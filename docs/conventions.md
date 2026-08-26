@@ -81,6 +81,33 @@ Structured, leveled (`debug`/`info`/`warn`/`error`), routed through
 `core/observability`. Never `print()` in `lib/`. Every log call is subject
 to FR-DIAG-002 — no plaintext, keys, voice/call content, or precise location.
 
+## UI widget kit
+
+Three packages are the project's standard component layer, superseding raw
+Material equivalents for their respective roles (human-directed adoption,
+`new_dependency` gate, 2026-08-26):
+
+- **`on_process_button_widget`** — every tappable action that does real
+  async work (network calls, sign-in, form submission) uses
+  `OnProcessButtonWidget`, not a bare `ElevatedButton`/`TextButton`. Its
+  built-in `running`/`success`/`error` states are the project's standard
+  way to show action feedback — don't hand-roll a separate spinner-in-button
+  pattern alongside it.
+- **`on_popup_window_widget`** — every dialog/popup uses
+  `OnPopupWindowWidget`, not a bare `AlertDialog`/`showDialog` builder with
+  ad hoc content. No screen uses this yet (first real dialog need: E02's
+  blocking confirmation, or an error dialog).
+- **`on_text_input_widget`** — every text field uses `OnTextInputWidget`
+  (or `OnTextInputWidgetUserField` for login/registration-style fields with
+  password toggling), not a bare `TextField`/`TextFormField`. No screen
+  uses this yet (first real text input: likely E02's device-nickname/search
+  field, or wherever the first free-text entry lands).
+
+Reference: `welcome_view.dart`'s "Continue with Google" button is the first
+real usage (`OnProcessButtonWidget`, `onTap` returning `null` since the
+navigation itself is synchronous — no success/error state to show yet;
+revisit once the button performs a real async sign-in call).
+
 ## Localization / RTL
 
 All user-visible strings come from ARB-based localization resources (no
@@ -109,3 +136,7 @@ Per rule 3 / `harness.yaml` `human_gates: new_dependency` — any package
 beyond what's named in the accepted ADRs (Drift, Pigeon, a Signal-protocol
 library, Sentry-or-equivalent, Firebase, GetX) requires a human-approved
 addition, recorded as a one-line note here with the approving human gate.
+
+- **2026-08-26** — `on_popup_window_widget` `^0.0.14`, `on_process_button_widget`
+  `^2.0.13`, `on_text_input_widget` `^0.1.0` — human-directed (explicit
+  request, not agent-proposed). See "UI widget kit" above.
