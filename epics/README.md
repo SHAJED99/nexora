@@ -65,7 +65,7 @@ graph TD
 |----|-------|-------------|-------------|------|-----------|--------|
 | E00 | Genesis / walking skeleton | — | — | — | — | done |
 | E01 | Identity & Access | Identity & Auth | FR-AUTH-001..005 | 4.8 | — | done |
-| E02 | Relationships, Trust & Blocking | Relationships & Trust | FR-TRUST-001..007, FR-BLOCK-001..003 | 4.0 | E01 | todo |
+| E02 | Relationships, Trust & Blocking | Relationships & Trust | FR-TRUST-001..007, FR-BLOCK-001..003 | 4.0 | E01 | done |
 | E03 | E2E Encryption & Threat Protection | Security & Encryption | FR-SEC-001..004 | 3.5 | E01 | todo |
 | E04 | Mesh Discovery, Relay & Dynamic Routing | Mesh Networking | FR-DISC-001..003, FR-ROUTE-001..009 | 2.8 | E01, E03 | todo |
 | E05 | Messaging Reliability & Multi-Device Sync | Messaging Reliability | FR-MSG-001..008 | 3.2 | E03, E04 | todo |

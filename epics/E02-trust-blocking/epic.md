@@ -1,7 +1,7 @@
 ---
 id: E02
 title: Relationships, Trust & Blocking
-status: todo
+status: done
 type: feature
 priority: { moscow: must, wsjf: 4.0 }
 depends_on: [E01]
