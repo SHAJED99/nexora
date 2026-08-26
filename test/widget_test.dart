@@ -1,10 +1,11 @@
-// Walking-skeleton widget test (E00-T05): proves welcome -> login
-// navigates on "Continue with Google", the (stubbed, short-delay for
-// speed) sign-in use case performs one real Drift write, and the app
-// lands on the placeholder home screen able to read that row back.
+// Walking-skeleton widget test (E00-T05, updated E01-T01): proves
+// welcome -> login navigates on "Continue with Google", the sign-in use
+// case performs one real Drift write (through a test-doubled
+// GoogleAuthService — no real Google/Firebase network calls in this
+// suite), and the app lands on the placeholder home screen able to read
+// that row back.
 //
-// Uses an in-memory Drift database — no real filesystem I/O, no real
-// Google/Firebase auth (out of scope for genesis).
+// Uses an in-memory Drift database — no real filesystem I/O.
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -18,6 +19,8 @@ import 'package:nexora/features/login/presentation/login_view.dart';
 import 'package:nexora/features/welcome/presentation/welcome_controller.dart';
 import 'package:nexora/features/welcome/presentation/welcome_view.dart';
 
+import 'support/fake_google_auth_service.dart';
+
 void main() {
   setUp(() => Get.testMode = true);
   tearDown(Get.reset);
@@ -27,8 +30,10 @@ void main() {
     (WidgetTester tester) async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       final repository = DeviceIdentityRepository(db);
-      final signInUseCase =
-          SignInUseCase(repository, delay: const Duration(milliseconds: 50));
+      final signInUseCase = SignInUseCase(
+        repository,
+        authService: FakeGoogleAuthService.success('firebase-uid-test'),
+      );
 
       Get.lazyPut(WelcomeController.new);
       Get.lazyPut(() => LoginController(signInUseCase));
