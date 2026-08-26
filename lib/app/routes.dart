@@ -6,6 +6,8 @@ import 'package:nexora/features/devices/presentation/devices_binding.dart';
 import 'package:nexora/features/devices/presentation/devices_view.dart';
 import 'package:nexora/features/home/presentation/home_view.dart';
 import 'package:nexora/features/login/presentation/login_view.dart';
+import 'package:nexora/features/settings/presentation/settings_binding.dart';
+import 'package:nexora/features/settings/presentation/settings_view.dart';
 import 'package:nexora/features/welcome/presentation/welcome_view.dart';
 
 abstract final class Routes {
@@ -18,6 +20,9 @@ abstract final class Routes {
 
   /// design/screens/devices.md (E02-T02).
   static const devices = '/devices';
+
+  /// design/screens/settings.md (E02-T03).
+  static const settings = '/settings';
 }
 
 final appPages = <GetPage<dynamic>>[
@@ -28,5 +33,10 @@ final appPages = <GetPage<dynamic>>[
     name: Routes.devices,
     page: () => const DevicesView(),
     binding: DevicesBinding(),
+  ),
+  GetPage<dynamic>(
+    name: Routes.settings,
+    page: () => const SettingsView(),
+    binding: SettingsBinding(),
   ),
 ];

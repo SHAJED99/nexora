@@ -49,6 +49,25 @@ class NexoraColors {
   static const devicesIconBackdropAllowed = Color(0x3339B8FD); // rgba(57,184,253,0.2)
   static const devicesIconBackdropUnknown = Color(0x33D3E4FE); // rgba(211,228,254,0.2)
   static const devicesIconBackdropBlocked = Color(0x33FFDAD6); // rgba(255,218,214,0.2)
+
+  // settings.md — reuses welcomeHeading/welcomeTextAccent/welcomeButtonBg/
+  // devicesMuted/devicesRowBorder/devicesActiveNavBg/devicesHeaderBg where
+  // the measured value is identical (per probe.json — the printed contract
+  // table drops several row-container/icon-backdrop fills the same way
+  // devices.md's did, so these are read from
+  // design/golden/settings/default@390x844/probe.json elements
+  // 1/2/62 (page/nav bg), 10/17/30/43 (row container fill, applied
+  // uniformly to all 8 rows — visually identical per the golden capture),
+  // and 12/19/25/32/38/45/51/57 (per-row icon backdrop)).
+  static const settingsPageBg = Color(0xFF0B1C30); // rgb(11,28,48) — == loginHeading's value, used here as a background
+  static const settingsHeadingText = Color(0xFFEAF1FF); // rgb(234,241,255)
+  static const settingsBodyText = Color(0xFFC7C4D8); // rgb(199,196,216)
+  static const settingsRowFill = Color(0xFF1A2C42); // rgb(26,44,66)
+  static const settingsIconBackdropBlue = Color(0xFF001E2F); // rgb(0,30,47) — Account
+  static const settingsIconBackdropGreen = Color(0xFF002113); // rgb(0,33,19) — Privacy & Security, Security Center
+  static const settingsIconBackdropViolet = Color(0xFF0F0069); // rgb(15,0,105) — Network, Storage
+  static const settingsIconGreen = Color(0xFF67F4B7); // rgb(103,244,183)
+  static const settingsIconLightBlue = Color(0xFFDCE9FF); // rgb(220,233,255) — Battery, Notifications, About/Updates
 }
 
 class NexoraTextStyles {
@@ -156,6 +175,43 @@ class NexoraTextStyles {
   );
 
   static const devicesNavLabelActive = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    color: NexoraColors.welcomeTextAccent,
+  );
+
+  // settings.md
+  static const settingsBrandTitle = devicesBrandTitle; // NEXORA — identical 28px/w600/welcomeHeading
+
+  static const settingsHeading = TextStyle(
+    fontSize: 28,
+    fontWeight: FontWeight.w600,
+    color: NexoraColors.settingsHeadingText,
+  );
+
+  static const settingsSubtitle = TextStyle(
+    fontSize: 14,
+    color: NexoraColors.settingsBodyText,
+  );
+
+  static const settingsRowTitle = TextStyle(
+    fontSize: 22,
+    fontWeight: FontWeight.w500,
+    color: NexoraColors.welcomeButtonBg, // rgb(248,249,255) — identical value
+  );
+
+  static const settingsRowDescription = TextStyle(
+    fontSize: 14,
+    color: NexoraColors.settingsBodyText,
+  );
+
+  static const settingsNavLabel = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    color: NexoraColors.settingsBodyText,
+  );
+
+  static const settingsNavLabelActive = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w500,
     color: NexoraColors.welcomeTextAccent,

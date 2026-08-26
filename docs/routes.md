@@ -23,6 +23,7 @@ feature epic builds the real post-auth destination.
 | Route | Screen id | Design contract | Feature module |
 |---|---|---|---|
 | `/devices` | `devices` | `design/screens/devices.md` | `lib/features/devices/` (E02-T02) |
+| `/settings` | `settings` | `design/screens/settings.md` | `lib/features/settings/` (E02-T03) |
 
 ## Contracted, not yet wired (owned by their feature epics)
 
@@ -34,12 +35,14 @@ implementation yet.
 | `/dashboard` | `dashboard` | `design/screens/dashboard.md` *(not yet generated — see design/sources.yaml)* |
 | `/conversations` | `conversations` | `design/screens/conversations.md` *(not yet generated)* |
 | `/chat/:id` | `chat` | `design/screens/chat.md` *(not yet generated)* |
-| `/settings` | `settings` | `design/screens/settings.md` *(not yet generated)* |
 
-Only `welcome`, `login` and `devices` have generated contracts as of
-E02-T02; the remaining four are listed in `design/sources.yaml`'s
-`screens:` table but their `design/screens/<id>.md` files are produced by
-`make design-contract SCREEN=<id>` when their owning feature epic starts.
+`welcome`, `login`, `devices` and `settings` have generated contracts as of
+E02-T03; `dashboard`, `conversations` and `chat` remain listed in
+`design/sources.yaml`'s `screens:` table but their `design/screens/<id>.md`
+files are produced by `make design-contract SCREEN=<id>` when their owning
+feature epic starts. `settings`'s eight rows are a pure navigation menu —
+none of their sub-screens (Account, Privacy & Security, etc.) have a
+design source yet; see `design/gaps.md` GAP-005.
 
 ## Route wiring
 
