@@ -41,6 +41,12 @@
       "env": { "SLACK_MCP_XOXP_TOKEN": "${SLACK_MCP_XOXP_TOKEN}" },
       "$comment": "Community Slack MCP. Optional — gate notices only. Verify package & scopes before use. Docs: agent/mcp/slack.md"
     },
+    "firebase": {
+      "type": "stdio",
+      "command": "E:\\home\\srppc3\\.npm-global\\firebase.cmd",
+      "args": ["mcp", "--dir", "."],
+      "$comment": "Official Firebase CLI MCP server (firebase-tools >=15). Auto-detects tools from firebase.json + enabled GCP APIs for the active project. Uses your existing `firebase login` session — no separate token. Feeds E01 (Identity & Access) and E11 (Firebase Metadata Sync). Docs: https://firebase.google.com/docs/cli/mcp-server. NOTE: pinned to the absolute path because this machine's PATH resolves an older firebase-tools@13.28.0 (no mcp command) ahead of the upgraded 15.28.1 install."
+    },
     "stitch": {
       "type": "http",
       "url": "https://stitch.googleapis.com/mcp",
