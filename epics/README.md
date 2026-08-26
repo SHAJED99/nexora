@@ -64,7 +64,7 @@ graph TD
 | id | title | SRS module(s) | FR prefixes | wsjf | depends_on | status |
 |----|-------|-------------|-------------|------|-----------|--------|
 | E00 | Genesis / walking skeleton | — | — | — | — | done |
-| E01 | Identity & Access | Identity & Auth | FR-AUTH-001..005 | 4.8 | — | todo |
+| E01 | Identity & Access | Identity & Auth | FR-AUTH-001..005 | 4.8 | — | done |
 | E02 | Relationships, Trust & Blocking | Relationships & Trust | FR-TRUST-001..007, FR-BLOCK-001..003 | 4.0 | E01 | todo |
 | E03 | E2E Encryption & Threat Protection | Security & Encryption | FR-SEC-001..004 | 3.5 | E01 | todo |
 | E04 | Mesh Discovery, Relay & Dynamic Routing | Mesh Networking | FR-DISC-001..003, FR-ROUTE-001..009 | 2.8 | E01, E03 | todo |

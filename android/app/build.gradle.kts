@@ -2,6 +2,9 @@ plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // E01-T01: applies google-services.json (already provisioned for
+    // project nexora-b3a97) so firebase_core/firebase_auth pick it up.
+    id("com.google.gms.google-services")
 }
 
 android {

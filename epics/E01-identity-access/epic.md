@@ -1,7 +1,7 @@
 ---
 id: E01
 title: Identity & Access
-status: todo
+status: done
 type: feature
 priority: { moscow: must, wsjf: 4.8 }
 depends_on: []
