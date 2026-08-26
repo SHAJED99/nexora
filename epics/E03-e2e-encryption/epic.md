@@ -1,7 +1,7 @@
 ---
 id: E03
 title: E2E Encryption & Threat Protection
-status: todo
+status: in-progress
 type: feature
 priority: { moscow: must, wsjf: 3.5 }
 depends_on: [E01]
@@ -76,13 +76,37 @@ This is security-critical — expect the review gate's security lens
 
 ## Open Questions
 - **OQ-E03-1 — specific crypto library.** ADR-0003 accepted the protocol *family* (Signal-style); task-sharding needs the specific Dart/Flutter library (or a justified from-primitives build) named before tasks can be written with real function signatures.
-  - **Status:** 🟡 open
-  - **Answer:** _<empty>_
-  - **Answered by:** _<empty>_
-  - **Date:** _<empty>_
+  - **Status:** ✅ resolved
+  - **Answer:** `libsignal_protocol_dart` (mixin.dev publisher, pure Dart, v0.8.2 at
+    time of decision) — implements X3DH, Double Ratchet, and Sender Keys
+    (group sessions, needed later by E07) natively, no FFI/native build step
+    for an Android-only app. Rejected: official Rust `libsignal` via
+    flutter_rust_bridge (thinner adoption, AGPL-3.0, adds a native-binary
+    supply chain); hand-rolling from `cryptography` package primitives
+    (multi-week effort, high tail-risk of a silent forward-secrecy bug).
+    **Note:** `libsignal_protocol_dart` is GPL-3.0-licensed as a dependency —
+    accepted by the human as compatible with NEXORA's distribution model.
+  - **Answered by:** human
+  - **Date:** 2026-08-27
 
 ## Analyze report
-<pending — appended once tasks are sharded>
+*(`skills/task-sharding` §6, run 2026-08-27 against E03-T01/T02/T03)*
+
+| Check | Result | Notes |
+|---|---|---|
+| EARS trace | ✅ pass | EARS-SEC-1/2/3 (epic-level) each covered by ≥1 task-level EARS id: T01→EARS-SEC-3a, T02→EARS-SEC-3b/3c, T03→EARS-SEC-1/2/3 (the epic ids themselves, since T03 is where the full protocol claim is proven). No orphans either direction. |
+| Contract sanity | ✅ pass | No REST/API endpoints in this epic (library-level interface only, per epic.md "API surface"). Function signatures across T01→T02→T03 form one consistent chain (`DriftSignalProtocolStore` → `IdentityService` → `CryptoService`), no two tasks define the same seam differently. |
+| Collision matrix | ✅ pass (trivially) | Strictly linear `depends_on` chain (T01→T02→T03), no parallel dispatch candidates, so no file can collide. T01 touches `database.dart`/`.g.dart` + new files only; T02 adds one new file; T03 only edits `crypto_stub.dart` (already owned by no other in-flight task) + adds one test file. |
+| Scope fences | ✅ pass | Every task's §4 is non-empty and epic-specific (see e.g. T03 explicitly fencing off auto-establish-on-demand and E07's Sender-Keys work). |
+| MoSCoW inflation | ⚠️ exception, justified | 3/3 tasks (100%) are `must` — normally a re-grade signal. Not re-graded here: this is a 3-task infrastructure epic where each task is a strict prerequisite for the next and none is independently shippable (a store with no identity service, or an identity service with no encrypt/decrypt, delivers zero of the epic's user-facing security guarantee). Inflation as a smell applies to epics with a mix of core and optional work; this epic has no optional slice to mis-grade against. Flagging for the human gate rather than silently re-grading one task to `should` to make the metric pass. |
+| Size | ✅ pass | T01 `M`, T02 `S`, T03 `M` — none `L`. T03's scope (session establishment + encrypt/decrypt + the 5 security proof tests) was the one candidate for a split; kept as one task because the tests *are* the deliverable's proof, not separable follow-up work, and splitting would let "establish session" ship as done before "prove forward secrecy" — the exact wrong signal for a security epic. |
+| Design | ✅ pass (n/a) | No `layer: frontend` tasks in this epic; `design_contract: n/a` on all three, consistent with epic.md's "Screens: None." |
+
+**Net:** 6/7 clean pass, 1 flagged exception (MoSCoW) with reasoning attached
+for the human to accept or override at the gate below.
+
+**Gate:** 🧍 `analyze_report` — ✅ cleared by human on 2026-08-27 (approved
+as-is, including the MoSCoW exception reasoning above).
 
 ## Retro
 → `retro.md` (written after E03 completion)
