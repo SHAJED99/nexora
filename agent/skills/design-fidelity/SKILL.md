@@ -116,6 +116,17 @@ markup scores 100%.
 3. **Never delete a design element to satisfy the API.** Keep it, wire it to
    local state, log the gap.
 4. **A red gate is never "close enough".** The number is right there.
+5. **For any repeated or grouped UI element, check `probe.json` directly for
+   untexted wrapper `generic`s — don't infer structure from the printed
+   contract table alone.** The table only numbers elements with a text/icon
+   role; a fill, border, radius, backdrop, or group container with no text
+   of its own gets no row there, so it's invisible unless you read the raw
+   probe. When a wrapper's box doesn't match a single item's (taller/wider
+   than one row), that's a GROUP holding several items, not a uniform style
+   applied to each one individually. (Promoted from `agent/memory/lessons/
+   design.md` L-design-001 — two consecutive tasks lost a wrapper element
+   this table doesn't surface: a devices-screen icon backdrop, then a
+   settings-screen group container read as "applies to every row.")
 
 ## Where to look next
 - Where screen contracts are first produced -> `skills/genesis` (T03)
