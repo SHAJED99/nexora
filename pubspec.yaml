@@ -50,6 +50,11 @@ dependencies:
   firebase_auth: ^5.3.1
   google_sign_in: ^6.2.2
 
+  # Account↔device metadata mapping in the same Firebase project
+  # (FR-FB-001/002, ADR-0005) — not a new foundational choice (E01-T02). See
+  # docs/conventions.md "Third-party dependency additions".
+  cloud_firestore: ^5.6.12
+
   # Project UI widget kit — human-approved (new_dependency gate, 2026-08-26).
   # Standard component layer for popups/dialogs, async-aware buttons, and
   # text inputs, superseding raw Material equivalents for those three roles.
