@@ -10,6 +10,8 @@ import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'relationships_table.dart';
+
 part 'database.g.dart';
 
 /// One row per locally-created device identity. This is the walking
@@ -32,7 +34,7 @@ class DeviceIdentities extends Table {
   TextColumn get accountUid => text().nullable()();
 }
 
-@DriftDatabase(tables: [DeviceIdentities])
+@DriftDatabase(tables: [DeviceIdentities, Relationships])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
@@ -40,7 +42,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -50,6 +52,11 @@ class AppDatabase extends _$AppDatabase {
             // Additive only — no drop/backfill, per docs/conventions.md
             // "Schema migrations" (FR-VER-003).
             await m.addColumn(deviceIdentities, deviceIdentities.accountUid);
+          }
+          if (from < 3) {
+            // E02-T01: new `relationships` table — additive, no changes to
+            // existing tables.
+            await m.createTable(relationships);
           }
         },
       );

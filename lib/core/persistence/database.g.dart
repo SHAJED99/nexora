@@ -411,17 +411,288 @@ class DeviceIdentitiesCompanion extends UpdateCompanion<DeviceIdentity> {
   }
 }
 
+class $RelationshipsTable extends Relationships
+    with TableInfo<$RelationshipsTable, Relationship> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RelationshipsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stateMeta = const VerificationMeta('state');
+  @override
+  late final GeneratedColumn<String> state = GeneratedColumn<String>(
+    'state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [deviceId, state, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'relationships';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Relationship> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('state')) {
+      context.handle(
+        _stateMeta,
+        state.isAcceptableOrUnknown(data['state']!, _stateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stateMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {deviceId};
+  @override
+  Relationship map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Relationship(
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      state: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}state'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $RelationshipsTable createAlias(String alias) {
+    return $RelationshipsTable(attachedDatabase, alias);
+  }
+}
+
+class Relationship extends DataClass implements Insertable<Relationship> {
+  final String deviceId;
+  final String state;
+  final DateTime updatedAt;
+  const Relationship({
+    required this.deviceId,
+    required this.state,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['device_id'] = Variable<String>(deviceId);
+    map['state'] = Variable<String>(state);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  RelationshipsCompanion toCompanion(bool nullToAbsent) {
+    return RelationshipsCompanion(
+      deviceId: Value(deviceId),
+      state: Value(state),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory Relationship.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Relationship(
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      state: serializer.fromJson<String>(json['state']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'deviceId': serializer.toJson<String>(deviceId),
+      'state': serializer.toJson<String>(state),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  Relationship copyWith({
+    String? deviceId,
+    String? state,
+    DateTime? updatedAt,
+  }) => Relationship(
+    deviceId: deviceId ?? this.deviceId,
+    state: state ?? this.state,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  Relationship copyWithCompanion(RelationshipsCompanion data) {
+    return Relationship(
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      state: data.state.present ? data.state.value : this.state,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Relationship(')
+          ..write('deviceId: $deviceId, ')
+          ..write('state: $state, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(deviceId, state, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Relationship &&
+          other.deviceId == this.deviceId &&
+          other.state == this.state &&
+          other.updatedAt == this.updatedAt);
+}
+
+class RelationshipsCompanion extends UpdateCompanion<Relationship> {
+  final Value<String> deviceId;
+  final Value<String> state;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const RelationshipsCompanion({
+    this.deviceId = const Value.absent(),
+    this.state = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RelationshipsCompanion.insert({
+    required String deviceId,
+    required String state,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : deviceId = Value(deviceId),
+       state = Value(state),
+       updatedAt = Value(updatedAt);
+  static Insertable<Relationship> custom({
+    Expression<String>? deviceId,
+    Expression<String>? state,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (deviceId != null) 'device_id': deviceId,
+      if (state != null) 'state': state,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RelationshipsCompanion copyWith({
+    Value<String>? deviceId,
+    Value<String>? state,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return RelationshipsCompanion(
+      deviceId: deviceId ?? this.deviceId,
+      state: state ?? this.state,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (state.present) {
+      map['state'] = Variable<String>(state.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RelationshipsCompanion(')
+          ..write('deviceId: $deviceId, ')
+          ..write('state: $state, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $DeviceIdentitiesTable deviceIdentities = $DeviceIdentitiesTable(
     this,
   );
+  late final $RelationshipsTable relationships = $RelationshipsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [deviceIdentities];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    deviceIdentities,
+    relationships,
+  ];
 }
 
 typedef $$DeviceIdentitiesTableCreateCompanionBuilder =
@@ -647,10 +918,174 @@ typedef $$DeviceIdentitiesTableProcessedTableManager =
       DeviceIdentity,
       PrefetchHooks Function()
     >;
+typedef $$RelationshipsTableCreateCompanionBuilder =
+    RelationshipsCompanion Function({
+      required String deviceId,
+      required String state,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$RelationshipsTableUpdateCompanionBuilder =
+    RelationshipsCompanion Function({
+      Value<String> deviceId,
+      Value<String> state,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$RelationshipsTableFilterComposer
+    extends Composer<_$AppDatabase, $RelationshipsTable> {
+  $$RelationshipsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RelationshipsTableOrderingComposer
+    extends Composer<_$AppDatabase, $RelationshipsTable> {
+  $$RelationshipsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RelationshipsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RelationshipsTable> {
+  $$RelationshipsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get state =>
+      $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$RelationshipsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RelationshipsTable,
+          Relationship,
+          $$RelationshipsTableFilterComposer,
+          $$RelationshipsTableOrderingComposer,
+          $$RelationshipsTableAnnotationComposer,
+          $$RelationshipsTableCreateCompanionBuilder,
+          $$RelationshipsTableUpdateCompanionBuilder,
+          (
+            Relationship,
+            BaseReferences<_$AppDatabase, $RelationshipsTable, Relationship>,
+          ),
+          Relationship,
+          PrefetchHooks Function()
+        > {
+  $$RelationshipsTableTableManager(_$AppDatabase db, $RelationshipsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RelationshipsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RelationshipsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RelationshipsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> deviceId = const Value.absent(),
+                Value<String> state = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RelationshipsCompanion(
+                deviceId: deviceId,
+                state: state,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String deviceId,
+                required String state,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => RelationshipsCompanion.insert(
+                deviceId: deviceId,
+                state: state,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RelationshipsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RelationshipsTable,
+      Relationship,
+      $$RelationshipsTableFilterComposer,
+      $$RelationshipsTableOrderingComposer,
+      $$RelationshipsTableAnnotationComposer,
+      $$RelationshipsTableCreateCompanionBuilder,
+      $$RelationshipsTableUpdateCompanionBuilder,
+      (
+        Relationship,
+        BaseReferences<_$AppDatabase, $RelationshipsTable, Relationship>,
+      ),
+      Relationship,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
   $$DeviceIdentitiesTableTableManager get deviceIdentities =>
       $$DeviceIdentitiesTableTableManager(_db, _db.deviceIdentities);
+  $$RelationshipsTableTableManager get relationships =>
+      $$RelationshipsTableTableManager(_db, _db.relationships);
 }
