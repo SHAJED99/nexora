@@ -1,6 +1,6 @@
 # E03 · E2E Encryption & Threat Protection · Progress
 
-**Status:** in-progress · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 3/5
+**Status:** in-progress · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 4/5
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -8,8 +8,8 @@
 - [x] E03-T01 · libsignal_protocol_dart + Drift-backed protocol store · done · builder (sonnet) → reviewer (opus)
 - [x] E03-T01b · Persist remote-peer identity trust across restarts (closes OQ-E03-T01-1) · done · builder (sonnet) → reviewer (opus)
 - [x] E03-T02 · Local identity generation + prekey bundle service · done · builder (sonnet) → reviewer (opus)
-- [ ] E03-B01 · One-time prekey ids restart at 1 after pool drains (S2 bug) · todo · builder (any) → reviewer (opus)
-- [ ] E03-T03 · Real core/crypto API — X3DH session + Double Ratchet encrypt/decrypt · blocked · builder (sonnet) → reviewer (opus)
+- [x] E03-B01 · One-time prekey ids restart at 1 after pool drains (S2 bug) · done · builder (sonnet) → reviewer (opus)
+- [ ] E03-T03 · Real core/crypto API — X3DH session + Double Ratchet encrypt/decrypt · todo · builder (sonnet) → reviewer (opus)
 
 ## Dependency graph
 ```mermaid
@@ -34,8 +34,7 @@ schema change (`crypto_counters` table) and must land before T03.
   the reviewer independently.
 
 ## Blocked / Frozen
-- E03-T03 — blocked on `depends_on: [E03-T02, E03-T01b, E03-B01]`; E03-B01
-  still todo.
+(none)
 
 ## Event log (append-only)
 - 2026-08-27 E03 sharded into 3 tasks (task-sharding skill). OQ-E03-1
@@ -97,3 +96,19 @@ schema change (`crypto_counters` table) and must land before T03.
   one-time-prekey-id counter. E03-B01 finalized with a full `files:` list
   and fix contract; `depends_on` narrowed to `[E03-T01b]` (already merged,
   so B01 owns the schema change directly). Dispatching E03-B01.
+- 2026-08-27 E03-B01 fixed on `epic_03_bug_01` (off `epic_03`):
+  `crypto_counters` table (schema v5->v6, additive, backfilled from live
+  rows on upgrade), `DriftSignalProtocolStore.allocateOneTimePreKeyIds()`
+  replaces `max(existingIds)+1` with an atomic monotonic counter. Builder
+  confirmed the exact repro failed pre-fix and passed post-fix. `flutter
+  analyze` clean, `flutter test` 59/59. Reviewer (Opus, the same reviewer
+  who filed this bug) independently reproduced the falsification, then
+  found and fixed a SECOND instance of the same defect class: allocation
+  wrapped at libsignal's advertised `Medium.MAX_VALUE` instead of its real
+  `MAX_VALUE - 1` arithmetic, which could silently reissue id 1 with fresh
+  key material at ~16.7M allocations — narrowed the modulus, added a
+  falsifiable regression test. Also strengthened a migration-backfill test
+  that couldn't distinguish a correct backfill from a wrong one (both
+  yielded the same counter value on an empty pool). Squash-merged to
+  `epic_03` (`b907a0e`); `flutter analyze`/`flutter test` re-confirmed
+  green (60/60). E03-B01 → `done`. E03-T03 fully unblocked — dispatching.
