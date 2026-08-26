@@ -7,6 +7,8 @@
 //
 // FR-DIAG-002 (non-negotiable): never log message plaintext, keys,
 // voice/call content, or precise location — not even here, not even later.
+import 'package:flutter/foundation.dart' show kDebugMode;
+
 enum LogLevel { debug, info, warn, error }
 
 class ObservabilityService {
@@ -21,7 +23,7 @@ class ObservabilityService {
   }
 
   void log(LogLevel level, String code, {Object? cause}) {
-    if (!_initialized) return;
+    if (!_initialized || !kDebugMode) return;
     // ignore: avoid_print
     print('[${level.name}] $code${cause != null ? ' ($cause)' : ''}');
   }

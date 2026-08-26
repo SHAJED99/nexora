@@ -29,6 +29,10 @@ class LoginController extends GetxController {
     Get.offNamed('/home');
   }
 
+  // TODO(ADR-0005): this is a genesis-stub device id, not a cryptographic
+  // device identity. The auth epic must replace this with a real per-device
+  // key generated via Random.secure() (or the crypto layer's own key
+  // derivation) before any real device identity depends on it.
   String _generateDeviceId() {
     final rand = Random();
     return List.generate(16, (_) => rand.nextInt(16).toRadixString(16)).join();

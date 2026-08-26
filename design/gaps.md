@@ -32,7 +32,17 @@ is how a product acquires seven different empty states.
 
 -->
 
-_(none yet — the planner fills this while sharding the first UI epic)_
+## GAP-001 — welcome, page background color not in the contract's token table
+- **status:** 🟡 proposed
+- **screen:** welcome (`design/screens/welcome.md`)
+- **spec:** epics/E00-genesis/epic.md (genesis walking skeleton, no FR id — this is a genesis-scaffold token gap, not a feature/journey gap)
+- **design shows:** the contract's measured token table has no page-background value (the Stitch golden capture's background reads through a light surface token, not a standalone page-bg entry)
+- **derived from:** `lib/core/design/tokens.dart:14` (`welcomeBg = Color(0xFF0B1420)`) — approximated by the E00-T05 builder to give the welcome screen a background, not measured from the golden capture
+- **proposal:** when the first real design-fidelity pass runs against the built app (post-genesis, see OQ-E00-3), re-measure the actual page background from `design/golden/welcome/default@390x844/probe.json` and replace this approximation with the measured value, or confirm it already matches and promote it into the contract's token table
+- **approved by:** _<pending — flagged during E00 review, 2026-08-26; not blocking merge since the skeleton has no design-verify gate yet (OQ-E00-3)>_
+- **built:** E00-T05 · golden extracted ⚪ (not yet re-verified against a running build)
+
+_(no other gaps yet — the planner fills the rest while sharding the first UI epic)_
 
 ## The usual suspects
 
