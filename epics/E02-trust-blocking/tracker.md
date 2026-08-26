@@ -1,13 +1,13 @@
 # E02 · Relationships, Trust & Blocking · Progress
 
-**Status:** in-progress · **Started:** 2026-08-26 · **Completed:** — · **Progress:** 2/3
+**Status:** in-progress · **Started:** 2026-08-26 · **Completed:** — · **Progress:** 3/3 (T03 review pending)
 
 > Only the ORCHESTRATOR edits this file.
 
 ## Tasks
 - [x] E02-T01 · Relationship domain (trust states, evaluation, blocking) · done · builder (sonnet) → reviewer (opus)
 - [x] E02-T02 · Devices screen · done · builder-ui (sonnet) → reviewer (opus)
-- [ ] E02-T03 · Settings screen (top-level menu) · todo · —
+- [x] E02-T03 · Settings screen (top-level menu) · review-requested · builder-ui (sonnet) → reviewer (pending)
 
 ## Dependency graph
 ```mermaid
@@ -71,3 +71,18 @@ Note: T02/T03 share `lib/app/routes.dart` + `bindings.dart` — serialize, don't
   flagged: no font-family theming anywhere in the app (bug-sweep item,
   S3), and `verify()` bypassing the domain layer (follow-up task, not a
   blocker). E02-T02 → `done`.
+- 2026-08-26/27 E02-T03 implemented on `epic_02_task_03` (off `epic_02`):
+  real `/settings` screen (`SettingsView`/`SettingsController`/
+  `SettingsBinding`), all 8 rows built against
+  `design/screens/settings.md` — including the per-row circular icon
+  backdrop, learned directly from E02-T02's review finding. Tap → "Coming
+  soon" `SnackBar`, no fabricated sub-screens. `design/gaps.md` GAP-005
+  logged for the undesigned Privacy & Security sub-screen (FR-TRUST-006).
+  Tests-first; `flutter analyze` clean, `flutter test` 34/34 green.
+  Builder hit a session-limit API error mid-manual-comparison; work up to
+  that point was fully committed. Orchestrator resumed directly: reverted
+  a leftover test-only `initialRoute` tweak, ran the release build on the
+  Wi-Fi device, completed the golden-screenshot comparison (match
+  confirmed, all 4 icon-backdrop colors verified against probe.json
+  exactly), filled in the checklist/self-review. status ->
+  review-requested, awaiting a different-model review (rule 5).
