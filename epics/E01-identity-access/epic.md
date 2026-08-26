@@ -80,11 +80,12 @@ once E00-T05's design-fidelity follow-up (OQ-E00-3) lands.
 | Device-identity key material overlaps with E03's crypto scope | Keep this epic to *generating and storing* the identity; E03 owns the ratchet/session protocol built on top of it |
 
 ## Open Questions
-- **OQ-E01-1 — Firebase project provisioning.** No Firebase project exists yet for NEXORA. Needs a human to create one (console access, billing if applicable) before this epic's first task can run against a real backend.
-  - **Status:** 🟡 open
-  - **Answer:** _<empty>_
-  - **Answered by:** _<empty>_
-  - **Date:** _<empty>_
+- **OQ-E01-1 — Firebase project provisioning.** ✅ Resolved. Project `nexora-b3a97` (display name "NEXORA") already existed under `shajedurrahmanpanna.storage3@gmail.com` — confirmed as the right one to use. Android app registered (`com.nexora.nexora`, app id `1:941031756225:android:1418978da131e449651f40`), both debug-keystore SHA-1/SHA-256 fingerprints added, Google Sign-In enabled as an Auth provider and deployed (`firebase deploy --only auth`), and the real `google-services.json` (with a populated `oauth_client`) written to `android/app/`. Task-sharding can proceed against a real backend.
+  - **Status:** 🟢 answered
+  - **Answer:** Use `nexora-b3a97`; full Android + Google Sign-In wiring done 2026-08-26 via the `firebase` MCP server (`agent/mcp/firebase.md`).
+  - **Answered by:** human (via Q&A) + claude-code (MCP-driven provisioning)
+  - **Date:** 2026-08-26
+  - **Follow-up:** release-signing SHA-1/SHA-256 (separate from the debug keystore used here) must be added to this same Android app before any signed/release build ships — track at E01 task-sharding, not forgotten.
 
 ## Analyze report
 <pending — appended once tasks are sharded>
