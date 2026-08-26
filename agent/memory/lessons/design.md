@@ -28,11 +28,6 @@ automatically for matching tasks (see `index.yaml`).
   with hairline dividers between rows, sized `48×48` (not `40×40`,
   carried over from the wrong contract) backdrops. No shipped defect.
 - recurrence: 2
-- status: lesson (recurrence 2 — candidate for promotion to a rule in
-  `agent/skills/design-fidelity/SKILL.md`: "for any grouped/repeated UI
-  element, cross-check probe.json's untexted wrapper `generic`s directly —
-  don't infer structure from the printed contract table alone. Where a
-  wrapper's height/width doesn't match a single row's, check whether it
-  spans multiple rows (a group) before assuming a uniform per-row style."
-  Awaiting 🧍 `retro_promotions` gate — not applied here, since that edit
-  is itself a human-approved gate this session hasn't run `skills/retro` for.)
+- status: promoted-to-rule(design-fidelity) — see `agent/skills/design-
+  fidelity/SKILL.md` Rules §5, promoted 2026-08-27 via `skills/retro`,
+  🧍 `retro_promotions` gate approved by human.

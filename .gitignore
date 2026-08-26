@@ -10,6 +10,12 @@ runs/*
 # Freeze signal dropped by the statusline hook
 agent/handoffs/.FREEZE
 
+# Agent isolation worktrees (Agent tool, isolation: "worktree") — never
+# committed; leftover directories from worktrees that couldn't be cleanly
+# removed (Windows path-length limits) previously got swept up by a broad
+# `git add -A` as embedded git repos (L-process-004).
+.claude/worktrees/
+
 # Design gate: contracts + golden are COMMITTED (they are the law).
 # Reports are regenerated on every verify — noise.
 design/reports/*
