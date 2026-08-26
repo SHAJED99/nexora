@@ -1,16 +1,21 @@
 // features/settings/presentation — built against design/screens/settings.md.
 // Elements referenced by number below are that contract's "Elements — the
 // build checklist" table; the "probe #" comments cite
-// design/golden/settings/default@390x844/probe.json's raw element indices
-// where the printed contract table dropped a fill (row container / icon
-// backdrop) the same way design/screens/devices.md's did for its row icon
-// backdrops (see design/gaps.md and the E02-T02 review that caught it).
+// design/golden/settings/default@390x844/probe.json's raw element indices,
+// since the printed contract table numbers each row as its own element and
+// does not surface the untexted wrapper `generic`s that actually carry the
+// group fill/border/radius and the icon backdrops. Review finding
+// (E02-T03, round 2): the first pass read those wrapper indices as "applies
+// to all 8 rows uniformly" instead of recognizing 4 of them as GROUP
+// containers (1/2/2/3 rows each) — see `_groups` below. Second consecutive
+// UI task to lose an element this way (E02-T02's icon backdrop was the
+// first) — worth a design-fidelity lesson entry.
 //
 // Deviation: the design's "battery_full_alt" glyph has no equivalent in
 // Flutter's bundled Material icon font — `Icons.battery_full` is the
-// closest available icon and is used in its place (logged here, not in
-// design/gaps.md, since it's a glyph-substitution detail rather than a
-// missing screen/journey).
+// closest available icon and is used in its place (logged here and in the
+// task file's §9 Deviations, since it's a glyph-substitution detail rather
+// than a missing screen/journey).
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/design/tokens.dart';
@@ -35,9 +40,9 @@ class SettingsView extends GetView<SettingsController> {
                   children: [
                     _TitleBlock(),
                     const SizedBox(height: 16),
-                    for (final row in _rows) ...[
-                      _MenuRow(spec: row, controller: controller),
-                      const SizedBox(height: 12),
+                    for (final group in _groups) ...[
+                      _MenuGroup(rows: group, controller: controller),
+                      const SizedBox(height: 24),
                     ],
                   ],
                 ),
@@ -172,12 +177,58 @@ final _rows = <_RowSpec>[
   ),
 ];
 
-/// One menu row — container fill/border/radius per probe.json elements
-/// 10/17/30/43 (applied uniformly to all 8 rows — the golden capture shows
-/// them visually identical; the printed contract table only captured 4 of
-/// the 8 as distinct elements, same drop pattern devices.md had for its
-/// icon backdrops). Tapping shows a "Coming soon" acknowledgement (task
-/// §3/§4 — no sub-screen exists yet for any row).
+/// The design groups the 8 rows into 4 panels of 1/2/2/3 — the fill,
+/// 12px radius, and 1px border belong to the GROUP
+/// (probe.json elements 9/16/29/42, heights 106/211/191/316 — exactly 1/2/2/3
+/// rows tall), not to each row individually. This was dropped in the first
+/// pass (review finding, E02-T03): the printed contract table lists each
+/// row as its own numbered element, which reads as "8 separate cards" until
+/// probe.json's untexted wrapper `generic`s are checked directly.
+final _groups = <List<_RowSpec>>[
+  [_rows[0]],
+  [_rows[1], _rows[2]],
+  [_rows[3], _rows[4]],
+  [_rows[5], _rows[6], _rows[7]],
+];
+
+/// One grouped panel — fill/border/radius on the group (probe elements
+/// 9/16/29/42), a hairline divider between rows within the group, rows
+/// themselves transparent/unbordered.
+class _MenuGroup extends StatelessWidget {
+  const _MenuGroup({required this.rows, required this.controller});
+
+  final List<_RowSpec> rows;
+  final SettingsController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: NexoraColors.settingsRowFill,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NexoraColors.devicesRowBorder),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0)
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: NexoraColors.devicesRowBorder,
+              ),
+            _MenuRow(spec: rows[i], controller: controller),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One menu row inside a `_MenuGroup` — no fill/border/radius of its own
+/// (those belong to the group). Tapping shows a "Coming soon"
+/// acknowledgement (task §3/§4 — no sub-screen exists yet for any row).
 class _MenuRow extends StatelessWidget {
   const _MenuRow({required this.spec, required this.controller});
 
@@ -187,23 +238,17 @@ class _MenuRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: NexoraColors.settingsRowFill,
-      borderRadius: BorderRadius.circular(12),
+      color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
         onTap: () => controller.openRow(spec.title),
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: NexoraColors.devicesRowBorder),
-          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 48,
+                height: 48,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: spec.iconBackdrop,

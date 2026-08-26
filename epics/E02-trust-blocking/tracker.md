@@ -1,13 +1,13 @@
 # E02 · Relationships, Trust & Blocking · Progress
 
-**Status:** in-progress · **Started:** 2026-08-26 · **Completed:** — · **Progress:** 3/3 (T03 review pending)
+**Status:** done · **Started:** 2026-08-26 · **Completed:** 2026-08-27 · **Progress:** 3/3
 
 > Only the ORCHESTRATOR edits this file.
 
 ## Tasks
 - [x] E02-T01 · Relationship domain (trust states, evaluation, blocking) · done · builder (sonnet) → reviewer (opus)
 - [x] E02-T02 · Devices screen · done · builder-ui (sonnet) → reviewer (opus)
-- [x] E02-T03 · Settings screen (top-level menu) · review-requested · builder-ui (sonnet) → reviewer (pending)
+- [x] E02-T03 · Settings screen (top-level menu) · done · builder-ui (sonnet) → reviewer (opus)
 
 ## Dependency graph
 ```mermaid
@@ -20,6 +20,7 @@ Note: T02/T03 share `lib/app/routes.dart` + `bindings.dart` — serialize, don't
 ## Review log
 - 2026-08-26 · E02-T01 · Opus · approve with notes (1 real gap fixed — blocked/allowed states collapsed to unknown, breaking FR-BLOCK-001's future callers; plus a DataClassName cleanup applied; 2 notes carried to E02-T03/E04) · design gate n/a (no UI)
 - 2026-08-26 · E02-T02 · Opus · changes requested → fixed → done (2 blocking: dropped icon backdrop chip, missing color assertions on EARS-DEV-1 — both fixed; 3 non-blocking notes: GAP-002/003/004 need real human sign-off not an agent's, no font-family theming anywhere (bug-sweep item), a `verify()` bypassing the domain layer) · design gate n/a automated (OQ-E00-3), manual comparison PASS except the fixed backdrop chip
+- 2026-08-27 · E02-T03 · Opus · changes requested → fixed → done (2 blocking: 8 rows built as individually-bordered cards instead of the design's 4 grouped panels [1/2/2/3 rows], and icon backdrop 40×40 instead of the contract's 48×48 — both fixed, re-verified on-device) · design gate n/a automated (OQ-E00-3), manual comparison PASS after fix · L-design-001 logged (recurrence 2 — same probe.json-wrapper-element root cause as E02-T02)
 
 ## Blocked / Frozen
 (none)
