@@ -1,14 +1,15 @@
 // core/services — E01-T02: best-effort account↔device metadata write to
-// Firestore (FR-FB-001/002). Tests exercise `writeDeviceMetadata`, the seam
-// `FirebaseMetadataService` exposes specifically so tests never need a real
-// `FirebaseFirestore`/platform-channel test harness (same pattern as
-// `GoogleAuthService.signInAndGetAccountUid` — see that file's comments).
-import 'package:cloud_firestore/cloud_firestore.dart';
+// Realtime Database (FR-FB-001/002). Tests exercise `writeDeviceMetadata`,
+// the seam `FirebaseMetadataService` exposes specifically so tests never
+// need a real `FirebaseDatabase`/platform-channel test harness (same
+// pattern as `GoogleAuthService.signInAndGetAccountUid` — see that file's
+// comments).
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/services/firebase_metadata_service.dart';
 
 /// Captures the path + data a real write would have sent, instead of
-/// touching Firestore.
+/// touching Realtime Database.
 class _CapturingFirebaseMetadataService extends FirebaseMetadataService {
   String? capturedUid;
   String? capturedDeviceId;
@@ -35,15 +36,15 @@ class _ThrowingFirebaseMetadataService extends FirebaseMetadataService {
     String deviceId,
     Map<String, dynamic> data,
   ) {
-    throw Exception('firestore unavailable');
+    throw Exception('realtime database unavailable');
   }
 }
 
 void main() {
   test('test_EARS_FB_1_registers_device_metadata_only', () async {
     // EARS-FB-1 (FR-FB-001/002): WHEN sign-in completes, the system SHALL
-    // register the device under the account in Firestore, containing only
-    // metadata (no plaintext/keys/recordings).
+    // register the device under the account in Realtime Database,
+    // containing only metadata (no plaintext/keys/recordings).
     final service = _CapturingFirebaseMetadataService();
 
     await service.registerDevice('uid-123', 'device-abc');
@@ -55,16 +56,16 @@ void main() {
     expect(data.keys.toSet(), {'deviceId', 'createdAt', 'lastSeenAt', 'platform'});
     expect(data['deviceId'], 'device-abc');
     expect(data['platform'], 'android');
-    expect(data['createdAt'], isA<FieldValue>());
-    expect(data['lastSeenAt'], isA<FieldValue>());
+    expect(data['createdAt'], ServerValue.timestamp);
+    expect(data['lastSeenAt'], ServerValue.timestamp);
   });
 
   test(
-    'test_EARS_FB_2_firestore_failure_is_caught_and_logged_not_thrown',
+    'test_EARS_FB_2_realtime_db_failure_is_caught_and_logged_not_thrown',
     () async {
-      // EARS-FB-2 (offline-first constitution): a Firestore failure must
-      // never propagate out of registerDevice — it is swallowed and logged,
-      // not thrown.
+      // EARS-FB-2 (offline-first constitution): a Realtime Database
+      // failure must never propagate out of registerDevice — it is
+      // swallowed and logged, not thrown.
       final service = _ThrowingFirebaseMetadataService();
 
       await expectLater(

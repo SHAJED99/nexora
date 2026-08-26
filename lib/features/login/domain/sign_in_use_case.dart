@@ -13,7 +13,7 @@
 // account<->device metadata registration (FR-FB-001/002, FR-AUTH-004) via
 // `FirebaseMetadataService`. `registerDevice` already swallows and logs
 // its own errors, but is only called when `accountUid` is non-null — a
-// Firestore write failure must never block local-first sign-in
+// Realtime Database write failure must never block local-first sign-in
 // (EARS-FB-2, offline-first constitution).
 import 'package:nexora/core/auth/google_auth_service.dart';
 import 'package:nexora/core/services/firebase_metadata_service.dart';

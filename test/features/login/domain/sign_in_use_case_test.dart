@@ -3,7 +3,7 @@
 // the genesis stub's `Future.delayed`.
 //
 // E01-T02: also fires a best-effort Firebase account<->device metadata
-// registration after the local Drift write. A Firestore failure must never
+// registration after the local Drift write. A Realtime Database failure must never
 // block sign-in (EARS-FB-2) — verified here with a metadata service double
 // that always throws from its write seam.
 import 'package:drift/native.dart';
@@ -16,7 +16,7 @@ import 'package:nexora/features/login/domain/sign_in_use_case.dart';
 
 import '../../../support/fake_google_auth_service.dart';
 
-/// Always throws from the write seam — proves a Firestore failure never
+/// Always throws from the write seam — proves a Realtime Database failure never
 /// propagates out of `SignInUseCase.call` (EARS-FB-2).
 class _ThrowingFirebaseMetadataService extends FirebaseMetadataService {
   @override
@@ -96,7 +96,7 @@ void main() {
     'test_EARS_FB_1_registers_device_under_account_after_local_write',
     () async {
       // EARS-FB-1 (FR-FB-001/002, FR-AUTH-004): WHEN sign-in completes, the
-      // system SHALL register the device under the account in Firestore —
+      // system SHALL register the device under the account in Realtime Database —
       // fired after the local Drift write.
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       final repository = DeviceIdentityRepository(db);
@@ -117,9 +117,9 @@ void main() {
   );
 
   test(
-    'test_EARS_FB_2_firestore_failure_does_not_block_signin',
+    'test_EARS_FB_2_metadata_write_failure_does_not_block_signin',
     () async {
-      // EARS-FB-2 (offline-first constitution): IF the Firestore write
+      // EARS-FB-2 (offline-first constitution): IF the Realtime Database write
       // fails, THEN local sign-in SHALL still succeed — `call` completes
       // normally and the local device-identity row is written, even though
       // the metadata service always throws.

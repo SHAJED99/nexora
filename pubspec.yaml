@@ -51,9 +51,11 @@ dependencies:
   google_sign_in: ^6.2.2
 
   # Account↔device metadata mapping in the same Firebase project
-  # (FR-FB-001/002, ADR-0005) — not a new foundational choice (E01-T02). See
+  # (FR-FB-001/002, ADR-0005) — not a new foundational choice (E01-T02).
+  # Realtime Database, not Firestore: Firestore requires the Blaze billing
+  # plan to provision at all; the human declined enabling billing. See
   # docs/conventions.md "Third-party dependency additions".
-  cloud_firestore: ^5.6.12
+  firebase_database: ^11.1.4
 
   # Project UI widget kit — human-approved (new_dependency gate, 2026-08-26).
   # Standard component layer for popups/dialogs, async-aware buttons, and
