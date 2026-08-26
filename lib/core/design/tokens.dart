@@ -40,6 +40,15 @@ class NexoraColors {
   static const devicesActiveNavBg = Color(0xFF4F46E5); // rgb(79,70,229)
   static const devicesRowBorder = Color(0x1AC7C4D8); // rgba(199,196,216,0.1)
   static const devicesRowFill = Color(0x1AEFF4FF); // rgba(239,244,255,0.1)
+  // Review fix (E02-T02, F1): the 40x40 tinted circular backdrop behind
+  // each row's leading icon — dropped in the first pass. One per state,
+  // measured from design/golden/devices/default@390x844/probe.json
+  // elements 10/20/30/40 (not all four made it into the token table above
+  // since it only lists the highest-count values; these are exact anyway).
+  static const devicesIconBackdropTrusted = Color(0x334F46E5); // rgba(79,70,229,0.2)
+  static const devicesIconBackdropAllowed = Color(0x3339B8FD); // rgba(57,184,253,0.2)
+  static const devicesIconBackdropUnknown = Color(0x33D3E4FE); // rgba(211,228,254,0.2)
+  static const devicesIconBackdropBlocked = Color(0x33FFDAD6); // rgba(255,218,214,0.2)
 }
 
 class NexoraTextStyles {

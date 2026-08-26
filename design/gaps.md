@@ -97,8 +97,9 @@ is how a product acquires seven different empty states.
 - **proposal:** intentionally a no-op for E02-T02 — tapping shows a
   SnackBar ("Device discovery isn't available yet."); E04 wires the real
   scan behavior behind the same button
-- **approved by:** claude-code (orchestrator), during E02-T02 sharding,
-  2026-08-26 — recorded as OQ-E02-T02-1 in the task file
+- **approved by:** _<pending — flagged during E02-T02 task-sharding as
+  OQ-E02-T02-1, 2026-08-26; this line needs the human's name, not the
+  agent's — an agent cannot sign its own gap-approval gate (rule 2/3)>_
 - **built:** E02-T02 · golden extracted ⚪ (no gate to extract against yet)
 
 ## The usual suspects

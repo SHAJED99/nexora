@@ -6,6 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:nexora/core/design/tokens.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/features/devices/presentation/devices_binding.dart';
 import 'package:nexora/features/devices/presentation/devices_controller.dart';
@@ -42,22 +43,38 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Trusted — element 13-14: check_circle, "Trusted Node".
+    // Trusted — element 13-14: check_circle, "Trusted Node", green.
     expect(find.text('Trusted Node'), findsOneWidget);
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.check_circle)).color,
+      NexoraColors.devicesTrustedGreen,
+    );
 
-    // Allowed — element 21-22: radio_button_checked, "Allowed".
+    // Allowed — element 21-22: radio_button_checked, "Allowed", blue.
     expect(find.text('Allowed'), findsOneWidget);
     expect(find.byIcon(Icons.radio_button_checked), findsOneWidget);
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.radio_button_checked)).color,
+      NexoraColors.devicesAllowedBlue,
+    );
 
-    // Unknown — element 29-31: warning, "Unknown", and the "Verify" button.
+    // Unknown — element 29-31: warning, "Unknown", amber, and the "Verify" button.
     expect(find.text('Unknown'), findsOneWidget);
     expect(find.byIcon(Icons.warning), findsOneWidget);
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.warning)).color,
+      NexoraColors.devicesUnknownAmber,
+    );
     expect(find.text('Verify'), findsOneWidget);
 
-    // Blocked — element 37-38: block, "Blocked".
+    // Blocked — element 37-38: block, "Blocked", red.
     expect(find.text('Blocked'), findsOneWidget);
     expect(find.byIcon(Icons.block), findsOneWidget);
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.block)).color,
+      NexoraColors.devicesBlockedRed,
+    );
 
     // "Verify" is Unknown-only (§2) — exactly one on screen, not one per row.
     expect(find.text('Verify'), findsOneWidget);

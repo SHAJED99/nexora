@@ -47,7 +47,7 @@ class DevicesController extends GetxController {
   }
 
   /// "Discover" button (element 6) — intentionally a no-op. Real device
-  /// discovery is E04's job; see OQ-E02-T02-1 / design/gaps.md GAP-002.
+  /// discovery is E04's job; see OQ-E02-T02-1 / design/gaps.md GAP-004.
   void discover() {
     Get.snackbar(
       'Discover',

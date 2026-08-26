@@ -175,7 +175,16 @@ class _DeviceRow extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.devices, size: 24, color: visual.iconColor),
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: visual.iconBackdrop,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.devices, size: 24, color: visual.iconColor),
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -247,12 +256,14 @@ class _DeviceRow extends StatelessWidget {
 class _StateVisual {
   const _StateVisual({
     required this.iconColor,
+    required this.iconBackdrop,
     required this.badgeIcon,
     required this.badgeColor,
     required this.badgeLabel,
   });
 
   final Color iconColor;
+  final Color iconBackdrop;
   final IconData badgeIcon;
   final Color badgeColor;
   final String badgeLabel;
@@ -265,6 +276,7 @@ _StateVisual _stateVisual(RelationshipState state) {
     case RelationshipState.trusted:
       return const _StateVisual(
         iconColor: NexoraColors.welcomeHeading,
+        iconBackdrop: NexoraColors.devicesIconBackdropTrusted,
         badgeIcon: Icons.check_circle,
         badgeColor: NexoraColors.devicesTrustedGreen,
         badgeLabel: 'Trusted Node',
@@ -272,6 +284,7 @@ _StateVisual _stateVisual(RelationshipState state) {
     case RelationshipState.allowed:
       return const _StateVisual(
         iconColor: NexoraColors.devicesAllowedBlue,
+        iconBackdrop: NexoraColors.devicesIconBackdropAllowed,
         badgeIcon: Icons.radio_button_checked,
         badgeColor: NexoraColors.devicesAllowedBlue,
         badgeLabel: 'Allowed',
@@ -279,6 +292,7 @@ _StateVisual _stateVisual(RelationshipState state) {
     case RelationshipState.unknown:
       return const _StateVisual(
         iconColor: NexoraColors.devicesMuted,
+        iconBackdrop: NexoraColors.devicesIconBackdropUnknown,
         badgeIcon: Icons.warning,
         badgeColor: NexoraColors.devicesUnknownAmber,
         badgeLabel: 'Unknown',
@@ -286,6 +300,7 @@ _StateVisual _stateVisual(RelationshipState state) {
     case RelationshipState.blocked:
       return const _StateVisual(
         iconColor: NexoraColors.devicesBlockedRed,
+        iconBackdrop: NexoraColors.devicesIconBackdropBlocked,
         badgeIcon: Icons.block,
         badgeColor: NexoraColors.devicesBlockedRed,
         badgeLabel: 'Blocked',
