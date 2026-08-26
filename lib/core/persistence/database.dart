@@ -24,6 +24,12 @@ class DeviceIdentities extends Table {
   DateTimeColumn get signedInAt => dateTime().nullable()();
   DateTimeColumn get createdAt =>
       dateTime().withDefault(currentDateAndTime)();
+  // E01-T01: links a device identity to the Firebase Auth account it was
+  // signed in under. Nullable/additive (schema v2) — ADR-0005: this is a
+  // queryable account-id <-> device-id mapping only (FR-AUTH-004, multiple
+  // devices per account are independent rows); the device identity itself
+  // never derives from or depends on this column or the Firebase session.
+  TextColumn get accountUid => text().nullable()();
 }
 
 @DriftDatabase(tables: [DeviceIdentities])
@@ -34,7 +40,19 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            // Additive only — no drop/backfill, per docs/conventions.md
+            // "Schema migrations" (FR-VER-003).
+            await m.addColumn(deviceIdentities, deviceIdentities.accountUid);
+          }
+        },
+      );
 
   /// Inserts a fresh device-identity row and returns its id. Genesis-scope:
   /// one device identity per app install is enough to prove the write path;
@@ -45,12 +63,14 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Marks the given device identity as signed in "now".
-  Future<void> markSignedIn(int id) {
+  /// Marks the given device identity as signed in "now", optionally
+  /// recording the Firebase account uid (E01-T01).
+  Future<void> markSignedIn(int id, {String? accountUid}) {
     return (update(deviceIdentities)..where((t) => t.id.equals(id))).write(
       DeviceIdentitiesCompanion(
         signedIn: const Value(true),
         signedInAt: Value(DateTime.now()),
+        accountUid: Value(accountUid),
       ),
     );
   }
