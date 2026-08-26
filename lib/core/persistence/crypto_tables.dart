@@ -63,3 +63,21 @@ class SignalSessions extends Table {
   @override
   Set<Column> get primaryKey => {addressName, addressDeviceId};
 }
+
+/// One row per remote peer whose identity key this device has trusted,
+/// keyed by the library's `SignalProtocolAddress` (`name` + `deviceId`).
+/// E03-T01b: closes OQ-E03-T01-1 — this state must survive a process
+/// restart so a changed remote identity key (MITM/safety-number-change
+/// signal) is still detected in a later app session, not just within the
+/// process that first observed it (FR-SEC-003, FR-SEC-004).
+class SignalTrustedIdentities extends Table {
+  @override
+  String get tableName => 'signal_trusted_identities';
+
+  TextColumn get addressName => text()();
+  IntColumn get addressDeviceId => integer()();
+  BlobColumn get identityKey => blob()();
+
+  @override
+  Set<Column> get primaryKey => {addressName, addressDeviceId};
+}

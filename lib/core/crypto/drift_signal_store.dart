@@ -23,13 +23,6 @@ class DriftSignalProtocolStore extends SignalProtocolStore {
 
   final AppDatabase _db;
 
-  /// Remote identity keys this store has recorded trust for, keyed by
-  /// protocol address. In-memory only for this task: §5's Data contract
-  /// names only local identity, prekeys and sessions as needing Drift
-  /// persistence, and no EARS test in this task exercises trust surviving
-  /// an app restart — see the task file's Deviations for the full note.
-  final Map<SignalProtocolAddress, IdentityKey?> _trustedIdentities = {};
-
   // ---------------------------------------------------------------------
   // IdentityKeyStore
   // ---------------------------------------------------------------------
@@ -93,11 +86,25 @@ class DriftSignalProtocolStore extends SignalProtocolStore {
     SignalProtocolAddress address,
     IdentityKey? identityKey,
   ) async {
-    final previous = _trustedIdentities[address];
-    final changed = previous != null &&
-        identityKey != null &&
-        previous != identityKey;
-    _trustedIdentities[address] = identityKey;
+    final previous = await getIdentity(address);
+    final changed =
+        previous != null && identityKey != null && previous != identityKey;
+
+    if (identityKey == null) {
+      await (_db.delete(_db.signalTrustedIdentities)
+            ..where((t) =>
+                t.addressName.equals(address.getName()) &
+                t.addressDeviceId.equals(address.getDeviceId())))
+          .go();
+    } else {
+      await _db.into(_db.signalTrustedIdentities).insertOnConflictUpdate(
+            SignalTrustedIdentitiesCompanion.insert(
+              addressName: address.getName(),
+              addressDeviceId: address.getDeviceId(),
+              identityKey: identityKey.serialize(),
+            ),
+          );
+    }
     return changed;
   }
 
@@ -107,7 +114,7 @@ class DriftSignalProtocolStore extends SignalProtocolStore {
     IdentityKey? identityKey,
     Direction direction,
   ) async {
-    final previous = _trustedIdentities[address];
+    final previous = await getIdentity(address);
     if (previous == null) {
       // Trust-on-first-use: nothing recorded yet.
       return true;
@@ -117,7 +124,15 @@ class DriftSignalProtocolStore extends SignalProtocolStore {
 
   @override
   Future<IdentityKey?> getIdentity(SignalProtocolAddress address) async {
-    return _trustedIdentities[address];
+    final row = await (_db.select(_db.signalTrustedIdentities)
+          ..where((t) =>
+              t.addressName.equals(address.getName()) &
+              t.addressDeviceId.equals(address.getDeviceId())))
+        .getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+    return IdentityKey.fromBytes(row.identityKey, 0);
   }
 
   // ---------------------------------------------------------------------

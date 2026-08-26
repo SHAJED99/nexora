@@ -1610,6 +1610,303 @@ class SignalSessionsCompanion extends UpdateCompanion<SignalSession> {
   }
 }
 
+class $SignalTrustedIdentitiesTable extends SignalTrustedIdentities
+    with TableInfo<$SignalTrustedIdentitiesTable, SignalTrustedIdentity> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SignalTrustedIdentitiesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _addressNameMeta = const VerificationMeta(
+    'addressName',
+  );
+  @override
+  late final GeneratedColumn<String> addressName = GeneratedColumn<String>(
+    'address_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _addressDeviceIdMeta = const VerificationMeta(
+    'addressDeviceId',
+  );
+  @override
+  late final GeneratedColumn<int> addressDeviceId = GeneratedColumn<int>(
+    'address_device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _identityKeyMeta = const VerificationMeta(
+    'identityKey',
+  );
+  @override
+  late final GeneratedColumn<Uint8List> identityKey =
+      GeneratedColumn<Uint8List>(
+        'identity_key',
+        aliasedName,
+        false,
+        type: DriftSqlType.blob,
+        requiredDuringInsert: true,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    addressName,
+    addressDeviceId,
+    identityKey,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'signal_trusted_identities';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SignalTrustedIdentity> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('address_name')) {
+      context.handle(
+        _addressNameMeta,
+        addressName.isAcceptableOrUnknown(
+          data['address_name']!,
+          _addressNameMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_addressNameMeta);
+    }
+    if (data.containsKey('address_device_id')) {
+      context.handle(
+        _addressDeviceIdMeta,
+        addressDeviceId.isAcceptableOrUnknown(
+          data['address_device_id']!,
+          _addressDeviceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_addressDeviceIdMeta);
+    }
+    if (data.containsKey('identity_key')) {
+      context.handle(
+        _identityKeyMeta,
+        identityKey.isAcceptableOrUnknown(
+          data['identity_key']!,
+          _identityKeyMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_identityKeyMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {addressName, addressDeviceId};
+  @override
+  SignalTrustedIdentity map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SignalTrustedIdentity(
+      addressName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}address_name'],
+      )!,
+      addressDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}address_device_id'],
+      )!,
+      identityKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}identity_key'],
+      )!,
+    );
+  }
+
+  @override
+  $SignalTrustedIdentitiesTable createAlias(String alias) {
+    return $SignalTrustedIdentitiesTable(attachedDatabase, alias);
+  }
+}
+
+class SignalTrustedIdentity extends DataClass
+    implements Insertable<SignalTrustedIdentity> {
+  final String addressName;
+  final int addressDeviceId;
+  final Uint8List identityKey;
+  const SignalTrustedIdentity({
+    required this.addressName,
+    required this.addressDeviceId,
+    required this.identityKey,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['address_name'] = Variable<String>(addressName);
+    map['address_device_id'] = Variable<int>(addressDeviceId);
+    map['identity_key'] = Variable<Uint8List>(identityKey);
+    return map;
+  }
+
+  SignalTrustedIdentitiesCompanion toCompanion(bool nullToAbsent) {
+    return SignalTrustedIdentitiesCompanion(
+      addressName: Value(addressName),
+      addressDeviceId: Value(addressDeviceId),
+      identityKey: Value(identityKey),
+    );
+  }
+
+  factory SignalTrustedIdentity.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SignalTrustedIdentity(
+      addressName: serializer.fromJson<String>(json['addressName']),
+      addressDeviceId: serializer.fromJson<int>(json['addressDeviceId']),
+      identityKey: serializer.fromJson<Uint8List>(json['identityKey']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'addressName': serializer.toJson<String>(addressName),
+      'addressDeviceId': serializer.toJson<int>(addressDeviceId),
+      'identityKey': serializer.toJson<Uint8List>(identityKey),
+    };
+  }
+
+  SignalTrustedIdentity copyWith({
+    String? addressName,
+    int? addressDeviceId,
+    Uint8List? identityKey,
+  }) => SignalTrustedIdentity(
+    addressName: addressName ?? this.addressName,
+    addressDeviceId: addressDeviceId ?? this.addressDeviceId,
+    identityKey: identityKey ?? this.identityKey,
+  );
+  SignalTrustedIdentity copyWithCompanion(
+    SignalTrustedIdentitiesCompanion data,
+  ) {
+    return SignalTrustedIdentity(
+      addressName: data.addressName.present
+          ? data.addressName.value
+          : this.addressName,
+      addressDeviceId: data.addressDeviceId.present
+          ? data.addressDeviceId.value
+          : this.addressDeviceId,
+      identityKey: data.identityKey.present
+          ? data.identityKey.value
+          : this.identityKey,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SignalTrustedIdentity(')
+          ..write('addressName: $addressName, ')
+          ..write('addressDeviceId: $addressDeviceId, ')
+          ..write('identityKey: $identityKey')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    addressName,
+    addressDeviceId,
+    $driftBlobEquality.hash(identityKey),
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SignalTrustedIdentity &&
+          other.addressName == this.addressName &&
+          other.addressDeviceId == this.addressDeviceId &&
+          $driftBlobEquality.equals(other.identityKey, this.identityKey));
+}
+
+class SignalTrustedIdentitiesCompanion
+    extends UpdateCompanion<SignalTrustedIdentity> {
+  final Value<String> addressName;
+  final Value<int> addressDeviceId;
+  final Value<Uint8List> identityKey;
+  final Value<int> rowid;
+  const SignalTrustedIdentitiesCompanion({
+    this.addressName = const Value.absent(),
+    this.addressDeviceId = const Value.absent(),
+    this.identityKey = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SignalTrustedIdentitiesCompanion.insert({
+    required String addressName,
+    required int addressDeviceId,
+    required Uint8List identityKey,
+    this.rowid = const Value.absent(),
+  }) : addressName = Value(addressName),
+       addressDeviceId = Value(addressDeviceId),
+       identityKey = Value(identityKey);
+  static Insertable<SignalTrustedIdentity> custom({
+    Expression<String>? addressName,
+    Expression<int>? addressDeviceId,
+    Expression<Uint8List>? identityKey,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (addressName != null) 'address_name': addressName,
+      if (addressDeviceId != null) 'address_device_id': addressDeviceId,
+      if (identityKey != null) 'identity_key': identityKey,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SignalTrustedIdentitiesCompanion copyWith({
+    Value<String>? addressName,
+    Value<int>? addressDeviceId,
+    Value<Uint8List>? identityKey,
+    Value<int>? rowid,
+  }) {
+    return SignalTrustedIdentitiesCompanion(
+      addressName: addressName ?? this.addressName,
+      addressDeviceId: addressDeviceId ?? this.addressDeviceId,
+      identityKey: identityKey ?? this.identityKey,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (addressName.present) {
+      map['address_name'] = Variable<String>(addressName.value);
+    }
+    if (addressDeviceId.present) {
+      map['address_device_id'] = Variable<int>(addressDeviceId.value);
+    }
+    if (identityKey.present) {
+      map['identity_key'] = Variable<Uint8List>(identityKey.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SignalTrustedIdentitiesCompanion(')
+          ..write('addressName: $addressName, ')
+          ..write('addressDeviceId: $addressDeviceId, ')
+          ..write('identityKey: $identityKey, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1623,6 +1920,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SignalOneTimePrekeysTable signalOneTimePrekeys =
       $SignalOneTimePrekeysTable(this);
   late final $SignalSessionsTable signalSessions = $SignalSessionsTable(this);
+  late final $SignalTrustedIdentitiesTable signalTrustedIdentities =
+      $SignalTrustedIdentitiesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1634,6 +1933,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     signalSignedPrekeys,
     signalOneTimePrekeys,
     signalSessions,
+    signalTrustedIdentities,
   ];
 }
 
@@ -2651,6 +2951,193 @@ typedef $$SignalSessionsTableProcessedTableManager =
       SignalSession,
       PrefetchHooks Function()
     >;
+typedef $$SignalTrustedIdentitiesTableCreateCompanionBuilder =
+    SignalTrustedIdentitiesCompanion Function({
+      required String addressName,
+      required int addressDeviceId,
+      required Uint8List identityKey,
+      Value<int> rowid,
+    });
+typedef $$SignalTrustedIdentitiesTableUpdateCompanionBuilder =
+    SignalTrustedIdentitiesCompanion Function({
+      Value<String> addressName,
+      Value<int> addressDeviceId,
+      Value<Uint8List> identityKey,
+      Value<int> rowid,
+    });
+
+class $$SignalTrustedIdentitiesTableFilterComposer
+    extends Composer<_$AppDatabase, $SignalTrustedIdentitiesTable> {
+  $$SignalTrustedIdentitiesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get addressName => $composableBuilder(
+    column: $table.addressName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get addressDeviceId => $composableBuilder(
+    column: $table.addressDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get identityKey => $composableBuilder(
+    column: $table.identityKey,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SignalTrustedIdentitiesTableOrderingComposer
+    extends Composer<_$AppDatabase, $SignalTrustedIdentitiesTable> {
+  $$SignalTrustedIdentitiesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get addressName => $composableBuilder(
+    column: $table.addressName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get addressDeviceId => $composableBuilder(
+    column: $table.addressDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get identityKey => $composableBuilder(
+    column: $table.identityKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SignalTrustedIdentitiesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SignalTrustedIdentitiesTable> {
+  $$SignalTrustedIdentitiesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get addressName => $composableBuilder(
+    column: $table.addressName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get addressDeviceId => $composableBuilder(
+    column: $table.addressDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<Uint8List> get identityKey => $composableBuilder(
+    column: $table.identityKey,
+    builder: (column) => column,
+  );
+}
+
+class $$SignalTrustedIdentitiesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SignalTrustedIdentitiesTable,
+          SignalTrustedIdentity,
+          $$SignalTrustedIdentitiesTableFilterComposer,
+          $$SignalTrustedIdentitiesTableOrderingComposer,
+          $$SignalTrustedIdentitiesTableAnnotationComposer,
+          $$SignalTrustedIdentitiesTableCreateCompanionBuilder,
+          $$SignalTrustedIdentitiesTableUpdateCompanionBuilder,
+          (
+            SignalTrustedIdentity,
+            BaseReferences<
+              _$AppDatabase,
+              $SignalTrustedIdentitiesTable,
+              SignalTrustedIdentity
+            >,
+          ),
+          SignalTrustedIdentity,
+          PrefetchHooks Function()
+        > {
+  $$SignalTrustedIdentitiesTableTableManager(
+    _$AppDatabase db,
+    $SignalTrustedIdentitiesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SignalTrustedIdentitiesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$SignalTrustedIdentitiesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$SignalTrustedIdentitiesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> addressName = const Value.absent(),
+                Value<int> addressDeviceId = const Value.absent(),
+                Value<Uint8List> identityKey = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SignalTrustedIdentitiesCompanion(
+                addressName: addressName,
+                addressDeviceId: addressDeviceId,
+                identityKey: identityKey,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String addressName,
+                required int addressDeviceId,
+                required Uint8List identityKey,
+                Value<int> rowid = const Value.absent(),
+              }) => SignalTrustedIdentitiesCompanion.insert(
+                addressName: addressName,
+                addressDeviceId: addressDeviceId,
+                identityKey: identityKey,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SignalTrustedIdentitiesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SignalTrustedIdentitiesTable,
+      SignalTrustedIdentity,
+      $$SignalTrustedIdentitiesTableFilterComposer,
+      $$SignalTrustedIdentitiesTableOrderingComposer,
+      $$SignalTrustedIdentitiesTableAnnotationComposer,
+      $$SignalTrustedIdentitiesTableCreateCompanionBuilder,
+      $$SignalTrustedIdentitiesTableUpdateCompanionBuilder,
+      (
+        SignalTrustedIdentity,
+        BaseReferences<
+          _$AppDatabase,
+          $SignalTrustedIdentitiesTable,
+          SignalTrustedIdentity
+        >,
+      ),
+      SignalTrustedIdentity,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2667,4 +3154,9 @@ class $AppDatabaseManager {
       $$SignalOneTimePrekeysTableTableManager(_db, _db.signalOneTimePrekeys);
   $$SignalSessionsTableTableManager get signalSessions =>
       $$SignalSessionsTableTableManager(_db, _db.signalSessions);
+  $$SignalTrustedIdentitiesTableTableManager get signalTrustedIdentities =>
+      $$SignalTrustedIdentitiesTableTableManager(
+        _db,
+        _db.signalTrustedIdentities,
+      );
 }

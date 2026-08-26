@@ -42,6 +42,7 @@ class DeviceIdentities extends Table {
   SignalSignedPrekeys,
   SignalOneTimePrekeys,
   SignalSessions,
+  SignalTrustedIdentities,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -50,7 +51,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -74,6 +75,11 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(signalSignedPrekeys);
             await m.createTable(signalOneTimePrekeys);
             await m.createTable(signalSessions);
+          }
+          if (from < 5) {
+            // E03-T01b: durable remote-peer identity trust — additive, no
+            // changes to existing tables (closes OQ-E03-T01-1).
+            await m.createTable(signalTrustedIdentities);
           }
         },
       );
