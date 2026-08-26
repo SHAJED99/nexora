@@ -71,6 +71,17 @@ class $DeviceIdentitiesTable extends DeviceIdentities
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _accountUidMeta = const VerificationMeta(
+    'accountUid',
+  );
+  @override
+  late final GeneratedColumn<String> accountUid = GeneratedColumn<String>(
+    'account_uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -78,6 +89,7 @@ class $DeviceIdentitiesTable extends DeviceIdentities
     signedIn,
     signedInAt,
     createdAt,
+    accountUid,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -123,6 +135,12 @@ class $DeviceIdentitiesTable extends DeviceIdentities
         createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
       );
     }
+    if (data.containsKey('account_uid')) {
+      context.handle(
+        _accountUidMeta,
+        accountUid.isAcceptableOrUnknown(data['account_uid']!, _accountUidMeta),
+      );
+    }
     return context;
   }
 
@@ -152,6 +170,10 @@ class $DeviceIdentitiesTable extends DeviceIdentities
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      accountUid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_uid'],
+      ),
     );
   }
 
@@ -167,12 +189,14 @@ class DeviceIdentity extends DataClass implements Insertable<DeviceIdentity> {
   final bool signedIn;
   final DateTime? signedInAt;
   final DateTime createdAt;
+  final String? accountUid;
   const DeviceIdentity({
     required this.id,
     required this.deviceId,
     required this.signedIn,
     this.signedInAt,
     required this.createdAt,
+    this.accountUid,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -184,6 +208,9 @@ class DeviceIdentity extends DataClass implements Insertable<DeviceIdentity> {
       map['signed_in_at'] = Variable<DateTime>(signedInAt);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || accountUid != null) {
+      map['account_uid'] = Variable<String>(accountUid);
+    }
     return map;
   }
 
@@ -196,6 +223,9 @@ class DeviceIdentity extends DataClass implements Insertable<DeviceIdentity> {
           ? const Value.absent()
           : Value(signedInAt),
       createdAt: Value(createdAt),
+      accountUid: accountUid == null && nullToAbsent
+          ? const Value.absent()
+          : Value(accountUid),
     );
   }
 
@@ -210,6 +240,7 @@ class DeviceIdentity extends DataClass implements Insertable<DeviceIdentity> {
       signedIn: serializer.fromJson<bool>(json['signedIn']),
       signedInAt: serializer.fromJson<DateTime?>(json['signedInAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      accountUid: serializer.fromJson<String?>(json['accountUid']),
     );
   }
   @override
@@ -221,6 +252,7 @@ class DeviceIdentity extends DataClass implements Insertable<DeviceIdentity> {
       'signedIn': serializer.toJson<bool>(signedIn),
       'signedInAt': serializer.toJson<DateTime?>(signedInAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'accountUid': serializer.toJson<String?>(accountUid),
     };
   }
 
@@ -230,12 +262,14 @@ class DeviceIdentity extends DataClass implements Insertable<DeviceIdentity> {
     bool? signedIn,
     Value<DateTime?> signedInAt = const Value.absent(),
     DateTime? createdAt,
+    Value<String?> accountUid = const Value.absent(),
   }) => DeviceIdentity(
     id: id ?? this.id,
     deviceId: deviceId ?? this.deviceId,
     signedIn: signedIn ?? this.signedIn,
     signedInAt: signedInAt.present ? signedInAt.value : this.signedInAt,
     createdAt: createdAt ?? this.createdAt,
+    accountUid: accountUid.present ? accountUid.value : this.accountUid,
   );
   DeviceIdentity copyWithCompanion(DeviceIdentitiesCompanion data) {
     return DeviceIdentity(
@@ -246,6 +280,9 @@ class DeviceIdentity extends DataClass implements Insertable<DeviceIdentity> {
           ? data.signedInAt.value
           : this.signedInAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      accountUid: data.accountUid.present
+          ? data.accountUid.value
+          : this.accountUid,
     );
   }
 
@@ -256,14 +293,15 @@ class DeviceIdentity extends DataClass implements Insertable<DeviceIdentity> {
           ..write('deviceId: $deviceId, ')
           ..write('signedIn: $signedIn, ')
           ..write('signedInAt: $signedInAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('accountUid: $accountUid')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode =>
-      Object.hash(id, deviceId, signedIn, signedInAt, createdAt);
+      Object.hash(id, deviceId, signedIn, signedInAt, createdAt, accountUid);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -272,7 +310,8 @@ class DeviceIdentity extends DataClass implements Insertable<DeviceIdentity> {
           other.deviceId == this.deviceId &&
           other.signedIn == this.signedIn &&
           other.signedInAt == this.signedInAt &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.accountUid == this.accountUid);
 }
 
 class DeviceIdentitiesCompanion extends UpdateCompanion<DeviceIdentity> {
@@ -281,12 +320,14 @@ class DeviceIdentitiesCompanion extends UpdateCompanion<DeviceIdentity> {
   final Value<bool> signedIn;
   final Value<DateTime?> signedInAt;
   final Value<DateTime> createdAt;
+  final Value<String?> accountUid;
   const DeviceIdentitiesCompanion({
     this.id = const Value.absent(),
     this.deviceId = const Value.absent(),
     this.signedIn = const Value.absent(),
     this.signedInAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.accountUid = const Value.absent(),
   });
   DeviceIdentitiesCompanion.insert({
     this.id = const Value.absent(),
@@ -294,6 +335,7 @@ class DeviceIdentitiesCompanion extends UpdateCompanion<DeviceIdentity> {
     this.signedIn = const Value.absent(),
     this.signedInAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.accountUid = const Value.absent(),
   }) : deviceId = Value(deviceId);
   static Insertable<DeviceIdentity> custom({
     Expression<int>? id,
@@ -301,6 +343,7 @@ class DeviceIdentitiesCompanion extends UpdateCompanion<DeviceIdentity> {
     Expression<bool>? signedIn,
     Expression<DateTime>? signedInAt,
     Expression<DateTime>? createdAt,
+    Expression<String>? accountUid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -308,6 +351,7 @@ class DeviceIdentitiesCompanion extends UpdateCompanion<DeviceIdentity> {
       if (signedIn != null) 'signed_in': signedIn,
       if (signedInAt != null) 'signed_in_at': signedInAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (accountUid != null) 'account_uid': accountUid,
     });
   }
 
@@ -317,6 +361,7 @@ class DeviceIdentitiesCompanion extends UpdateCompanion<DeviceIdentity> {
     Value<bool>? signedIn,
     Value<DateTime?>? signedInAt,
     Value<DateTime>? createdAt,
+    Value<String?>? accountUid,
   }) {
     return DeviceIdentitiesCompanion(
       id: id ?? this.id,
@@ -324,6 +369,7 @@ class DeviceIdentitiesCompanion extends UpdateCompanion<DeviceIdentity> {
       signedIn: signedIn ?? this.signedIn,
       signedInAt: signedInAt ?? this.signedInAt,
       createdAt: createdAt ?? this.createdAt,
+      accountUid: accountUid ?? this.accountUid,
     );
   }
 
@@ -345,6 +391,9 @@ class DeviceIdentitiesCompanion extends UpdateCompanion<DeviceIdentity> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (accountUid.present) {
+      map['account_uid'] = Variable<String>(accountUid.value);
+    }
     return map;
   }
 
@@ -355,7 +404,8 @@ class DeviceIdentitiesCompanion extends UpdateCompanion<DeviceIdentity> {
           ..write('deviceId: $deviceId, ')
           ..write('signedIn: $signedIn, ')
           ..write('signedInAt: $signedInAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('accountUid: $accountUid')
           ..write(')'))
         .toString();
   }
@@ -381,6 +431,7 @@ typedef $$DeviceIdentitiesTableCreateCompanionBuilder =
       Value<bool> signedIn,
       Value<DateTime?> signedInAt,
       Value<DateTime> createdAt,
+      Value<String?> accountUid,
     });
 typedef $$DeviceIdentitiesTableUpdateCompanionBuilder =
     DeviceIdentitiesCompanion Function({
@@ -389,6 +440,7 @@ typedef $$DeviceIdentitiesTableUpdateCompanionBuilder =
       Value<bool> signedIn,
       Value<DateTime?> signedInAt,
       Value<DateTime> createdAt,
+      Value<String?> accountUid,
     });
 
 class $$DeviceIdentitiesTableFilterComposer
@@ -422,6 +474,11 @@ class $$DeviceIdentitiesTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get accountUid => $composableBuilder(
+    column: $table.accountUid,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -459,6 +516,11 @@ class $$DeviceIdentitiesTableOrderingComposer
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get accountUid => $composableBuilder(
+    column: $table.accountUid,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$DeviceIdentitiesTableAnnotationComposer
@@ -486,6 +548,11 @@ class $$DeviceIdentitiesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get accountUid => $composableBuilder(
+    column: $table.accountUid,
+    builder: (column) => column,
+  );
 }
 
 class $$DeviceIdentitiesTableTableManager
@@ -530,12 +597,14 @@ class $$DeviceIdentitiesTableTableManager
                 Value<bool> signedIn = const Value.absent(),
                 Value<DateTime?> signedInAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<String?> accountUid = const Value.absent(),
               }) => DeviceIdentitiesCompanion(
                 id: id,
                 deviceId: deviceId,
                 signedIn: signedIn,
                 signedInAt: signedInAt,
                 createdAt: createdAt,
+                accountUid: accountUid,
               ),
           createCompanionCallback:
               ({
@@ -544,12 +613,14 @@ class $$DeviceIdentitiesTableTableManager
                 Value<bool> signedIn = const Value.absent(),
                 Value<DateTime?> signedInAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<String?> accountUid = const Value.absent(),
               }) => DeviceIdentitiesCompanion.insert(
                 id: id,
                 deviceId: deviceId,
                 signedIn: signedIn,
                 signedInAt: signedInAt,
                 createdAt: createdAt,
+                accountUid: accountUid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
