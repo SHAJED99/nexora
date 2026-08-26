@@ -70,7 +70,11 @@ class AppDatabase extends _$AppDatabase {
       DeviceIdentitiesCompanion(
         signedIn: const Value(true),
         signedInAt: Value(DateTime.now()),
-        accountUid: Value(accountUid),
+        // absent (not null) when no uid is passed, so a caller that omits
+        // accountUid never clobbers an existing account link on the row.
+        accountUid: accountUid == null
+            ? const Value.absent()
+            : Value(accountUid),
       ),
     );
   }

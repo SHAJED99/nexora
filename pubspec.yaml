@@ -62,6 +62,11 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
+  # Test-only: builds a hand-crafted v1 schema in database_migration_test.dart
+  # (already a transitive dep via drift/sqlite3_flutter_libs — declared
+  # directly per analyzer's depend_on_referenced_packages).
+  sqlite3: ^3.5.2
+
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
   # activated in the `analysis_options.yaml` file located at the root of your
