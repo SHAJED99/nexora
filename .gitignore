@@ -29,3 +29,23 @@ __pycache__/
 # rendered workshop deck (source is docs/WORKSHOP.md)
 deck.html
 deck.pdf
+
+# Flutter/Dart build artifacts (E00-T04) — generated, never committed.
+# Drift-generated *.g.dart files ARE committed (codegen output checked in
+# like any other generated-but-reviewed source, per Drift convention).
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+*.iml
+.idea/
+android/.gradle/
+android/local.properties
+android/**/gradle-wrapper.jar
+android/key.properties
+**/android/app/debug
+**/android/app/profile
+**/android/app/release
