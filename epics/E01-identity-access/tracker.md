@@ -1,16 +1,20 @@
 # E01 · Identity & Access · Progress
 
-**Status:** todo · **Started:** — · **Completed:** — · **Progress:** 0/? (not yet sharded)
+**Status:** in-progress · **Started:** 2026-08-26 · **Completed:** — · **Progress:** 0/2
 
 > Only the ORCHESTRATOR edits this file.
 > todo → in-progress → review-requested → (changes-requested →) done → verified
 > · side: blocked, frozen
 
 ## Tasks
-_(populated by `skills/task-sharding` once E01 is approved)_
+- [ ] E01-T01 · Real Google Sign-In + device identity · todo · —
+- [ ] E01-T02 · Firebase account/device metadata wrapper · todo · —
 
 ## Dependency graph
-_(populated at sharding)_
+```mermaid
+graph LR
+  T01[E01-T01] --> T02[E01-T02]
+```
 
 ## Review log
 (date · task · reviewer model · outcome · design gate %)
