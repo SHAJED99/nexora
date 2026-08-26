@@ -1,22 +1,26 @@
 # E03 · E2E Encryption & Threat Protection · Progress
 
-**Status:** in-progress · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 1/3
+**Status:** in-progress · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 1/4
 
 > Only the ORCHESTRATOR edits this file.
 
 ## Tasks
 - [x] E03-T01 · libsignal_protocol_dart + Drift-backed protocol store · done · builder (sonnet) → reviewer (opus)
+- [ ] E03-T01b · Persist remote-peer identity trust across restarts (closes OQ-E03-T01-1) · todo · builder (sonnet) → reviewer (opus)
 - [ ] E03-T02 · Local identity generation + prekey bundle service · todo · builder (sonnet) → reviewer (opus)
-- [ ] E03-T03 · Real core/crypto API — X3DH session + Double Ratchet encrypt/decrypt · blocked (OQ-E03-T01-1) · builder (sonnet) → reviewer (opus)
+- [ ] E03-T03 · Real core/crypto API — X3DH session + Double Ratchet encrypt/decrypt · todo · builder (sonnet) → reviewer (opus)
 
 ## Dependency graph
 ```mermaid
 graph LR
+  T01[E03-T01] --> T01b[E03-T01b]
   T01[E03-T01] --> T02[E03-T02]
-  T02 --> T03[E03-T03]
+  T01b --> T03[E03-T03]
+  T02 --> T03
 ```
-Strictly linear — each task's store/service is the next task's only seam.
-No parallel dispatch candidates in this epic.
+T01b and T02 both depend only on T01 and touch disjoint files
+(`drift_signal_store.dart`/`database.dart`/`crypto_tables.dart` vs a new
+`identity_service.dart`) — safe to dispatch in parallel. T03 waits on both.
 
 ## Review log
 - 2026-08-27 · E03-T01 · Opus · approve with notes (0 blocking; a real spec
@@ -27,9 +31,7 @@ No parallel dispatch candidates in this epic.
   the reviewer independently.
 
 ## Blocked / Frozen
-- E03-T03 — blocked on OQ-E03-T01-1 (remote-peer identity trust persistence)
-  until the planner/human resolve it. Not a task-execution blocker; a spec
-  gap discovered during E03-T01's review.
+- E03-T03 — blocked on `depends_on: [E03-T02, E03-T01b]`, both still todo.
 
 ## Event log (append-only)
 - 2026-08-27 E03 sharded into 3 tasks (task-sharding skill). OQ-E03-1
@@ -64,3 +66,7 @@ No parallel dispatch candidates in this epic.
   (`403c94e`); `flutter analyze`/`flutter test` re-confirmed green on
   `epic_03` (42/42). E03-T01 → `done`. E03-T02 cleared to start; E03-T03
   blocked pending OQ-E03-T01-1 resolution.
+- 2026-08-27 Human resolved OQ-E03-T01-1: shard a new task rather than fold
+  into T02 or defer. E03-T01b written, `epic.md` OQ closed, E03-T03's
+  `depends_on` updated to `[E03-T02, E03-T01b]`. Dispatching E03-T01b and
+  E03-T02 in parallel (disjoint files, both depend only on T01).

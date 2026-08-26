@@ -89,6 +89,20 @@ This is security-critical — expect the review gate's security lens
   - **Answered by:** human
   - **Date:** 2026-08-27
 
+- **OQ-E03-T01-1 — remote-peer identity trust not persisted across
+  restarts.** Raised by the reviewer during E03-T01's review: `saveIdentity`/
+  `isTrustedIdentity`/`getIdentity` were implemented in-memory only, so a
+  changed remote identity key (MITM/safety-number change) would not be
+  detected across an app restart — undermining the epic's own FR-SEC-003
+  claim. A schema change (rule 3 human gate).
+  - **Status:** ✅ resolved
+  - **Answer:** Sharded as a new task, **E03-T01b**, adding a
+    `signal_trusted_identities` Drift table (schema v4→v5) and rewiring
+    `DriftSignalProtocolStore` to it. E03-T03's `depends_on` updated to
+    include it; E03-T03 stays blocked until E03-T01b is done.
+  - **Answered by:** human
+  - **Date:** 2026-08-27
+
 ## Analyze report
 *(`skills/task-sharding` §6, run 2026-08-27 against E03-T01/T02/T03)*
 
