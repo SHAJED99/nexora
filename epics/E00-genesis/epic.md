@@ -44,9 +44,9 @@ inside of.
 | E00-T01 | Foundational ADRs (0001–0006) | docs | M | ✅ done — all `accepted`, 2026-08-26 |
 | E00-T02 | Conventions (`docs/conventions.md`) | docs | S | ✅ done |
 | E00-T03 | Design contracts (extract + gap pass) | design | M | ✅ done — 7 screens contracted + human-approved (Q-DESIGN-001); `design/gaps.md` intentionally empty until FR ids exist in an epic |
-| E00-T04 | Repo skeleton + route/data-flow maps | infra | M | 🟡 todo |
-| E00-T05 | Walking skeleton (real request, end to end, running) | cross-cutting | L | 🟡 todo |
-| E00-T06 | CI, branch protection, hooks, design self-test | infra | M | 🟡 todo |
+| E00-T04 | Repo skeleton + route/data-flow maps | infra | M | 🔵 review-requested — Flutter Android skeleton scaffolded (`lib/` per docs/conventions.md), `docs/routes.md` + `docs/data-flow.md` written |
+| E00-T05 | Walking skeleton (real request, end to end, running) | cross-cutting | L | 🔵 review-requested — welcome/login built against contracts; UI → GetX controller → use case → repository → Drift wired with one real write + read; `flutter analyze`/`flutter test` green, `flutter build apk --debug` succeeded; no emulator available to confirm on-device boot |
+| E00-T06 | CI, hooks, design self-test | infra | M | 🔵 review-requested — `.github/workflows/ci.yml` added; git hooks confirmed already installed; `design-selftest` green; GitHub branch protection and design-verify wiring for welcome/login explicitly deferred (see tracker.md event log) |
 
 ## Test strategy
 T05's walking skeleton is proven by: app builds, launches, the one wired
