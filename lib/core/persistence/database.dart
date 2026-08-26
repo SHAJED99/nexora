@@ -10,6 +10,7 @@ import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'crypto_tables.dart';
 import 'relationships_table.dart';
 
 part 'database.g.dart';
@@ -34,7 +35,14 @@ class DeviceIdentities extends Table {
   TextColumn get accountUid => text().nullable()();
 }
 
-@DriftDatabase(tables: [DeviceIdentities, Relationships])
+@DriftDatabase(tables: [
+  DeviceIdentities,
+  Relationships,
+  SignalIdentity,
+  SignalSignedPrekeys,
+  SignalOneTimePrekeys,
+  SignalSessions,
+])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
@@ -42,7 +50,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -57,6 +65,15 @@ class AppDatabase extends _$AppDatabase {
             // E02-T01: new `relationships` table — additive, no changes to
             // existing tables.
             await m.createTable(relationships);
+          }
+          if (from < 4) {
+            // E03-T01: Signal protocol store tables — additive, no changes
+            // to existing tables (ADR-0003, docs/conventions.md "Schema
+            // migrations").
+            await m.createTable(signalIdentity);
+            await m.createTable(signalSignedPrekeys);
+            await m.createTable(signalOneTimePrekeys);
+            await m.createTable(signalSessions);
           }
         },
       );
