@@ -1907,6 +1907,212 @@ class SignalTrustedIdentitiesCompanion
   }
 }
 
+class $CryptoCountersTable extends CryptoCounters
+    with TableInfo<$CryptoCountersTable, CryptoCounter> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CryptoCountersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nextOneTimePreKeyIdMeta =
+      const VerificationMeta('nextOneTimePreKeyId');
+  @override
+  late final GeneratedColumn<int> nextOneTimePreKeyId = GeneratedColumn<int>(
+    'next_one_time_pre_key_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, nextOneTimePreKeyId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'crypto_counters';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CryptoCounter> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('next_one_time_pre_key_id')) {
+      context.handle(
+        _nextOneTimePreKeyIdMeta,
+        nextOneTimePreKeyId.isAcceptableOrUnknown(
+          data['next_one_time_pre_key_id']!,
+          _nextOneTimePreKeyIdMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CryptoCounter map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CryptoCounter(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      nextOneTimePreKeyId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}next_one_time_pre_key_id'],
+      )!,
+    );
+  }
+
+  @override
+  $CryptoCountersTable createAlias(String alias) {
+    return $CryptoCountersTable(attachedDatabase, alias);
+  }
+}
+
+class CryptoCounter extends DataClass implements Insertable<CryptoCounter> {
+  final int id;
+  final int nextOneTimePreKeyId;
+  const CryptoCounter({required this.id, required this.nextOneTimePreKeyId});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['next_one_time_pre_key_id'] = Variable<int>(nextOneTimePreKeyId);
+    return map;
+  }
+
+  CryptoCountersCompanion toCompanion(bool nullToAbsent) {
+    return CryptoCountersCompanion(
+      id: Value(id),
+      nextOneTimePreKeyId: Value(nextOneTimePreKeyId),
+    );
+  }
+
+  factory CryptoCounter.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CryptoCounter(
+      id: serializer.fromJson<int>(json['id']),
+      nextOneTimePreKeyId: serializer.fromJson<int>(
+        json['nextOneTimePreKeyId'],
+      ),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'nextOneTimePreKeyId': serializer.toJson<int>(nextOneTimePreKeyId),
+    };
+  }
+
+  CryptoCounter copyWith({int? id, int? nextOneTimePreKeyId}) => CryptoCounter(
+    id: id ?? this.id,
+    nextOneTimePreKeyId: nextOneTimePreKeyId ?? this.nextOneTimePreKeyId,
+  );
+  CryptoCounter copyWithCompanion(CryptoCountersCompanion data) {
+    return CryptoCounter(
+      id: data.id.present ? data.id.value : this.id,
+      nextOneTimePreKeyId: data.nextOneTimePreKeyId.present
+          ? data.nextOneTimePreKeyId.value
+          : this.nextOneTimePreKeyId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CryptoCounter(')
+          ..write('id: $id, ')
+          ..write('nextOneTimePreKeyId: $nextOneTimePreKeyId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, nextOneTimePreKeyId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CryptoCounter &&
+          other.id == this.id &&
+          other.nextOneTimePreKeyId == this.nextOneTimePreKeyId);
+}
+
+class CryptoCountersCompanion extends UpdateCompanion<CryptoCounter> {
+  final Value<int> id;
+  final Value<int> nextOneTimePreKeyId;
+  const CryptoCountersCompanion({
+    this.id = const Value.absent(),
+    this.nextOneTimePreKeyId = const Value.absent(),
+  });
+  CryptoCountersCompanion.insert({
+    this.id = const Value.absent(),
+    this.nextOneTimePreKeyId = const Value.absent(),
+  });
+  static Insertable<CryptoCounter> custom({
+    Expression<int>? id,
+    Expression<int>? nextOneTimePreKeyId,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (nextOneTimePreKeyId != null)
+        'next_one_time_pre_key_id': nextOneTimePreKeyId,
+    });
+  }
+
+  CryptoCountersCompanion copyWith({
+    Value<int>? id,
+    Value<int>? nextOneTimePreKeyId,
+  }) {
+    return CryptoCountersCompanion(
+      id: id ?? this.id,
+      nextOneTimePreKeyId: nextOneTimePreKeyId ?? this.nextOneTimePreKeyId,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (nextOneTimePreKeyId.present) {
+      map['next_one_time_pre_key_id'] = Variable<int>(
+        nextOneTimePreKeyId.value,
+      );
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CryptoCountersCompanion(')
+          ..write('id: $id, ')
+          ..write('nextOneTimePreKeyId: $nextOneTimePreKeyId')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1922,6 +2128,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SignalSessionsTable signalSessions = $SignalSessionsTable(this);
   late final $SignalTrustedIdentitiesTable signalTrustedIdentities =
       $SignalTrustedIdentitiesTable(this);
+  late final $CryptoCountersTable cryptoCounters = $CryptoCountersTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1934,6 +2141,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     signalOneTimePrekeys,
     signalSessions,
     signalTrustedIdentities,
+    cryptoCounters,
   ];
 }
 
@@ -3138,6 +3346,147 @@ typedef $$SignalTrustedIdentitiesTableProcessedTableManager =
       SignalTrustedIdentity,
       PrefetchHooks Function()
     >;
+typedef $$CryptoCountersTableCreateCompanionBuilder =
+    CryptoCountersCompanion Function({
+      Value<int> id,
+      Value<int> nextOneTimePreKeyId,
+    });
+typedef $$CryptoCountersTableUpdateCompanionBuilder =
+    CryptoCountersCompanion Function({
+      Value<int> id,
+      Value<int> nextOneTimePreKeyId,
+    });
+
+class $$CryptoCountersTableFilterComposer
+    extends Composer<_$AppDatabase, $CryptoCountersTable> {
+  $$CryptoCountersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nextOneTimePreKeyId => $composableBuilder(
+    column: $table.nextOneTimePreKeyId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CryptoCountersTableOrderingComposer
+    extends Composer<_$AppDatabase, $CryptoCountersTable> {
+  $$CryptoCountersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nextOneTimePreKeyId => $composableBuilder(
+    column: $table.nextOneTimePreKeyId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CryptoCountersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CryptoCountersTable> {
+  $$CryptoCountersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get nextOneTimePreKeyId => $composableBuilder(
+    column: $table.nextOneTimePreKeyId,
+    builder: (column) => column,
+  );
+}
+
+class $$CryptoCountersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CryptoCountersTable,
+          CryptoCounter,
+          $$CryptoCountersTableFilterComposer,
+          $$CryptoCountersTableOrderingComposer,
+          $$CryptoCountersTableAnnotationComposer,
+          $$CryptoCountersTableCreateCompanionBuilder,
+          $$CryptoCountersTableUpdateCompanionBuilder,
+          (
+            CryptoCounter,
+            BaseReferences<_$AppDatabase, $CryptoCountersTable, CryptoCounter>,
+          ),
+          CryptoCounter,
+          PrefetchHooks Function()
+        > {
+  $$CryptoCountersTableTableManager(
+    _$AppDatabase db,
+    $CryptoCountersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CryptoCountersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CryptoCountersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CryptoCountersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> nextOneTimePreKeyId = const Value.absent(),
+              }) => CryptoCountersCompanion(
+                id: id,
+                nextOneTimePreKeyId: nextOneTimePreKeyId,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> nextOneTimePreKeyId = const Value.absent(),
+              }) => CryptoCountersCompanion.insert(
+                id: id,
+                nextOneTimePreKeyId: nextOneTimePreKeyId,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CryptoCountersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CryptoCountersTable,
+      CryptoCounter,
+      $$CryptoCountersTableFilterComposer,
+      $$CryptoCountersTableOrderingComposer,
+      $$CryptoCountersTableAnnotationComposer,
+      $$CryptoCountersTableCreateCompanionBuilder,
+      $$CryptoCountersTableUpdateCompanionBuilder,
+      (
+        CryptoCounter,
+        BaseReferences<_$AppDatabase, $CryptoCountersTable, CryptoCounter>,
+      ),
+      CryptoCounter,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3159,4 +3508,6 @@ class $AppDatabaseManager {
         _db,
         _db.signalTrustedIdentities,
       );
+  $$CryptoCountersTableTableManager get cryptoCounters =>
+      $$CryptoCountersTableTableManager(_db, _db.cryptoCounters);
 }

@@ -43,6 +43,7 @@ class DeviceIdentities extends Table {
   SignalOneTimePrekeys,
   SignalSessions,
   SignalTrustedIdentities,
+  CryptoCounters,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -51,7 +52,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -80,6 +81,34 @@ class AppDatabase extends _$AppDatabase {
             // E03-T01b: durable remote-peer identity trust — additive, no
             // changes to existing tables (closes OQ-E03-T01-1).
             await m.createTable(signalTrustedIdentities);
+          }
+          if (from < 6) {
+            // E03-B01: dedicated monotonic-counter table — additive, no
+            // changes to existing tables. Fixes one-time-prekey id reuse
+            // after the pool drains (root cause: id allocation was derived
+            // from live rows only).
+            await m.createTable(cryptoCounters);
+
+            // Seed the counter from whatever one-time prekeys already
+            // exist on this device at migration time, so an install
+            // upgrading with a still-live (unconsumed) pool doesn't
+            // immediately collide with itself on the next replenish — the
+            // counter must never go backward relative to ids this device
+            // has already issued. A device with no prekeys yet (or none
+            // ever generated) leaves the table empty; the store treats an
+            // absent row as "start at 1".
+            final maxExisting = await customSelect(
+              'SELECT MAX(id) AS max_id FROM signal_one_time_prekeys',
+            ).getSingleOrNull();
+            final maxExistingId = maxExisting?.data['max_id'] as int?;
+            if (maxExistingId != null) {
+              await into(cryptoCounters).insert(
+                CryptoCountersCompanion.insert(
+                  id: const Value(0),
+                  nextOneTimePreKeyId: Value(maxExistingId + 1),
+                ),
+              );
+            }
           }
         },
       );

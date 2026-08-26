@@ -4,6 +4,7 @@
 // one-time-prekey pool replenishment, and PreKeyBundle assembly — all
 // against a real in-memory Drift database + real libsignal_protocol_dart
 // record objects, per L-backend lessons and E03-T01's established pattern.
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
@@ -80,10 +81,12 @@ void main() {
   });
 
   test('test_EARS_SEC_3c_replenishes_below_minimum', () async {
-    // Seed the store with fewer than `minimum` one-time prekeys.
-    for (var id = 1; id <= 5; id++) {
-      await store.storePreKey(id, PreKeyRecord(id, Curve.generateKeyPair()));
-    }
+    // Seed the store with fewer than `minimum` one-time prekeys, through
+    // the real issuance path (E03-B01: ids are only ever legitimately
+    // allocated via replenishOneTimePreKeys/allocateOneTimePreKeyIds, never
+    // by writing a chosen id directly — that bypasses the monotonic
+    // counter this fix relies on).
+    await service.replenishOneTimePreKeys(minimum: 5, batch: 5);
 
     final generated = await service.replenishOneTimePreKeys(
       minimum: 20,
@@ -108,12 +111,7 @@ void main() {
   test(
     'test_EARS_SEC_3c_replenish_never_reuses_a_consumed_gap',
     () async {
-      for (var id = 1; id <= 5; id++) {
-        await store.storePreKey(
-          id,
-          PreKeyRecord(id, Curve.generateKeyPair()),
-        );
-      }
+      await service.replenishOneTimePreKeys(minimum: 5, batch: 5);
       // Consume (remove) an id in the middle of the range, leaving a gap.
       await store.removePreKey(3);
 
@@ -129,6 +127,144 @@ void main() {
       expect(ids.contains(3), isFalse);
       // New ids must start above the highest existing id (5), not fill 3.
       expect(ids.containsAll([1, 2, 4, 5, 6, 7, 8, 9, 10]), isTrue);
+    },
+  );
+
+  test(
+    'test_EARS_SEC_3c_replenish_never_reuses_a_drained_pools_ids',
+    () async {
+      // E03-B01 repro: replenish, record the id->key map, drain the pool
+      // completely (as T03's decryptPreKeyMessage does on consumption),
+      // then replenish again. The old `max(existing ids) + 1` logic
+      // restarted at 1 once existingIds was empty, reissuing ids already
+      // handed to peers with different key material.
+      final generated1 = await service.replenishOneTimePreKeys(
+        minimum: 20,
+        batch: 5,
+      );
+      expect(generated1, 5);
+
+      final firstBatchRows = await db.select(db.signalOneTimePrekeys).get();
+      final firstBatchIds = firstBatchRows.map((r) => r.id).toSet();
+      expect(firstBatchIds, {1, 2, 3, 4, 5});
+      final firstKeyById = {
+        for (final row in firstBatchRows)
+          row.id: PreKeyRecord.fromBuffer(row.record)
+              .getKeyPair()
+              .publicKey
+              .serialize(),
+      };
+
+      // Simulate every prekey being consumed by a peer (drains the pool to
+      // empty).
+      for (final id in firstBatchIds) {
+        await store.removePreKey(id);
+      }
+      expect(await db.select(db.signalOneTimePrekeys).get(), isEmpty);
+
+      final generated2 = await service.replenishOneTimePreKeys(
+        minimum: 20,
+        batch: 5,
+      );
+      expect(generated2, 5);
+
+      final secondBatchRows = await db.select(db.signalOneTimePrekeys).get();
+      final secondBatchIds = secondBatchRows.map((r) => r.id).toSet();
+
+      // New ids must be strictly above every id this device has ever
+      // issued — none of the drained ids may reappear.
+      expect(secondBatchIds.intersection(firstBatchIds), isEmpty);
+      for (final id in secondBatchIds) {
+        expect(id, greaterThan(5));
+      }
+      expect(secondBatchIds, {6, 7, 8, 9, 10});
+
+      // Even if an id were to reappear, the key material must never
+      // silently differ under an id a peer already X3DH'd against — this
+      // assertion documents that guarantee for any id that does collide.
+      for (final row in secondBatchRows) {
+        final oldKey = firstKeyById[row.id];
+        if (oldKey != null) {
+          final newKey = PreKeyRecord.fromBuffer(row.record)
+              .getKeyPair()
+              .publicKey
+              .serialize();
+          expect(newKey, oldKey);
+        }
+      }
+    },
+  );
+
+  test(
+    'test_EARS_SEC_3c_high_water_mark_survives_restart',
+    () async {
+      // App-restart case: a fresh service/store pair reopened against the
+      // SAME database connection must continue allocating above every id
+      // the previous instance issued — the high-water mark must be
+      // persisted, not held only in memory.
+      await service.replenishOneTimePreKeys(minimum: 20, batch: 5);
+      final firstIds = (await db.select(db.signalOneTimePrekeys).get())
+          .map((r) => r.id)
+          .toSet();
+      expect(firstIds, {1, 2, 3, 4, 5});
+
+      // Drain the pool, as a consuming peer would.
+      for (final id in firstIds) {
+        await store.removePreKey(id);
+      }
+
+      // New instances over the same connection — simulates an app restart
+      // without closing/reopening the underlying database.
+      final restartedStore = DriftSignalProtocolStore(db);
+      final restartedService = IdentityService(db, restartedStore);
+
+      final generated = await restartedService.replenishOneTimePreKeys(
+        minimum: 20,
+        batch: 5,
+      );
+      expect(generated, 5);
+
+      final secondIds = (await db.select(db.signalOneTimePrekeys).get())
+          .map((r) => r.id)
+          .toSet();
+      expect(secondIds.intersection(firstIds), isEmpty);
+      for (final id in secondIds) {
+        expect(id, greaterThan(5));
+      }
+    },
+  );
+
+  test(
+    'test_EARS_SEC_3c_allocated_ids_are_always_the_ids_libsignal_mints',
+    () async {
+      // E03-B01 review finding. The whole fix rests on one invariant: the
+      // id allocateOneTimePreKeyIds hands out is the id that ends up in
+      // signal_one_time_prekeys. libsignal's generatePreKeys can only mint
+      // 1..Medium.MAX_VALUE - 1 (key_helper.dart:37), so an allocator
+      // ranging over 1..Medium.MAX_VALUE broke that invariant at exactly
+      // one point: allocating Medium.MAX_VALUE made libsignal mint id 1
+      // instead, reusing an ancient id, and a batch straddling the
+      // boundary minted the same id twice.
+      //
+      // Seeded at the top of the space so the boundary is reachable
+      // without issuing ~16M ids.
+      await db.into(db.cryptoCounters).insertOnConflictUpdate(
+            CryptoCountersCompanion.insert(
+              id: const Value(0),
+              nextOneTimePreKeyId: const Value(0xFFFFFF - 1),
+            ),
+          );
+
+      final allocated = await store.allocateOneTimePreKeyIds(3);
+
+      // Every allocated id round-trips through libsignal unchanged.
+      for (final id in allocated) {
+        expect(generatePreKeys(id, 1).single.id, id);
+      }
+      // ...and the batch contains no duplicate, even across the wrap.
+      expect(allocated.toSet(), hasLength(allocated.length));
+      // Wraps rather than overflowing or throwing.
+      expect(allocated, [0xFFFFFF - 1, 1, 2]);
     },
   );
 

@@ -67,9 +67,11 @@ class IdentityService {
   }
 
   /// Keeps the one-time prekey pool from running dry. Counts prekeys
-  /// currently in the store; if below [minimum], generates [batch] more
-  /// starting at `max(existing ids) + 1` — never reusing an id left free
-  /// by a consumed/removed prekey (task file §6 risk).
+  /// currently in the store; if below [minimum], allocates [batch] more ids
+  /// from the store's monotonic high-water mark
+  /// ([DriftSignalProtocolStore.allocateOneTimePreKeyIds]) — never derived
+  /// from the live rows, so a fully-drained pool never restarts id
+  /// allocation at 1 and reissue ids already handed to peers (E03-B01).
   ///
   /// Returns the count of newly generated prekeys (0 if already at or
   /// above [minimum]).
@@ -82,14 +84,12 @@ class IdentityService {
       return 0;
     }
 
-    final nextId = existingIds.isEmpty
-        ? 1
-        : existingIds.reduce((a, b) => a > b ? a : b) + 1;
-    final newRecords = generatePreKeys(nextId, batch);
-    for (final record in newRecords) {
+    final ids = await _store.allocateOneTimePreKeyIds(batch);
+    for (final id in ids) {
+      final record = generatePreKeys(id, 1).single;
       await _store.storePreKey(record.id, record);
     }
-    return newRecords.length;
+    return ids.length;
   }
 
   /// Assembles the local identity key, registration id, signed prekey, and

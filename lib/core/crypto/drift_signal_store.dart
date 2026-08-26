@@ -18,6 +18,33 @@ import '../persistence/database.dart';
 /// which would orphan every session a peer has with this device.
 const int _localIdentityRowId = 0;
 
+/// The fixed row id for the singleton allocation-counters row (E03-B01).
+const int _countersRowId = 0;
+
+/// libsignal's own prekey id space wraps here (`Medium.MAX_VALUE`,
+/// `2^24 - 1`). Allocation wraps back to 1 rather than overflowing —
+/// full wrap-safety (skipping ids that might still be live) is not
+/// required for v1: one-time prekeys are expected to be consumed and
+/// replenished long before ~16M ids are ever issued (task file, "What
+/// this task does").
+const int _preKeyIdMediumMaxValue = 0xFFFFFF;
+
+/// The modulus of the *usable* prekey id space, which must match
+/// libsignal's `generatePreKeys(start, count)` exactly. That function
+/// computes `((start - 1 + i).remainder(Medium.MAX_VALUE - 1)) + 1`
+/// (`key_helper.dart:37`), so the ids it can actually mint are
+/// `1..Medium.MAX_VALUE - 1`.
+///
+/// Allocating over the wider `1..Medium.MAX_VALUE` would break the
+/// invariant this whole fix rests on — that the id handed out by
+/// [DriftSignalProtocolStore.allocateOneTimePreKeyIds] is the id that ends
+/// up in `signal_one_time_prekeys`. Allocating `Medium.MAX_VALUE` itself
+/// made libsignal silently mint id `1` instead, so the counter recorded a
+/// ~16M id as issued while the row written reused an ancient id — and a
+/// batch straddling the boundary minted the same id twice, overwriting a
+/// live prekey's key material. Caught in E03-B01 review.
+const int _preKeyIdSpaceModulus = _preKeyIdMediumMaxValue - 1;
+
 class DriftSignalProtocolStore extends SignalProtocolStore {
   DriftSignalProtocolStore(this._db);
 
@@ -173,6 +200,44 @@ class DriftSignalProtocolStore extends SignalProtocolStore {
     await (_db.delete(_db.signalOneTimePrekeys)
           ..where((t) => t.id.equals(preKeyId)))
         .go();
+  }
+
+  /// Atomically allocates [count] consecutive one-time-prekey ids from a
+  /// monotonic high-water mark (`crypto_counters.next_one_time_prekey_id`)
+  /// that survives both consumption (`removePreKey`) and app restart —
+  /// never re-derived from the live `signal_one_time_prekeys` rows (E03-B01
+  /// root cause: `max(existing ids) + 1` restarts at 1 once the pool
+  /// drains, reissuing ids already handed to peers with different key
+  /// material).
+  ///
+  /// Allocates within libsignal's own mintable id space
+  /// (`1..Medium.MAX_VALUE - 1`, see [_preKeyIdSpaceModulus]) so the id
+  /// returned here is always the id `generatePreKeys` mints and
+  /// `storePreKey` persists. Wraps back to 1 past the top of that space
+  /// rather than overflowing; full wrap-safety against an ancient
+  /// still-live id is a known, accepted edge case for v1 (task file, "What
+  /// this task does").
+  Future<List<int>> allocateOneTimePreKeyIds(int count) async {
+    return _db.transaction(() async {
+      final row = await (_db.select(_db.cryptoCounters)
+            ..where((t) => t.id.equals(_countersRowId)))
+          .getSingleOrNull();
+      final start = row?.nextOneTimePreKeyId ?? 1;
+
+      final ids = List<int>.generate(
+        count,
+        (i) => ((start - 1 + i) % _preKeyIdSpaceModulus) + 1,
+      );
+      final nextStart = ((start - 1 + count) % _preKeyIdSpaceModulus) + 1;
+
+      await _db.into(_db.cryptoCounters).insertOnConflictUpdate(
+            CryptoCountersCompanion.insert(
+              id: const Value(_countersRowId),
+              nextOneTimePreKeyId: Value(nextStart),
+            ),
+          );
+      return ids;
+    });
   }
 
   // ---------------------------------------------------------------------

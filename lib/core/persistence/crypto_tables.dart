@@ -64,6 +64,27 @@ class SignalSessions extends Table {
   Set<Column> get primaryKey => {addressName, addressDeviceId};
 }
 
+/// Singleton row (fixed `id = 0`, enforced in code, never autoincrement) —
+/// monotonic allocation counters for this device's Signal protocol key
+/// material. E03-B01: `next_one_time_prekey_id` must be a high-water mark
+/// that survives row deletion (a consumed/removed one-time prekey) and app
+/// restart — it must never be re-derived from `max(live rows)`, which is
+/// what let a drained pool reissue ids already handed to peers with
+/// different key material (E03-B01 root cause). Kept as its own table
+/// rather than a column on `signal_identity` — clean separation between
+/// identity data and allocation state (human-approved 2026-08-27).
+class CryptoCounters extends Table {
+  @override
+  String get tableName => 'crypto_counters';
+
+  IntColumn get id => integer()();
+  IntColumn get nextOneTimePreKeyId =>
+      integer().withDefault(const Constant(1))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// One row per remote peer whose identity key this device has trusted,
 /// keyed by the library's `SignalProtocolAddress` (`name` + `deviceId`).
 /// E03-T01b: closes OQ-E03-T01-1 — this state must survive a process
