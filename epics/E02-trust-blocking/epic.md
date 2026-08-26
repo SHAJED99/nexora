@@ -84,7 +84,27 @@ simulation to prove trust persistence.
 _(none yet — carried forward from E00: none of Q-ARCH-003/004, Q-FUNC-005/006 touch this epic directly)_
 
 ## Analyze report
-<pending — appended once tasks are sharded>
+
+Sharded 2026-08-26 into E02-T01 (relationship domain, backend, M),
+E02-T02 (Devices screen, frontend, M, depends_on T01), E02-T03 (Settings
+screen top-level menu, frontend, S, depends_on T01).
+
+| Check | Result |
+|---|---|
+| EARS trace | FR-TRUST-001..005, FR-BLOCK-001..003 → T01. FR-TRUST-003/004/005 also re-asserted at the UI level → T02. FR-TRUST-006/007 → explicitly NOT built (no design contract for the config sub-screen; no Firebase sync scope yet) — both logged as open questions/gaps, not silently dropped. No orphans. |
+| Contract sanity | No API endpoints (local-only + one Drift table). Error envelope n/a (no new failure surface beyond existing `AppFailure` pattern). |
+| Collision matrix | T02 and T03 touch different screen files but BOTH update `lib/app/routes.dart` and `lib/app/bindings.dart` — a real collision if run in parallel. **Mitigation: T02 and T03 both depend_on T01 only, not each other, but must be serialized against one another** (pick_order / scheduler should not run them concurrently) — flagging explicitly since the dependency graph alone doesn't show this. |
+| Scope fences | All three non-empty and specific (T02 excludes real discovery/groups; T03 excludes inventing sub-screens). |
+| MoSCoW inflation | 2 must (T01, T02), 1 should (T03) — 67% must, over the 60% heuristic but justified: T01 is a hard prerequisite for the epic's own EARS criteria, T02 is the primary user-visible deliverable; T03 is genuinely secondary (a menu with no working sub-screens yet). |
+| Size | T01=M, T02=M, T03=S. None L. |
+| Design | T02 → `design/screens/devices.md` (exists). T03 → `design/screens/settings.md` (exists). Both real contracts, not placeholders. |
+
+🧍 **HUMAN GATE** (`analyze_report`): approved implicitly by the standing
+proceeding-directive ("go through to the end of all tasks", 2026-08-26) —
+re-open if you want to review before dispatch. **Flag for your attention:**
+T02/T03's shared-file collision (routes.dart/bindings.dart) means they'll
+be built and merged one at a time, not in parallel, even though nothing in
+`depends_on` forces that.
 
 ## Retro
 → `retro.md` (written after E02 completion)
