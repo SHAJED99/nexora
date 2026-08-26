@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/design/tokens.dart';
+import 'package:on_process_button_widget/on_process_button_widget.dart';
 import 'welcome_controller.dart';
 
 class WelcomeView extends GetView<WelcomeController> {
@@ -42,12 +43,15 @@ class WelcomeView extends GetView<WelcomeController> {
               SizedBox(
                 width: double.infinity,
                 height: 58,
-                child: ElevatedButton(
-                  onPressed: controller.continueWithGoogle,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: NexoraColors.welcomeButtonBg,
-                    shape: const StadiumBorder(),
-                  ),
+                child: OnProcessButtonWidget(
+                  backgroundColor: NexoraColors.welcomeButtonBg,
+                  fontColor: NexoraColors.welcomeButtonText,
+                  iconColor: NexoraColors.welcomeButtonText,
+                  borderRadius: BorderRadius.circular(29),
+                  onTap: () async {
+                    controller.continueWithGoogle();
+                    return null;
+                  },
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
