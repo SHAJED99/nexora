@@ -140,3 +140,7 @@ addition, recorded as a one-line note here with the approving human gate.
 - **2026-08-26** — `on_popup_window_widget` `^0.0.14`, `on_process_button_widget`
   `^2.0.13`, `on_text_input_widget` `^0.1.0` — human-directed (explicit
   request, not agent-proposed). See "UI widget kit" above.
+- **2026-08-26** — `cloud_firestore` `^5.6.12` (E01-T02) — same Firebase
+  project already named in ADR-0005/ADR-0006's accepted scope; adds the
+  Firestore client needed for the account-id ↔ device-id metadata mapping
+  (FR-FB-001/002), not a new foundational choice.

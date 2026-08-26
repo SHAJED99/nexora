@@ -8,7 +8,7 @@
 
 ## Tasks
 - [x] E01-T01 · Real Google Sign-In + device identity · done · builder (sonnet) → reviewer (opus)
-- [ ] E01-T02 · Firebase account/device metadata wrapper · todo · —
+- [ ] E01-T02 · Firebase account/device metadata wrapper · review-requested · builder (sonnet) → reviewer (?)
 
 ## Dependency graph
 ```mermaid
@@ -52,3 +52,24 @@ graph LR
   now). Third note (cancellation-path unit test) left open, non-blocking.
   `flutter analyze`/`flutter test` re-confirmed green (5/5) after fixes.
   E01-T01 → `done`.
+- 2026-08-26 E01-T02 implemented on `epic_01_task_02` (builder, sonnet).
+  Added `FirebaseMetadataService.registerDevice` (writes exactly
+  `{deviceId, createdAt, lastSeenAt, platform}` to
+  `/users/{uid}/devices/{deviceId}`, best-effort — swallows/logs any
+  Firestore error), wired into `SignInUseCase` after the local Drift write,
+  `firestore.rules` restricting to the owning uid, `firebase.json` updated
+  to point at it. `cloud_firestore` added as a dependency (logged in
+  `docs/conventions.md`). Tests written first (red confirmed before each
+  implementation): EARS-FB-1/2 at both the service level and the
+  `SignInUseCase` level. `flutter analyze` clean, `flutter test` green
+  (9/9). Deviation: touched `sign_in_use_case.dart`/its test and
+  `pubspec.yaml`/`.lock`/`docs/conventions.md`, which are not in this
+  task's YAML `files:` list — treated as a sharding omission since the
+  task's own §3/§7 prose requires this wiring; see task file §9 Deviations.
+  Deliberately did NOT run `firebase deploy --only firestore:rules`
+  (live-project change, flagged for a human/orchestrator call). Ran the app
+  on the Wi-Fi device (192.168.0.145:5555) — welcome screen renders — but
+  synthetic `adb input tap` on "Continue with Google" again did not
+  register (same limitation as E01-T01), so manual on-device Firestore
+  verification could not be completed; a human physical tap is still
+  needed. Status set to `review-requested`.
