@@ -88,7 +88,24 @@ once E00-T05's design-fidelity follow-up (OQ-E00-3) lands.
   - **Follow-up:** release-signing SHA-1/SHA-256 (separate from the debug keystore used here) must be added to this same Android app before any signed/release build ships — track at E01 task-sharding, not forgotten.
 
 ## Analyze report
-<pending — appended once tasks are sharded>
+
+Sharded 2026-08-26 into E01-T01 (Real Google Sign-In + device identity, M)
+and E01-T02 (Firebase account/device metadata wrapper, S, depends_on T01).
+
+| Check | Result |
+|---|---|
+| EARS trace | EARS-AUTH-1/2/4 (FR-AUTH-001/003/004) → T01. EARS-AUTH-4 (FR-AUTH-005, welcome screen's sole-Google-path) is already satisfied by genesis's built welcome screen and unchanged by either task — no orphan, just no new test needed. FR-FB-001/002 → T02. All epic-level FR ids traced; no orphans. |
+| Contract sanity | T02's Firestore write is a single-document upsert, not a list endpoint — pagination n/a. Error envelope: both tasks use the `AppFailure` shape from `docs/conventions.md`. No two tasks define the same contract differently. |
+| Collision matrix | T01 files ∩ T02 files = ∅. T02 also `depends_on: [E01-T01]`, so no parallel-execution risk regardless. **Empty — pass.** |
+| Scope fences | Both tasks' §4 non-empty and specific (T01 excludes E03's crypto protocol + sign-out/session-refresh; T02 excludes E11's fuller scope + retry queues). |
+| MoSCoW inflation | 2/2 tasks `must` (100%) — flagged by the >60% heuristic, but justified: both are direct, non-optional prerequisites for the epic's own EARS criteria, not padding. No `should`/`could` work exists to rebalance against in this epic. |
+| Size | T01 = M (justified — it's the first real external-integration task: two new SDKs, Gradle plugin wiring, plus the device-id fix). T02 = S. Neither is L. |
+| Design | Neither task is `layer: frontend`; `design_contract: n/a` on both is correct — no UI changes in this epic's tasks. |
+
+🧍 **HUMAN GATE** (`analyze_report`): approved implicitly by proceeding
+directive ("go through to the end of all tasks... otherwise go through the
+full journey", 2026-08-26) — re-open if you want to review task files
+before dispatch.
 
 ## Retro
 → `retro.md` (written after E01 completion)
