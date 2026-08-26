@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NEXORA - Connect beyond the network</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary-container": "#67f4b7",
+                      "primary-container": "#4f46e5",
+                      "surface-dim": "#cbdbf5",
+                      "primary-fixed-dim": "#c3c0ff",
+                      "inverse-surface": "#213145",
+                      "surface": "#f8f9ff",
+                      "on-tertiary-fixed": "#002113",
+                      "tertiary": "#005338",
+                      "background": "#f8f9ff",
+                      "surface-container-highest": "#d3e4fe",
+                      "surface-container-high": "#dce9ff",
+                      "on-primary-fixed": "#0f0069",
+                      "on-secondary-fixed": "#001e2f",
+                      "error": "#ba1a1a",
+                      "outline": "#777587",
+                      "on-error-container": "#93000a",
+                      "on-tertiary": "#ffffff",
+                      "primary": "#3525cd",
+                      "on-tertiary-fixed-variant": "#005236",
+                      "on-primary": "#ffffff",
+                      "surface-container-lowest": "#ffffff",
+                      "on-secondary-container": "#004666",
+                      "tertiary-fixed": "#6ffbbe",
+                      "on-error": "#ffffff",
+                      "on-secondary": "#ffffff",
+                      "primary-fixed": "#e2dfff",
+                      "on-background": "#0b1c30",
+                      "tertiary-container": "#006e4b",
+                      "on-secondary-fixed-variant": "#004c6e",
+                      "secondary-fixed-dim": "#89ceff",
+                      "on-primary-container": "#dad7ff",
+                      "surface-container-low": "#eff4ff",
+                      "tertiary-fixed-dim": "#4edea3",
+                      "error-container": "#ffdad6",
+                      "surface-variant": "#d3e4fe",
+                      "on-surface-variant": "#464555",
+                      "surface-tint": "#4d44e3",
+                      "outline-variant": "#c7c4d8",
+                      "surface-bright": "#f8f9ff",
+                      "secondary-container": "#39b8fd",
+                      "secondary": "#006591",
+                      "surface-container": "#e5eeff",
+                      "on-primary-fixed-variant": "#3323cc",
+                      "inverse-on-surface": "#eaf1ff",
+                      "inverse-primary": "#c3c0ff",
+                      "secondary-fixed": "#c9e6ff",
+                      "on-surface": "#0b1c30"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "base": "4px",
+                      "xl": "32px",
+                      "md": "16px",
+                      "xs": "4px",
+                      "margin-mobile": "16px",
+                      "margin-desktop": "64px",
+                      "sm": "8px",
+                      "gutter": "16px",
+                      "lg": "24px"
+              },
+              "fontFamily": {
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "label-md": [
+                              "JetBrains Mono"
+                      ],
+                      "display-lg": [
+                              "Geist"
+                      ],
+                      "headline-lg": [
+                              "Geist"
+                      ],
+                      "headline-lg-mobile": [
+                              "Geist"
+                      ],
+                      "title-lg": [
+                              "Inter"
+                      ],
+                      "code-sm": [
+                              "JetBrains Mono"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "letterSpacing": "0.5px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.5px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "display-lg": [
+                              "57px",
+                              {
+                                      "lineHeight": "64px",
+                                      "letterSpacing": "-0.25px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "title-lg": [
+                              "22px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "code-sm": [
+                              "11px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.25px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@600&amp;family=Inter:wght@400;500&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+          font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+      </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface dark:bg-inverse-surface text-on-surface dark:text-inverse-on-surface h-screen flex flex-col items-center justify-center p-margin-mobile md:p-margin-desktop overflow-hidden">
+<!-- Ambient Background Graphic (Mesh Concept) -->
+<div class="absolute inset-0 z-0 opacity-10 pointer-events-none flex items-center justify-center">
+<svg class="w-full max-w-[800px] h-auto" viewbox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<lineargradient id="lineGrad" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#3525cd"></stop>
+<stop offset="100%" stop-color="#4f46e5"></stop>
+</lineargradient>
+</defs>
+<g fill="none" stroke="url(#lineGrad)" stroke-width="2">
+<!-- Inner Hex -->
+<polygon points="400,250 530,325 530,475 400,550 270,475 270,325"></polygon>
+<!-- Connecting Lines -->
+<line x1="400" x2="400" y1="250" y2="100"></line>
+<line x1="530" x2="680" y1="325" y2="250"></line>
+<line x1="530" x2="680" y1="475" y2="550"></line>
+<line x1="400" x2="400" y1="550" y2="700"></line>
+<line x1="270" x2="120" y1="475" y2="550"></line>
+<line x1="270" x2="120" y1="325" y2="250"></line>
+<!-- Cross Lines -->
+<line x1="400" x2="530" y1="250" y2="475"></line>
+<line x1="530" x2="400" y1="325" y2="550"></line>
+<line x1="270" x2="400" y1="475" y2="250"></line>
+<!-- Outer Nodes -->
+<circle cx="400" cy="100" fill="#3525cd" r="16"></circle>
+<circle cx="680" cy="250" fill="#3525cd" r="16"></circle>
+<circle cx="680" cy="550" fill="#3525cd" r="16"></circle>
+<circle cx="400" cy="700" fill="#3525cd" r="16"></circle>
+<circle cx="120" cy="550" fill="#3525cd" r="16"></circle>
+<circle cx="120" cy="250" fill="#3525cd" r="16"></circle>
+<!-- Inner Nodes -->
+<circle cx="400" cy="250" fill="#4f46e5" r="12"></circle>
+<circle cx="530" cy="325" fill="#4f46e5" r="12"></circle>
+<circle cx="530" cy="475" fill="#4f46e5" r="12"></circle>
+<circle cx="400" cy="550" fill="#4f46e5" r="12"></circle>
+<circle cx="270" cy="475" fill="#4f46e5" r="12"></circle>
+<circle cx="270" cy="325" fill="#4f46e5" r="12"></circle>
+<!-- Center Node -->
+<circle cx="400" cy="400" fill="#67f4b7" r="24"></circle>
+<!-- Center connections -->
+<line stroke-width="4" x1="400" x2="400" y1="400" y2="250"></line>
+<line x1="400" x2="530" y1="400" y2="325"></line>
+<line stroke-width="4" x1="400" x2="530" y1="400" y2="475"></line>
+<line x1="400" x2="400" y1="400" y2="550"></line>
+<line stroke-width="4" x1="400" x2="270" y1="400" y2="475"></line>
+<line x1="400" x2="270" y1="400" y2="325"></line>
+</g>
+</svg>
+</div>
+<!-- Main Content Container -->
+<main class="z-10 flex flex-col items-center justify-center flex-grow w-full max-w-lg text-center space-y-xl">
+<!-- App Identity -->
+<div class="flex flex-col items-center space-y-md animate-fade-in-up">
+<div class="w-24 h-24 bg-primary-container rounded-3xl flex items-center justify-center shadow-[0_0_40px_rgba(79,70,229,0.3)] mb-4">
+<span class="material-symbols-outlined text-6xl text-on-primary-container" style="font-variation-settings: 'FILL' 1;">
+                    hub
+                </span>
+</div>
+<h1 class="font-display-lg text-display-lg md:text-display-lg text-primary-fixed-dim tracking-tight">
+                NEXORA
+            </h1>
+<p class="font-title-lg text-title-lg text-surface-dim max-w-[280px]">
+                Connect beyond the network.
+            </p>
+</div>
+</main>
+<!-- Bottom Action Area -->
+<div class="z-10 w-full max-w-md pb-8 px-4 animate-fade-in-up" style="animation-delay: 200ms;">
+<button class="w-full bg-primary text-on-primary font-body-lg text-body-lg py-4 rounded-full flex items-center justify-center space-x-2 transition-transform active:scale-[0.98] shadow-[0_8px_24px_rgba(53,37,205,0.2)]">
+<span>Get started</span>
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 0;">
+                arrow_forward
+            </span>
+</button>
+<p class="font-label-md text-label-md text-surface-variant/50 text-center mt-6 flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px] mr-1" style="font-variation-settings: 'FILL' 1;">
+                lock
+            </span>
+            End-to-end encrypted mesh
+        </p>
+</div>
+<style>
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-fade-in-up {
+            animation: fadeInUp 0.8s ease-out forwards;
+        }
+    </style>
+</body></html>

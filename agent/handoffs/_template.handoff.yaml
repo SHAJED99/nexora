@@ -1,0 +1,28 @@
+# Handoff packet — the unit of cross-platform transfer (NOT chat history).
+# Written on a rate-limit freeze or a P1 preempt. See agent/skills/handoff §4.
+# next_step and last_test_status are MANDATORY. Validated at freeze time.
+version: 1
+task_id: E03-T07
+epic: epic_03
+branch: epic_03_task_07
+status: frozen                  # frozen | blocked
+provenance:
+  from_platform: claude-code    # claude-code | codex | opencode | ...
+  from_session_id: "<native session id / jsonl path>"
+  timestamp: "2026-06-10T12:00:00Z"
+  reason: approaching_5h_limit  # approaching_5h_limit | weekly_guard | p1_preempt | human
+git:
+  last_commit: "<sha of the wip commit>"
+  diff_ref: agent/handoffs/E03-T07.diff
+files_touched:
+  - path: src/api/refresh.ts
+    summary: "endpoint wired; expiry validation pending"
+last_test_status:
+  suite: unit
+  result: "2 failing"
+  failing: ["test_EARS_AUTH_3_refresh_rejects_expired"]
+next_step: "Fix expiry validation in src/api/refresh.ts:142, rerun unit suite"
+open_decisions:
+  - "refresh TTL 7d vs 30d — awaiting human (Open Question in task file)"
+dependencies: [E03-T05]
+acceptance_refs: [SRS-4.2, EARS-AUTH-3]

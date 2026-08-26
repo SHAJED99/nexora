@@ -1,0 +1,31 @@
+node_modules/
+.env
+.env.*
+!.env.example
+
+# Per-run agent logs (adapters write these; metrics.csv is the durable record)
+runs/*
+!runs/.gitkeep
+
+# Freeze signal dropped by the statusline hook
+agent/handoffs/.FREEZE
+
+# Design gate: contracts + golden are COMMITTED (they are the law).
+# Reports are regenerated on every verify — noise.
+design/reports/*
+!design/reports/.gitkeep
+design/.cache/
+
+.DS_Store
+*.log
+
+# python bytecode
+__pycache__/
+*.pyc
+
+# python virtualenv
+.venv/
+
+# rendered workshop deck (source is docs/WORKSHOP.md)
+deck.html
+deck.pdf

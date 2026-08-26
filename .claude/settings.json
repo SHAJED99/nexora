@@ -1,0 +1,39 @@
+{
+  "$comment": "cp .claude/settings.example.json .claude/settings.json — see CLAUDE.md",
+  "includeCoAuthoredBy": false,
+  "statusLine": {
+    "type": "command",
+    "command": "python agent/orchestrator/ratelimit_guard.py"
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python agent/hooks/lesson-inject.py",
+            "$comment": "Rule 8, mechanized: finds the task id in your prompt and injects that area's lessons. Fails open — a memory aid must never block work."
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(make:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run lint:*)",
+      "Bash(node design/tools/:*)",
+      "Bash(python agent/orchestrator/:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git worktree list:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push origin development:*)"
+    ]
+  }
+}

@@ -1,0 +1,128 @@
+# design/sources.yaml — where designs come from, and which route each screen binds to.
+#
+# Ships EMPTY. Genesis T03 fills it once you drop a design into docs/UI/.
+# The self-test does not use this file — it generates its own and writes to a
+# scratch golden root, so `make design-selftest` never touches your design law.
+version: 1
+
+# Where extracted goldens land. Committed — a diff on the golden IS the design
+# changelog. Only override for scratch runs.
+golden_root: design/golden
+
+sources:
+  # kind: static  — a folder of .html (a Figma HTML export, a bundled sample, a mockup)
+  # kind: command — a React/Vue/Svelte design app the tool boots and kills for you
+  # kind: url     — already running somewhere
+  # kind: figma   — Figma frames; imported via design/tools/figma-import.mjs (not browsable)
+  #
+  # ui:
+  #   kind: static
+  #   root: docs/UI/sample-frontend
+  #
+  # ui_app:
+  #   kind: command
+  #   cmd: "npm --prefix docs/UI/design-app run dev"
+  #   ready_url: http://localhost:5173
+  #   timeout_s: 120
+  #
+  # ui_figma:
+  #   kind: figma
+  #   file_key: "abc123XYZ"          # from the Figma URL
+  #   node_ids: ["12:345", "12:678"] # frame ids, one per screen
+  #   # then: node design/tools/figma-import.mjs --screen <id>
+  #   # Prefer an HTML export + kind: static — a real browser's computed styles
+  #   # beat roles inferred from Figma layer names. The export is never shipped.
+
+  ui:
+    kind: static
+    root: docs/UI/stitch_nexora_mesh_messenger
+    # Google Stitch export (Q-DESIGN-001, spec/questions.md). Each screen is
+    # its own self-contained code.html (Tailwind CDN + real computed styles),
+    # not a single-file bundle — no state-setup clicks needed to reach them.
+    # Design tokens: docs/UI/stitch_nexora_mesh_messenger/nexora_design_system/DESIGN.md
+
+# Where the BUILT app runs when the gate executes.
+# Override per run: make design-verify IMPL=http://localhost:3000
+impl:
+  kind: url
+  url: http://localhost:3000
+  # kind: command
+  # cmd: "npm run dev --workspace apps/web"
+  # ready_url: http://localhost:3000
+  # timeout_s: 120
+
+screens:
+  # Six unique screens from the Stitch export. A seventh export folder,
+  # nexora_secure_network_dashboard/, is a byte-identical duplicate of
+  # welcome_to_nexora/ (same generation, different folder name) — intentionally
+  # not bound to a screen id here; see design/gaps.md.
+  #
+  # Android phone only for now, pending Q-SCOPE-002 (platform scope). Add
+  # 768x1024 tablet captures once that's answered and Design.md's tablet
+  # layout (§108) gets its own Stitch pass.
+  - id: welcome
+    source: ui
+    design_path: /welcome_to_nexora/code.html
+    impl_path: /welcome
+    viewports: [390x844]
+    states: [{ name: default }]
+
+  - id: dashboard
+    source: ui
+    design_path: /dashboard/code.html
+    impl_path: /dashboard
+    viewports: [390x844]
+    states: [{ name: default }]
+
+  - id: conversations
+    source: ui
+    design_path: /conversations/code.html
+    impl_path: /conversations
+    viewports: [390x844]
+    states: [{ name: default }]
+
+  - id: chat
+    source: ui
+    design_path: /chat_with_alex/code.html
+    impl_path: /chat/[id]
+    viewports: [390x844]
+    states: [{ name: default }]
+    ignore_text:
+      - '^\d{1,2}:\d{2}\s?(AM|PM)?$'   # timestamps
+
+  - id: devices
+    source: ui
+    design_path: /devices/code.html
+    impl_path: /devices
+    viewports: [390x844]
+    states: [{ name: default }]
+
+  - id: settings
+    source: ui
+    design_path: /settings/code.html
+    impl_path: /settings
+    viewports: [390x844]
+    states: [{ name: default }]
+
+  - id: login
+    source: ui
+    design_path: /login/code.html
+    impl_path: /login
+    viewports: [390x844]
+    states: [{ name: default }]
+    # "Signing in to NEXORA" — the transient state after tapping "Continue
+    # with Google" on the welcome screen, while OAuth completes. Answers the
+    # missing-login-screen gap the human raised; Google Sign-In is NEXORA's
+    # sole auth method (BRD §5), so there is no separate credentials form.
+# - id: login
+#   source: ui
+#   design_path: /login.html      # the path inside the design source
+#   impl_path: /login             # the route in the built app
+#   viewports: [1440x900]         # add 390x844 for a responsive surface
+#   states:
+#     - name: default
+#     - name: error
+#       setup: [{ fill: { selector: "#email", value: "bad" } }, { click: "button[type=submit]" }]
+#   mask: []                      # CSS selectors hidden before the PIXEL shot (clocks, avatars, charts)
+#   ignore_text: []               # regexes — text matching these is not copy-compared
+#                                 # e.g. ['^\d{1,2} (minutes|hours) ago$', '^\$[\d,.]+$']

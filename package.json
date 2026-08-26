@@ -1,0 +1,21 @@
+{
+  "name": "agent-harness",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Harness tooling — the design-fidelity gate. Product deps are added by genesis under apps/.",
+  "scripts": {
+    "design:extract": "node design/tools/extract.mjs",
+    "design:contract": "node design/tools/contract.mjs",
+    "design:verify": "node design/tools/verify.mjs",
+    "design:selftest": "node design/tools/selftest.mjs"
+  },
+  "devDependencies": {
+    "pixelmatch": "^6.0.0",
+    "playwright": "^1.49.0",
+    "pngjs": "^7.0.0"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
+  }
+}

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NEXORA - Secure Chat</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary-container": "#67f4b7",
+                    "primary-container": "#4f46e5",
+                    "surface-dim": "#cbdbf5",
+                    "primary-fixed-dim": "#c3c0ff",
+                    "inverse-surface": "#213145",
+                    "surface": "#f8f9ff",
+                    "on-tertiary-fixed": "#002113",
+                    "tertiary": "#005338",
+                    "background": "#f8f9ff",
+                    "surface-container-highest": "#d3e4fe",
+                    "surface-container-high": "#dce9ff",
+                    "on-primary-fixed": "#0f0069",
+                    "on-secondary-fixed": "#001e2f",
+                    "error": "#ba1a1a",
+                    "outline": "#777587",
+                    "on-error-container": "#93000a",
+                    "on-tertiary": "#ffffff",
+                    "primary": "#3525cd",
+                    "on-tertiary-fixed-variant": "#005236",
+                    "on-primary": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-secondary-container": "#004666",
+                    "tertiary-fixed": "#6ffbbe",
+                    "on-error": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "primary-fixed": "#e2dfff",
+                    "on-background": "#0b1c30",
+                    "tertiary-container": "#006e4b",
+                    "on-secondary-fixed-variant": "#004c6e",
+                    "secondary-fixed-dim": "#89ceff",
+                    "on-primary-container": "#dad7ff",
+                    "surface-container-low": "#eff4ff",
+                    "tertiary-fixed-dim": "#4edea3",
+                    "error-container": "#ffdad6",
+                    "surface-variant": "#d3e4fe",
+                    "on-surface-variant": "#464555",
+                    "surface-tint": "#4d44e3",
+                    "outline-variant": "#c7c4d8",
+                    "surface-bright": "#f8f9ff",
+                    "secondary-container": "#39b8fd",
+                    "secondary": "#006591",
+                    "surface-container": "#e5eeff",
+                    "on-primary-fixed-variant": "#3323cc",
+                    "inverse-on-surface": "#eaf1ff",
+                    "inverse-primary": "#c3c0ff",
+                    "secondary-fixed": "#c9e6ff",
+                    "on-surface": "#0b1c30"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "base": "4px",
+                    "xl": "32px",
+                    "md": "16px",
+                    "xs": "4px",
+                    "margin-mobile": "16px",
+                    "margin-desktop": "64px",
+                    "sm": "8px",
+                    "gutter": "16px",
+                    "lg": "24px"
+            },
+            "fontFamily": {
+                    "body-lg": [
+                            "Inter"
+                    ],
+                    "label-md": [
+                            "JetBrains Mono"
+                    ],
+                    "display-lg": [
+                            "Geist"
+                    ],
+                    "headline-lg": [
+                            "Geist"
+                    ],
+                    "headline-lg-mobile": [
+                            "Geist"
+                    ],
+                    "title-lg": [
+                            "Inter"
+                    ],
+                    "code-sm": [
+                            "JetBrains Mono"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "body-lg": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "letterSpacing": "0.5px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "label-md": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.5px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "display-lg": [
+                            "57px",
+                            {
+                                    "lineHeight": "64px",
+                                    "letterSpacing": "-0.25px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "28px",
+                            {
+                                    "lineHeight": "36px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "title-lg": [
+                            "22px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "code-sm": [
+                            "11px",
+                            {
+                                    "lineHeight": "16px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "letterSpacing": "0.25px",
+                                    "fontWeight": "400"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface dark:bg-surface text-on-surface h-screen flex flex-col font-body-lg overflow-hidden selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky border-b border-outline-variant/10 bg-surface dark:bg-surface flex justify-between items-center px-md h-16 shrink-0 z-10">
+<div class="flex items-center gap-sm">
+<button class="text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-highest transition-colors active:scale-95 duration-150 p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-outline-variant/20">
+<img class="w-full h-full object-cover" data-alt="A close-up portrait of a professional individual in a dimly lit, high-tech server room environment. The lighting is cool and blue-toned, reflecting off metallic surfaces, creating a serious and secure modern corporate aesthetic. The image conveys reliability and technical expertise." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBFVDKUq-dZ_xRJM--mGe2zDx_uhPAPMdXvTcJtCoD_eEFPHvYhiixQ4OTkZjVMDEj-GzTeClkIFfYTq7SG3_VPztV2Twrvvxbv3EJ0ci7a2zM-a2fNHSHx-41hSZQR3-NK2NqBjjiifTsoi6TSRBOdoKmrLSGD6QQTdKoBLcraZA63S6tqKl_-U8zLxfrbnabdvDR0pU9g5fNi99qDUdEQu-Jq7mG2Y61S0pqtyLX4uAVaa_Eoy7Fegw"/>
+</div>
+<div class="flex flex-col">
+<h1 class="font-title-lg text-title-lg text-primary dark:text-primary">Ahmed</h1>
+<div class="flex items-center gap-xs text-primary dark:text-primary font-label-md text-label-md">
+<span class="material-symbols-outlined text-[14px]" data-icon="lock" style="font-variation-settings: 'FILL' 1;">lock</span>
+<span>End-to-end encrypted</span>
+</div>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-sm">
+<button class="text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-highest transition-colors active:scale-95 duration-150 p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</header>
+<!-- Chat Canvas -->
+<main class="flex-1 overflow-y-auto px-margin-mobile md:px-margin-desktop py-lg flex flex-col gap-lg bg-surface">
+<!-- Date Header -->
+<div class="flex justify-center w-full">
+<span class="font-label-md text-label-md text-on-surface-variant bg-surface-container-low border border-outline-variant/10 px-sm py-xs rounded-full">Today</span>
+</div>
+<!-- Received Message -->
+<div class="flex flex-col items-start max-w-[85%] md:max-w-[70%]">
+<div class="bg-surface-container-low text-on-surface p-md rounded-xl rounded-tl-sm border border-outline-variant/10 shadow-sm">
+<p class="font-body-lg text-body-lg">The latest node synchronization is complete. Encryption keys have been rotated successfully across the mesh network.</p>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant mt-xs ml-sm">10:42 AM</span>
+</div>
+<!-- Sent Message (Read) -->
+<div class="flex flex-col items-end max-w-[85%] md:max-w-[70%] self-end">
+<div class="bg-primary text-on-primary p-md rounded-xl rounded-tr-sm shadow-sm">
+<p class="font-body-lg text-body-lg">Are you free to grab lunch tomorrow?</p>
+</div>
+<div class="flex items-center gap-xs mt-xs mr-sm">
+<span class="font-label-md text-label-md text-on-surface-variant">10:45 AM</span>
+<span class="material-symbols-outlined text-on-tertiary-container text-[16px]" data-icon="done_all" style="font-variation-settings: 'FILL' 1;">done_all</span>
+</div>
+</div>
+<!-- Received Message -->
+<div class="flex flex-col items-start max-w-[85%] md:max-w-[70%]">
+<div class="bg-surface-container-low text-on-surface p-md rounded-xl rounded-tl-sm border border-outline-variant/10 shadow-sm flex flex-col gap-sm">
+<p class="font-body-lg text-body-lg">Sure, let's meet at 1pm at the usual place.</p>
+<!-- Embedded Card -->
+<div class="bg-surface-container-high border border-outline-variant/20 rounded-lg p-sm flex items-center gap-sm">
+<span class="material-symbols-outlined text-secondary" data-icon="troubleshoot">troubleshoot</span>
+<div class="flex flex-col flex-1">
+<span class="font-label-md text-label-md font-bold">Backup: Family Photos</span>
+<span class="font-label-md text-label-md text-on-surface-variant">In progress... 78%</span>
+</div>
+</div>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant mt-xs ml-sm">10:48 AM</span>
+</div>
+<!-- Sent Message (Delivered) -->
+<div class="flex flex-col items-end max-w-[85%] md:max-w-[70%] self-end">
+<div class="bg-primary text-on-primary p-md rounded-xl rounded-tr-sm shadow-sm">
+<p class="font-body-lg text-body-lg">Let me know when you're on your way.</p>
+</div>
+<div class="flex items-center gap-xs mt-xs mr-sm">
+<span class="font-label-md text-label-md text-on-surface-variant">10:50 AM</span>
+<span class="material-symbols-outlined text-on-surface-variant text-[16px]" data-icon="done_all">done_all</span>
+</div>
+</div>
+<!-- Sent Message (Sent) -->
+<div class="flex flex-col items-end max-w-[85%] md:max-w-[70%] self-end">
+<div class="bg-primary text-on-primary p-md rounded-xl rounded-tr-sm shadow-sm">
+<p class="font-body-lg text-body-lg">I'll bring an umbrella just in case.</p>
+</div>
+<div class="flex items-center gap-xs mt-xs mr-sm">
+<span class="font-label-md text-label-md text-on-surface-variant">10:51 AM</span>
+<span class="material-symbols-outlined text-on-surface-variant text-[16px]" data-icon="check">check</span>
+</div>
+</div>
+</main>
+<!-- Input Bar -->
+<footer class="bg-surface-container w-full p-md border-t border-outline-variant/10 shrink-0">
+<div class="max-w-[1200px] mx-auto flex items-end gap-sm relative">
+<button class="w-12 h-12 rounded-full flex items-center justify-center text-primary shrink-0 hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+<div class="flex-1 bg-surface-container-lowest border-b-2 border-primary rounded-t-xl rounded-b-none px-md py-sm flex items-center relative overflow-hidden">
+<textarea class="w-full bg-transparent border-none p-0 focus:ring-0 resize-none font-body-lg text-body-lg text-on-surface placeholder:text-on-surface-variant min-h-[24px] max-h-[120px]" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'" placeholder="Secure message..." rows="1"></textarea>
+<div class="absolute right-sm top-1/2 -translate-y-1/2 text-primary">
+<span class="material-symbols-outlined" data-icon="lock" style="font-variation-settings: 'FILL' 1;">lock</span>
+</div>
+</div>
+<button class="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-on-primary shrink-0 hover:bg-primary-fixed transition-colors active:scale-95">
+<span class="material-symbols-outlined" data-icon="mic">mic</span>
+</button>
+</div>
+</footer>
+</body></html>

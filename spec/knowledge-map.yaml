@@ -1,0 +1,488 @@
+# spec/knowledge-map.yaml — the single queryable index over what this project
+# knows. Nodes are POINTERS (id + one-line summary + source path) — the source
+# document holds the truth, this file never duplicates it at length.
+#
+# Baselined by: skills/knowledge-map, from docs/intake-report.md + spec/questions.md
+# Baseline date: 2026-08-26
+# 🧍 human gate: knowledge_map_baseline — ✅ APPROVED by human, 2026-08-26.
+# Decision on remaining open important questions (Q-ARCH-003, Q-ARCH-004,
+# Q-FUNC-005, Q-FUNC-006): fold into genesis — Q-ARCH-003 becomes a genesis
+# ADR (crypto protocol family); the other three take their recommended-default
+# v1 placeholder heuristics, explicitly flagged as tunable, to be finalized at
+# each affected epic's task-sharding step rather than blocking genesis.
+
+project:
+  name: NEXORA
+  tagline: "Connect beyond the network"
+  lifecycle_stage: pre-genesis  # intake + question-resolution round 1 done; Epic 00 not started
+
+vision:
+  statement: >
+    A secure, offline-first communication platform where devices can
+    communicate directly or through other available network paths,
+    automatically select and migrate between connections, and continue
+    communicating even when traditional Internet connectivity is unavailable.
+  source: documentation/BRD.md §67
+
+goals:
+  - id: G-001
+    statement: Reliable communication without continuous Internet connectivity
+    source: documentation/BRD.md §2.1
+  - id: G-002
+    statement: Secure end-to-end encrypted communication
+    source: documentation/BRD.md §2.2
+  - id: G-003
+    statement: Dynamic use of available network paths, with automatic route migration
+    source: documentation/BRD.md §2.3-4
+  - id: G-004
+    statement: Offline-first functionality with strong user-controlled privacy
+    source: documentation/BRD.md §2.5-6
+  - id: G-005
+    statement: Persistent user/device relationships, local-first conversation storage
+    source: documentation/BRD.md §2.7-8
+  - id: G-006
+    statement: Efficient battery/network usage; resilient during network failures
+    source: documentation/BRD.md §2.9-10
+  - id: G-007
+    statement: Controlled application version compatibility
+    source: documentation/BRD.md §2.11
+  - id: G-008
+    statement: A scalable architecture supporting future communication features
+    source: documentation/BRD.md §2.12
+
+stakeholders:
+  - role: human (product owner)
+    responsibility: "Rule 3 — stack/architecture/auth ADRs, all human_gates in harness.yaml"
+
+users:
+  - id: U-001
+    persona: "Unnamed — users who lack reliable Internet connectivity"
+    status: inferred
+    note: >
+      BRD §1 implies the target user but never names a persona, demographic,
+      or use-case (e.g. disaster response, off-grid, developing-region).
+      No blocking question raised (see A-002) since it doesn't change v1
+      architecture, but it's a real gap worth human input on eventually.
+    source: documentation/BRD.md §1
+
+facts:
+  # --- Authentication & identity ---
+  - id: F-001
+    statement: Users authenticate via Google Authentication; Firebase Authentication maintains account identity
+    source: documentation/BRD.md §5
+  - id: F-002
+    statement: Every app installation has its own unique cryptographic device identity, independent of account identity
+    source: documentation/BRD.md §6
+  - id: F-003
+    statement: One user may have multiple devices, each with its own local state and cryptographic identity
+    source: documentation/BRD.md §6
+
+  # --- Relationships & trust ---
+  - id: F-004
+    statement: Trusted device relationships are persisted (survive uninstall/reinstall); device identity may still require re-verification
+    source: documentation/BRD.md §7
+  - id: F-005
+    statement: Connection requests are evaluated independently by each side into Trusted/Allowed/Unknown/Blocked states
+    source: documentation/BRD.md §8
+  - id: F-006
+    statement: A trusted device's connection request auto-accepts, skipping normal authentication
+    source: documentation/BRD.md §9
+  - id: F-007
+    statement: Authorization is bidirectional — both sides must independently allow the connection, or it's rejected
+    source: documentation/BRD.md §10
+  - id: F-008
+    statement: Users control auto-accept-trusted, auto-accept-specific-users, require-auth-for-unknown, block, allow/disable communication, location access
+    source: documentation/BRD.md §11
+  - id: F-009
+    statement: Blocking is a strong boundary — blocked users cannot directly communicate; affects all applicable functionality
+    source: documentation/BRD.md §12
+  - id: F-010
+    statement: In shared groups, blocked members are completely invisible to each other (messages, activity, presence, location)
+    source: documentation/BRD.md §13
+  - id: F-011
+    statement: Group encryption keys prevent blocked members from decrypting each other's content, even as co-members
+    source: documentation/BRD.md §14
+
+  # --- Communication types & storage ---
+  - id: F-012
+    statement: Personal communication supports text, voice messages, PTT, voice calls, attachments, location sharing
+    source: documentation/BRD.md §15
+  - id: F-013
+    statement: Group communication supports text, PTT, voice calls, attachments, group events
+    source: documentation/BRD.md §15
+  - id: F-014
+    statement: Conversation history is stored locally, with separate Personal/Groups UI areas
+    source: documentation/BRD.md §16
+  - id: F-015
+    statement: Voice messages, PTT recordings, and call recordings are stored locally on-device
+    source: documentation/BRD.md §17
+  - id: F-016
+    statement: Default voice profile is optimized for low CPU/battery/network usage over quality
+    source: documentation/BRD.md §18
+  - id: F-017
+    statement: Storage management offers Smart Mode (default), delete-after-X-days, delete-over-X-MB
+    source: documentation/BRD.md §19
+  - id: F-018
+    statement: Smart Mode auto-selects removal candidates by age/size/type/access-frequency/activity/pressure/temp-status/importance, and explains its decisions
+    source: documentation/BRD.md §20,22
+  - id: F-019
+    statement: Storage warnings on the dashboard are informational only — no forced "Clean Now" action
+    source: documentation/BRD.md §21
+
+  # --- Discovery, transport, routing ---
+  - id: F-020
+    statement: Device discovery uses Bluetooth, Wi-Fi, Wi-Fi Direct, local network, Internet- or peer-assisted mechanisms; discovery never implies authorization
+    source: documentation/BRD.md §23
+  - id: F-021
+    statement: No transport is permanently restricted to one feature — any transport may carry any supported communication type
+    source: documentation/BRD.md §3.3, §24
+  - id: F-022
+    statement: A and B don't need a direct connection — other devices (C, D...) may relay
+    source: documentation/BRD.md §25
+  - id: F-023
+    statement: Store-and-forward — an intermediary temporarily stores encrypted packets when the destination is unreachable, forwards on reconnect
+    source: documentation/BRD.md §26
+  - id: F-024
+    statement: Relays process routing/metadata/encrypted payloads only — never plaintext content
+    source: documentation/BRD.md §27
+  - id: F-025
+    statement: Relay storage is temporary; packets carry id/destination/priority/size/created/expiry/delivery-state metadata; copies removed after successful delivery
+    source: documentation/BRD.md §28
+  - id: F-026
+    statement: Routes are continuously re-evaluated; migration happens when a sufficiently-better route is found (no numeric threshold defined — see Q-FUNC-005)
+    source: documentation/BRD.md §29-30
+  - id: F-027
+    statement: Migration sequence is make-before-break — establish + validate new connection, move traffic, THEN terminate old connection
+    source: documentation/BRD.md §30
+  - id: F-028
+    statement: Routing cost considers battery/latency/reliability/bandwidth/hop-count/congestion/stability/packet-loss/traffic-type; battery is never the sole criterion; no formula given (see Q-ARCH-004)
+    source: documentation/BRD.md §3.4, §31
+  - id: F-029
+    statement: Different traffic types prioritize different cost factors — text favors reliability/battery/bandwidth, file transfer favors bandwidth/reliability/battery, voice favors latency/jitter/packet-loss/stability/battery, discovery favors battery efficiency alone
+    source: documentation/BRD.md §31
+  - id: F-030
+    statement: On route failure, the system searches alternatives and migrates, or queues/retries if none exist
+    source: documentation/BRD.md §32
+
+  # --- Messaging semantics ---
+  - id: F-031
+    statement: Offline-created messages save locally, enter an outgoing queue, and send once a route becomes available
+    source: documentation/BRD.md §33
+  - id: F-032
+    statement: Message delivery states include Queued/Sent/Accepted/Delivered/Stored/Read/Failed (exact UI representation may evolve)
+    source: documentation/BRD.md §34
+  - id: F-033
+    statement: Every message/network operation has a unique id; duplicate packets must not create duplicate messages
+    source: documentation/BRD.md §35
+  - id: F-034
+    statement: Logical message ordering is maintained even when network packets arrive out of order
+    source: documentation/BRD.md §36
+  - id: F-035
+    statement: Multiple devices per user synchronize only the missing/required data (not full re-sync)
+    source: documentation/BRD.md §37
+  - id: F-036
+    statement: The app must fully function without Firebase; on reconnect it exchanges sync metadata, identifies gaps, synchronizes, resolves conflicts
+    source: documentation/BRD.md §38
+  - id: F-037
+    statement: Conflict resolution favors the more security-restrictive state — BLOCK>TRUST, LOCATION-OFF>LOCATION-ON, REVOKED>ACTIVE, REMOVED>MEMBER
+    source: documentation/BRD.md §39
+  - id: F-038
+    statement: Security-sensitive relationship changes (TRUST/BLOCK/UNBLOCK/REMOVE-TRUST/REVOKE) are represented as discrete events/operations for predictable sync
+    source: documentation/BRD.md §40
+
+  # --- Security ---
+  - id: F-039
+    statement: All private communication is end-to-end encrypted; only authorized endpoints may decrypt — not relays, Firebase, or network infrastructure
+    source: documentation/BRD.md §41
+  - id: F-040
+    statement: Must protect against device impersonation, MITM, replay, packet modification, malicious relays, flooding, unauthorized sync, stolen/compromised/fake devices, Sybil abuse
+    source: documentation/BRD.md §42
+  - id: F-041
+    statement: Cryptographic protocol family (X3DH/Double-Ratchet/MLS-equivalent) is unspecified — see Q-ARCH-003
+    source: documentation/BRD.md §66.2 (explicitly deferred)
+
+  # --- Location ---
+  - id: F-042
+    statement: Location sharing has a global on/off toggle plus per-user overrides
+    source: documentation/BRD.md §43
+  - id: F-043
+    statement: Location is visible only when connected+authorized+global-on+per-user-on ALL hold; otherwise unavailable
+    source: documentation/BRD.md §44
+  - id: F-044
+    statement: Blocked users cannot access each other's location; location data is encrypted; Firebase is not a permanent location-history store
+    source: documentation/BRD.md §45
+  - id: F-045
+    statement: When live location is unavailable, last-known location may show with a visible timestamp — never presented as live
+    source: documentation/BRD.md §46
+
+  # --- Platform / background / notifications ---
+  - id: F-046
+    statement: Notifications cover new messages, voice/PTT, incoming calls, connection/trust requests, group/security events, storage warnings; privacy is configurable
+    source: documentation/BRD.md §47
+  - id: F-047
+    statement: Background operation (discovery, sync, maintenance, calls, PTT, location) must account for Android Doze, Battery Saver, background restrictions, process termination, screen lock
+    source: documentation/BRD.md §48
+  - id: F-048
+    statement: Android-native components handle system-sensitive functionality (Bluetooth, nearby devices, Wi-Fi, foreground services, background networking, notifications, mic, location); Flutter talks to native via defined interfaces
+    source: documentation/BRD.md §49
+
+  # --- Groups ---
+  - id: F-049
+    statement: Groups have Owner/Admin/Member roles; Owner may rename/add/remove members/assign admins/transfer ownership/delete group
+    source: documentation/BRD.md §50
+  - id: F-050
+    statement: Group encryption keys rotate on membership change; a removed member loses future access; a newly-added member does not automatically get historical access (mechanism for exception unspecified — see Q-FUNC-006)
+    source: documentation/BRD.md §51
+
+  # --- Calls ---
+  - id: F-051
+    statement: Voice calls use the same dynamic-routing architecture and get higher network priority than non-real-time sync
+    source: documentation/BRD.md §52
+  - id: F-052
+    statement: Mid-call route migration follows evaluate→establish→migrate→terminate-old, minimizing interruption
+    source: documentation/BRD.md §53
+
+  # --- Firebase / recovery / abuse / diagnostics ---
+  - id: F-053
+    statement: "Firebase may store: auth info, user/device identity+metadata, trust/block metadata, user config, revocation info, push info, version policy. Must NOT store: message plaintext, voice/call recordings, private/session keys, permanent private location history"
+    source: documentation/BRD.md §54
+  - id: F-054
+    statement: New devices enroll via an existing trusted device where possible; if all crypto keys are permanently lost, historical content is unrecoverable by design
+    source: documentation/BRD.md §55
+  - id: F-055
+    statement: Must control connection-request spam, message flooding, relay abuse, storage exhaustion, group-invite spam, device-registration abuse, battery-exhaustion attacks, network-resource abuse
+    source: documentation/BRD.md §56
+  - id: F-056
+    statement: Diagnostics must be useful without exposing sensitive content — never log plaintext, keys, voice content, sensitive personal/location data
+    source: documentation/BRD.md §57
+
+  # --- Versioning ---
+  - id: F-057
+    statement: Protocols carry version info (app/build/protocol/crypto/db); devices negotiate compatible features; incompatible/insecure protocols may be rejected
+    source: documentation/BRD.md §58
+  - id: F-058
+    statement: App updates must migrate DB schema/config/crypto structures/protocol/sync metadata without destroying existing local conversations
+    source: documentation/BRD.md §59
+  - id: F-059
+    statement: A testing/simulation framework is required — simulate routes, battery, latency, bandwidth, packet loss, device/relay failure, transport availability, partitions, migration, sync, security-policy changes
+    source: documentation/BRD.md §60
+  - id: F-060
+    statement: Version states are UP_TO_DATE / UPDATE_AVAILABLE / UPDATE_REQUIRED, driven primarily by build-number comparison against a remotely configurable policy
+    source: documentation/BRD.md §61.1-4
+  - id: F-061
+    statement: Mandatory updates are non-dismissible and go through Google Play (in-app update API where supported); app must never silently download/install arbitrary APKs
+    source: documentation/BRD.md §61.5-6
+  - id: F-062
+    statement: The last-known version policy is cached for offline use; policy re-fetches and re-evaluates on reconnect; a device with zero connectivity cannot be forced to update
+    source: documentation/BRD.md §61.7-8
+  - id: F-063
+    statement: Mandatory updates must not delete local messages/voice/recordings/attachments/settings/history
+    source: documentation/BRD.md §61.9
+  - id: F-064
+    statement: Version policy should be protected against unauthorized modification, ideally cryptographically signed and verified
+    source: documentation/BRD.md §61.12
+
+  # --- Design system (from Design.md) ---
+  - id: F-065
+    statement: UI uses Material 3 exclusively — no competing/custom visual system; light/dark/system theme via ColorScheme.fromSeed, seed #4F46E5 (deep indigo)
+    source: documentation/Design.md §1-5
+  - id: F-066
+    statement: Navigation adapts by width class — NavigationBar (compact/phone), NavigationRail (medium), NavigationDrawer (expanded/desktop)
+    source: documentation/Design.md §11-13
+  - id: F-067
+    statement: Progressive disclosure is a core UX principle — default view says "You're connected"; advanced network/route detail is one tap away, not shown by default
+    source: documentation/Design.md §100-103, §132
+  - id: F-068
+    statement: Explicit design anti-patterns — no excessive gradients/glassmorphism/heavy shadows/neon, no inconsistent corner radii, no per-purpose style drift
+    source: documentation/Design.md §104
+  - id: F-069
+    statement: All visible strings must come from localization resources; RTL support required via logical (not left/right) padding
+    source: documentation/Design.md §111-112
+
+  # --- Constraints ---
+  - id: F-070
+    statement: Primary platform is Android (v1 confirmed Android-only per Q-SCOPE-002); application framework is Flutter, with native Android components for system-sensitive functionality
+    source: documentation/BRD.md header, §49; spec/questions.md Q-SCOPE-002
+  - id: F-071
+    statement: Offline-first is a hard architectural constraint, not a feature toggle — must remain useful with no Internet, no Firebase, or a partitioned network
+    source: documentation/BRD.md §3.1
+  - id: F-072
+    statement: BRD explicitly excludes exact package/library/protocol/algorithm choices from its scope — deferred to the technical design phase (genesis)
+    source: documentation/BRD.md §66.2, §68
+
+assumptions:
+  - id: A-001
+    statement: NEXORA has no monetization/business model in scope for the epics this harness plans
+    risk_if_wrong: "Low near-term; would only matter if a future task touches payment flows (a human_gates item: auth_or_payment_code)"
+    status: active
+    source: spec/questions.md Q-BIZ-007
+  - id: A-002
+    statement: v1 group size and relay hop count use conservative placeholder defaults, tunable later, rather than being blocking unknowns
+    risk_if_wrong: "Low — these are the kind of constants trivially changed later without architectural rework"
+    status: active
+    source: spec/questions.md Q-SCOPE-008
+  - id: A-003
+    statement: Target user persona (who specifically needs offline-first mesh messaging) is inferred as "users lacking reliable Internet" but never named explicitly
+    risk_if_wrong: "Could shape UX priorities (e.g. disaster-response vs. everyday off-grid use) but does not change v1 architecture"
+    status: active
+    source: documentation/BRD.md §1; docs/intake-report.md §3 Users row
+
+decisions: []
+  # Populated by skills/genesis — ADR-0001..000N (stack, architecture, auth,
+  # crypto protocol, third-party services). None accepted yet.
+
+requirements:
+  functional: []
+  non_functional: []
+  # Populated by skills/genesis when BRD/Design content is atomic-ized into
+  # FR-/NFR- ids with acceptance criteria. Until then, facts[] above is the
+  # source of truth for what's known.
+
+features: []
+  # Populated by skills/epic-breakdown (E<NN> pointers). Not yet run.
+
+journeys:
+  - id: J-001
+    name: Primary onboarding flow
+    summary: "Google Login → Account Created → Device Setup → Discover Devices → Connection Request → (Trusted: Auto-Accept | Unknown: Authentication) → Connection → Secure Channel → {Chat, PTT, Call} → Dynamic Routing → {Bluetooth, Wi-Fi, Internet} → Relay → Destination"
+    source: documentation/BRD.md §63
+  - id: J-002
+    name: First-run detailed flow
+    summary: "First Launch → Welcome → Permission Flow → Device Setup → Device Pairing → Trust Establishment → First Dashboard"
+    source: documentation/Design.md §80-87
+
+business_rules:
+  - id: BR-001
+    statement: "Battery consumption alone must never determine the best route"
+    source: documentation/BRD.md §3.4, §31, §64
+  - id: BR-002
+    statement: "A new connection must be established and validated before the old one is terminated (make-before-break migration)"
+    source: documentation/BRD.md §30, §64
+  - id: BR-003
+    statement: "Relay devices may never decrypt end-to-end encrypted communication"
+    source: documentation/BRD.md §27, §41, §64
+  - id: BR-004
+    statement: "Conflict resolution always favors the more security-restrictive state (BLOCK>TRUST, LOCATION-OFF>LOCATION-ON, REVOKED>ACTIVE, REMOVED>MEMBER)"
+    source: documentation/BRD.md §39, §64
+  - id: BR-005
+    statement: "Blocking is bidirectional-independent — both sides must authorize a connection, one side blocking is sufficient to prevent it"
+    source: documentation/BRD.md §10, §12, §64
+  - note: "Full table is 40 rules — see documentation/BRD.md §64 'Major Business Rules' for the complete list. Only the most architecturally load-bearing are indexed here; the table itself is the source of truth."
+
+data_models:
+  - id: D-001
+    name: Firebase data boundary
+    summary: "May store: auth, user/device identity+metadata, trust/block metadata, user config, revocation, push info, version policy. Must NOT store: message plaintext, voice/call recordings, private/session keys, permanent location history"
+    source: documentation/BRD.md §54
+  - id: D-002
+    name: Message delivery state
+    summary: "Queued / Sent / Accepted / Delivered / Stored / Read / Failed"
+    source: documentation/BRD.md §34
+  - id: D-003
+    name: Relay packet metadata
+    summary: "Packet ID, destination, priority, size, creation time, expiration time, delivery state"
+    source: documentation/BRD.md §28
+  - id: D-004
+    name: Version categories
+    summary: "Application Version, Build Number, Protocol Version, Cryptographic Version, Database Schema Version — tracked independently"
+    source: documentation/BRD.md §61.10
+
+apis: []
+  # None specified anywhere in BRD/Design — explicitly deferred (BRD §66.2, §68).
+
+integrations:
+  - id: I-001
+    name: Google Authentication
+    summary: Sole authentication method (confirmed via design review — welcome screen shows only "Continue with Google")
+    source: documentation/BRD.md §5; design/screens/welcome.md
+  - id: I-002
+    name: Firebase
+    summary: Auth, device/relationship metadata, remote-config-shaped version policy — bounded by the Firebase data boundary (D-001)
+    source: documentation/BRD.md §54, §61.3
+  - id: I-003
+    name: Google Play in-app update
+    summary: Mandatory update delivery mechanism; app must never silently install arbitrary APKs
+    source: documentation/BRD.md §61.6
+
+architecture:
+  summary: >
+    High-level layered intent from BRD §65: Google Auth → Firebase → Identity
+    & Authorization → Communication App (Chat/PTT/Calls/Groups/Attachments/
+    Location) → E2E Encryption → Sync Engine → Route Engine → Relay Engine →
+    {Bluetooth, Wi-Fi, Internet} → Peer Devices. A Flutter+Android-native
+    split is suggested (not contractual) in Design.md §92-96.
+  decisions: []  # ADR pointers — populated at genesis
+  source: documentation/BRD.md §65; documentation/Design.md §92-96
+
+risks:
+  - id: R-001
+    statement: Design.md has no visual source, only text — resolved (see A record in spec/questions.md Q-DESIGN-001; Google Stitch used as the source)
+    severity: high (mitigated)
+    source: docs/intake-report.md §7 Risks
+  - id: R-002
+    statement: Mesh networking + E2E crypto + multi-transport routing is a large, security-critical surface for a first release; BRD itself defers 30 technical-design topics (§68) — Epic 00 will likely be unusually large
+    severity: medium
+    note: Consider a phased wave rollout (e.g. direct-connection chat before multi-hop relay) rather than building the full mesh in wave 1 — a call for skills/epic-breakdown
+    source: docs/intake-report.md §7 Risks
+  - id: R-003
+    statement: No numeric NFR targets anywhere (battery %, latency ms, storage MB) — every NFR in BRD §62 is qualitative; acceptance criteria at task-sharding time will need human-supplied numbers or they'll be invented (violates rule 1)
+    severity: medium
+    source: docs/intake-report.md §7 Risks
+
+constraints:
+  - id: C-001
+    statement: Android-only for v1 (confirmed)
+    source: spec/questions.md Q-SCOPE-002
+  - id: C-002
+    statement: Flutter application framework, Android-native components for system-sensitive functionality
+    source: documentation/BRD.md header, §49
+  - id: C-003
+    statement: Offline-first is architecturally non-negotiable
+    source: documentation/BRD.md §3.1
+  - id: C-004
+    statement: Google Authentication is the sole auth method — no other login path
+    source: documentation/BRD.md §5; design/screens/welcome.md
+  - id: C-005
+    statement: BRD excludes exact package/library/protocol/algorithm choices from its own scope — those are genesis's ADRs, not pre-decided
+    source: documentation/BRD.md §66.2
+
+open_questions:
+  # 🟡 open only — answered questions live in spec/questions.md, not here.
+  - id: Q-ARCH-003
+    summary: E2E encryption protocol/key-exchange scheme unnamed (protocol family, not library)
+    priority: important
+    source: spec/questions.md
+  - id: Q-ARCH-004
+    summary: Routing cost function named but unweighted — no formula, even for a v1 heuristic
+    priority: important
+    source: spec/questions.md
+  - id: Q-FUNC-005
+    summary: "\"Sufficiently better route\" migration threshold undefined"
+    priority: important
+    source: spec/questions.md
+  - id: Q-FUNC-006
+    summary: Mechanism for granting a re-added group member historical access is unspecified
+    priority: important
+    source: spec/questions.md
+  # Q-BIZ-007 and Q-SCOPE-008 intentionally absent: both closed by assumption
+  # (A-001, A-002 above) in spec/questions.md's ⚪ section — no longer 🟡 open.
+
+edges:
+  - { from: F-001, to: I-001, kind: implemented_by }
+  - { from: F-039, to: F-041, kind: depends_on }
+  - { from: F-041, to: Q-ARCH-003, kind: blocked_by }
+  - { from: F-028, to: Q-ARCH-004, kind: blocked_by }
+  - { from: F-026, to: Q-FUNC-005, kind: blocked_by }
+  - { from: F-050, to: Q-FUNC-006, kind: blocked_by }
+  # R-001→Q-DESIGN-001 and C-001→Q-SCOPE-002 intentionally omitted: both
+  # questions are answered/closed (see spec/questions.md), and open_questions[]
+  # — the only Q- nodes this map indexes — holds 🟡 open items only.
+  - { from: F-053, to: D-001, kind: elaborated_by }
+  - { from: F-032, to: D-002, kind: elaborated_by }
+  - { from: F-025, to: D-003, kind: elaborated_by }
+  - { from: F-057, to: D-004, kind: elaborated_by }
+  - { from: F-009, to: BR-005, kind: elaborated_by }
+  - { from: F-037, to: BR-004, kind: elaborated_by }
+  - { from: F-024, to: BR-003, kind: elaborated_by }
+  - { from: F-027, to: BR-002, kind: elaborated_by }
+  - { from: F-028, to: BR-001, kind: elaborated_by }

@@ -1,0 +1,23 @@
+{
+  "$comment": "Copy to .cursor/mcp.json. Verify against current Cursor docs.",
+  "mcpServers": {
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/"
+    },
+    "figma": {
+      "url": "http://127.0.0.1:3845/mcp"
+    },
+    "database": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@bytebase/dbhub",
+        "--transport",
+        "stdio",
+        "--dsn",
+        "${HARNESS_DB_DSN}",
+        "--readonly"
+      ]
+    }
+  }
+}

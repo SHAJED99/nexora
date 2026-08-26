@@ -1,0 +1,24 @@
+{
+  "$comment": "Merge into opencode.json (project or global). Verify the schema against current OpenCode docs.",
+  "mcp": {
+    "github": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "enabled": true
+    },
+    "database": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@bytebase/dbhub",
+        "--transport",
+        "stdio",
+        "--dsn",
+        "{env:HARNESS_DB_DSN}",
+        "--readonly"
+      ],
+      "enabled": true
+    }
+  }
+}

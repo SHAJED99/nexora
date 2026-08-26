@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--
+  SYNTHETIC TEST DATA — not project design, never shipped.
+  A DRIFTED port — the kind of "looks basically right" output an eyeball review
+  waves through. Five planted defects, one per detector:
+    1. the "Remember me" checkbox is gone            → missing element
+    2. the button says "Login", the design "Sign in" → copy (changed)
+    3. the subtitle was rewritten                    → copy (absent)
+    4. the accent is #10b981, the design #059669     → style delta + off-palette token
+    5. control radius is 12px, the design 7px        → style delta
+  The gate must FAIL this file and name all five. It is ~0.04% different by
+  pixel comparison. See selftest-data/README.md.
+-->
+<meta charset="utf-8">
+<title>Login</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, sans-serif; font-size: 13px; color: #18181b;
+    background: #fafafa; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .auth-panel {
+    width: 360px; background: #ffffff; border: 1px solid #e4e4e7;
+    border-radius: 8px; padding: 24px; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  .auth-title { font-size: 18px; font-weight: 600; color: #18181b; margin-bottom: 4px; }
+  .auth-lead { font-size: 12px; font-weight: 400; color: #71717a; margin-bottom: 20px; }
+  .field-label { display: block; font-size: 12px; font-weight: 500; color: #3f3f46; margin-bottom: 6px; }
+  .field {
+    width: 100%; height: 32px; background: #ffffff; color: #18181b;
+    border: 1px solid #e4e4e7; border-radius: 12px; padding: 0 10px;
+    font-size: 14px; font-weight: 400; font-family: system-ui, sans-serif; margin-bottom: 14px;
+  }
+  .field-row { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 18px; }
+  .link-inline { font-size: 12px; font-weight: 500; color: #10b981; text-decoration: none; }
+  .btn-primary {
+    width: 100%; height: 32px; background: #10b981; color: #ffffff;
+    border: 1px solid #047857; border-radius: 12px;
+    font-size: 13px; font-weight: 600; font-family: system-ui, sans-serif;
+  }
+  .auth-legal { margin-top: 16px; font-size: 11px; font-weight: 400; color: #a1a1aa; text-align: center; }
+</style>
+</head>
+<body>
+  <section class="auth-panel">
+    <h1 class="auth-title">Sign in</h1>
+    <div class="auth-lead">Welcome back!</div>
+    <form class="auth-form" novalidate>
+      <label class="field-label" for="email">Email</label>
+      <input class="field" id="email" name="email" type="email" placeholder="you@company.com" required>
+      <label class="field-label" for="password">Password</label>
+      <input class="field" id="password" name="password" type="password" placeholder="••••••••" required>
+      <div class="field-row">
+        <a class="link-inline" href="/reset">Forgot password?</a>
+      </div>
+      <button class="btn-primary" type="submit">Login</button>
+    </form>
+    <div class="auth-legal">Protected by SSO. Contact support for access.</div>
+  </section>
+</body>
+</html>

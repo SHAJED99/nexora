@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Settings - NEXORA</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&amp;family=JetBrains+Mono:wght@400;500&amp;family=Geist:wght@600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary-container": "#67f4b7",
+                      "primary-container": "#4f46e5",
+                      "surface-dim": "#cbdbf5",
+                      "primary-fixed-dim": "#c3c0ff",
+                      "inverse-surface": "#213145",
+                      "surface": "#f8f9ff",
+                      "on-tertiary-fixed": "#002113",
+                      "tertiary": "#005338",
+                      "background": "#f8f9ff",
+                      "surface-container-highest": "#d3e4fe",
+                      "surface-container-high": "#dce9ff",
+                      "on-primary-fixed": "#0f0069",
+                      "on-secondary-fixed": "#001e2f",
+                      "error": "#ba1a1a",
+                      "outline": "#777587",
+                      "on-error-container": "#93000a",
+                      "on-tertiary": "#ffffff",
+                      "primary": "#3525cd",
+                      "on-tertiary-fixed-variant": "#005236",
+                      "on-primary": "#ffffff",
+                      "surface-container-lowest": "#ffffff",
+                      "on-secondary-container": "#004666",
+                      "tertiary-fixed": "#6ffbbe",
+                      "on-error": "#ffffff",
+                      "on-secondary": "#ffffff",
+                      "primary-fixed": "#e2dfff",
+                      "on-background": "#0b1c30",
+                      "tertiary-container": "#006e4b",
+                      "on-secondary-fixed-variant": "#004c6e",
+                      "secondary-fixed-dim": "#89ceff",
+                      "on-primary-container": "#dad7ff",
+                      "surface-container-low": "#eff4ff",
+                      "tertiary-fixed-dim": "#4edea3",
+                      "error-container": "#ffdad6",
+                      "surface-variant": "#d3e4fe",
+                      "on-surface-variant": "#464555",
+                      "surface-tint": "#4d44e3",
+                      "outline-variant": "#c7c4d8",
+                      "surface-bright": "#f8f9ff",
+                      "secondary-container": "#39b8fd",
+                      "secondary": "#006591",
+                      "surface-container": "#e5eeff",
+                      "on-primary-fixed-variant": "#3323cc",
+                      "inverse-on-surface": "#eaf1ff",
+                      "inverse-primary": "#c3c0ff",
+                      "secondary-fixed": "#c9e6ff",
+                      "on-surface": "#0b1c30"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "base": "4px",
+                      "xl": "32px",
+                      "md": "16px",
+                      "xs": "4px",
+                      "margin-mobile": "16px",
+                      "margin-desktop": "64px",
+                      "sm": "8px",
+                      "gutter": "16px",
+                      "lg": "24px"
+              },
+              "fontFamily": {
+                      "body-lg": ["Inter"],
+                      "label-md": ["JetBrains Mono"],
+                      "display-lg": ["Geist"],
+                      "headline-lg": ["Geist"],
+                      "headline-lg-mobile": ["Geist"],
+                      "title-lg": ["Inter"],
+                      "code-sm": ["JetBrains Mono"],
+                      "body-md": ["Inter"]
+              },
+              "fontSize": {
+                      "body-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "0.5px", "fontWeight": "400"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.5px", "fontWeight": "500"}],
+                      "display-lg": ["57px", {"lineHeight": "64px", "letterSpacing": "-0.25px", "fontWeight": "600"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                      "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                      "title-lg": ["22px", {"lineHeight": "28px", "fontWeight": "500"}],
+                      "code-sm": ["11px", {"lineHeight": "16px", "fontWeight": "400"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.25px", "fontWeight": "400"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        body {
+            /* Applying default dark mode background based on theme config */
+            background-color: #0b1c30; /* Using a dark background for the 'dark' class context */
+            color: #f8f9ff;
+        }
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #464555;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #777587;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="antialiased min-h-screen flex flex-col font-body-lg text-body-lg bg-[#0b1c30] text-[#eaf1ff]"> <!-- Using hardcoded dark colors for visual consistency in this example as tailwind dark mode bg needs to be explicitly set if not using the default bg classes -->
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky border-b border-outline-variant/10 bg-[#0b1c30] z-40">
+<div class="flex justify-between items-center px-md h-16 w-full max-w-[1200px] mx-auto">
+<button class="flex items-center justify-center p-sm rounded-full hover:bg-[#1a2c42] transition-colors active:scale-95 duration-150 text-[#c3c0ff]">
+<span class="material-symbols-outlined" data-icon="hub">hub</span>
+</button>
+<h1 class="font-display-lg text-headline-lg-mobile tracking-tight text-[#c3c0ff]">NEXORA</h1>
+<button class="flex items-center justify-center p-sm rounded-full hover:bg-[#1a2c42] transition-colors active:scale-95 duration-150 text-[#c3c0ff]">
+<span class="material-symbols-outlined" data-icon="lock">lock</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-grow w-full max-w-[1200px] mx-auto px-margin-mobile md:px-margin-desktop py-lg pb-24 md:pb-lg">
+<div class="mb-lg">
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-[#eaf1ff] mb-sm">Settings</h2>
+<p class="font-body-md text-body-md text-[#c7c4d8]">Manage your secure connection preferences and device configurations.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Settings List -->
+<div class="col-span-1 md:col-span-8 lg:col-span-9 flex flex-col gap-sm">
+<!-- Account Group -->
+<div class="bg-[#1a2c42] rounded-xl border border-[#c7c4d8]/10 overflow-hidden mb-md">
+<button class="w-full flex items-center p-md hover:bg-[#213145] transition-colors text-left group">
+<div class="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-[#001e2f] text-[#89ceff] group-hover:bg-[#004666] transition-colors mr-md">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</div>
+<div class="flex-grow">
+<h3 class="font-title-lg text-title-lg text-[#f8f9ff] mb-xs">Account</h3>
+<p class="font-body-md text-body-md text-[#c7c4d8]">Profile, identity keys, linked devices</p>
+</div>
+<span class="material-symbols-outlined text-[#777587] group-hover:text-[#c3c0ff] transition-colors">chevron_right</span>
+</button>
+</div>
+<!-- Privacy & Security Group -->
+<div class="bg-[#1a2c42] rounded-xl border border-[#c7c4d8]/10 overflow-hidden mb-md">
+<button class="w-full flex items-center p-md hover:bg-[#213145] transition-colors text-left group border-b border-[#c7c4d8]/10">
+<div class="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-[#002113] text-[#67f4b7] group-hover:bg-[#005338] transition-colors mr-md">
+<span class="material-symbols-outlined" data-icon="security">security</span>
+</div>
+<div class="flex-grow">
+<h3 class="font-title-lg text-title-lg text-[#f8f9ff] mb-xs">Privacy &amp; Security</h3>
+<p class="font-body-md text-body-md text-[#c7c4d8]">Encryption protocols, app lock, permissions</p>
+</div>
+<span class="material-symbols-outlined text-[#777587] group-hover:text-[#c3c0ff] transition-colors">chevron_right</span>
+</button>
+<button class="w-full flex items-center p-md hover:bg-[#213145] transition-colors text-left group">
+<div class="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-[#002113] text-[#67f4b7] group-hover:bg-[#005338] transition-colors mr-md">
+<span class="material-symbols-outlined" data-icon="policy">policy</span>
+</div>
+<div class="flex-grow">
+<h3 class="font-title-lg text-title-lg text-[#f8f9ff] mb-xs">Security Center</h3>
+<p class="font-body-md text-body-md text-[#c7c4d8]">Threat logs, network audits, certificates</p>
+</div>
+<span class="material-symbols-outlined text-[#777587] group-hover:text-[#c3c0ff] transition-colors">chevron_right</span>
+</button>
+</div>
+<!-- Network & Storage Group -->
+<div class="bg-[#1a2c42] rounded-xl border border-[#c7c4d8]/10 overflow-hidden mb-md">
+<button class="w-full flex items-center p-md hover:bg-[#213145] transition-colors text-left group border-b border-[#c7c4d8]/10">
+<div class="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-[#0f0069] text-[#c3c0ff] group-hover:bg-[#3525cd] transition-colors mr-md">
+<span class="material-symbols-outlined" data-icon="wifi_tethering">wifi_tethering</span>
+</div>
+<div class="flex-grow">
+<h3 class="font-title-lg text-title-lg text-[#f8f9ff] mb-xs">Network</h3>
+<p class="font-body-md text-body-md text-[#c7c4d8]">Data usage, mesh routing, proxy</p>
+</div>
+<span class="material-symbols-outlined text-[#777587] group-hover:text-[#c3c0ff] transition-colors">chevron_right</span>
+</button>
+<button class="w-full flex items-center p-md hover:bg-[#213145] transition-colors text-left group">
+<div class="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-[#0f0069] text-[#c3c0ff] group-hover:bg-[#3525cd] transition-colors mr-md">
+<span class="material-symbols-outlined" data-icon="sd_storage">sd_storage</span>
+</div>
+<div class="flex-grow">
+<h3 class="font-title-lg text-title-lg text-[#f8f9ff] mb-xs">Storage</h3>
+<p class="font-body-md text-body-md text-[#c7c4d8]">Local cache, message retention, export</p>
+</div>
+<span class="material-symbols-outlined text-[#777587] group-hover:text-[#c3c0ff] transition-colors">chevron_right</span>
+</button>
+</div>
+<!-- Device & App Group -->
+<div class="bg-[#1a2c42] rounded-xl border border-[#c7c4d8]/10 overflow-hidden mb-md">
+<button class="w-full flex items-center p-md hover:bg-[#213145] transition-colors text-left group border-b border-[#c7c4d8]/10">
+<div class="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-[#213145] text-[#dce9ff] group-hover:bg-[#dce9ff] group-hover:text-[#213145] transition-colors mr-md">
+<span class="material-symbols-outlined" data-icon="battery_full_alt">battery_full_alt</span>
+</div>
+<div class="flex-grow">
+<h3 class="font-title-lg text-title-lg text-[#f8f9ff] mb-xs">Battery</h3>
+<p class="font-body-md text-body-md text-[#c7c4d8]">Background execution, power saving modes</p>
+</div>
+<span class="material-symbols-outlined text-[#777587] group-hover:text-[#c3c0ff] transition-colors">chevron_right</span>
+</button>
+<button class="w-full flex items-center p-md hover:bg-[#213145] transition-colors text-left group border-b border-[#c7c4d8]/10">
+<div class="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-[#213145] text-[#dce9ff] group-hover:bg-[#dce9ff] group-hover:text-[#213145] transition-colors mr-md">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</div>
+<div class="flex-grow">
+<h3 class="font-title-lg text-title-lg text-[#f8f9ff] mb-xs">Notifications</h3>
+<p class="font-body-md text-body-md text-[#c7c4d8]">Alerts, silent modes, LED behaviors</p>
+</div>
+<span class="material-symbols-outlined text-[#777587] group-hover:text-[#c3c0ff] transition-colors">chevron_right</span>
+</button>
+<button class="w-full flex items-center p-md hover:bg-[#213145] transition-colors text-left group">
+<div class="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-[#213145] text-[#dce9ff] group-hover:bg-[#dce9ff] group-hover:text-[#213145] transition-colors mr-md">
+<span class="material-symbols-outlined" data-icon="info">info</span>
+</div>
+<div class="flex-grow">
+<h3 class="font-title-lg text-title-lg text-[#f8f9ff] mb-xs">About / Updates</h3>
+<p class="font-body-md text-body-md text-[#c7c4d8]">Version 2.4.1, release notes, diagnostic logs</p>
+</div>
+<span class="material-symbols-outlined text-[#777587] group-hover:text-[#c3c0ff] transition-colors">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Side Info Panel (Desktop Only) -->
+<div class="hidden md:flex flex-col col-span-4 lg:col-span-3 gap-md">
+<div class="bg-[#1a2c42] rounded-xl border border-[#c7c4d8]/10 p-md flex flex-col items-center text-center">
+<div class="w-24 h-24 rounded-full bg-[#001e2f] flex items-center justify-center mb-md border-2 border-[#89ceff]">
+<span class="material-symbols-outlined text-[48px] text-[#89ceff]" data-icon="shield">shield</span>
+</div>
+<h4 class="font-title-lg text-title-lg text-[#f8f9ff] mb-xs">System Secure</h4>
+<p class="font-body-md text-body-md text-[#c7c4d8] mb-md">All encryption protocols are active and up to date.</p>
+<button class="w-full py-sm px-md rounded-full border border-[#89ceff] text-[#89ceff] font-label-md text-label-md hover:bg-[#001e2f] transition-colors">
+                        Run Audit
+                    </button>
+</div>
+<div class="bg-[#213145] rounded-xl border border-[#c7c4d8]/10 p-md">
+<h4 class="font-label-md text-label-md text-[#c7c4d8] mb-sm uppercase tracking-wider">Node Status</h4>
+<div class="flex items-center justify-between mb-sm">
+<span class="font-body-md text-body-md text-[#f8f9ff]">Uptime</span>
+<span class="font-code-sm text-code-sm text-[#67f4b7]">99.9%</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body-md text-body-md text-[#f8f9ff]">Active Peers</span>
+<span class="font-code-sm text-code-sm text-[#89ceff]">24</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 md:hidden border-t border-outline-variant/10 bg-[#0b1c30]">
+<div class="flex justify-around items-center h-20 px-base w-full max-w-[1200px] mx-auto">
+<button class="flex flex-col items-center justify-center text-[#c7c4d8] px-4 py-1 hover:bg-[#1a2c42] transition-colors active:scale-95 duration-150 rounded-lg group">
+<span class="material-symbols-outlined mb-1 group-hover:text-[#f8f9ff] transition-colors" data-icon="dashboard">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#c7c4d8] px-4 py-1 hover:bg-[#1a2c42] transition-colors active:scale-95 duration-150 rounded-lg group">
+<span class="material-symbols-outlined mb-1 group-hover:text-[#f8f9ff] transition-colors" data-icon="chat">chat</span>
+<span class="font-label-md text-label-md">Conversations</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#c7c4d8] px-4 py-1 hover:bg-[#1a2c42] transition-colors active:scale-95 duration-150 rounded-lg group">
+<span class="material-symbols-outlined mb-1 group-hover:text-[#f8f9ff] transition-colors" data-icon="router">router</span>
+<span class="font-label-md text-label-md">Devices</span>
+</button>
+<!-- Active Navigation Item -->
+<button class="flex flex-col items-center justify-center bg-[#4f46e5] text-[#dad7ff] rounded-full px-4 py-2 hover:bg-[#3525cd] transition-colors active:scale-95 duration-150 h-[52px]">
+<span class="material-symbols-outlined mb-1" data-icon="settings" data-weight="fill" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</button>
+</div>
+</nav>
+<!-- Top Navigation (Desktop) - Hidden on mobile, visible on md+ -->
+<nav class="hidden md:flex fixed top-0 left-0 w-full h-16 border-b border-outline-variant/10 bg-[#0b1c30]/90 backdrop-blur-sm z-30 pointer-events-none">
+<!-- This is a semantic shell placeholder for where desktop nav would typically go alongside the app bar, 
+             but we are using the side-nav/top-bar hybrid approach as per standard app layouts.
+             For this specific design, we'll assume navigation is handled via the app bar or a hidden sidebar 
+             to keep focus on settings, but we include this to satisfy structural completeness if needed, 
+             though mostly it remains invisible structural scaffolding here. -->
+</nav>
+</body></html>

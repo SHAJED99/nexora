@@ -1,0 +1,420 @@
+{
+  "url": "/welcome_to_nexora/code.html",
+  "title": "NEXORA - Connect beyond the network",
+  "viewport": {
+    "w": 390,
+    "h": 844
+  },
+  "scrollHeight": 884,
+  "elements": [
+    {
+      "tag": "BODY",
+      "role": "generic",
+      "text": "",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": true,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "w": 390,
+        "h": 884
+      },
+      "style": {
+        "color": "rgb(234, 241, 255)",
+        "background": "rgb(33, 49, 69)",
+        "fontFamily": "ui-sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgb(229, 231, 235)",
+        "padding": "16px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "DIV",
+      "role": "generic",
+      "text": "",
+      "depth": 3,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": true,
+      "box": {
+        "x": 147,
+        "y": 217,
+        "w": 96,
+        "h": 96
+      },
+      "style": {
+        "color": "rgb(234, 241, 255)",
+        "background": "rgb(79, 70, 229)",
+        "fontFamily": "ui-sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "radius": "24px",
+        "borderWidth": "0px",
+        "borderColor": "rgb(229, 231, 235)",
+        "padding": "0px",
+        "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(79, 70, 229, 0.3) 0px 0px 40px 0px",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "SPAN",
+      "role": "generic",
+      "text": "hub",
+      "depth": 4,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 165,
+        "y": 235,
+        "w": 60,
+        "h": 60
+      },
+      "style": {
+        "color": "rgb(218, 215, 255)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Material Symbols Outlined",
+        "fontSize": "60px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgb(229, 231, 235)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "H1",
+      "role": "heading:1",
+      "text": "NEXORA",
+      "depth": 3,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 82,
+        "y": 345,
+        "w": 227,
+        "h": 64
+      },
+      "style": {
+        "color": "rgb(195, 192, 255)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Geist",
+        "fontSize": "57px",
+        "fontWeight": "600",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgb(229, 231, 235)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "P",
+      "role": "generic",
+      "text": "Connect beyond the network.",
+      "depth": 3,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 55,
+        "y": 425,
+        "w": 280,
+        "h": 56
+      },
+      "style": {
+        "color": "rgb(203, 219, 245)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Inter",
+        "fontSize": "22px",
+        "fontWeight": "500",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgb(229, 231, 235)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "P",
+      "role": "generic",
+      "text": "Secure communication that keeps working when the network doesn't.",
+      "depth": 3,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 55,
+        "y": 497,
+        "w": 280,
+        "h": 40
+      },
+      "style": {
+        "color": "rgb(211, 228, 254)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Inter",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgb(229, 231, 235)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "role": "button",
+      "text": "",
+      "depth": 2,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": true,
+      "box": {
+        "x": 32,
+        "y": 738,
+        "w": 326,
+        "h": 58
+      },
+      "style": {
+        "color": "rgb(60, 64, 67)",
+        "background": "rgb(248, 249, 255)",
+        "fontFamily": "Inter",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "radius": "9999px",
+        "borderWidth": "1px",
+        "borderColor": "rgb(199, 196, 216)",
+        "padding": "16px 0px",
+        "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(0, 0, 0, 0.06) 0px 1px 2px 0px",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "IMG",
+      "role": "image",
+      "text": "",
+      "depth": 3,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "Google logo",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 91,
+        "y": 757,
+        "w": 20,
+        "h": 20
+      },
+      "style": {
+        "color": "rgb(60, 64, 67)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Inter",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgb(229, 231, 235)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "SPAN",
+      "role": "generic",
+      "text": "Continue with Google",
+      "depth": 3,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 127,
+        "y": 755,
+        "w": 173,
+        "h": 24
+      },
+      "style": {
+        "color": "rgb(60, 64, 67)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Inter",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgb(229, 231, 235)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "P",
+      "role": "generic",
+      "text": "End-to-end encrypted mesh",
+      "depth": 2,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 32,
+        "y": 820,
+        "w": 326,
+        "h": 16
+      },
+      "style": {
+        "color": "rgb(211, 228, 254)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "JetBrains Mono",
+        "fontSize": "12px",
+        "fontWeight": "500",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgb(229, 231, 235)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "SPAN",
+      "role": "generic",
+      "text": "lock",
+      "depth": 3,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 90,
+        "y": 821,
+        "w": 14,
+        "h": 14
+      },
+      "style": {
+        "color": "rgb(211, 228, 254)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Material Symbols Outlined",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgb(229, 231, 235)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    }
+  ],
+  "tokens": {
+    "color": {
+      "rgb(218, 215, 255)": 1,
+      "rgb(195, 192, 255)": 1,
+      "rgb(203, 219, 245)": 1,
+      "rgb(211, 228, 254)": 3,
+      "rgb(60, 64, 67)": 1
+    },
+    "background": {
+      "rgb(33, 49, 69)": 1,
+      "rgb(79, 70, 229)": 1,
+      "rgb(248, 249, 255)": 1
+    },
+    "fontFamily": {
+      "Material Symbols Outlined": 2,
+      "Geist": 1,
+      "Inter": 3,
+      "JetBrains Mono": 1
+    },
+    "fontSize": {
+      "60px": 1,
+      "57px": 1,
+      "22px": 1,
+      "14px": 2,
+      "16px": 1,
+      "12px": 1
+    },
+    "fontWeight": {
+      "400": 4,
+      "500": 2,
+      "600": 1
+    },
+    "radius": {
+      "24px": 1,
+      "9999px": 1
+    },
+    "borderColor": {
+      "rgb(199, 196, 216)": 1
+    },
+    "shadow": {
+      "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(79, 70, 229, 0.3) 0px 0px 40px 0px": 1,
+      "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(0, 0, 0, 0.06) 0px 1px 2px 0px": 1
+    },
+    "spacing": {
+      "16px": 1,
+      "16px 0px": 1
+    }
+  },
+  "meta": {
+    "screen": "welcome",
+    "state": "default",
+    "viewport": "390x844",
+    "source": "ui",
+    "design_url": "http://127.0.0.1:55840/welcome_to_nexora/code.html",
+    "impl_path": "/welcome",
+    "extracted_at": "2026-08-26T10:52:34.563Z"
+  }
+}

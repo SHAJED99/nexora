@@ -1,0 +1,65 @@
+# harness.yaml — topology & policy ("org code"). Read by agent/orchestrator/*.
+version: 2
+project: "<set-during-genesis>"
+
+platforms:                      # fallback order for rate-limit handoff
+  - name: claude-code
+    adapter: agent/adapters/run-claude.sh
+    freeze_threshold_pct: 80    # freeze + hand off at 80% of the 5h window
+    weekly_guard: true
+  - name: codex
+    adapter: agent/adapters/run-codex.sh
+    freeze_threshold_pct: 80
+  - name: opencode
+    adapter: agent/adapters/run-opencode.sh
+    freeze_threshold_pct: 80
+
+model_tiers:                    # routing hints
+  plan_review: opus             # planner / architecture / final review
+  implement: sonnet             # default builder tier
+  trivial: haiku                # renames, boilerplate, summaries
+
+review_routing:
+  # rule 5: reviewed_by != executed_by. The orchestrator picks a reviewer model
+  # from this list, excluding whatever executed the task.
+  models: [opus, sonnet, codex]
+  prefer_cross_platform: true   # Codex reviewing Claude (and back) catches the most
+
+budgets:
+  per_task_warn_usd: 5
+  per_epic_warn_usd: 60
+
+paths:
+  spec: spec/
+  design: design/
+  epics: epics/
+  runs: runs/
+  handoffs: agent/handoffs/
+  rates: agent/rates/cost-config.yaml
+
+scheduler:
+  statuses: [todo, in-progress, review-requested, changes-requested, done, verified, blocked, frozen]
+  lanes: [backend, frontend, cli, infra, docs, cross-cutting]
+  pick_order: [unblocked, p1_bug, moscow, wsjf, critical_path]
+  wip_limit_parallel_agents: 3   # 2–4 is the sane range
+
+human_gates:                     # actions that ALWAYS pause for a human
+  - epic00_exit_review           # domain model + ADRs + design contracts + skeleton
+  - design_contract_approval     # the extracted contracts + derived-gap list
+  - epic_breakdown_and_wave      # the epic map and the first wave
+  - analyze_report               # specs consistent before tasks dispatch
+  - bug_priorities               # QA sets severity; human sets priority
+  - retro_promotions             # lesson → rule/hook edits are code
+  - epic_to_dev_merge
+  - dev_to_main_merge
+  - db_schema_migration
+  - new_dependency
+  - secrets_or_env_change
+  - auth_or_payment_code
+  - delete_over_50_lines
+  - intake_mode_confirmation      # human confirms detected input mode + intake report
+  - blocking_questions_resolved   # no blocking question 🟡 open before genesis
+  - knowledge_map_baseline        # human approves the initial spec/knowledge-map.yaml
+  - codebase_baseline_approval    # brownfield: human approves docs/codebase-baseline.md before changes
+  - change_impact_approval        # human approves each docs/impact/IMP-nnn report before re-planning
+  - agent_role_creation           # a new agent role is law every future agent reads — same class as retro_promotions

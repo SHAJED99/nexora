@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NEXORA - Devices</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&amp;family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-container": "#67f4b7",
+                        "primary-container": "#4f46e5",
+                        "surface-dim": "#cbdbf5",
+                        "primary-fixed-dim": "#c3c0ff",
+                        "inverse-surface": "#213145",
+                        "surface": "#f8f9ff",
+                        "on-tertiary-fixed": "#002113",
+                        "tertiary": "#005338",
+                        "background": "#f8f9ff",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface-container-high": "#dce9ff",
+                        "on-primary-fixed": "#0f0069",
+                        "on-secondary-fixed": "#001e2f",
+                        "error": "#ba1a1a",
+                        "outline": "#777587",
+                        "on-error-container": "#93000a",
+                        "on-tertiary": "#ffffff",
+                        "primary": "#3525cd",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "on-primary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-container": "#004666",
+                        "tertiary-fixed": "#6ffbbe",
+                        "on-error": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#e2dfff",
+                        "on-background": "#0b1c30",
+                        "tertiary-container": "#006e4b",
+                        "on-secondary-fixed-variant": "#004c6e",
+                        "secondary-fixed-dim": "#89ceff",
+                        "on-primary-container": "#dad7ff",
+                        "surface-container-low": "#eff4ff",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "error-container": "#ffdad6",
+                        "surface-variant": "#d3e4fe",
+                        "on-surface-variant": "#464555",
+                        "surface-tint": "#4d44e3",
+                        "outline-variant": "#c7c4d8",
+                        "surface-bright": "#f8f9ff",
+                        "secondary-container": "#39b8fd",
+                        "secondary": "#006591",
+                        "surface-container": "#e5eeff",
+                        "on-primary-fixed-variant": "#3323cc",
+                        "inverse-on-surface": "#eaf1ff",
+                        "inverse-primary": "#c3c0ff",
+                        "secondary-fixed": "#c9e6ff",
+                        "on-surface": "#0b1c30"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "base": "4px",
+                        "xl": "32px",
+                        "md": "16px",
+                        "xs": "4px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "64px",
+                        "sm": "8px",
+                        "gutter": "16px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Inter"],
+                        "label-md": ["JetBrains Mono"],
+                        "display-lg": ["Geist"],
+                        "headline-lg": ["Geist"],
+                        "headline-lg-mobile": ["Geist"],
+                        "title-lg": ["Inter"],
+                        "code-sm": ["JetBrains Mono"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["16px", { "lineHeight": "24px", "letterSpacing": "0.5px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.5px", "fontWeight": "500" }],
+                        "display-lg": ["57px", { "lineHeight": "64px", "letterSpacing": "-0.25px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "600" }],
+                        "title-lg": ["22px", { "lineHeight": "28px", "fontWeight": "500" }],
+                        "code-sm": ["11px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.25px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+        }
+        .dark body {
+            background-color: theme('colors.on-background');
+            color: theme('colors.surface');
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col relative pb-24 md:pb-0">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky border-b border-outline-variant/10 bg-surface dark:bg-inverse-surface z-40 hidden md:block">
+<div class="flex justify-between items-center px-md h-16 w-full max-w-[1200px] mx-auto">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed-dim" data-icon="hub">hub</span>
+<h1 class="font-display-lg text-headline-lg tracking-tight text-primary dark:text-primary-fixed-dim">NEXORA</h1>
+</div>
+<nav class="hidden md:flex gap-lg h-full">
+<a class="flex items-center h-full px-sm text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-highest transition-colors active:scale-95 duration-150" href="#">
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center h-full px-sm text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-highest transition-colors active:scale-95 duration-150" href="#">
+<span class="font-label-md text-label-md">Conversations</span>
+</a>
+<a class="flex items-center h-full px-sm border-b-2 border-primary text-primary dark:text-primary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container-highest transition-colors active:scale-95 duration-150" href="#">
+<span class="font-label-md text-label-md">Devices</span>
+</a>
+<a class="flex items-center h-full px-sm text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-highest transition-colors active:scale-95 duration-150" href="#">
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+</nav>
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed-dim" data-icon="lock">lock</span>
+</div>
+</header>
+<!-- Mobile Header -->
+<header class="w-full top-0 sticky border-b border-outline-variant/10 bg-surface dark:bg-inverse-surface z-40 md:hidden">
+<div class="flex justify-between items-center px-md h-16 w-full">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed-dim" data-icon="hub">hub</span>
+<h1 class="font-display-lg text-headline-lg-mobile tracking-tight text-primary dark:text-primary-fixed-dim">NEXORA</h1>
+</div>
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed-dim" data-icon="lock">lock</span>
+</div>
+</header>
+<main class="flex-grow w-full max-w-[1200px] mx-auto px-margin-mobile md:px-margin-desktop py-lg">
+<div class="flex justify-between items-end mb-lg">
+<div>
+<h2 class="font-title-lg text-title-lg text-on-surface dark:text-on-surface">Network Nodes</h2>
+<p class="font-body-md text-body-md text-on-surface-variant dark:text-on-surface-variant mt-xs">Manage paired and nearby devices.</p>
+</div>
+<button class="bg-primary hover:bg-primary/90 text-on-primary font-label-md text-label-md px-md py-sm rounded-lg flex items-center gap-xs transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="search">search</span>
+                Discover
+            </button>
+</div>
+<!-- Devices Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+<!-- Device Card: Trusted -->
+<div class="bg-surface-container-low dark:bg-surface-container-low/10 border border-outline-variant/10 rounded-xl p-md flex flex-col justify-between min-h-[160px]">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-primary-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary-fixed-dim" data-icon="laptop_mac">laptop_mac</span>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg font-medium text-on-surface dark:text-on-surface">Ahmed's Laptop</h3>
+<p class="font-code-sm text-code-sm text-on-surface-variant dark:text-on-surface-variant mt-[2px]">Wi-Fi Direct</p>
+</div>
+</div>
+<button class="text-on-surface-variant dark:text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="flex justify-between items-end mt-auto pt-sm">
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-tertiary-fixed-dim text-[16px]" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-label-md text-label-md text-tertiary-fixed-dim">Trusted Node</span>
+</div>
+<span class="font-code-sm text-code-sm text-on-surface-variant dark:text-on-surface-variant">Last seen: Just now</span>
+</div>
+</div>
+<!-- Device Card: Allowed -->
+<div class="bg-surface-container-low dark:bg-surface-container-low/10 border border-outline-variant/10 rounded-xl p-md flex flex-col justify-between min-h-[160px]">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-secondary-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary-fixed-dim" data-icon="smartphone">smartphone</span>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg font-medium text-on-surface dark:text-on-surface">Rahim's Phone</h3>
+<p class="font-code-sm text-code-sm text-on-surface-variant dark:text-on-surface-variant mt-[2px]">Bluetooth LE</p>
+</div>
+</div>
+<button class="text-on-surface-variant dark:text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="flex justify-between items-end mt-auto pt-sm">
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-secondary-fixed-dim text-[16px]" data-icon="radio_button_checked" style="font-variation-settings: 'FILL' 1;">radio_button_checked</span>
+<span class="font-label-md text-label-md text-secondary-fixed-dim">Allowed</span>
+</div>
+<span class="font-code-sm text-code-sm text-on-surface-variant dark:text-on-surface-variant">Last seen: 2m ago</span>
+</div>
+</div>
+<!-- Device Card: Unknown -->
+<div class="bg-surface-container-low dark:bg-surface-container-low/10 border border-outline-variant/10 rounded-xl p-md flex flex-col justify-between min-h-[160px]">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-surface-variant/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-outline" data-icon="router">router</span>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg font-medium text-on-surface dark:text-on-surface">Unknown Device</h3>
+<p class="font-code-sm text-code-sm text-on-surface-variant dark:text-on-surface-variant mt-[2px]">Mesh Proximity</p>
+</div>
+</div>
+<button class="text-on-surface-variant dark:text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="flex justify-between items-end mt-auto pt-sm">
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-[#F59E0B] text-[16px]" data-icon="warning" style="font-variation-settings: 'FILL' 1;">warning</span>
+<span class="font-label-md text-label-md text-[#F59E0B]">Unknown</span>
+</div>
+<div class="flex gap-xs">
+<button class="text-code-sm font-label-md text-primary hover:bg-primary/10 px-2 py-1 rounded transition-colors">Verify</button>
+</div>
+</div>
+</div>
+<!-- Device Card: Blocked -->
+<div class="bg-surface-container-low dark:bg-surface-container-low/10 border border-outline-variant/10 rounded-xl p-md flex flex-col justify-between min-h-[160px] opacity-75">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-error-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-error" data-icon="desktop_windows">desktop_windows</span>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg font-medium text-on-surface dark:text-on-surface">Old Tablet</h3>
+<p class="font-code-sm text-code-sm text-on-surface-variant dark:text-on-surface-variant mt-[2px]">Wi-Fi Direct</p>
+</div>
+</div>
+<button class="text-on-surface-variant dark:text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="flex justify-between items-end mt-auto pt-sm">
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-error text-[16px]" data-icon="block" style="font-variation-settings: 'FILL' 1;">block</span>
+<span class="font-label-md text-label-md text-error">Blocked</span>
+</div>
+<span class="font-code-sm text-code-sm text-on-surface-variant dark:text-on-surface-variant">Last seen: 5d ago</span>
+</div>
+</div>
+</div>
+<!-- Empty State Example (Hidden by default, structure provided) -->
+<div class="hidden flex-col items-center justify-center text-center py-xl mt-xl border border-dashed border-outline-variant/30 rounded-xl">
+<div class="w-16 h-16 rounded-full bg-surface-container-high dark:bg-inverse-surface flex items-center justify-center mb-md">
+<span class="material-symbols-outlined text-primary text-[32px]" data-icon="radar">radar</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-background dark:text-surface mb-xs">No Devices Found</h3>
+<p class="font-code-sm text-code-sm text-on-surface-variant dark:text-on-surface-variant mt-[2px]">Scanning your secure mesh environment for nearby nodes and paired connections.</p>
+<button class="bg-primary hover:bg-primary/90 text-on-primary font-label-md text-label-md px-lg py-sm rounded-lg transition-colors">
+                Discover devices
+            </button>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 md:hidden border-t border-outline-variant/10 bg-surface-container dark:bg-surface-container">
+<div class="flex justify-around items-center h-20 px-base w-full">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant px-4 py-1 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors active:scale-95 duration-150 rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="dashboard">dashboard</span>
+<span class="font-label-md text-label-md text-[10px]">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant px-4 py-1 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors active:scale-95 duration-150 rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="chat">chat</span>
+<span class="font-label-md text-label-md text-[10px]">Conversations</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container dark:bg-primary-container text-on-primary-container dark:text-on-primary-container rounded-full px-4 py-1 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="router" style="font-variation-settings: 'FILL' 1;">router</span>
+<span class="font-label-md text-label-md text-[10px]">Devices</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant px-4 py-1 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors active:scale-95 duration-150 rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md text-[10px]">Settings</span>
+</a>
+</div>
+</nav>
+</body></html>

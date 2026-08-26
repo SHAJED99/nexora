@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--
+  SYNTHETIC TEST DATA — not project design, never shipped.
+  The pretend "design" the self-test extracts its golden from.
+  See selftest-data/README.md.
+-->
+<meta charset="utf-8">
+<title>Sign in</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, sans-serif; font-size: 13px; color: #18181b;
+    background: #fafafa; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .card {
+    width: 360px; background: #ffffff; border: 1px solid #e4e4e7;
+    border-radius: 8px; padding: 24px; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  h1 { font-size: 18px; font-weight: 600; color: #18181b; margin-bottom: 4px; }
+  .sub { font-size: 12px; color: #71717a; margin-bottom: 20px; }
+  label { display: block; font-size: 12px; font-weight: 500; color: #3f3f46; margin-bottom: 6px; }
+  input[type=email], input[type=password] {
+    width: 100%; height: 32px; background: #ffffff; color: #18181b;
+    border: 1px solid #e4e4e7; border-radius: 7px; padding: 0 10px;
+    font-size: 14px; font-weight: 400; font-family: system-ui, sans-serif; margin-bottom: 14px;
+  }
+  .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .remember { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 400; color: #52525b; }
+  a { font-size: 12px; font-weight: 500; color: #059669; text-decoration: none; }
+  button {
+    width: 100%; height: 32px; background: #059669; color: #ffffff;
+    border: 1px solid #047857; border-radius: 7px;
+    font-size: 13px; font-weight: 600; font-family: system-ui, sans-serif;
+  }
+  .foot { margin-top: 16px; font-size: 11px; font-weight: 400; color: #a1a1aa; text-align: center; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <h1>Sign in</h1>
+    <p class="sub">Welcome back. Use your work account.</p>
+    <form>
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" placeholder="you@company.com" required>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" placeholder="••••••••" required>
+      <div class="row">
+        <span class="remember"><input id="remember" name="remember" type="checkbox">Remember me</span>
+        <a href="/reset">Forgot password?</a>
+      </div>
+      <button type="submit">Sign in</button>
+    </form>
+    <p class="foot">Protected by SSO. Contact support for access.</p>
+  </main>
+</body>
+</html>

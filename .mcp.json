@@ -1,0 +1,54 @@
+{
+  "$comment": "Harness MCP connections (Claude Code project scope). Docs per server: agent/mcp/. Env vars expand from your shell / .env. Enable ONLY what an agent needs — every connected server's tool schemas cost context on every turn.",
+  "mcpServers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "$comment": "Official GitHub remote MCP (PRs, issues, branches). OAuth on first use. Docs: agent/mcp/github.md"
+    },
+    "figma": {
+      "type": "http",
+      "url": "http://127.0.0.1:3845/mcp",
+      "$comment": "Figma Dev Mode MCP served by the Figma desktop app (Preferences > Enable Dev Mode MCP Server). Remote alternative: https://mcp.figma.com/mcp. Feeds design/tools/extract.mjs. Docs: agent/mcp/figma.md"
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "$comment": "Browser automation for the reviewer (E2E checks). The design gate does NOT use this — design/tools/ drives Playwright directly so results are deterministic and diffable."
+    },
+    "database": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@bytebase/dbhub", "--transport", "stdio", "--dsn", "${HARNESS_DB_DSN}", "--readonly"],
+      "env": {},
+      "$comment": "Universal DB MCP via DBHub. READ-ONLY by default — never point agents at prod read-write. Docs: agent/mcp/database.md"
+    },
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp",
+      "$comment": "Up-to-date library docs — reduces hallucinated APIs. Optional."
+    },
+    "atlassian": {
+      "type": "sse",
+      "url": "https://mcp.atlassian.com/v1/sse",
+      "$comment": "Official Atlassian remote MCP — Jira + Confluence (OAuth). Optional; enable only if you actually track work there. Docs: agent/mcp/jira.md"
+    },
+    "slack": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "slack-mcp-server@latest", "--transport", "stdio"],
+      "env": { "SLACK_MCP_XOXP_TOKEN": "${SLACK_MCP_XOXP_TOKEN}" },
+      "$comment": "Community Slack MCP. Optional — gate notices only. Verify package & scopes before use. Docs: agent/mcp/slack.md"
+    },
+    "stitch": {
+      "type": "http",
+      "url": "https://stitch.googleapis.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${STITCH_ACCESS_TOKEN}",
+        "X-Goog-User-Project": "${STITCH_PROJECT_ID}"
+      },
+      "$comment": "Google Stitch — AI UI design generation, feeds docs/UI/ source for design-fidelity (Q-DESIGN-001). Per Google's own docs (stitch.withgoogle.com/docs/mcp/setup), the MCP endpoint needs an OAuth access token via gcloud, NOT the Stitch Settings-page API key — that key only works against Stitch's REST API. Docs: agent/mcp/stitch.md"
+    }
+  }
+}

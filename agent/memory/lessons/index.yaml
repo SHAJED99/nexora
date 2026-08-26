@@ -1,0 +1,37 @@
+# Which lessons get injected for which work.
+# Read by agent/hooks/lesson-inject.py (Claude Code UserPromptSubmit hook).
+#
+# The hook finds the task id in your prompt, reads that task's `layer:` and
+# `files:`, and prepends the matching area lessons. Rule 8 without anyone
+# having to remember rule 8.
+version: 1
+
+# Always injected, whatever the task.
+always: [process]
+
+# task frontmatter `layer:` → area files
+by_layer:
+  backend: [backend]
+  frontend: [frontend, design]
+  cli: [backend]
+  infra: [infra]
+  docs: []
+  cross-cutting: [backend, frontend, design, infra]
+
+# Path globs matched against the task's `files:` list — catches work whose layer
+# label undersells what it touches.
+by_path:
+  "**/auth/**": [backend]
+  "**/*.migration.*": [backend, infra]
+  "**/migrations/**": [backend, infra]
+  "**/components/**": [frontend, design]
+  "**/*.tsx": [frontend, design]
+  "**/*.css": [design]
+  "docker-compose*.yml": [infra]
+  "Dockerfile*": [infra]
+  ".github/workflows/**": [infra]
+
+# Keep the injection small enough that it's read, not skimmed. If an area file
+# outgrows this, that's the signal to promote its top lessons to rules or hooks
+# (skills/retro) — not to raise the cap.
+max_lessons_per_area: 8

@@ -1,0 +1,53 @@
+# design/thresholds.yaml — what "matches the design" means, numerically.
+#
+# The split matters. STRUCTURE, COPY and TOKENS are hard: they are what a human
+# means by "follow the design", and an implementation controls them completely.
+# PIXELS and LAYOUT are soft: real apps render real data in real fonts, so a
+# perfect build still moves pixels. Gating on pixels teaches agents to game the
+# screenshot; gating on structure teaches them to build the design.
+#
+# Tighten as a screen stabilises. Loosening a hard threshold is a 🧍 human call —
+# it changes what the harness is allowed to ship.
+
+hard: # any breach = FAIL, merge blocked
+  missing_elements_max: 0 # every design element exists in the build
+  copy_mismatch_max: 0 # every string, character for character
+  style_deltas_max: 0 # colour/size/weight/radius within `tolerance`
+  off_palette_tokens_max: 0 # no invented colours/sizes used more than once
+
+soft: # breach = warning in the report; reviewer judges
+  layout_deltas_max: 0
+  pixel_mismatch_max_pct: 8.0
+
+tolerance:
+  color: exact # `exact`, or a number = max per-channel distance (8 ≈ imperceptible)
+  font_size_px: 0.5
+  font_weight: 0
+  radius_px: 1.0
+  spacing_px: 2.0
+  layout_box_px: 8.0
+
+pixel:
+  antialias_threshold: 0.12 # pixelmatch per-pixel sensitivity (higher = more forgiving)
+
+extra_elements: warn # `warn` | `fail`. Extra elements are often spec-required
+  # (a field the design forgot) — the reviewer checks they are
+  # logged in design/gaps.md, not that they don't exist.
+
+# ── Relaxations ───────────────────────────────────────────────────────────────
+# Every value above has a shipped-strict baseline recorded in
+# agent/orchestrator/health.py. `make health` FAILS on any value looser than its
+# baseline unless it is declared here with a reason and an approver — so
+# loosening a threshold under deadline cannot pass unnoticed. Declared ones show
+# as a warning carrying the reason, permanently, to whoever reads the report.
+#
+# This exists because loosening a threshold applies to EVERY screen, FOREVER,
+# and is the single most effective way to disable this subsystem by accident.
+# It's a 🧍 human gate (harness.yaml). Prefer fixing the build, or narrowing the
+# scope with `mask:`/`ignore_text:` on the one screen that needs it.
+#
+# relaxations:
+#   soft.pixel_mismatch_max_pct:
+#     reason: "the dashboard renders live charts; pixel noise is data, not drift"
+#     approved_by: "<human>"
+#     date: 2026-07-15

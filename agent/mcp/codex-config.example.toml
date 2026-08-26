@@ -1,0 +1,8 @@
+# Append to ~/.codex/config.toml — Codex CLI MCP config (verify keys against
+# current Codex docs; format has evolved).
+[mcp_servers.github]
+url = "https://api.githubcopilot.com/mcp/"
+
+[mcp_servers.database]
+command = "npx"
+args = ["-y", "@bytebase/dbhub", "--transport", "stdio", "--dsn", "${MULTICA_DB_DSN}", "--readonly"]
