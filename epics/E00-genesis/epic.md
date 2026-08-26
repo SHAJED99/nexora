@@ -44,9 +44,9 @@ inside of.
 | E00-T01 | Foundational ADRs (0001–0006) | docs | M | ✅ done — all `accepted`, 2026-08-26 |
 | E00-T02 | Conventions (`docs/conventions.md`) | docs | S | ✅ done |
 | E00-T03 | Design contracts (extract + gap pass) | design | M | ✅ done — 7 screens contracted + human-approved (Q-DESIGN-001); `design/gaps.md` intentionally empty until FR ids exist in an epic |
-| E00-T04 | Repo skeleton + route/data-flow maps | infra | M | 🟡 todo |
-| E00-T05 | Walking skeleton (real request, end to end, running) | cross-cutting | L | 🟡 todo |
-| E00-T06 | CI, branch protection, hooks, design self-test | infra | M | 🟡 todo |
+| E00-T04 | Repo skeleton + route/data-flow maps | infra | M | ✅ done — reviewed (Opus, approve with notes) — Flutter Android skeleton scaffolded (`lib/` per docs/conventions.md), `docs/routes.md` + `docs/data-flow.md` written |
+| E00-T05 | Walking skeleton (real request, end to end, running) | cross-cutting | L | ✅ done — reviewed (Opus, approve with notes) — welcome/login built against contracts; UI → GetX controller → use case → repository → Drift wired with one real write + read; `flutter analyze`/`flutter test` green, `flutter build apk --debug` succeeded; no emulator available to confirm on-device boot |
+| E00-T06 | CI, branch protection, hooks, design self-test | infra | M | ✅ done — reviewed (Opus, approve with notes) — `.github/workflows/ci.yml` added; git hooks confirmed already installed; `design-selftest` green; **branch protection on `main`/`development` NOT done** (requires GitHub UI/API repo-admin access — open human follow-up, OQ-E00-2) and design-verify wiring for welcome/login explicitly deferred (OQ-E00-3) |
 
 ## Test strategy
 T05's walking skeleton is proven by: app builds, launches, the one wired
@@ -61,6 +61,16 @@ test yet.
 | No numeric NFR targets exist (R-003, knowledge-map) | Does not block the skeleton; will need human-supplied numbers before any task claiming an NFR is done |
 
 ## Open Questions
+- **OQ-E00-2 — GitHub branch protection on `main`/`development`.** Not doable from an agent worktree (needs GitHub UI or `gh api` with repo-admin credentials). Remains an explicit human follow-up before the exit gate closes.
+  - **Status:** 🟡 open
+  - **Answer:** _<empty>_
+  - **Answered by:** _<empty>_
+  - **Date:** _<empty>_
+- **OQ-E00-3 — No design-fidelity gate exists for the built Flutter app yet.** `make design-verify`'s DOM probe can't inspect a compiled Android build; welcome/login were only hand-diffed against their contracts during review (2026-08-26). A Flutter-capable design gate (e.g. golden-image widget tests, or a debug HTTP/semantics dump the existing tooling can probe) is a follow-up task for whichever epic next touches a screen.
+  - **Status:** 🟡 open
+  - **Answer:** _<empty>_
+  - **Answered by:** _<empty>_
+  - **Date:** _<empty>_
 - **OQ-E00-1 — Q-ARCH-004/Q-FUNC-005/Q-FUNC-006 defaults.** Per human decision (2026-08-26): these fold into their respective feature epics (routing/relay, groups/encryption) at task-sharding time, using the recommended-default v1 heuristic, flagged tunable — not blocking here.
   - **Status:** ⚪ deferred (by design)
   - **Answer:** fold into feature-epic task-sharding, not genesis

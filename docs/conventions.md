@@ -88,6 +88,15 @@ inline string literals in `presentation/`), per `design/` F-069. Layout uses
 logical padding/alignment (`EdgeInsetsDirectional`, `start`/`end`) — never
 literal `left`/`right`.
 
+**Deviation (E00-T05, genesis walking skeleton, 2026-08-26):** the welcome
+and login screens use inline string literals, not ARB resources. Reason:
+adding `intl`/ARB scaffolding is itself a `new_dependency` (human gate) and
+the genesis skeleton's job was to prove the architecture wired end to end,
+not stand up localization infrastructure. This must not become house style
+— the first feature epic that ships a real screen should either get ARB
+scaffolding approved as a `new_dependency` or explicitly re-affirm inline
+strings as the convention, not inherit the skeleton's shortcut silently.
+
 ## Schema migrations
 
 Drift migrations are additive and tested — a migration step is never
