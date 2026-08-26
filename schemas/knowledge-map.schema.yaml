@@ -1,0 +1,255 @@
+# schemas/knowledge-map.schema.yaml
+# Normative field list for spec/knowledge-map.yaml.
+# JSON Schema (draft 2020-12) expressed in YAML.
+#
+# Governing principle: the map is an INDEX over existing id systems
+# (FR-, NFR-, UC-, ADR-, GAP-, Q-, A-, E<NN>, E<NN>-T<MM>, L-), never a copy of
+# their content. Hence every node is {id, summary, path} — `summary` is capped
+# by convention at one line, and `path` is required on anything that has an
+# owning file. If the map and the file disagree, the file wins.
+#
+# Skeleton to copy: templates/knowledge-map.template.yaml
+# Maintained by: skills/knowledge-map (see its §2 ownership table)
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://harness.dev/schemas/knowledge-map.schema.yaml"
+title: Harness Project Knowledge Map
+type: object
+additionalProperties: false
+required: [project, facts, assumptions, requirements, open_questions, edges]
+
+# ── reusable definitions ───────────────────────────────────────────────
+$defs:
+
+  # A pointer node: an id, a one-line summary, and the file that owns it.
+  # NOTE: deliberately does NOT set additionalProperties:false — this schema is
+  # composed via allOf, where each subschema is evaluated independently, so a
+  # closed base would reject every sibling property its own branch adds
+  # (severity, mitigation, supersedes...). Use-sites close the object with
+  # `unevaluatedProperties: false`, which IS allOf-aware in draft 2020-12.
+  pointer:
+    type: object
+    required: [id, summary]
+    properties:
+      id: { type: string, minLength: 2 }
+      summary:
+        type: string
+        description: One line. Longer than one line means content is leaking into the map.
+        maxLength: 200
+      path:
+        type: string
+        description: Repo-relative path to the artifact that owns the content.
+      status: { type: string }
+
+  # pointer, closed. For nodes that add nothing beyond the base four fields.
+  closed_pointer:
+    unevaluatedProperties: false
+    allOf:
+      - $ref: "#/$defs/pointer"
+
+  fact:
+    type: object
+    additionalProperties: false
+    required: [id, statement, source]
+    properties:
+      id: { type: string, pattern: "^F-[0-9]{3}$" }
+      statement: { type: string, maxLength: 300 }
+      source:
+        type: string
+        description: Where this came from — a doc path, a Q- id, or "codebase-baseline".
+      inferred:
+        type: boolean
+        default: false
+        description: true = this was inferred, not stated. An inferred fact is a candidate assumption.
+
+  assumption:
+    type: object
+    additionalProperties: false
+    required: [id, statement, risk_if_wrong, status]
+    properties:
+      id: { type: string, pattern: "^A-[0-9]{3}$" }
+      statement: { type: string, maxLength: 300 }
+      made_because: { type: string }
+      risk_if_wrong:
+        type: string
+        description: >-
+          The invalidation consequence, concretely. "We rebuild the billing
+          module" beats "some rework".
+      status:
+        enum: [active, confirmed, invalidated]
+      from_question: { type: string, pattern: "^Q-[A-Z]+-[0-9]{3}$" }
+      impact_report:
+        type: string
+        pattern: "^IMP-[0-9]{3}$"
+        description: >-
+          REQUIRED once status is invalidated — an invalidated assumption with
+          no impact walk is a live landmine (knowledge-map §3).
+
+  requirement_pointer:
+    unevaluatedProperties: false
+    allOf:
+      - $ref: "#/$defs/pointer"
+      - type: object
+        properties:
+          id: { type: string, pattern: "^(FR|NFR)-[A-Z]+-[0-9]{3}$" }
+          status:
+            enum: [proposed, accepted, implemented, verified, retired]
+
+  question_pointer:
+    type: object
+    additionalProperties: false
+    required: [id, summary, priority]
+    properties:
+      id: { type: string, pattern: "^Q-[A-Z]+-[0-9]{3}$" }
+      summary: { type: string, maxLength: 200 }
+      priority: { enum: [blocking, important, optional] }
+      area:
+        enum: [PROD, BIZ, UX, FUNC, TECH, ARCH, SEC, DATA, INT, DEPLOY, NFR]
+      path: { type: string, default: "spec/questions.md" }
+
+  edge:
+    type: object
+    additionalProperties: false
+    required: [from, to, kind]
+    properties:
+      from: { type: string }
+      to: { type: string }
+      kind:
+        description: >-
+          Edge vocabulary is CLOSED. A new kind needs an ADR — an open
+          vocabulary makes the graph unwalkable, which defeats the map.
+        enum:
+          - implemented_by      # FR-… → E<NN> | E<NN>-T<MM>
+          - sharded_into        # E<NN>  → E<NN>-T<MM>
+          - constrained_by      # anything → ADR-nnnn
+          - derived_from        # requirement → fact | question | design
+          - verified_by         # FR-… → EARS id | test name
+          - depends_on          # task → task
+          - conflicts_with      # requirement ↔ requirement (must be resolved)
+          - supersedes          # ADR → ADR
+          - answers             # Q-… → FR-… | ADR-… | A-nnn | GAP-nnn
+          - assumes             # anything → A-nnn
+          - designed_by         # FR-… | E<NN> → design/screens/<id>.md
+          - documents           # artifact → doc path
+      note: { type: string }
+
+# ── top-level keys ─────────────────────────────────────────────────────
+properties:
+
+  project:
+    type: object
+    additionalProperties: false
+    required: [name, lifecycle_stage]
+    properties:
+      name: { type: string }
+      lifecycle_stage:
+        description: Mirrors the canonical workflow stages; one value, the current one.
+        enum:
+          - intake
+          - questions
+          - knowledge_baseline
+          - genesis
+          - epic_planning
+          - execution
+          - release
+          - maintenance
+      modes:
+        type: array
+        description: Detected intake mode(s) — A..E, mixes are normal.
+        items: { enum: [A, B, C, D, E] }
+      # No type constraint on purpose: authored in YAML by hand, where an
+      # unquoted 2026-08-23 parses to a date object rather than a string. Both
+      # that and a quoted ISO-8601 string are accepted.
+      updated:
+        description: ISO-8601 date (quoted string, or a bare YAML date).
+
+  vision: { type: string }
+  goals:        { type: array, items: { type: string } }
+  stakeholders: { type: array, items: { type: string } }
+  users:
+    type: array
+    description: Personas.
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, summary]
+      properties:
+        id: { type: string }
+        summary: { type: string }
+        goals: { type: array, items: { type: string } }
+
+  facts:       { type: array, items: { $ref: "#/$defs/fact" } }
+  assumptions: { type: array, items: { $ref: "#/$defs/assumption" } }
+  decisions:
+    type: array
+    description: ADR pointers only — the ADR file holds context, options, trade-offs.
+    items:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: "#/$defs/pointer"
+        - type: object
+          properties:
+            id: { type: string, pattern: "^ADR-[0-9]{4}$" }
+            status: { enum: [proposed, awaiting_human, accepted, imposed, superseded, rejected] }
+            supersedes: { type: string, pattern: "^ADR-[0-9]{4}$" }
+
+  requirements:
+    type: object
+    additionalProperties: false
+    properties:
+      functional:     { type: array, items: { $ref: "#/$defs/requirement_pointer" } }
+      non_functional: { type: array, items: { $ref: "#/$defs/requirement_pointer" } }
+
+  features:
+    type: array
+    description: Epic pointers.
+    items:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: "#/$defs/pointer"
+        - type: object
+          properties:
+            id: { type: string, pattern: "^E[0-9]{2}$" }
+            status: { enum: [planned, in_progress, complete, verified] }
+
+  journeys:       { type: array, items: { $ref: "#/$defs/closed_pointer" } }
+  business_rules: { type: array, items: { $ref: "#/$defs/closed_pointer" } }
+  data_models:    { type: array, items: { $ref: "#/$defs/closed_pointer" } }
+  apis:           { type: array, items: { $ref: "#/$defs/closed_pointer" } }
+  integrations:   { type: array, items: { $ref: "#/$defs/closed_pointer" } }
+
+  architecture:
+    type: object
+    additionalProperties: false
+    description: ADR pointers for the load-bearing choices; prose lives in the ADRs.
+    properties:
+      style:      { type: string }
+      decisions:  { type: array, items: { type: string, pattern: "^ADR-[0-9]{4}$" } }
+      baseline:   { type: string, description: "docs/codebase-baseline.md (brownfield)" }
+
+  risks:
+    type: array
+    items:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: "#/$defs/pointer"
+        - type: object
+          properties:
+            severity: { enum: [low, medium, high] }
+            mitigation: { type: string }
+
+  constraints: { type: array, items: { $ref: "#/$defs/closed_pointer" } }
+
+  open_questions:
+    type: array
+    description: >-
+      🟡 OPEN questions only. Answered questions live in spec/questions.md; the
+      map indexes what is still unknown (knowledge-map §3).
+    items: { $ref: "#/$defs/question_pointer" }
+
+  edges:
+    type: array
+    description: >-
+      Traceability edges. No edge may point at a missing id — dangling
+      from/to fails the consistency check.
+    items: { $ref: "#/$defs/edge" }

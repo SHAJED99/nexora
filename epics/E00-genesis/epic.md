@@ -12,6 +12,12 @@ design_screens: [welcome, login, dashboard, conversations, chat, devices, settin
 ---
 # E00 · Genesis — project foundation
 
+**Gate:** 🧍 `epic00_exit_review` — ✅ cleared by human on 2026-08-26
+(all 6 foundational ADRs accepted; walking skeleton confirmed running on a
+physical Android device; human approved the epic_00 → development → main
+merges. Two follow-ups remain open and don't block this gate: OQ-E00-2
+branch protection, OQ-E00-3 Flutter-capable design gate.)
+
 ## Business goal
 Establish the human-decided architectural foundation (stack, crypto protocol,
 transport strategy, auth/session model, persistence, observability), the

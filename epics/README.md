@@ -1,9 +1,11 @@
 # Master epic map
 
+**Gate:** 🧍 `epic_breakdown_and_wave` — ✅ cleared by human on 2026-08-26
+("Approve as proposed" — the 14-epic map, WSJF scores, and Wave 1
+[E01..E06] all approved as drafted.)
+
 > Derived from `spec/srs.md` + `spec/feature-list.md`, scored via
-> `skills/epic-breakdown`. 🧍 **Awaiting human approval** — gate
-> `epic_breakdown_and_wave` (`harness.yaml`). Nothing shards until this map,
-> its scores, and Wave 1 are approved.
+> `skills/epic-breakdown`.
 
 ## The wave model
 

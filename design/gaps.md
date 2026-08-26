@@ -1,5 +1,11 @@
 # Design gaps — what the design doesn't cover, and what we'll do about it
 
+**Gate:** 🧍 `design_contract_approval` — ✅ cleared by human on 2026-08-26
+(the original 7-screen contract extraction + gap pass, per Q-DESIGN-001 in
+`spec/questions.md`. Gaps added later by feature epics — GAP-002/003/004 —
+each carry their own `approved by:` line below and are tracked
+independently; several are still pending your actual sign-off.)
+
 Rule 2 has two halves. Every part of the provided design gets implemented as
 accurately as possible **and** every journey it omits gets completed from the
 BRD / SRS / feature list, consistent with the design that exists.

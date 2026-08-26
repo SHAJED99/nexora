@@ -6,8 +6,11 @@ Claude Code specifics for this repo:
 
 - Agent roles live in `agent/agents/` (5 roles). Mirror them as native
   subagents: `ln -s ../agent/agents .claude/agents`
-- Skills live in `agent/skills/` (10). Make them natively discoverable:
+- Skills live in `agent/skills/` (17). Make them natively discoverable:
   `ln -s ../agent/skills .claude/skills`
+  (`/harness-init` creates both directories by copying them out of the plugin.
+  Skill cross-references are written `skills/<name>` — the same directory, seen
+  from inside `agent/`.)
 - Run headless tasks via `agent/adapters/run-claude.sh <task-id> "<prompt>"`
   so cost + session JSON are captured into `runs/` and `metrics.csv`.
 - Settings this repo expects (`.claude/settings.json`, see `agent/hooks/`):

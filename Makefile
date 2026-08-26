@@ -13,7 +13,7 @@ IMPL ?=
 STRICT ?=
 
 .PHONY: next status review validate health metrics metrics-json hooks lessons \
-        design-extract design-contract design-verify design-selftest workshop help
+        design-extract design-contract design-verify design-selftest help
 
 # ── Work queue ────────────────────────────────────────────────────────────────
 next:            ## next executable task(s); make next LAYER=frontend
@@ -47,10 +47,3 @@ metrics-json:    ## same, as JSON
 hooks:           ## install git hooks (co-author strip, main/development protection)
 	bash agent/hooks/install-hooks.sh
 
-workshop:        ## render docs/WORKSHOP.md → deck.html (add PDF=1 for a PDF)
-	npx --yes @marp-team/marp-cli@latest docs/WORKSHOP.md --no-stdin \
-	  -o deck.$(if $(PDF),pdf,html)
-	@echo "harness: deck → deck.$(if $(PDF),pdf,html)"
-
-help:
-	@grep -E '^[a-z-]+:.*##' Makefile | sed 's/:.*##/ —/'
