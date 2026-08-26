@@ -94,14 +94,19 @@ void main() {
       final currentRoute = Get.currentRoute;
 
       await tester.tap(find.text('Account'));
-      await tester.pump(); // SnackBar animates in without pumpAndSettle.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300)); // let the GetX snackbar overlay animate in.
 
       // No navigation happened — still on the same (settings) screen.
       expect(Get.currentRoute, currentRoute);
       expect(find.byType(SettingsView), findsOneWidget);
 
-      // A SnackBar acknowledges the tap instead.
-      expect(find.byType(SnackBar), findsOneWidget);
+      // A snackbar acknowledges the tap instead of navigating anywhere.
+      expect(find.text('Coming soon'), findsOneWidget);
+
+      // Let the snackbar's own auto-dismiss timer finish before the test
+      // ends, so no pending timer trips the framework's teardown check.
+      await tester.pumpAndSettle(const Duration(seconds: 4));
     },
   );
 }

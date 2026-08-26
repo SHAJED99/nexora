@@ -102,6 +102,27 @@ is how a product acquires seven different empty states.
   agent's — an agent cannot sign its own gap-approval gate (rule 2/3)>_
 - **built:** E02-T02 · golden extracted ⚪ (no gate to extract against yet)
 
+## GAP-005 — settings, "Privacy & Security" sub-screen has no design source
+- **status:** 🟡 proposed
+- **screen:** settings (`design/screens/settings.md`) — or "new screen"
+- **spec:** FR-TRUST-006 — auto-accept-trusted, auto-accept-specific,
+  require-auth-for-unknown, block-list view, location-access toggle all
+  need a real settings surface; the design's "Privacy & Security" row
+  (element 15/21 — icon `security`, "Encryption protocols, app lock,
+  permissions") is only a menu entry, not the sub-screen itself
+- **design shows:** a tappable row that implies a destination screen, with
+  no destination screen drawn anywhere in the design source
+- **derived from:** N/A — not derived yet; this gap only proposes that the
+  sub-screen needs a design pass, not what it should contain
+- **proposal:** once a design pass produces `design/screens/settings-privacy.md`
+  (or similar), shard a task from it that implements FR-TRUST-006's actual
+  controls, consistent with `settings.md`'s row/card primitives
+  (`NexoraColors.settingsRowFill`/`devicesRowBorder`, row typography)
+- **approved by:** _<pending — needs the human's actual sign-off, not an agent's>_
+- **built:** not built — this is the proposal only (E02-T03 builds the
+  menu row that links to it; the row's tap currently shows a "Coming soon"
+  SnackBar per OQ-E02-T03-1)
+
 ## The usual suspects
 
 Checklist for the gap pass. In rough order of how often each is missed:

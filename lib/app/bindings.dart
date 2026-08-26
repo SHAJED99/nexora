@@ -36,5 +36,10 @@ class AppBinding extends Bindings {
     Get.lazyPut(
       () => HomeController(Get.find<DeviceIdentityRepository>()),
     );
+
+    // `SettingsController` (E02-T03) has no shared dependencies of its
+    // own — it's a pure navigation menu — so it needs no permanent
+    // singleton here; `SettingsBinding` registers it directly per-route,
+    // same as `DevicesBinding` does for the rest of its controller.
   }
 }
