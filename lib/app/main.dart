@@ -7,6 +7,10 @@ import 'bindings.dart';
 import 'routes.dart';
 
 Future<void> main() async {
+  // Required before any platform-channel call (Firebase.initializeApp()
+  // included) — without this, `main()` throws
+  // "Binding has not yet been initialized" before runApp() ever runs.
+  WidgetsFlutterBinding.ensureInitialized();
   await ObservabilityService.instance.init();
   // E01-T01: account identity only (ADR-0005) — Google Authentication via
   // Firebase Auth needs the default app initialized before any sign-in
