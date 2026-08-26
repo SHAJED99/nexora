@@ -12,8 +12,12 @@ class DeviceIdentityRepository {
     return _db.createDeviceIdentity(deviceId);
   }
 
-  /// Marks the given device identity as signed in.
-  Future<void> markSignedIn(int id) => _db.markSignedIn(id);
+  /// Marks the given device identity as signed in, optionally recording the
+  /// Firebase account uid it was signed in under (ADR-0005: the device
+  /// identity row itself never derives from this — `accountUid` is purely
+  /// an additive, queryable link, per FR-AUTH-004).
+  Future<void> markSignedIn(int id, {String? accountUid}) =>
+      _db.markSignedIn(id, accountUid: accountUid);
 
   /// Reads back the most recently created device identity, if any.
   Future<DeviceIdentity?> latestDeviceIdentity() => _db.latestDeviceIdentity();
