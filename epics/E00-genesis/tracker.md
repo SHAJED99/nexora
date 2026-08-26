@@ -1,6 +1,6 @@
 # E00 · Genesis — project foundation · Progress
 
-**Status:** in-progress · **Started:** 2026-08-26 · **Completed:** — · **Progress:** 7/7 done (E00 exit gate below still requires human sign-off + 2 open follow-ups, OQ-E00-2/3)
+**Status:** done · **Started:** 2026-08-26 · **Completed:** 2026-08-26 · **Progress:** 7/7 done — human approved epic_00→development→main merges; walking skeleton confirmed running on a physical Android device (Pixel 8 Pro). 2 open follow-ups carried forward: OQ-E00-2 (branch protection), OQ-E00-3 (Flutter-capable design gate).
 
 > Only the ORCHESTRATOR edits this file.
 > todo → in-progress → review-requested → (changes-requested →) done → verified
@@ -70,3 +70,9 @@ graph LR
 - 2026-08-26 E00-T04/T05/T06 fix-ups applied (tracker/epic accounting
   corrected, conventions.md deviation entry added, design/gaps.md entry
   added for `welcomeBg`) — tasks move to done pending merge to `epic_00`.
+- 2026-08-26 epic_00_task_04 → epic_00 merged (commit 99a493d).
+- 2026-08-26 Walking skeleton run live on a physical Android device
+  (Pixel 8 Pro, `flutter run`) — welcome screen rendered, no crash;
+  confirms the genesis exit-gate item beyond the widget test's evidence.
+- 2026-08-26 🧍 human approved epic_00 → development merge (commit e16a2eb)
+  and development → main merge (commit 0dda60d) — E00 status: done.

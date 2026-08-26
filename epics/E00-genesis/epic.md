@@ -1,7 +1,7 @@
 ---
 id: E00
 title: Genesis — project foundation
-status: in-progress
+status: done
 type: genesis
 priority: { moscow: must, wsjf: 10 }
 depends_on: []
