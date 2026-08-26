@@ -6,5 +6,8 @@
         "supportEmail": "shajedurrahmanpanna.panna@gmail.com"
       }
     }
+  },
+  "database": {
+    "rules": "database.rules.json"
   }
 }
