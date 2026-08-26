@@ -412,7 +412,7 @@ class DeviceIdentitiesCompanion extends UpdateCompanion<DeviceIdentity> {
 }
 
 class $RelationshipsTable extends Relationships
-    with TableInfo<$RelationshipsTable, Relationship> {
+    with TableInfo<$RelationshipsTable, RelationshipRow> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -457,7 +457,7 @@ class $RelationshipsTable extends Relationships
   static const String $name = 'relationships';
   @override
   VerificationContext validateIntegrity(
-    Insertable<Relationship> instance, {
+    Insertable<RelationshipRow> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -492,9 +492,9 @@ class $RelationshipsTable extends Relationships
   @override
   Set<GeneratedColumn> get $primaryKey => {deviceId};
   @override
-  Relationship map(Map<String, dynamic> data, {String? tablePrefix}) {
+  RelationshipRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return Relationship(
+    return RelationshipRow(
       deviceId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}device_id'],
@@ -516,11 +516,11 @@ class $RelationshipsTable extends Relationships
   }
 }
 
-class Relationship extends DataClass implements Insertable<Relationship> {
+class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
   final String deviceId;
   final String state;
   final DateTime updatedAt;
-  const Relationship({
+  const RelationshipRow({
     required this.deviceId,
     required this.state,
     required this.updatedAt,
@@ -542,12 +542,12 @@ class Relationship extends DataClass implements Insertable<Relationship> {
     );
   }
 
-  factory Relationship.fromJson(
+  factory RelationshipRow.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return Relationship(
+    return RelationshipRow(
       deviceId: serializer.fromJson<String>(json['deviceId']),
       state: serializer.fromJson<String>(json['state']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -563,17 +563,17 @@ class Relationship extends DataClass implements Insertable<Relationship> {
     };
   }
 
-  Relationship copyWith({
+  RelationshipRow copyWith({
     String? deviceId,
     String? state,
     DateTime? updatedAt,
-  }) => Relationship(
+  }) => RelationshipRow(
     deviceId: deviceId ?? this.deviceId,
     state: state ?? this.state,
     updatedAt: updatedAt ?? this.updatedAt,
   );
-  Relationship copyWithCompanion(RelationshipsCompanion data) {
-    return Relationship(
+  RelationshipRow copyWithCompanion(RelationshipsCompanion data) {
+    return RelationshipRow(
       deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
       state: data.state.present ? data.state.value : this.state,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -582,7 +582,7 @@ class Relationship extends DataClass implements Insertable<Relationship> {
 
   @override
   String toString() {
-    return (StringBuffer('Relationship(')
+    return (StringBuffer('RelationshipRow(')
           ..write('deviceId: $deviceId, ')
           ..write('state: $state, ')
           ..write('updatedAt: $updatedAt')
@@ -595,13 +595,13 @@ class Relationship extends DataClass implements Insertable<Relationship> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is Relationship &&
+      (other is RelationshipRow &&
           other.deviceId == this.deviceId &&
           other.state == this.state &&
           other.updatedAt == this.updatedAt);
 }
 
-class RelationshipsCompanion extends UpdateCompanion<Relationship> {
+class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
   final Value<String> deviceId;
   final Value<String> state;
   final Value<DateTime> updatedAt;
@@ -620,7 +620,7 @@ class RelationshipsCompanion extends UpdateCompanion<Relationship> {
   }) : deviceId = Value(deviceId),
        state = Value(state),
        updatedAt = Value(updatedAt);
-  static Insertable<Relationship> custom({
+  static Insertable<RelationshipRow> custom({
     Expression<String>? deviceId,
     Expression<String>? state,
     Expression<DateTime>? updatedAt,
@@ -1007,17 +1007,17 @@ class $$RelationshipsTableTableManager
         RootTableManager<
           _$AppDatabase,
           $RelationshipsTable,
-          Relationship,
+          RelationshipRow,
           $$RelationshipsTableFilterComposer,
           $$RelationshipsTableOrderingComposer,
           $$RelationshipsTableAnnotationComposer,
           $$RelationshipsTableCreateCompanionBuilder,
           $$RelationshipsTableUpdateCompanionBuilder,
           (
-            Relationship,
-            BaseReferences<_$AppDatabase, $RelationshipsTable, Relationship>,
+            RelationshipRow,
+            BaseReferences<_$AppDatabase, $RelationshipsTable, RelationshipRow>,
           ),
-          Relationship,
+          RelationshipRow,
           PrefetchHooks Function()
         > {
   $$RelationshipsTableTableManager(_$AppDatabase db, $RelationshipsTable table)
@@ -1067,17 +1067,17 @@ typedef $$RelationshipsTableProcessedTableManager =
     ProcessedTableManager<
       _$AppDatabase,
       $RelationshipsTable,
-      Relationship,
+      RelationshipRow,
       $$RelationshipsTableFilterComposer,
       $$RelationshipsTableOrderingComposer,
       $$RelationshipsTableAnnotationComposer,
       $$RelationshipsTableCreateCompanionBuilder,
       $$RelationshipsTableUpdateCompanionBuilder,
       (
-        Relationship,
-        BaseReferences<_$AppDatabase, $RelationshipsTable, Relationship>,
+        RelationshipRow,
+        BaseReferences<_$AppDatabase, $RelationshipsTable, RelationshipRow>,
       ),
-      Relationship,
+      RelationshipRow,
       PrefetchHooks Function()
     >;
 

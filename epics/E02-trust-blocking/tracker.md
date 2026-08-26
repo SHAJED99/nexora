@@ -1,11 +1,11 @@
 # E02 · Relationships, Trust & Blocking · Progress
 
-**Status:** in-progress · **Started:** 2026-08-26 · **Completed:** — · **Progress:** 0/3
+**Status:** in-progress · **Started:** 2026-08-26 · **Completed:** — · **Progress:** 1/3
 
 > Only the ORCHESTRATOR edits this file.
 
 ## Tasks
-- [ ] E02-T01 · Relationship domain (trust states, evaluation, blocking) · review-requested · executed_by claude-code (sonnet)
+- [x] E02-T01 · Relationship domain (trust states, evaluation, blocking) · done · builder (sonnet) → reviewer (opus)
 - [ ] E02-T02 · Devices screen · todo · —
 - [ ] E02-T03 · Settings screen (top-level menu) · todo · —
 
@@ -18,7 +18,7 @@ graph LR
 Note: T02/T03 share `lib/app/routes.dart` + `bindings.dart` — serialize, don't parallelize.
 
 ## Review log
-(date · task · reviewer model · outcome · design gate %)
+- 2026-08-26 · E02-T01 · Opus · approve with notes (1 real gap fixed — blocked/allowed states collapsed to unknown, breaking FR-BLOCK-001's future callers; plus a DataClassName cleanup applied; 2 notes carried to E02-T03/E04) · design gate n/a (no UI)
 
 ## Blocked / Frozen
 (none)
@@ -31,3 +31,10 @@ Note: T02/T03 share `lib/app/routes.dart` + `bindings.dart` — serialize, don't
   `EvaluateConnectionRequestUseCase`, `BlockUseCase`. Tests-first;
   `flutter analyze` clean, `flutter test` 24/24 green. Commit `530cdbf`.
   status -> review-requested, awaiting a different-model review (rule 5).
+- 2026-08-26 Independent review (Opus, rule 5): confirmed 24/24 green,
+  mutation-tested the migration test. Approved with notes; 1 fixed —
+  `EvaluateConnectionRequestUseCase` now returns a stored blocked/allowed
+  state as-is instead of collapsing it to unknown (2 new regression
+  tests), plus `@DataClassName('RelationshipRow')` to remove a latent
+  import-collision trap. `flutter analyze`/`flutter test` re-confirmed
+  green (26/26). E02-T01 → `done`.

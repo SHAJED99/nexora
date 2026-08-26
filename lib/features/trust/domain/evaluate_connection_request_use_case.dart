@@ -25,8 +25,13 @@ class EvaluateConnectionRequestUseCase {
     bool requireAuthForUnknown = false,
   }) async {
     final existing = await _repository.get(deviceId);
-    if (existing?.state == RelationshipState.trusted) {
-      return RelationshipState.trusted;
+    // A previously-recorded state (trusted, allowed, or blocked) is always
+    // returned as-is — a blocked device must never evaluate as merely
+    // "unknown" (review fix, E02-T01: that would be indistinguishable from
+    // a never-seen device to any future caller, defeating FR-BLOCK-001).
+    // Only a device with no relationship row at all is genuinely Unknown.
+    if (existing != null) {
+      return existing.state;
     }
     // No FR-TRUST-006 config wired yet — defaults to Unknown regardless of
     // the flags' values until E02-T03 gives them real meaning.

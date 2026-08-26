@@ -55,4 +55,27 @@ void main() {
     final relationshipB = await repository.get('device-b');
     expect(relationshipB!.state, RelationshipState.blocked);
   });
+
+  test('test_EARS_BLOCK_1_blocked_device_evaluates_as_blocked', () async {
+    // Review fix (E02-T01): a stored `blocked` state must be returned
+    // as-is, never collapsed to `unknown` — otherwise a future caller
+    // reading this evaluation to decide "unknown device, prompt the
+    // user?" would prompt for a device that was explicitly blocked,
+    // defeating FR-BLOCK-001's enforcement.
+    await repository.upsert('device-blocked', RelationshipState.blocked);
+
+    final result = await useCase.call('device-blocked');
+
+    expect(result, RelationshipState.blocked);
+  });
+
+  test('test_EARS_TRUST_1_allowed_device_evaluates_as_allowed', () async {
+    // An `allowed` device's stored state is likewise returned as-is, not
+    // collapsed to unknown.
+    await repository.upsert('device-allowed', RelationshipState.allowed);
+
+    final result = await useCase.call('device-allowed');
+
+    expect(result, RelationshipState.allowed);
+  });
 }

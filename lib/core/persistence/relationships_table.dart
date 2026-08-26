@@ -6,6 +6,7 @@
 // `docs/conventions.md` "Enums" — never an integer index.
 import 'package:drift/drift.dart';
 
+@DataClassName('RelationshipRow')
 class Relationships extends Table {
   TextColumn get deviceId => text()();
   TextColumn get state => text()();
