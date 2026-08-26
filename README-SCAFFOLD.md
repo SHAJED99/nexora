@@ -17,7 +17,8 @@ require re-scaffolding.
 
 This scaffold tracks the upstream harness v2 layout with two extensions:
 
-1. **Six new human gates** in `harness.yaml` (19 total, was 13):
+1. **Seven new human gates** in `harness.yaml` (20 total, was 13), now a
+   structured registry that `scheduler.py --validate` reads and enforces:
    `intake_mode_confirmation` · `blocking_questions_resolved` ·
    `knowledge_map_baseline` · `codebase_baseline_approval` ·
    `change_impact_approval`.

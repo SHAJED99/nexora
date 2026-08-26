@@ -133,4 +133,4 @@ nothing is the finding.
 - Missing coverage becomes work → `skills/epic-breakdown` · `skills/task-sharding`
 - Unclaimed code or reversed decisions → `skills/change-impact`
 - Consumes this report → `skills/release` (release gate) · `skills/review`
-- Command → `/trace [id]`
+- Command → `/agentic-dev-workflow:trace [id]`

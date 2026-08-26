@@ -69,7 +69,9 @@ input (idea|PRD|SRS|design|code) ─▶ intake + questions ─▶ knowledge map 
 | Topology, budgets, gates | `harness.yaml` |
 | External platforms | `agent/mcp/README.md` |
 | Current work queue | `make next` |
+| Watch the whole run in a browser | `make dashboard` (or `make dashboard PORT=9999`) |
 | Your gates as the human | `docs/HUMAN-GUIDE.md` |
+| How to drive the workflow (commands, in order) | the plugin's `GETTING-STARTED.md` |
 | Classify the input, write the intake report | `agent/skills/project-intake/SKILL.md` |
 | Surface and resolve blocking questions | `agent/skills/question-resolution/SKILL.md` |
 | Build/maintain the knowledge map | `agent/skills/knowledge-map/SKILL.md` |

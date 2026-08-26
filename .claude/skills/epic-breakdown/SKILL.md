@@ -87,6 +87,19 @@ everything else waits for the task to land.
 queue. An injection that vanishes silently is why people stop trusting the
 queue and start asking for status.
 
+## Recording the gate
+When you write the epic map, put the gate line at the top of
+`epics/README.md`, awaiting a human:
+
+```
+**Gate:** 🧍 `epic_breakdown_and_wave` — ⏳ AWAITING HUMAN
+```
+
+**Re-open it for every wave.** One cleared line does not authorise every
+future wave: when you plan wave N, reset the line to ⏳ and record the
+previous clearance in the wave history below it. Otherwise the first
+approval silently covers work nobody has seen.
+
 ## Where to look next
 - What feeds the epic map -> `skills/genesis` (`spec/` + accepted ADRs)
 - Turning an approved epic into tasks -> `skills/task-sharding`

@@ -3,7 +3,7 @@ name: builder
 description: Backend / CLI / infra implementer. One task at a time, own branch + worktree, tests first, strictly inside the task file's contract.
 model: sonnet
 mcp: [github, database, context7]
-skills: [implement, review]
+skills: [implement, review, handoff]
 ---
 # Builder (backend · cli · infra)
 

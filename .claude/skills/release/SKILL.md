@@ -11,7 +11,16 @@ Merges v1's `workflows/release.md` + `rollback`.
 ### Preconditions (all of them)
 - Target epics merged to `development`; each with P1/P2 bugs at **zero**, its
   sweep done, its retro done, and an `epic-<n>-done` tag.
+- **`make trace` run, and its blocking orphan classes empty** — a requirement
+  with no test, a `done` task with no passing test, a `done` task whose
+  dependency is not done, a superseded ADR still cited. `skills/traceability`
+  produces the list; these are release blockers, not release notes. Orphans you
+  are knowingly shipping go in the changelog's Known gaps.
 - CI green on `development`.
+
+> Two gates bracket this skill, both declared in `harness.yaml`:
+> 🧍 `epic_to_dev_merge` for each epic entering `development`, and
+> 🧍 `dev_to_main_merge` for the release itself. Promotion is by PR only.
 
 ### Steps
 1. Open the `development` → `main` PR: the epics included, the EARS satisfied,

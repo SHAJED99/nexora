@@ -112,21 +112,24 @@ markup scores 100%.
 ## Rules
 1. **Never hand-edit the generated tables** in a contract. Regenerate.
 2. **Never loosen `thresholds.yaml` to make a build pass.** That is the one
-   change that silently disables this whole subsystem. It's a 🧍 human call.
+   change that silently disables this whole subsystem. It's a 🧍 human call — the `design_threshold_relaxation` gate.
 3. **Never delete a design element to satisfy the API.** Keep it, wire it to
    local state, log the gap.
 4. **A red gate is never "close enough".** The number is right there.
-5. **For any repeated or grouped UI element, check `probe.json` directly for
-   untexted wrapper `generic`s — don't infer structure from the printed
-   contract table alone.** The table only numbers elements with a text/icon
-   role; a fill, border, radius, backdrop, or group container with no text
-   of its own gets no row there, so it's invisible unless you read the raw
-   probe. When a wrapper's box doesn't match a single item's (taller/wider
-   than one row), that's a GROUP holding several items, not a uniform style
-   applied to each one individually. (Promoted from `agent/memory/lessons/
-   design.md` L-design-001 — two consecutive tasks lost a wrapper element
-   this table doesn't surface: a devices-screen icon backdrop, then a
-   settings-screen group container read as "applies to every row.")
+
+## Recording the gate
+When you write the derived-gap list, put the gate line at the top of
+`design/gaps.md`, awaiting a human:
+
+```
+**Gate:** 🧍 `design_contract_approval` — ⏳ AWAITING HUMAN
+```
+
+The human replaces the whole right-hand side with
+`✅ cleared by <name> on <YYYY-MM-DD>`. `make validate` reads that one
+line and `make next` refuses to dispatch until it is cleared. Do not add
+the line before there is something to approve — a gate on an empty document
+is a gate that gets cleared out of habit.
 
 ## Where to look next
 - Where screen contracts are first produced -> `skills/genesis` (T03)

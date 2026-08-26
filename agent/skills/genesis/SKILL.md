@@ -49,7 +49,13 @@ like. Then produce two things.
 
 **First, `spec/` — the canonical, greppable source of truth:**
 `spec/srs.md` (atomic FR/NFR ids) · `spec/feature-list.md` (Module → Feature →
-UC) · `spec/glossary.md` · `spec/constitution.md` (🧍 the human approves).
+UC) · `spec/glossary.md` · `spec/product-rules.md` (🧍 the human approves) — the
+invariants that hold across every feature: authorisation model, audit
+obligations, tenancy, money handling.
+
+> Named `product-rules.md`, not `constitution.md`. **"The constitution" in this
+> harness means `AGENTS.md`** — the ten always-on rules that govern the *agents*.
+> Two files with one name is how a task ends up citing the wrong law.
 
 This conversion is not clerical work. A `.docx` cannot be grepped, diffed,
 traced or cited — **rule 1 needs an id to be law**. A task claiming it
@@ -116,7 +122,19 @@ architecture exists rather than being described.
 CI green, branch protection on `main`/`development` (PR required, CI green,
 linear history), `make hooks` installed, `make design-selftest` green.
 
-## 🧍 The exit gate — the big one
+## 🧍 The exit gate — the big one (`epic00_exit_review`)
+
+Record it at the top of `epics/E00-genesis/epic.md` — the document that IS
+the exit checklist:
+
+```
+**Gate:** 🧍 `epic00_exit_review` — ⏳ AWAITING HUMAN
+```
+
+Cleared as `✅ cleared by <name> on <YYYY-MM-DD>`. `make validate`
+reads it, and once `epics/E01*/` exists the gate must be present and
+cleared — finishing genesis by deleting its paperwork does not count.
+
 Nothing shards until the human confirms:
 - [ ] domain model accepted
 - [ ] every foundational ADR `accepted` (not "proposed", not "assumed")

@@ -74,6 +74,13 @@ stamps metrics. The human flips `done` → `verified` in batches.
 one task is a specification problem wearing a coding problem's clothes; a third
 round of the same conversation won't fix it.
 
+## Gates you enforce for the human
+Two `harness.yaml` gates land on the reviewer because they are properties of a
+diff, not of a stage: 🧍 `auth_or_payment_code` (any change under an auth or
+payment path gets the security lens in `references/security.md`, and the human
+signs it off) and 🧍 `delete_over_50_lines`. If the task file does not record
+the gate as cleared, the verdict is `changes-requested` — not "looks fine to me".
+
 ## Reviewing well
 - **Evidence beats opinion.** `auth.ts:142 — token compared with < so an
   exactly-expired token passes` beats "expiry handling looks off".

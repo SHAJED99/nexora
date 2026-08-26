@@ -95,8 +95,10 @@ you approved is the re-plan you performed — a step skipped, a `traces_to:` hal
 updated, a new id nothing claims. This is a verification step, not bookkeeping.
 
 ### 6. Revalidation
-**Done is only done against the current spec.** Affected `done` tasks drop to
-needs-revalidation — implemented as new bug/chore tasks tracing to the new
+**Done is only done against the current spec.** Affected `done` tasks need
+revalidating. **"needs-revalidation" is a disposition, NOT a status** — it is not
+in `harness.yaml scheduler.statuses` and `scheduler.py --validate` rejects any
+status it does not know. Revalidation is expressed as new bug/chore tasks tracing to the new
 ids, because the harness has one execution state system (task frontmatter +
 tracker.md) and impact does not get a second one. A task that was done against
 FR-X-old and never revalidated against FR-X-new is not done; it's stale and

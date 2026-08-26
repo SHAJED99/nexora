@@ -42,6 +42,10 @@ every one of them changes what gets built. The frontmatter contract:
 - `functions:` — signature, params, returns, purpose.
 - `design_contract:` — required for `layer: frontend`.
 - `depends_on:` — correct, or the scheduler lies to everyone.
+- `required_context:` — the ids the executing agent will need: spec ids, ADR ids,
+  the design contract, upstream task ids. `skills/agent-briefing` attaches
+  **exactly** this and nothing "just in case", so an under-declared list is how a
+  brief ends up missing something the task depends on.
 
 ### 3. Write the scope fence (§What this task does NOT do)
 The most-skipped section and the highest-value one. Name the

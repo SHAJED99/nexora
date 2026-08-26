@@ -98,7 +98,10 @@ management.
    automate next.
 
 ## Where to look next
-- What must be complete first -> `skills/release`
+- What must be complete first -> `skills/bug-sweep` (P1/P2 clear) and the
+  epic's merge into `development`. **Not** `skills/release`: the epic retro runs
+  *before* a release, and `skills/release` lists a completed retro among its
+  preconditions — reading it the other way makes the two circular.
 - Evidence to read, not memory -> per-epic `metrics.csv`, `runs/`, review verdicts, `docs/impact/`
 - Where lessons live and how they reach an agent -> `agent/memory/lessons/` + the lesson-inject hook
 - A lesson that became a rule -> the relevant `SKILL.md`; a rule that became a hook -> `agent/hooks/`

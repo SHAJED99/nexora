@@ -48,7 +48,8 @@ The map rots the day updates become "someone's, eventually". Ownership:
 
 | Event | Who updates | What changes |
 |---|---|---|
-| intake completes | project-intake | facts, constraints, users, vision |
+| intake completes | **knowledge-map**, reading `docs/intake-report.md` | facts, constraints, users, vision |
+| brownfield baseline approved | codebase-analysis | facts, constraints, architecture (`imposed` ADRs) |
 | question resolved / assumed | question-resolution | open_questions[], assumptions[], facts[] |
 | genesis produces spec/ + ADRs | genesis | requirements, decisions, architecture |
 | epic approved | epic-breakdown | features[], edges FR→E<NN> |

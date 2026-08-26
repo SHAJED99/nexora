@@ -84,12 +84,9 @@ export function probeFn() {
     const keep = INTERACTIVE.has(tag) || MEDIA.has(tag) || text.length > 0 || surface;
 
     // Token census over every visible node — this is the design's real palette,
-    // not what a style guide claims. Font tokens only count where text is
-    // actually rendered — a decorative SVG shape (background graphics, icon
-    // paths) inherits some ambient font-family too, but that value is never
-    // seen and would falsely dilute the census toward the browser default.
+    // not what a style guide claims.
+    bump(tokens.fontFamily, (cs.fontFamily || '').split(',')[0].trim().replace(/["']/g, ''));
     if (text) {
-      bump(tokens.fontFamily, (cs.fontFamily || '').split(',')[0].trim().replace(/["']/g, ''));
       bump(tokens.color, cs.color);
       bump(tokens.fontSize, cs.fontSize);
       bump(tokens.fontWeight, cs.fontWeight);

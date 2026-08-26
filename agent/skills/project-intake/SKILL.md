@@ -8,7 +8,9 @@ The first skill that runs on any project. Its job is to answer one question
 honestly: **what do we actually know, and what are we pretending to know?**
 
 One binding rule: **intake never writes `spec/` — that is genesis's job.**
-Intake produces `docs/intake-report.md` + questions, nothing else. An intake
+Intake produces `docs/intake-report.md` + questions, nothing else. The knowledge
+map is populated *from* that report by `skills/knowledge-map` at the baseline
+gate — intake supplies the facts, it does not write the file. An intake
 that starts writing FR ids has skipped two gates and a whole skill.
 
 ## Procedure

@@ -16,6 +16,9 @@ agent/handoffs/.FREEZE
 # `git add -A` as embedded git repos (L-process-004).
 .claude/worktrees/
 
+# harness-update's pre-overwrite backups — never committed, purely local safety net
+.harness-update-backup/
+
 # Design gate: contracts + golden are COMMITTED (they are the law).
 # Reports are regenerated on every verify — noise.
 design/reports/*

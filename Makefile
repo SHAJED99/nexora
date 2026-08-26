@@ -11,9 +11,12 @@ LAYER ?=
 SCREEN ?=
 IMPL ?=
 STRICT ?=
+PORT ?= 8787
+OUT ?= harness-status.html
 
 .PHONY: next status review validate health metrics metrics-json hooks lessons \
-        design-extract design-contract design-verify design-selftest help
+        design-extract design-contract design-verify design-selftest \
+        dashboard dashboard-snapshot help
 
 # ── Work queue ────────────────────────────────────────────────────────────────
 next:            ## next executable task(s); make next LAYER=frontend
@@ -24,6 +27,10 @@ review:          ## tasks waiting for review
 	$(SCHED) --review-queue
 validate:        ## DAG + frontmatter + design-contract sanity
 	$(SCHED) --validate
+dashboard:       ## live web board (gates, queue, review, questions) at 127.0.0.1:$(PORT)
+	$(PY) agent/orchestrator/dashboard.py --port $(PORT) --open
+dashboard-snapshot: ## one static, self-contained HTML snapshot -> $(OUT)
+	$(PY) agent/orchestrator/dashboard.py --html $(OUT)
 health:          ## decay checks — the 7 ways the harness dies quietly; STRICT=1 fails on warnings too
 	$(PY) agent/orchestrator/health.py $(if $(STRICT),--strict,)
 

@@ -7,6 +7,13 @@ description: The implementation loop — branch + worktree, tests first from EAR
 One task. One branch. One worktree. Nothing outside the contract.
 
 ## Before you touch anything
+
+**Read your brief first** — `runs/<task_id>/brief.md`, if the orchestrator wrote
+one (`skills/agent-briefing`). It is the task file plus exactly the context you
+were given, and its §10 lists what was deliberately withheld. If something you
+genuinely need is missing, that is a **brief bug**: append to the task's
+`## Open Questions` and stop. Do not go and find it yourself — a brief you
+widened is a brief nobody reviewed.
 1. **Read the task file completely.** It is the contract (rule 6): `files:`,
    `api_contracts:`, `functions:`, `## What this task does NOT do`.
 2. **Read the lessons.** The lesson hook injects your area's list at prompt
@@ -108,7 +115,23 @@ and the spec beats the design. Never improvise around a gap: an agent's guess
 becomes a requirement nobody agreed to.
 
 ## Never
-- Touch files outside `files:` (lockfiles excepted).
+- Touch files outside `files:`. **Lockfiles are NOT a free pass**: a lockfile
+  change means a dependency changed, which is 🧍 `new_dependency` (rule 3). Add
+  the manifest and lockfile to `files:` in the same breath as getting that gate
+  cleared — never as a silent side effect of `npm install`.
+
+**Four gates fire on the *shape* of your diff, not on any stage — stop and get
+each cleared the moment your work turns into one of them** (they are declared in
+`harness.yaml`, and the reviewer checks for them):
+
+| If your diff… | Gate |
+|---|---|
+| adds or edits a migration | 🧍 `db_schema_migration` |
+| changes a manifest or lockfile | 🧍 `new_dependency` |
+| touches `.env`, secrets or deployment config | 🧍 `secrets_or_env_change` |
+| removes more than ~50 lines | 🧍 `delete_over_50_lines` |
+
+None of these is detected for you. Naming your own gate is the job.
 - Add a dependency, change a schema, touch auth/payment code, or delete >50
   lines without the 🧍 human gate.
 - Refactor something unrelated because you were passing through.

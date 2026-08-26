@@ -187,6 +187,23 @@ the executor.
   bug**. Fix the brief and the `required_context:` that missed it, not the agent.
 - A brief assembled by grep → it will contain a superseded ADR eventually.
 
+## What a cleared gate does and does not prove
+`scheduler.py --validate` enforces the artifact gates: a gate whose document
+exists must carry `✅ cleared by <name> on <date>`, and a gate whose
+`precondition_for:` path exists must have that document at all — so skipping a
+stage by never writing its paperwork fails too. `--next` refuses to dispatch
+while any of that is open.
+
+**It cannot prove a human did it.** You write the files; nothing distinguishes
+your tick from theirs. `validation/attack_gates.py` measures exactly that: eight
+ways of slipping past a gate are blocked, and one — forging a dated, attributed
+approval — is not, because it is irreducible here.
+
+So the value is not proof, it is **shape**: clearing a gate becomes an explicit,
+dated, attributable claim instead of an omission nobody notices, and forging one
+is a visible lie in the diff with a name on it. Never write an approval line on a
+human's behalf — including when you are confident they would agree.
+
 ## Where to look next
 - Who decided `owner_agent:` → `skills/task-sharding` · waves → `skills/epic-breakdown`
 - Where the context is retrieved from → `skills/knowledge-map`
