@@ -1,6 +1,6 @@
 # E01 · Identity & Access · Progress
 
-**Status:** in-progress · **Started:** 2026-08-26 · **Completed:** — · **Progress:** 1/2 done, 1/2 review-requested
+**Status:** in-progress · **Started:** 2026-08-26 · **Completed:** — · **Progress:** 2/2 done
 
 > Only the ORCHESTRATOR edits this file.
 > todo → in-progress → review-requested → (changes-requested →) done → verified
@@ -8,7 +8,7 @@
 
 ## Tasks
 - [x] E01-T01 · Real Google Sign-In + device identity · done · builder (sonnet) → reviewer (opus)
-- [x] E01-T02 · Firebase account/device metadata wrapper (Realtime Database, pivoted from Firestore) · review-requested · builder (sonnet) → reviewer (pending)
+- [x] E01-T02 · Firebase account/device metadata wrapper (Realtime Database, pivoted from Firestore) · done · builder (sonnet) → reviewer (opus)
 
 ## Dependency graph
 ```mermaid
@@ -18,6 +18,7 @@ graph LR
 
 ## Review log
 - 2026-08-26 · E01-T01 · Opus · approve with notes (3 notes: 2 fixed — null-clobber on re-sign-in, untested v1→v2 migration path; 1 left as noted, non-blocking — `signIn()` cancellation branch needs a platform-interface mock to cover directly) · design gate n/a (no UI change)
+- 2026-08-26 · E01-T02 · Opus · changes requested → fixed → done (1 blocking: `registerDevice` could hang sign-in indefinitely on a write that never resolves — fixed with a bounded timeout + regression test; 2 non-blocking notes carried to E11: `createdAt`/`lastSeenAt` always equal, rules lack `.validate`) · design gate n/a (no UI change)
 
 ## Blocked / Frozen
 (none)

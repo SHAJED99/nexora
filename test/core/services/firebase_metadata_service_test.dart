@@ -4,6 +4,8 @@
 // need a real `FirebaseDatabase`/platform-channel test harness (same
 // pattern as `GoogleAuthService.signInAndGetAccountUid` — see that file's
 // comments).
+import 'dart:async';
+
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/services/firebase_metadata_service.dart';
@@ -40,6 +42,23 @@ class _ThrowingFirebaseMetadataService extends FirebaseMetadataService {
   }
 }
 
+/// Never completes from the write seam — simulates `DatabaseReference.set()`
+/// queuing offline and never getting a server ack. Proves `registerDevice`
+/// is bounded by its `timeout`, not an indefinite hang (review finding,
+/// E01-T02).
+class _HangingFirebaseMetadataService extends FirebaseMetadataService {
+  _HangingFirebaseMetadataService({super.timeout});
+
+  @override
+  Future<void> writeDeviceMetadata(
+    String uid,
+    String deviceId,
+    Map<String, dynamic> data,
+  ) {
+    return Completer<void>().future; // never completes
+  }
+}
+
 void main() {
   test('test_EARS_FB_1_registers_device_metadata_only', () async {
     // EARS-FB-1 (FR-FB-001/002): WHEN sign-in completes, the system SHALL
@@ -67,6 +86,24 @@ void main() {
       // failure must never propagate out of registerDevice — it is
       // swallowed and logged, not thrown.
       final service = _ThrowingFirebaseMetadataService();
+
+      await expectLater(
+        service.registerDevice('uid-123', 'device-abc'),
+        completes,
+      );
+    },
+  );
+
+  test(
+    'test_EARS_FB_2_never_completing_write_is_bounded_by_timeout_not_hung',
+    () async {
+      // Review finding (E01-T02): a write seam that never completes (the
+      // real-world shape of an offline `DatabaseReference.set()`) must not
+      // hang registerDevice forever — §4's "fire-and-forget" promise is
+      // broken if awaiting it can block sign-in indefinitely.
+      final service = _HangingFirebaseMetadataService(
+        timeout: const Duration(milliseconds: 50),
+      );
 
       await expectLater(
         service.registerDevice('uid-123', 'device-abc'),

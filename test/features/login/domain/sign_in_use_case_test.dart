@@ -25,7 +25,7 @@ class _ThrowingFirebaseMetadataService extends FirebaseMetadataService {
     String deviceId,
     Map<String, dynamic> data,
   ) {
-    throw Exception('firestore unavailable');
+    throw Exception('realtime database unavailable');
   }
 }
 

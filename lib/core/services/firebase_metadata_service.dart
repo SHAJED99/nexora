@@ -23,10 +23,18 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 
 class FirebaseMetadataService {
-  FirebaseMetadataService({FirebaseDatabase? database})
-      : _databaseOverride = database;
+  FirebaseMetadataService({FirebaseDatabase? database, Duration? timeout})
+      : _databaseOverride = database,
+        _timeout = timeout ?? const Duration(seconds: 10);
 
   final FirebaseDatabase? _databaseOverride;
+
+  // `DatabaseReference.set()`'s Future only completes on server ack — with
+  // no connectivity it queues the write and never completes at all. §4's
+  // "fire-and-forget" promise is broken if the caller awaits that
+  // indefinitely, so this bounds it: a timeout is just another failure
+  // mode caught below, same as any other Realtime Database error.
+  final Duration _timeout;
 
   // Resolved lazily, mirroring `GoogleAuthService._firebaseAuth` — so
   // constructing a `FirebaseMetadataService()` with no override never
@@ -49,7 +57,7 @@ class FirebaseMetadataService {
         'createdAt': ServerValue.timestamp,
         'lastSeenAt': ServerValue.timestamp,
         'platform': 'android',
-      });
+      }).timeout(_timeout);
     } catch (e) {
       ObservabilityService.instance.logError(
         'firebase.device_registration_failed',
