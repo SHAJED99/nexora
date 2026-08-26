@@ -43,23 +43,73 @@ scheduler:
   pick_order: [unblocked, p1_bug, moscow, wsjf, critical_path]
   wip_limit_parallel_agents: 3   # 2–4 is the sane range
 
-human_gates:                     # actions that ALWAYS pause for a human
-  - epic00_exit_review           # domain model + ADRs + design contracts + skeleton
-  - design_contract_approval     # the extracted contracts + derived-gap list
-  - epic_breakdown_and_wave      # the epic map and the first wave
-  - analyze_report               # specs consistent before tasks dispatch
-  - bug_priorities               # QA sets severity; human sets priority
-  - retro_promotions             # lesson → rule/hook edits are code
-  - epic_to_dev_merge
-  - dev_to_main_merge
-  - db_schema_migration
-  - new_dependency
-  - secrets_or_env_change
-  - auth_or_payment_code
-  - delete_over_50_lines
-  - intake_mode_confirmation      # human confirms detected input mode + intake report
-  - blocking_questions_resolved   # no blocking question 🟡 open before genesis
-  - knowledge_map_baseline        # human approves the initial spec/knowledge-map.yaml
-  - codebase_baseline_approval    # brownfield: human approves docs/codebase-baseline.md before changes
-  - change_impact_approval        # human approves each docs/impact/IMP-nnn report before re-planning
-  - agent_role_creation           # a new agent role is law every future agent reads — same class as retro_promotions
+# Gates that ALWAYS pause for a human — and this list is READ, not decorative.
+#
+#   kind: artifact  the gate lives on a document. `scheduler.py --validate`
+#                   requires the approval line to be cleared once that document
+#                   exists, and `--next` refuses to dispatch while it is not.
+#                   `precondition_for:` closes the obvious dodge — if that
+#                   downstream path exists, the stage demonstrably happened, so
+#                   the gate document must exist AND be cleared. Deleting or
+#                   never writing the artifact is therefore not an escape.
+#                   `only_if:` marks a gate that applies conditionally (the
+#                   brownfield baseline gate is moot on a greenfield project).
+#   kind: work      the gate fires on the shape of a change, not a stage. No
+#                   artifact to check; the reviewer and the human enforce it.
+#   kind: process   the gate fires on editing the process itself.
+#
+# The approval line convention (artifact gates), as written by the templates:
+#     **Gate:** 🧍 `<key>` — ⏳ AWAITING HUMAN
+# Cleared means that line becomes:
+#     **Gate:** 🧍 `<key>` — ✅ cleared by <name> on <YYYY-MM-DD>
+# A NAME and a DATE are required, because "✅" alone is something an agent types
+# without thinking. This does not prove a human did it — nothing here can, since
+# the agent holds the pen. What it does is make approval an explicit, dated,
+# attributable claim instead of an omission nobody notices.
+human_gates:
+  # ── pipeline, in order ──────────────────────────────────────────────
+  - { key: intake_mode_confirmation,    kind: artifact, owner: project-intake,     artifact: "docs/intake-report.md",     precondition_for: "spec/questions.md" }
+  - { key: codebase_baseline_approval,  kind: artifact, owner: codebase-analysis,  artifact: "docs/codebase-baseline.md", only_if: "docs/codebase-baseline.md" }
+  - { key: blocking_questions_resolved, kind: artifact, owner: question-resolution, artifact: "spec/questions.md",        precondition_for: "spec/srs.md" }
+  - { key: knowledge_map_baseline,      kind: artifact, owner: knowledge-map,      artifact: "spec/knowledge-map.yaml",   precondition_for: "spec/srs.md" }
+  - { key: epic00_exit_review,          kind: artifact, owner: genesis,            artifact_glob: "epics/E00*/epic.md",   precondition_for: "epics/E01*/" }
+  - { key: design_contract_approval,    kind: artifact, owner: design-fidelity,    artifact: "design/gaps.md",            precondition_for: "design/screens/*.md" }
+    # ^ if screen CONTRACTS exist the design stage ran, so the derived-gap
+    #   list must be approved. Without a precondition this gate was
+    #   entirely opt-in, which left rule 2 ("design is law") unenforced
+    #   unless the agent volunteered the paperwork.
+  - { key: epic_breakdown_and_wave,     kind: artifact, owner: epic-breakdown,     artifact: "epics/README.md",           precondition_for: "epics/E0[1-9]*/tasks/*.md" }
+    # ^ E01 onwards, NOT epics/E*/tasks/*.md. Epic 00's own genesis tasks
+    #   match that wider glob, so the previous value blocked `make next` for
+    #   the whole of Epic 00 — a gate for a stage that had not happened yet,
+    #   gating the mandatory first step of every project.
+  - { key: analyze_report,              kind: work,     owner: task-sharding }
+    # ^ kind: work, not artifact. The analyze report is appended to each
+    #   epic.md (skills/task-sharding), so there is no single canonical file
+    #   to check; a per-epic artifact gate would need one line per epic and a
+    #   glob would let one epic's approval clear every other. Better an
+    #   honest work gate than an artifact gate that can never fire.
+  - { key: bug_priorities,              kind: work,     owner: bug-sweep }
+  - { key: epic_to_dev_merge,           kind: work,     owner: release }
+  - { key: dev_to_main_merge,           kind: work,     owner: release }
+  - { key: change_impact_approval,      kind: artifact, owner: change-impact,      artifact_glob: "docs/impact/*.md" }
+    # ^ every markdown file in docs/impact/, not just IMP-*.md: the narrow
+    #   glob meant renaming a report sidestepped its own approval gate.
+  # ── the shape of the work, not the stage: can interrupt any task ────
+  - { key: db_schema_migration,         kind: work,     owner: implement }
+  - { key: new_dependency,              kind: work,     owner: implement }
+  - { key: secrets_or_env_change,       kind: work,     owner: implement }
+  - { key: auth_or_payment_code,        kind: work,     owner: review }
+  - { key: delete_over_50_lines,        kind: work,     owner: implement }
+  # ── editing the process itself ──────────────────────────────────────
+  - { key: retro_promotions,            kind: process,  owner: retro }
+  - { key: agent_role_creation,         kind: process,  owner: agent-briefing }
+  - { key: design_threshold_relaxation, kind: process,  owner: design-fidelity }
+    # ^ enforced by health.py H1 (requires reason + approved_by) and was the only
+    #   genuinely-enforced human gate that this list did not declare.
+#
+# 🧍 moments inside a declared gate — NOT separate gates, so they are not listed:
+#   each ADR accepted/rejected, and the product-rules approval  -> epic00_exit_review
+#   the derived-gap list approval                               -> design_contract_approval
+#   done -> verified sign-off                                   -> epic_to_dev_merge
+#   a constitution (AGENTS.md) edit                             -> retro_promotions

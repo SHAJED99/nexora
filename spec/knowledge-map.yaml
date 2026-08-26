@@ -4,7 +4,7 @@
 #
 # Baselined by: skills/knowledge-map, from docs/intake-report.md + spec/questions.md
 # Baseline date: 2026-08-26
-# 🧍 human gate: knowledge_map_baseline — ✅ APPROVED by human, 2026-08-26.
+# Gate: 🧍 knowledge_map_baseline - ✅ cleared by human on 2026-08-26
 # Decision on remaining open important questions (Q-ARCH-003, Q-ARCH-004,
 # Q-FUNC-005, Q-FUNC-006): fold into genesis — Q-ARCH-003 becomes a genesis
 # ADR (crypto protocol family); the other three take their recommended-default
@@ -56,14 +56,12 @@ stakeholders:
 
 users:
   - id: U-001
-    persona: "Unnamed — users who lack reliable Internet connectivity"
-    status: inferred
-    note: >
-      BRD §1 implies the target user but never names a persona, demographic,
-      or use-case (e.g. disaster response, off-grid, developing-region).
-      No blocking question raised (see A-002) since it doesn't change v1
-      architecture, but it's a real gap worth human input on eventually.
-    source: documentation/BRD.md §1
+    summary: >-
+      Unnamed — users who lack reliable Internet connectivity (inferred,
+      documentation/BRD.md §1). BRD never names a persona, demographic, or
+      use-case (disaster response, off-grid, developing-region). No blocking
+      question raised (see A-003) since it doesn't change v1 architecture,
+      but worth human input eventually.
 
 facts:
   # --- Authentication & identity ---
@@ -315,17 +313,16 @@ assumptions:
     statement: NEXORA has no monetization/business model in scope for the epics this harness plans
     risk_if_wrong: "Low near-term; would only matter if a future task touches payment flows (a human_gates item: auth_or_payment_code)"
     status: active
-    source: spec/questions.md Q-BIZ-007
+    from_question: Q-BIZ-007
   - id: A-002
     statement: v1 group size and relay hop count use conservative placeholder defaults, tunable later, rather than being blocking unknowns
     risk_if_wrong: "Low — these are the kind of constants trivially changed later without architectural rework"
     status: active
-    source: spec/questions.md Q-SCOPE-008
+    from_question: Q-SCOPE-008
   - id: A-003
-    statement: Target user persona (who specifically needs offline-first mesh messaging) is inferred as "users lacking reliable Internet" but never named explicitly
+    statement: Target user persona (who specifically needs offline-first mesh messaging) is inferred as "users lacking reliable Internet" but never named explicitly (documentation/BRD.md §1; docs/intake-report.md §3 Users row)
     risk_if_wrong: "Could shape UX priorities (e.g. disaster-response vs. everyday off-grid use) but does not change v1 architecture"
     status: active
-    source: documentation/BRD.md §1; docs/intake-report.md §3 Users row
 
 decisions: []
   # Populated by skills/genesis — ADR-0001..000N (stack, architecture, auth,
@@ -343,66 +340,59 @@ features: []
 
 journeys:
   - id: J-001
-    name: Primary onboarding flow
-    summary: "Google Login → Account Created → Device Setup → Discover Devices → Connection Request → (Trusted: Auto-Accept | Unknown: Authentication) → Connection → Secure Channel → {Chat, PTT, Call} → Dynamic Routing → {Bluetooth, Wi-Fi, Internet} → Relay → Destination"
-    source: documentation/BRD.md §63
+    summary: "Primary onboarding flow: Google Login → Account Created → Device Setup → Discover Devices → Connection Request → (Trusted: Auto-Accept | Unknown: Authentication) → Connection → Secure Channel → {Chat, PTT, Call} → Dynamic Routing → {Bluetooth, Wi-Fi, Internet} → Relay → Destination"
+    path: documentation/BRD.md
   - id: J-002
-    name: First-run detailed flow
-    summary: "First Launch → Welcome → Permission Flow → Device Setup → Device Pairing → Trust Establishment → First Dashboard"
-    source: documentation/Design.md §80-87
+    summary: "First-run detailed flow: First Launch → Welcome → Permission Flow → Device Setup → Device Pairing → Trust Establishment → First Dashboard"
+    path: documentation/Design.md
 
 business_rules:
   - id: BR-001
-    statement: "Battery consumption alone must never determine the best route"
-    source: documentation/BRD.md §3.4, §31, §64
+    summary: "Battery consumption alone must never determine the best route"
+    path: documentation/BRD.md
   - id: BR-002
-    statement: "A new connection must be established and validated before the old one is terminated (make-before-break migration)"
-    source: documentation/BRD.md §30, §64
+    summary: "A new connection must be established and validated before the old one is terminated (make-before-break migration)"
+    path: documentation/BRD.md
   - id: BR-003
-    statement: "Relay devices may never decrypt end-to-end encrypted communication"
-    source: documentation/BRD.md §27, §41, §64
+    summary: "Relay devices may never decrypt end-to-end encrypted communication"
+    path: documentation/BRD.md
   - id: BR-004
-    statement: "Conflict resolution always favors the more security-restrictive state (BLOCK>TRUST, LOCATION-OFF>LOCATION-ON, REVOKED>ACTIVE, REMOVED>MEMBER)"
-    source: documentation/BRD.md §39, §64
+    summary: "Conflict resolution always favors the more security-restrictive state (BLOCK>TRUST, LOCATION-OFF>LOCATION-ON, REVOKED>ACTIVE, REMOVED>MEMBER)"
+    path: documentation/BRD.md
   - id: BR-005
-    statement: "Blocking is bidirectional-independent — both sides must authorize a connection, one side blocking is sufficient to prevent it"
-    source: documentation/BRD.md §10, §12, §64
-  - note: "Full table is 40 rules — see documentation/BRD.md §64 'Major Business Rules' for the complete list. Only the most architecturally load-bearing are indexed here; the table itself is the source of truth."
+    summary: "Blocking is bidirectional-independent — both sides must authorize a connection, one side blocking is sufficient to prevent it"
+    path: documentation/BRD.md
+  - id: BR-006
+    summary: "Full table is 40 rules — see documentation/BRD.md §64 'Major Business Rules' for the complete list. Only the most architecturally load-bearing (BR-001..005) are indexed here; the table itself is the source of truth."
+    path: documentation/BRD.md
 
 data_models:
   - id: D-001
-    name: Firebase data boundary
-    summary: "May store: auth, user/device identity+metadata, trust/block metadata, user config, revocation, push info, version policy. Must NOT store: message plaintext, voice/call recordings, private/session keys, permanent location history"
-    source: documentation/BRD.md §54
+    summary: "Firebase data boundary — May store: auth, user/device identity+metadata, trust/block metadata, user config, revocation, push info, version policy. Must NOT store: message plaintext, voice/call recordings, private/session keys, permanent location history"
+    path: documentation/BRD.md
   - id: D-002
-    name: Message delivery state
-    summary: "Queued / Sent / Accepted / Delivered / Stored / Read / Failed"
-    source: documentation/BRD.md §34
+    summary: "Message delivery state — Queued / Sent / Accepted / Delivered / Stored / Read / Failed"
+    path: documentation/BRD.md
   - id: D-003
-    name: Relay packet metadata
-    summary: "Packet ID, destination, priority, size, creation time, expiration time, delivery state"
-    source: documentation/BRD.md §28
+    summary: "Relay packet metadata — Packet ID, destination, priority, size, creation time, expiration time, delivery state"
+    path: documentation/BRD.md
   - id: D-004
-    name: Version categories
-    summary: "Application Version, Build Number, Protocol Version, Cryptographic Version, Database Schema Version — tracked independently"
-    source: documentation/BRD.md §61.10
+    summary: "Version categories — Application Version, Build Number, Protocol Version, Cryptographic Version, Database Schema Version — tracked independently"
+    path: documentation/BRD.md
 
 apis: []
   # None specified anywhere in BRD/Design — explicitly deferred (BRD §66.2, §68).
 
 integrations:
   - id: I-001
-    name: Google Authentication
-    summary: Sole authentication method (confirmed via design review — welcome screen shows only "Continue with Google")
-    source: documentation/BRD.md §5; design/screens/welcome.md
+    summary: "Google Authentication — sole authentication method (confirmed via design review — welcome screen shows only \"Continue with Google\")"
+    path: documentation/BRD.md
   - id: I-002
-    name: Firebase
-    summary: Auth, device/relationship metadata, remote-config-shaped version policy — bounded by the Firebase data boundary (D-001)
-    source: documentation/BRD.md §54, §61.3
+    summary: "Firebase — auth, device/relationship metadata, remote-config-shaped version policy — bounded by the Firebase data boundary (D-001)"
+    path: documentation/BRD.md
   - id: I-003
-    name: Google Play in-app update
-    summary: Mandatory update delivery mechanism; app must never silently install arbitrary APKs
-    source: documentation/BRD.md §61.6
+    summary: "Google Play in-app update — mandatory update delivery mechanism; app must never silently install arbitrary APKs"
+    path: documentation/BRD.md
 
 architecture:
   summary: >
@@ -416,54 +406,55 @@ architecture:
 
 risks:
   - id: R-001
-    statement: Design.md has no visual source, only text — resolved (see A record in spec/questions.md Q-DESIGN-001; Google Stitch used as the source)
-    severity: high (mitigated)
-    source: docs/intake-report.md §7 Risks
+    summary: Design.md has no visual source, only text — resolved (see A record in spec/questions.md Q-DESIGN-001; Google Stitch used as the source)
+    severity: high
+    mitigation: "Mitigated — Google Stitch used as the design source, see Q-DESIGN-001"
+    path: docs/intake-report.md
   - id: R-002
-    statement: Mesh networking + E2E crypto + multi-transport routing is a large, security-critical surface for a first release; BRD itself defers 30 technical-design topics (§68) — Epic 00 will likely be unusually large
+    summary: Mesh networking + E2E crypto + multi-transport routing is a large, security-critical surface for a first release; BRD itself defers 30 technical-design topics (§68) — Epic 00 will likely be unusually large
     severity: medium
-    note: Consider a phased wave rollout (e.g. direct-connection chat before multi-hop relay) rather than building the full mesh in wave 1 — a call for skills/epic-breakdown
-    source: docs/intake-report.md §7 Risks
+    mitigation: Consider a phased wave rollout (e.g. direct-connection chat before multi-hop relay) rather than building the full mesh in wave 1 — a call for skills/epic-breakdown
+    path: docs/intake-report.md
   - id: R-003
-    statement: No numeric NFR targets anywhere (battery %, latency ms, storage MB) — every NFR in BRD §62 is qualitative; acceptance criteria at task-sharding time will need human-supplied numbers or they'll be invented (violates rule 1)
+    summary: No numeric NFR targets anywhere (battery %, latency ms, storage MB) — every NFR in BRD §62 is qualitative; acceptance criteria at task-sharding time will need human-supplied numbers or they'll be invented (violates rule 1)
     severity: medium
-    source: docs/intake-report.md §7 Risks
+    path: docs/intake-report.md
 
 constraints:
   - id: C-001
-    statement: Android-only for v1 (confirmed)
-    source: spec/questions.md Q-SCOPE-002
+    summary: Android-only for v1 (confirmed, spec/questions.md Q-SCOPE-002)
+    path: documentation/BRD.md
   - id: C-002
-    statement: Flutter application framework, Android-native components for system-sensitive functionality
-    source: documentation/BRD.md header, §49
+    summary: Flutter application framework, Android-native components for system-sensitive functionality
+    path: documentation/BRD.md
   - id: C-003
-    statement: Offline-first is architecturally non-negotiable
-    source: documentation/BRD.md §3.1
+    summary: Offline-first is architecturally non-negotiable
+    path: documentation/BRD.md
   - id: C-004
-    statement: Google Authentication is the sole auth method — no other login path
-    source: documentation/BRD.md §5; design/screens/welcome.md
+    summary: Google Authentication is the sole auth method — no other login path
+    path: documentation/BRD.md
   - id: C-005
-    statement: BRD excludes exact package/library/protocol/algorithm choices from its own scope — those are genesis's ADRs, not pre-decided
-    source: documentation/BRD.md §66.2
+    summary: BRD excludes exact package/library/protocol/algorithm choices from its own scope — those are genesis's ADRs, not pre-decided
+    path: documentation/BRD.md
 
 open_questions:
   # 🟡 open only — answered questions live in spec/questions.md, not here.
   - id: Q-ARCH-003
     summary: E2E encryption protocol/key-exchange scheme unnamed (protocol family, not library)
     priority: important
-    source: spec/questions.md
+    path: spec/questions.md
   - id: Q-ARCH-004
     summary: Routing cost function named but unweighted — no formula, even for a v1 heuristic
     priority: important
-    source: spec/questions.md
+    path: spec/questions.md
   - id: Q-FUNC-005
     summary: "\"Sufficiently better route\" migration threshold undefined"
     priority: important
-    source: spec/questions.md
+    path: spec/questions.md
   - id: Q-FUNC-006
     summary: Mechanism for granting a re-added group member historical access is unspecified
     priority: important
-    source: spec/questions.md
+    path: spec/questions.md
   # Q-BIZ-007 and Q-SCOPE-008 intentionally absent: both closed by assumption
   # (A-001, A-002 above) in spec/questions.md's ⚪ section — no longer 🟡 open.
 

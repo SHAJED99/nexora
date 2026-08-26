@@ -7,6 +7,11 @@
 
 ## Gate status — 🧍 `blocking_questions_resolved`
 
+**Gate:** 🧍 `blocking_questions_resolved` — ✅ cleared by human on 2026-08-26
+(both 🟡 blocking questions of round 1 — Q-SCOPE-002, Q-DESIGN-001 — answered
+by the human directly; see their entries below. The 4 important/optional
+questions remaining open/assumed do not block this gate per rule 3.)
+
 | | Count |
 |---|---|
 | 🟡 blocking | 0 |

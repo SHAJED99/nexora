@@ -12,7 +12,7 @@ automated. §2 of the same doc says "remember to watch for X" is the weakest
 control that exists — so a §7 that only *asks* you to watch is the one place the
 harness didn't take its own advice.
 
-This is that section promoted from a lesson to a hook. Six of the seven are
+This is that section promoted from a lesson to a hook. All seven are
 mechanically detectable from the repo; this finds them and names the fix.
 
 Exit: 0 = healthy · 1 = at least one FAIL (or WARN under --strict).
@@ -214,7 +214,8 @@ def check_fences():
             continue
         m = HEAD.search(body)
         if not m:
-            r.flag("warn", f"{fm.get('id')}: no §4 scope-fence section ({fm['_path']})")
+            r.flag("fail", f"{fm.get('id')}: no §4 scope-fence section at all "
+                   f"({fm['_path']}) — absent is worse than empty, not better")
             continue
         seg = body[m.end():]
         nxt = re.search(r"^##\s", seg, re.M)
@@ -233,14 +234,34 @@ def check_review_independence():
     r.fix = ("Route review to a model listed in harness.yaml review_routing.models,\n"
              "  excluding whatever executed the task. Same-model review is ceremony, not\n"
              "  independence — it shares the executor's blind spots exactly.")
+    # What this check can and cannot prove. Both fields are stamped by the agent
+    # itself, so a differing string is evidence of routing, not proof of it — an
+    # executor that writes reviewed_by: "someone-else" passes. The strongest
+    # available signal is that the reviewer is a model the project DECLARED it
+    # would route to, and that it is not the executor.
+    declared = []
+    try:
+        with open(os.path.join(ROOT, "harness.yaml"), encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh) or {}
+        declared = [str(m).lower() for m in
+                    ((cfg.get("review_routing") or {}).get("models") or [])]
+    except (OSError, yaml.YAMLError):
+        declared = []
+
     for fm, _ in tasks():
         if str(fm.get("status")) not in DONE:
             continue
         ex, rv = str(fm.get("executed_by") or ""), str(fm.get("reviewed_by") or "")
         if not rv:
             r.flag("fail", f"{fm.get('id')}: {fm.get('status')} with no reviewed_by ({fm['_path']})")
-        elif ex and rv.strip().lower() == ex.strip().lower():
+            continue
+        if ex and rv.strip().lower() == ex.strip().lower():
             r.flag("fail", f"{fm.get('id')}: reviewed_by == executed_by ({ex}) — rule 5 ({fm['_path']})")
+            continue
+        if declared and not any(m in rv.lower() for m in declared):
+            r.flag("warn", f"{fm.get('id')}: reviewed_by '{rv}' names no model from "
+                           f"harness.yaml review_routing.models ({declared}) — "
+                           f"rule 5 is unverifiable for this task ({fm['_path']})")
     return r
 
 

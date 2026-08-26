@@ -40,8 +40,30 @@ MOSCOW = {"must": 0, "should": 1, "could": 2, "wont": 3}
 TIER = {"S": 0, "M": 1, "L": 2}
 DONE = {"done", "verified"}
 IN_FLIGHT = {"in-progress", "review-requested", "changes-requested"}
-ORDER = ["todo", "in-progress", "review-requested", "changes-requested",
-         "blocked", "frozen", "done", "verified"]
+# The status vocabulary. Declared in harness.yaml so the config is load-bearing
+# rather than decorative: previously this list was hardcoded here AND declared in
+# harness.yaml scheduler.statuses, so adding a status to the yaml made
+# `make validate` reject it as unknown instead of accepting it.
+_ORDER_FALLBACK = ["todo", "in-progress", "review-requested", "changes-requested",
+                   "blocked", "frozen", "done", "verified"]
+
+
+def _statuses():
+    try:
+        with open(os.path.join(ROOT, "harness.yaml"), encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh) or {}
+        declared = ((cfg.get("scheduler") or {}).get("statuses")) or []
+    except (OSError, yaml.YAMLError):
+        declared = []
+    if not isinstance(declared, list) or not declared:
+        return list(_ORDER_FALLBACK)
+    # DONE / IN_FLIGHT above are semantic groupings, so a project may reorder or
+    # extend statuses but the two terminal ones must still exist.
+    missing = [s for s in ("todo", "done") if s not in declared]
+    return list(_ORDER_FALLBACK) if missing else [str(s) for s in declared]
+
+
+ORDER = _statuses()
 
 
 def frontmatter(path):
@@ -82,6 +104,28 @@ def load():
 
 def validate(epics, tasks):
     errs = []
+    # Epic-level depends_on was neither validated nor honoured: an epic could
+    # declare depends_on a nonexistent epic with no error, and its tasks
+    # dispatched while the epic it depended on was still todo.
+    # Epic directories MUST be E<NN>-<slug> with two digits. This is not
+    # cosmetic: the gate registry matches `epics/E00*/epic.md` and
+    # `epics/E0[1-9]*/tasks/*.md` while the DAG loader matches `epics/E*/`, so a
+    # project naming epics E0/E1 loads and validates cleanly while BOTH the
+    # genesis exit gate and the epic-breakdown gate silently never fire.
+    # Verified before this check existed: DAG OK, zero gate errors, no warning.
+    for ep in sorted(glob.glob(os.path.join(ROOT, "epics", "E*", "epic.md"))):
+        name = os.path.basename(os.path.dirname(ep))
+        if not re.match(r"^E\d{2}(-|$)", name):
+            errs.append(
+                f"epics/{name}/: epic directories must be named E<NN>-<slug> with "
+                f"TWO digits (E00-genesis, E01-core). The human gates are matched "
+                f"by that shape — '{name}' would load but silently lose its gates.")
+
+    for eid, e in epics.items():
+        for d in (e.get("depends_on") or []):
+            if str(d) not in epics:
+                errs.append(f"{eid}: depends_on unknown epic '{d}'")
+
     for tid, t in tasks.items():
         for d in deps(t):
             if d not in tasks and d not in epics:
@@ -90,6 +134,16 @@ def validate(epics, tasks):
             errs.append(f"{tid}: unknown status '{t.get('status')}'")
         if t.get("status") == "todo" and not (t.get("traces_to") or t.get("type") == "genesis"):
             errs.append(f"{tid}: missing traces_to (rule 1 — spec is law)")
+        # An unedited copy of epics/_templates/task.template.md used to validate
+        # clean and dispatch: `id: E<NN>-T<MM>`, `traces_to: [FR-XXXX-000, ...]`.
+        # Placeholders are not ids, and a task nobody filled in is not a task.
+        placeholders = [str(v) for v in
+                        [tid] + [str(x) for x in (t.get("traces_to") or [])]
+                        if re.search(r"<[A-Za-z]+>|XXXX|0\.0\.0|E<NN>|T<MM>", str(v))]
+        if placeholders:
+            errs.append(f"{tid}: unfilled template placeholder(s) "
+                        f"{placeholders} — this task file was copied from "
+                        f"epics/_templates/ and never completed")
         # rule 2 — a frontend task without a design contract cannot be gated,
         # which means it cannot be trusted to match the design.
         if str(t.get("layer", "")) == "frontend" and t.get("type") != "genesis":
@@ -97,9 +151,25 @@ def validate(epics, tasks):
             if not dc:
                 errs.append(f"{tid}: layer=frontend without design_contract "
                             f"(rule 2 — see skills/design-fidelity)")
-            elif not os.path.exists(os.path.join(ROOT, str(dc))):
-                errs.append(f"{tid}: design_contract '{dc}' does not exist "
-                            f"(run: make design-extract && make design-contract)")
+            else:
+                dc_path = os.path.join(ROOT, str(dc))
+                if not os.path.exists(dc_path):
+                    errs.append(f"{tid}: design_contract '{dc}' does not exist "
+                                f"(run: make design-extract && make design-contract)")
+                else:
+                    # Rule 2 used to be satisfied by os.path.exists() alone, so a
+                    # 0-byte file made "design is law" green. A contract has to
+                    # contain the elements the gate compares against.
+                    try:
+                        body = open(dc_path, encoding="utf-8").read()
+                    except OSError:
+                        body = ""
+                    if len(body.strip()) < 200 or "elements" not in body:
+                        errs.append(
+                            f"{tid}: design_contract '{dc}' is empty or not a "
+                            f"generated contract ({len(body.strip())} bytes) — "
+                            f"regenerate with make design-contract; an existing "
+                            f"file is not a contract")
     children = {k: [] for k in tasks}
     indeg = {k: 0 for k in tasks}
     for k, t in tasks.items():
@@ -172,25 +242,63 @@ def show_status(epics, tasks):
     print("totals: " + " ".join(f"{s}:{tot[s]}" for s in ORDER if tot[s]))
 
 
-# Field names each knowledge-map node may carry. Mirrors
-# schemas/knowledge-map.schema.yaml; kept as a plain set so this check needs
-# nothing beyond pyyaml (ADR: the harness stays stdlib + pyyaml).
-MAP_KEYS = {
-    "facts": {"id", "statement", "source", "inferred"},
-    "assumptions": {"id", "statement", "made_because", "risk_if_wrong", "status",
-                    "from_question", "impact_report"},
-    "decisions": {"id", "summary", "path", "status", "supersedes"},
-    "features": {"id", "summary", "path", "status"},
-    "journeys": {"id", "summary", "path", "status"},
-    "business_rules": {"id", "summary", "path", "status"},
-    "data_models": {"id", "summary", "path", "status"},
-    "apis": {"id", "summary", "path", "status"},
-    "integrations": {"id", "summary", "path", "status"},
-    "constraints": {"id", "summary", "path", "status"},
-    "risks": {"id", "summary", "path", "status", "severity", "mitigation"},
-    "open_questions": {"id", "summary", "priority", "area", "path"},
-    "edges": {"from", "to", "kind", "note"},
-}
+# Where the map's field list actually lives. Derived, never duplicated: an
+# earlier version of this check hardcoded a copy of every section's field names,
+# which is the "two copies, one source, no sync" pattern this repo warns about
+# (docs/ARCHITECTURE.md). Read the schema instead — pyyaml is already a
+# dependency, and jsonschema deliberately is not.
+MAP_SCHEMA_CANDIDATES = (
+    os.path.join("schemas", "knowledge-map.schema.yaml"),
+    os.path.join("agent", "schemas", "knowledge-map.schema.yaml"),
+)
+
+
+def _map_allowed_keys():
+    """{section: {allowed field names}} derived from the JSON Schema.
+
+    Returns {} when no schema ships with the project, which disables the lint
+    rather than inventing rules.
+    """
+    path = next((os.path.join(ROOT, c) for c in MAP_SCHEMA_CANDIDATES
+                 if os.path.exists(os.path.join(ROOT, c))), None)
+    if not path:
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            schema = yaml.safe_load(fh) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
+
+    defs = schema.get("$defs") or {}
+
+    def props_of(node, seen=()):
+        """Collect property names through $ref and allOf."""
+        if not isinstance(node, dict):
+            return set()
+        out = set(node.get("properties") or {})
+        ref = node.get("$ref")
+        if ref:
+            name = ref.rsplit("/", 1)[-1]
+            if name not in seen:
+                out |= props_of(defs.get(name, {}), seen + (name,))
+        for sub in node.get("allOf") or []:
+            out |= props_of(sub, seen)
+        return out
+
+    allowed = {}
+    for section, node in (schema.get("properties") or {}).items():
+        if not isinstance(node, dict):
+            continue
+        if node.get("type") == "array":
+            keys = props_of(node.get("items") or {})
+            if keys:
+                allowed[section] = keys
+        elif section == "requirements":
+            for sub, subnode in (node.get("properties") or {}).items():
+                keys = props_of((subnode or {}).get("items") or {})
+                if keys:
+                    allowed[f"requirements.{sub}"] = keys
+    return allowed
 
 
 def validate_knowledge_map():
@@ -216,17 +324,18 @@ def validate_knowledge_map():
     if not isinstance(data, dict):
         return ["spec/knowledge-map.yaml: top level is not a mapping"]
 
+    allowed_by_section = _map_allowed_keys()
+    if not allowed_by_section:
+        return []
+
     errs = []
-    reqs = data.get("requirements") or {}
-    sections = list(MAP_KEYS.items())
-    if isinstance(reqs, dict):
-        for k in ("functional", "non_functional"):
-            sections.append((f"requirements.{k}", {"id", "summary", "path", "status"}))
-    for name, allowed in sections:
-        if "." in name:
-            items = (reqs or {}).get(name.split(".", 1)[1]) or []
+    for section, allowed in sorted(allowed_by_section.items()):
+        if "." in section:
+            parent, child = section.split(".", 1)
+            container = data.get(parent) or {}
+            items = container.get(child) if isinstance(container, dict) else None
         else:
-            items = data.get(name) or []
+            items = data.get(section)
         if not isinstance(items, list):
             continue
         for i, node in enumerate(items):
@@ -235,9 +344,231 @@ def validate_knowledge_map():
             extra = set(node) - allowed
             if extra:
                 errs.append(
-                    f"spec/knowledge-map.yaml: {name}[{i}] has unexpected key(s) "
+                    f"spec/knowledge-map.yaml: {section}[{i}] has unexpected key(s) "
                     f"{sorted(extra)} — usually an unquoted comma in flow style; "
                     f"quote the value")
+    return errs
+
+
+def _gates():
+    """The declared gate registry from harness.yaml.
+
+    Returns (gates, errors). FAILS CLOSED, which it did not used to.
+
+    The previous version returned [] on a missing file, unparseable YAML, or a
+    renamed key, and said nothing. Renaming `human_gates:` to anything else made
+    all twenty gates vanish while `--validate` still printed "DAG OK" and
+    `--next` dispatched — verified. One indentation slip in a merge conflict, or
+    a declined overwrite during `/harness-init`, disarmed the whole model
+    silently. A harness with no gates is a defect, not a permissive default.
+    """
+    path = os.path.join(ROOT, "harness.yaml")
+    if not os.path.exists(path):
+        return [], ["harness.yaml is missing — no human gates can be enforced. "
+                    "Restore it from the plugin's scaffold/."]
+    try:
+        with open(path, encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh) or {}
+    except (OSError, yaml.YAMLError) as e:
+        return [], [f"harness.yaml is unreadable ({e}) — no human gates can be "
+                    f"enforced until it parses."]
+    if not isinstance(cfg, dict):
+        return [], ["harness.yaml does not parse to a mapping — no human gates "
+                    "can be enforced."]
+    if "human_gates" not in cfg:
+        return [], ["harness.yaml declares no `human_gates:` key — every gate is "
+                    "unenforced. If the key was renamed, rename it back; the "
+                    "scheduler reads that exact name."]
+    raw = cfg.get("human_gates")
+    if not isinstance(raw, list) or not raw:
+        return [], ["harness.yaml `human_gates:` is empty or not a list — every "
+                    "gate is unenforced."]
+    gates = [g for g in raw if isinstance(g, dict) and g.get("key")]
+    errs = []
+    if not gates:
+        errs.append("harness.yaml `human_gates:` has no keyed entries — this "
+                    "scheduler needs the structured form "
+                    "`- { key: ..., kind: ..., owner: ... }`.")
+    skipped = len(raw) - len(gates)
+    if skipped and gates:
+        errs.append(f"harness.yaml: {skipped} `human_gates` entr(y|ies) have no "
+                    f"`key:` and are being ignored — fix or remove them rather "
+                    f"than leaving a gate that looks declared but is not.")
+    return gates, errs
+
+
+def _gate_cleared(text, key):
+    """True only for a canonical, cleared gate declaration naming `key`.
+
+    The shape, and nothing else counts:
+
+        **Gate:** \U0001f9cd `<key>` \u2014 \u2705 cleared by <name> on <YYYY-MM-DD>
+        # Gate: \U0001f9cd <key> - \u2705 cleared by <name> on <YYYY-MM-DD>
+
+    Anchored at the start of the line after optional decoration (`-`, `*`, `>`,
+    `#`, `<!--`, bold markers, YAML comment), because an adversarial pass showed
+    that scanning for a loose pattern anywhere on any line let all of these clear
+    a gate: a log line appended at the bottom while the visible header still read
+    AWAITING; "Delegated <key>" (the substring "gate"); a comment demonstrating
+    what not to write; a negation; and a table row.
+
+    It still cannot prove a human approved anything — the agent writes the file.
+    What it enforces is that clearing a gate means editing the one declaration
+    line, so a false clearance is a deliberate, dated, attributable edit rather
+    than a plausible-looking sentence added somewhere else in the document.
+    """
+    decoration = r"(?:[-*>#]|<!--|\*\*|\s)*"
+    label = r"(?:\*\*)?Gate:?(?:\*\*)?:?"
+    # A clearing VERB, not merely the word "by": "required by policy, see <date>"
+    # otherwise reads as an approval.
+    verb = r"(?:cleared|approved|confirmed|signed|accepted)\s+by"
+    verdicts = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        m = re.match(rf"^{decoration}{label}\s*", line, re.IGNORECASE)
+        if not m:
+            continue
+        rest = line[m.end():]
+        # the key must come next, allowing a person marker and backticks
+        m2 = re.match(r"^(?:\U0001f9cd\s*)?`?" + re.escape(key) + r"`?\s*", rest)
+        if not m2:
+            continue
+        verdicts.append(rest[m2.end():].lstrip(" -\u2014:"))
+
+    # Order-independent: if ANY declaration of this key is still awaiting, the
+    # gate is open, whatever a later line claims. Otherwise a log line appended
+    # above the header would win by being scanned first.
+    if any("\u23f3" in v for v in verdicts):
+        return False
+    for verdict in verdicts:
+        if not verdict.startswith("\u2705"):          # must OPEN with the tick
+            continue
+        if re.search(r"\bnot\b|\bnever\b", verdict, re.IGNORECASE):
+            continue
+        if re.search(verb + r"\s+\S+.*?\b\d{4}-\d{2}-\d{2}\b", verdict, re.IGNORECASE):
+            return True
+    return False
+
+
+def _gate_rejected(text, key):
+    """True when the gate line records an explicit, dated human REJECTION.
+
+    Same canonical shape as a clearance, with ❌ instead of ✅. A rejection is a
+    decided outcome: the change does not proceed, and the project keeps working.
+    Treating it as "not yet approved" wedged every dispatch permanently, which
+    punished the human for using an outcome the impact-report template itself
+    offers.
+    """
+    cross = "\u274c"
+    decoration = r"(?:[-*>#]|<!--|\*\*|\s)*"
+    label = r"(?:\*\*)?Gate:?(?:\*\*)?:?"
+    verb = r"(?:rejected|declined|refused)\s+by"
+    for raw in text.splitlines():
+        line = raw.strip()
+        m = re.match(rf"^{decoration}{label}\s*", line, re.IGNORECASE)
+        if not m:
+            continue
+        rest = line[m.end():]
+        m2 = re.match(r"^(?:\U0001f9cd\s*)?`?" + re.escape(key) + r"`?\s*", rest)
+        if not m2:
+            continue
+        verdict = rest[m2.end():].lstrip(" -\u2014:")
+        if not verdict.startswith(cross):
+            continue
+        if re.search(verb + r"\s+\S+.*?\b\d{4}-\d{2}-\d{2}\b", verdict, re.IGNORECASE):
+            return True
+    return False
+
+
+def _exists(pattern):
+    """True if a literal path or a glob matches anything under ROOT."""
+    full = os.path.join(ROOT, pattern)
+    if any(c in pattern for c in "*?["):
+        return bool(glob.glob(full))
+    return os.path.exists(full)
+
+
+def validate_gates():
+    """Human gates, enforced instead of merely documented.
+
+    `human_gates` used to be a flat list that no code read: pure documentation,
+    so the model was entirely trust-based and the list could drift from the
+    skills without anything noticing.
+
+    Three rules per artifact gate, in this order:
+
+      1. A gate line that is PRESENT and not cleared is an error. The owning
+         skill writes that line when it produces the document, so its presence
+         means the approval is genuinely outstanding.
+      2. A gate line that is ABSENT is not an error by itself. Several documents
+         ship as empty placeholders (`design/gaps.md`, `epics/README.md`), and an
+         earlier version demanded a cleared gate on them — which made a FRESH
+         INSTALL fail `validate` while `harness-init` says it must be green. The
+         only way to comply was to forge approvals for gates nobody had opened,
+         so the system's first lesson was how to forge one. Absent means "not
+         reached yet".
+      3. Unless `precondition_for:` says otherwise: if that downstream path
+         exists the stage demonstrably ran, so the document must exist AND carry
+         a cleared line. This is what stops "skip the gate by never writing the
+         paperwork" — rule 2 without rule 3 would be an open door.
+    """
+    errs = []
+    gates, registry_errs = _gates()
+    errs.extend(registry_errs)
+    for g in gates:
+        key, kind = g["key"], g.get("kind", "artifact")
+        if kind != "artifact":
+            continue                      # work/process gates have no document
+
+        only_if = g.get("only_if")
+        if only_if and not _exists(only_if):
+            continue                      # conditional gate, not applicable here
+
+        paths = []
+        if g.get("artifact"):
+            paths = [os.path.join(ROOT, g["artifact"])]
+        elif g.get("artifact_glob"):
+            paths = sorted(glob.glob(os.path.join(ROOT, g["artifact_glob"])))
+
+        downstream = g.get("precondition_for")
+        stage_passed = bool(downstream) and _exists(downstream)
+        existing = [p for p in paths if os.path.exists(p)]
+
+        if stage_passed and not existing:
+            errs.append(
+                f"🧍 {key}: {downstream} exists, so this stage ran — but its gate "
+                f"document {g.get('artifact') or g.get('artifact_glob')} is missing. "
+                f"A gate is not cleared by deleting the paperwork.")
+            continue
+
+        for path in existing:
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    text = fh.read()
+            except OSError:
+                continue
+            rel = os.path.relpath(path, ROOT)
+            declared = key in text
+            if not declared:
+                if stage_passed:
+                    errs.append(
+                        f"{rel}: this stage ran ({downstream} exists) but the file "
+                        f"carries no 🧍 {key} gate line. The owning skill must write "
+                        f"it — see harness.yaml for who owns this gate.")
+                continue                  # otherwise: stage not reached, fine
+            if _gate_rejected(text, key):
+                # A recorded "no" is a DECISION, not an absence. It used to read
+                # as "not cleared" and block every dispatch in the project
+                # forever, telling the human to replace an ⏳ that was not there
+                # — so the only escapes were forging a ✅ or deleting their own
+                # decision. The change simply does not proceed; work continues.
+                continue
+            if not _gate_cleared(text, key):
+                errs.append(f"🧍 {key} NOT cleared in {rel} — a human must approve "
+                            f"it: set the gate line to "
+                            f"'✅ cleared by <name> on <YYYY-MM-DD>' "
+                            f"(or '❌ rejected by <name> on <YYYY-MM-DD>' to "
+                            f"decline it)")
     return errs
 
 
@@ -254,6 +585,8 @@ def main():
     epics, tasks = load()
     errs, children = validate(epics, tasks)
     errs += validate_knowledge_map()
+    gate_errs = validate_gates()
+    errs += gate_errs
 
     if a.status:
         show_status(epics, tasks); sys.exit(0)
@@ -268,6 +601,10 @@ def main():
         print(f"harness: {len(epics)} epics, {len(tasks)} tasks — " + ("DAG OK ✓" if not errs else f"{len(errs)} problem(s)"))
         sys.exit(1 if errs else 0)
     if errs:
+        if gate_errs:
+            print("harness: ✋ a human gate is open — dispatch blocked:", file=sys.stderr)
+            for e in gate_errs:
+                print(f"  {e}", file=sys.stderr)
         print("harness: fix --validate errors first", file=sys.stderr); sys.exit(1)
 
     picks, in_flight = ready(epics, tasks, children, layer=a.layer, tight=a.tight)
