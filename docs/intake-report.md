@@ -8,7 +8,7 @@
 
 - **Date:** 2026-08-26
 - **Prepared by:** claude-code (project-intake)
-- **Gate:** 🧍 `intake_mode_confirmation` — ⏳ AWAITING HUMAN
+- **Gate:** 🧍 `intake_mode_confirmation` — ✅ cleared by human on 2026-08-27
 
 ---
 
@@ -137,9 +137,11 @@ Log: `spec/questions.md`
 
 ## 8. Human confirmation (🧍 `intake_mode_confirmation`)
 
-- [ ] Detected mode(s) are correct
-- [ ] The input inventory is complete — nothing was withheld or forgotten
-- [ ] The facts are actually facts
-- [ ] The recommended path is approved
+**Gate:** 🧍 `intake_mode_confirmation` — ✅ cleared by human on 2026-08-27
 
-**Corrections from the human:**
+- [x] Detected mode(s) are correct
+- [x] The input inventory is complete — nothing was withheld or forgotten
+- [x] The facts are actually facts
+- [x] The recommended path is approved
+
+**Corrections from the human:** none.
