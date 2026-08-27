@@ -1,7 +1,7 @@
 ---
 id: E04
 title: Mesh Discovery, Relay & Dynamic Routing
-status: build-complete
+status: done
 type: feature
 priority: { moscow: must, wsjf: 2.8 }
 depends_on: [E01, E03]

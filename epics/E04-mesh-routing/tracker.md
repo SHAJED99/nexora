@@ -1,8 +1,8 @@
 # E04 · Mesh Discovery, Relay & Dynamic Routing · Progress
 
-**Status:** bug sweep found 1 P1 (B01) + 2 P2 (B02/B03) — B01 must land
-before the human gate · **Started:** 2026-08-27 · **Completed:** — ·
-**Progress:** 7/10
+**Status:** all tasks + bug fixes done, P1/P2 = 0 — pending on-device
+Bluetooth verification + retro before the human merge gate · **Started:**
+2026-08-27 · **Completed:** — · **Progress:** 10/10
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -14,9 +14,9 @@ before the human gate · **Started:** 2026-08-27 · **Completed:** — ·
 - [x] E04-T03c · Real Bluetooth data transfer · done · builder (sonnet) → reviewer (opus)
 - [x] E04-T04 · Store-and-forward relay engine · done · builder (sonnet) → reviewer (opus)
 - [x] E04-T05 · Wire real discovery into Devices screen · done · builder-ui (sonnet) → reviewer (opus)
-- [ ] E04-B01 · Relay traffic permanently suppresses route migration (S2, P1) · todo · builder (any) → reviewer (opus)
-- [ ] E04-B02 · Forwarded relay packets retained forever (S3, P2) · todo · builder (any) → reviewer (opus)
-- [ ] E04-B03 · No production link-quality data source (S3, P2) · todo · builder (any) → reviewer (opus)
+- [x] E04-B01 · Relay traffic permanently suppresses route migration (S2, P1) · done · builder (sonnet) → reviewer (opus)
+- [x] E04-B02 · Forwarded relay packets retained forever (S3, P2) · done · builder (sonnet) → reviewer (opus)
+- [x] E04-B03 · No production link-quality data source (S3, P2) · done · builder (sonnet) → reviewer (opus)
 
 ## Dependency graph
 ```mermaid
@@ -184,3 +184,44 @@ chain — can start once discovery is real, in parallel with T03c/T04.
   Kotlin side left genuinely unfed (no synthetic values) — E05 wires the
   native emission. Dispatching B01 and B03 in parallel (disjoint files);
   B02 serialized after B01 (both touch `relay_engine.dart`).
+- 2026-08-27 E04-B03 fixed + reviewed: extended `pigeons/transport.dart`
+  with `int? rssi` + `onLinkQuality` event, genuinely unfed on both sides
+  (reviewer independently grepped for and confirmed zero fabricated
+  values, confirmed nullable-not-defaulted on both Dart/Kotlin). `epic.md`
+  gets an explicit Carry-forward entry + a qualified "Contract sanity"
+  line. Squash-merged (`0198986`), 114/114 green.
+- 2026-08-27 E04-B01 fixed + reviewed (the P1): `RelayEngine` no longer
+  calls `setActiveRoute` per forward attempt — new `noteAttemptedRoute`/
+  `_lastAttemptedRoute` separate "which link I'm using" from "a validated
+  switch happened." Builder's first attempt (the task's literal
+  suggestion) still failed its own regression test; diagnosed why and
+  built the actual fix instead of shipping the literal suggestion.
+  Reviewer independently re-derived the same failure, then found a
+  second real bug in the fix itself (`setActiveRoute` didn't clear the
+  new tracking map, so a stale attempted-route could survive a validated
+  switch and cause wrong-link-blaming) and fixed it in the same pass.
+  T04's overclaiming docs corrected. Squash-merged (`bc38b06`), 117/117
+  green.
+- 2026-08-27 E04-B02 fixed + reviewed (last bug): new
+  `RelayEngine.reclaimPayloads()` nulls the payload BLOB of any
+  terminal-state row past its own `expires_at` (schema v9->v10, nullable
+  payload column, SQLite table-rebuild migration). Reviewer found a real
+  blocking defect in the migration itself — the four rebuild statements
+  weren't transaction-wrapped, so a crash mid-migration could either
+  permanently brick the database (stale intermediate table blocking
+  retry) or silently drop the entire relay store — fixed by wrapping the
+  rebuild in an explicit transaction. Also added a 4th regression test
+  for the `expired` terminal state (builder's three covered
+  forwarding/delivered only). Squash-merged (`05aaf44`), 124/124 green.
+  **P1/P2 = 0. All 10 E04 tasks/bugs done.**
+  Reviewer's overall gate assessment (verbatim judgment, not code): the
+  code is ready; the paperwork and hardware verification are not. Two
+  concrete asks before the human gate — (1) this tracker was stale at
+  review time, now corrected; (2) **T03a/T03b/T03c/T05's on-device manual
+  verification boxes are still unticked** — T03b/T03c in particular have
+  no hardware-free test coverage at all by their own task files' design,
+  so their correctness currently rests entirely on code review and
+  reasoning, never an actual physical Bluetooth round trip. This is the
+  single largest real risk left in E04 and the one thing a review pass
+  cannot substitute for. Retro next, then the human `epic_dev_merge`
+  gate — with the on-device gap surfaced explicitly, not buried.
