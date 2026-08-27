@@ -1,6 +1,8 @@
 # E04 · Mesh Discovery, Relay & Dynamic Routing · Progress
 
-**Status:** build-complete, pending bug sweep · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 7/7
+**Status:** bug sweep found 1 P1 (B01) + 2 P2 (B02/B03) — B01 must land
+before the human gate · **Started:** 2026-08-27 · **Completed:** — ·
+**Progress:** 7/10
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -12,6 +14,9 @@
 - [x] E04-T03c · Real Bluetooth data transfer · done · builder (sonnet) → reviewer (opus)
 - [x] E04-T04 · Store-and-forward relay engine · done · builder (sonnet) → reviewer (opus)
 - [x] E04-T05 · Wire real discovery into Devices screen · done · builder-ui (sonnet) → reviewer (opus)
+- [ ] E04-B01 · Relay traffic permanently suppresses route migration (S2, P1) · todo · builder (any) → reviewer (opus)
+- [ ] E04-B02 · Forwarded relay packets retained forever (S3, P2) · todo · builder (any) → reviewer (opus)
+- [ ] E04-B03 · No production link-quality data source (S3, P2) · todo · builder (any) → reviewer (opus)
 
 ## Dependency graph
 ```mermaid
@@ -136,3 +141,46 @@ chain — can start once discovery is real, in parallel with T03c/T04.
   planner instead of bounced back to the builder. Squash-merged
   (`7b78f6b`), 112/112 green.
   **E04 build-complete: 7/7 tasks done. Proceeding to bug sweep.**
+- 2026-08-27 Bug sweep (Opus, `agent/skills/bug-sweep`) run against
+  `epic_04` @ `cbc2efd`, aimed at the seams flagged during T04's review.
+  Added `test/core/persistence/routing_migration_test.dart` directly
+  (test-only, well-precedented pattern, no bug task needed) — proved both
+  T02's v7->v8 and T04's v8->v9 migrations genuinely run `onUpgrade`, not
+  just fresh-schema creation. 3 real findings:
+  - **E04-B01 (S2)**: `RelayEngine._attempt` calls
+    `RoutingEngine.setActiveRoute` on every forward attempt (as a
+    side-channel for `onRouteFailure` link-blaming), which clears
+    migration-tracking state as a side effect — reproduced empirically:
+    60 samples with interleaved relay traffic, migration never fires,
+    vs. 10 samples without relay traffic, migration fires exactly as
+    designed. Also found T04's own §2 and `epic.md` both claim relay
+    forwarding "closes T02's make-before-break seam" — false as merged,
+    contradicted by T04's own §4. Root cause: a bookkeeping call meaning
+    "this is the link I'm using" is read by `RoutingEngine` as "a route
+    switch happened."
+  - **E04-B02 (S3)**: `sweepExpired()` only reclaims `queued` packets;
+    nothing ever reclaims a `relay_packets` row (or its `payload` BLOB)
+    once it reaches `forwarding`/`delivered`/`expired` — a relay device
+    accumulates other peers' ciphertext indefinitely, contradicting
+    `epic.md`'s own "local only, ephemeral" data-model claim. (The T04
+    reviewer's original "forwarding is a dead-end" worry was investigated
+    and found NOT to be a defect — a different, real defect underneath it.)
+  - **E04-B03 (S3)**: `RoutingEngine._knownLinks` has no production
+    populator — `pigeons/transport.dart` exposes discovery/connection/
+    data events but no latency/loss/RSSI signal, so on a real device
+    `computeRoute()` always returns `null` and the mesh can move bytes
+    point-to-point but cannot route. Not disclosed anywhere in `epic.md`;
+    contradicts the epic's own analyze-report "Contract sanity" line.
+  🧍 `bug_priorities` + rule-3 gates: human resolved all three —
+  **B01 → P1**, fix the provable defect (separate the two signals),
+  correct T04/epic.md's overclaiming docs; a full validated-migration
+  probe for relay traffic explicitly declined as out of a bug fix's scope.
+  **B02 → P2**, reclaim (null) the payload BLOB once a terminal-state row
+  passes its own `expires_at` — no extra grace period — keep the row for
+  E13 diagnostics; requires a small additive schema change (nullable
+  `payload`, v9->v10).
+  **B03 → P2**, extend the Pigeon schema now (`int? rssi` +
+  `onLinkQuality` event) while E04 still owns the transport boundary,
+  Kotlin side left genuinely unfed (no synthetic values) — E05 wires the
+  native emission. Dispatching B01 and B03 in parallel (disjoint files);
+  B02 serialized after B01 (both touch `relay_engine.dart`).
