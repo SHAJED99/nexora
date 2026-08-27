@@ -174,4 +174,16 @@ class _EventsHandler extends TransportEventsApi {
   @override
   void onDataReceived(String deviceId, Uint8List bytes) =>
       _service._handleDataReceived(deviceId, bytes);
+
+  // E04-B03: `onLinkQuality` was added to the Pigeon contract so a
+  // production link-quality signal has somewhere to land, but no native
+  // implementation emits it yet (contract-only, see pigeons/transport.dart).
+  // Intentionally a no-op here rather than a new stream/getter — wiring a
+  // real consumer (RoutingEngine.recordLinkMeasurement) is E05's job, and
+  // adding unused Dart-facade plumbing now would be scope creep on a
+  // contract-only bug fix. This override exists purely so
+  // `_EventsHandler`, which implements the abstract `TransportEventsApi`,
+  // still compiles.
+  @override
+  void onLinkQuality(String deviceId, int latencyMs, double lossRate) {}
 }

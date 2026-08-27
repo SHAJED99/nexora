@@ -244,7 +244,15 @@ enum class ConnectionState(val raw: Int) {
 data class TransportDevice (
   val id: String,
   val displayName: String,
-  val type: TransportType
+  val type: TransportType,
+  /**
+   * Signal strength in dBm, when the native layer can supply it (e.g.
+   * Android's Bluetooth scan result RSSI). Null when unavailable.
+   *
+   * Contract-only as of E04-B03: no native implementation populates this
+   * field yet — wiring real RSSI is E05's job (FR-ROUTE-001, FR-ROUTE-002).
+   */
+  val rssi: Long? = null
 )
  {
   companion object {
@@ -252,7 +260,8 @@ data class TransportDevice (
       val id = pigeonVar_list[0] as String
       val displayName = pigeonVar_list[1] as String
       val type = pigeonVar_list[2] as TransportType
-      return TransportDevice(id, displayName, type)
+      val rssi = pigeonVar_list[3] as Long?
+      return TransportDevice(id, displayName, type, rssi)
     }
   }
   fun toList(): List<Any?> {
@@ -260,6 +269,7 @@ data class TransportDevice (
       id,
       displayName,
       type,
+      rssi,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -270,7 +280,7 @@ data class TransportDevice (
       return true
     }
     val other = other as TransportDevice
-    return TransportApiPigeonUtils.deepEquals(this.id, other.id) && TransportApiPigeonUtils.deepEquals(this.displayName, other.displayName) && TransportApiPigeonUtils.deepEquals(this.type, other.type)
+    return TransportApiPigeonUtils.deepEquals(this.id, other.id) && TransportApiPigeonUtils.deepEquals(this.displayName, other.displayName) && TransportApiPigeonUtils.deepEquals(this.type, other.type) && TransportApiPigeonUtils.deepEquals(this.rssi, other.rssi)
   }
 
   override fun hashCode(): Int {
@@ -278,10 +288,11 @@ data class TransportDevice (
     result = 31 * result + TransportApiPigeonUtils.deepHash(this.id)
     result = 31 * result + TransportApiPigeonUtils.deepHash(this.displayName)
     result = 31 * result + TransportApiPigeonUtils.deepHash(this.type)
+    result = 31 * result + TransportApiPigeonUtils.deepHash(this.rssi)
     return result
   }
   override fun toString(): String {
-    return "TransportDevice(id=$id, displayName=$displayName, type=$type)"
+    return "TransportDevice(id=$id, displayName=$displayName, type=$type, rssi=$rssi)"
   }
 }
 private open class TransportApiPigeonCodec : StandardMessageCodec() {
@@ -509,6 +520,36 @@ class TransportEventsApi(private val binaryMessenger: BinaryMessenger, private v
       val channelName = "dev.flutter.pigeon.nexora.TransportEventsApi.onDataReceived$separatedMessageChannelSuffix"
       val channel = BasicMessageChannel<Any?>(binaryMessenger, channelName, codec)
       channel.send(listOf(deviceIdArg, bytesArg)) {
+        if (it is List<*>) {
+          if (it.size > 1) {
+            continuation.resumeWithException(FlutterError(it[0] as String, it[1] as String, it[2] as String?))
+          } else {
+            continuation.resume(Unit)
+          }
+        } else {
+          continuation.resumeWithException(TransportApiPigeonUtils.createConnectionError(channelName))
+        } 
+      }
+    }
+  }
+  /**
+   * Link-quality signal for a given neighbor, when the native layer can
+   * measure it (round-trip latency, observed packet loss).
+   *
+   * Contract-only as of E04-B03: declared here so `RoutingEngine` has a
+   * stable production event to consume, but nothing in this repo calls
+   * this method yet — no native implementation emits it. Wiring real
+   * Bluetooth latency/loss measurements into this event and calling
+   * `RoutingEngine.recordLinkMeasurement` from it is E05's job
+   * (FR-ROUTE-001, FR-ROUTE-002). Do not synthesize values here.
+   */
+  suspend fun onLinkQuality(deviceIdArg: String, latencyMsArg: Long, lossRateArg: Double)
+{
+    val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
+    return suspendCancellableCoroutine { continuation ->
+      val channelName = "dev.flutter.pigeon.nexora.TransportEventsApi.onLinkQuality$separatedMessageChannelSuffix"
+      val channel = BasicMessageChannel<Any?>(binaryMessenger, channelName, codec)
+      channel.send(listOf(deviceIdArg, latencyMsArg, lossRateArg)) {
         if (it is List<*>) {
           if (it.size > 1) {
             continuation.resumeWithException(FlutterError(it[0] as String, it[1] as String, it[2] as String?))

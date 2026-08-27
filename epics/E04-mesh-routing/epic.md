@@ -101,7 +101,7 @@ latency/partition simulator" as an early task here, since every later route
 | Check | Result | Notes |
 |---|---|---|
 | EARS trace | ✅ pass | EARS-ROUTE-1/2/3/4 (epic-level) each covered: T02→ROUTE-1/2/4, T04→ROUTE-3/4b. New sub-ids introduced for genuinely new scope not named at epic level (EARS-SIM-1/2/3 for the simulator, EARS-TRANSPORT-1/2/3 for the Pigeon boundary, EARS-DISC-1/2 for Bluetooth, EARS-DEV-3/4 for the screen) — all trace to an FR id, none orphaned. |
-| Contract sanity | ✅ pass | One Pigeon schema (T03a) defines the transport boundary once; T03b/T03c extend its *implementation*, never redefine the contract. No two tasks define the same table/function differently — `routes` (T02) and `relay_packets` (T04) are disjoint tables. |
+| Contract sanity | ✅ pass, qualified 2026-08-27 (E04-B03) | One Pigeon schema (T03a) defines the transport boundary once; T03b/T03c extend its *implementation*, never redefine the contract. No two tasks define the same table/function differently — `routes` (T02) and `relay_packets` (T04) are disjoint tables. **Qualification:** this held for the tasks in scope when the report ran, but the end-of-epic bug sweep (E04-B03) found the contract itself was incomplete — no task had added a link-quality signal (RSSI/latency/loss) to the schema, so `RoutingEngine` had no production populator. The human approved extending the schema (2026-08-27) to close the gap; see §Carry-forward below. The claim "T03b/T03c never redefine the contract" is accurate for those two tasks specifically — it was E04-B03, not a T03b/T03c task, that extended the schema, and it did so with human sign-off as an explicit ADR-0004 boundary change, not a silent redefinition. |
 | Collision matrix | ✅ pass | T01/T03a share no files (checked). T02/T03b share no files (T02 is pure Dart routing_engine + persistence; T03b is native Kotlin only). T03c only touches files T03a created/T03b will have already modified, strictly sequential via `depends_on`. T05 touches only `devices_controller.dart` + its test, untouched by any other E04 task. |
 | Scope fences | ✅ pass | Every task's §4 is non-empty; T03a/T03b/T03c in particular are careful to state exactly what stays loopback/unimplemented at each stage — the most collision-prone three-way split in this epic. |
 | MoSCoW inflation | ⚠️ exception, justified | 7/7 tasks `must` — same reasoning as E03: this is infrastructure with a strict dependency chain (simulator→routing engine→relay; Pigeon plumbing→discovery→data transfer→relay) and no task is independently shippable value on its own. Flagged, not silently re-graded. |
@@ -124,6 +124,28 @@ exception (reasoning above), 0 unclassified findings, 0 collisions.
 Proceeding to dispatch under the human's standing instruction to continue
 through E14 without per-gate pauses — full findings stand as written above
 for later audit, nothing re-graded silently to force a clean pass.
+
+## Carry-forward
+
+- **E04-B03 — link-quality measurement is contract-only, not wired.**
+  `pigeons/transport.dart` now declares `TransportDevice.rssi` (nullable
+  `int`) and `TransportEventsApi.onLinkQuality(deviceId, latencyMs,
+  lossRate)` (human-approved ADR-0004 boundary extension, 2026-08-27), so
+  `RoutingEngine.recordLinkMeasurement`
+  (`lib/core/routing_engine/routing_engine.dart:141-155`) has a stable
+  production event to consume once something calls it. **Nothing does yet.**
+  No native Kotlin implementation populates `rssi` or emits
+  `onLinkQuality`, and no Dart caller invokes
+  `recordLinkMeasurement`. This blocks the routing engine from computing
+  real routes on-device — `computeRoute()` returns `null` for every
+  destination until this is wired (`RelayEngine` then queues every packet
+  until it expires). **Blocked FRs:** FR-ROUTE-001, FR-ROUTE-002.
+  **Owning epic: E05** — measuring real Android Bluetooth RSSI / round-trip
+  latency, emitting them across the now-extended contract, and calling
+  `RoutingEngine.recordLinkMeasurement` from the Dart side. Do not
+  synthesize placeholder measurement values to make the engine appear live
+  before that wiring lands — an honest `null` route beats a confident route
+  computed from invented data.
 
 ## Retro
 → `retro.md` (written after E04 completion)

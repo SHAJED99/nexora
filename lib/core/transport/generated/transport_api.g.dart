@@ -134,6 +134,7 @@ class TransportDevice {
     required this.id,
     required this.displayName,
     required this.type,
+    this.rssi,
   });
 
   String id;
@@ -142,11 +143,19 @@ class TransportDevice {
 
   TransportType type;
 
+  /// Signal strength in dBm, when the native layer can supply it (e.g.
+  /// Android's Bluetooth scan result RSSI). Null when unavailable.
+  ///
+  /// Contract-only as of E04-B03: no native implementation populates this
+  /// field yet — wiring real RSSI is E05's job (FR-ROUTE-001, FR-ROUTE-002).
+  int? rssi;
+
   List<Object?> _toList() {
     return <Object?>[
       id,
       displayName,
       type,
+      rssi,
     ];
   }
 
@@ -159,6 +168,7 @@ class TransportDevice {
       id: result[0]! as String,
       displayName: result[1]! as String,
       type: result[2]! as TransportType,
+      rssi: result[3] as int?,
     );
   }
 
@@ -171,7 +181,7 @@ class TransportDevice {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(id, other.id) && _deepEquals(displayName, other.displayName) && _deepEquals(type, other.type);
+    return _deepEquals(id, other.id) && _deepEquals(displayName, other.displayName) && _deepEquals(type, other.type) && _deepEquals(rssi, other.rssi);
   }
 
   @override
@@ -180,7 +190,7 @@ class TransportDevice {
 
   @override
   String toString() {
-    return 'TransportDevice(id: $id, displayName: $displayName, type: $type)';
+    return 'TransportDevice(id: $id, displayName: $displayName, type: $type, rssi: $rssi)';
   }
 }
 
@@ -342,6 +352,17 @@ abstract class TransportEventsApi {
 
   void onDataReceived(String deviceId, Uint8List bytes);
 
+  /// Link-quality signal for a given neighbor, when the native layer can
+  /// measure it (round-trip latency, observed packet loss).
+  ///
+  /// Contract-only as of E04-B03: declared here so `RoutingEngine` has a
+  /// stable production event to consume, but nothing in this repo calls
+  /// this method yet — no native implementation emits it. Wiring real
+  /// Bluetooth latency/loss measurements into this event and calling
+  /// `RoutingEngine.recordLinkMeasurement` from it is E05's job
+  /// (FR-ROUTE-001, FR-ROUTE-002). Do not synthesize values here.
+  void onLinkQuality(String deviceId, int latencyMs, double lossRate);
+
   static void setUp(TransportEventsApi? api, {BinaryMessenger? binaryMessenger, String messageChannelSuffix = '',}) {
     messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
     {
@@ -421,6 +442,29 @@ abstract class TransportEventsApi {
           final Uint8List arg_bytes = args[1]! as Uint8List;
           try {
             api.onDataReceived(arg_deviceId, arg_bytes);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.nexora.TransportEventsApi.onLinkQuality$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final String arg_deviceId = args[0]! as String;
+          final int arg_latencyMs = args[1]! as int;
+          final double arg_lossRate = args[2]! as double;
+          try {
+            api.onLinkQuality(arg_deviceId, arg_latencyMs, arg_lossRate);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

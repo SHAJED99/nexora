@@ -42,11 +42,19 @@ class TransportDevice {
     required this.id,
     required this.displayName,
     required this.type,
+    this.rssi,
   });
 
   final String id;
   final String displayName;
   final TransportType type;
+
+  /// Signal strength in dBm, when the native layer can supply it (e.g.
+  /// Android's Bluetooth scan result RSSI). Null when unavailable.
+  ///
+  /// Contract-only as of E04-B03: no native implementation populates this
+  /// field yet — wiring real RSSI is E05's job (FR-ROUTE-001, FR-ROUTE-002).
+  final int? rssi;
 }
 
 /// Lifecycle state of a connection to a given device id.
@@ -81,4 +89,15 @@ abstract class TransportEventsApi {
   void onConnectionStateChanged(String deviceId, ConnectionState state);
 
   void onDataReceived(String deviceId, Uint8List bytes);
+
+  /// Link-quality signal for a given neighbor, when the native layer can
+  /// measure it (round-trip latency, observed packet loss).
+  ///
+  /// Contract-only as of E04-B03: declared here so `RoutingEngine` has a
+  /// stable production event to consume, but nothing in this repo calls
+  /// this method yet — no native implementation emits it. Wiring real
+  /// Bluetooth latency/loss measurements into this event and calling
+  /// `RoutingEngine.recordLinkMeasurement` from it is E05's job
+  /// (FR-ROUTE-001, FR-ROUTE-002). Do not synthesize values here.
+  void onLinkQuality(String deviceId, int latencyMs, double lossRate);
 }
