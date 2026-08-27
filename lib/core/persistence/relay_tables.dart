@@ -25,7 +25,14 @@ class RelayPackets extends Table {
 
   /// Opaque, already-encrypted bytes. Never parsed, inspected or logged by
   /// anything in this table's own file or `relay_engine.dart` (FR-ROUTE-003).
-  BlobColumn get payload => blob()();
+  ///
+  /// Nullable as of schema v10 (E04-B02): `RelayEngine.reclaimPayloads()`
+  /// nulls this out once a terminal-state row (`forwarding` / `delivered` /
+  /// `expired`) passes its own `expires_at` -- the row itself (id,
+  /// destination, size, timestamps, state) is kept for diagnostics (E13),
+  /// but the ciphertext bytes are not retained past the packet's own TTL.
+  /// See `epic.md` §Data model for the exact retention rule.
+  BlobColumn get payload => blob().nullable()();
 
   /// Higher values are forwarded first within a `processQueue()` pass.
   IntColumn get priority => integer()();

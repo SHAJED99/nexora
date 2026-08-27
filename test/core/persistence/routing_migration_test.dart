@@ -12,8 +12,6 @@
 // PRIOR-version schema with raw SQL, set `userVersion`, open it with
 // `AppDatabase`, and assert both that the new tables are usable and that
 // pre-existing rows survived.
-import 'dart:typed_data';
-
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -153,7 +151,7 @@ void main() {
           RelayPacketsCompanion.insert(
             id: 'p1',
             destinationId: 'D',
-            payload: Uint8List.fromList([1, 2, 3]),
+            payload: Value(Uint8List.fromList([1, 2, 3])),
             priority: 0,
             sizeBytes: 3,
             createdAt: 1000,
@@ -204,7 +202,7 @@ void main() {
           RelayPacketsCompanion.insert(
             id: 'p1',
             destinationId: 'D',
-            payload: Uint8List.fromList([9]),
+            payload: Value(Uint8List.fromList([9])),
             priority: 5,
             sizeBytes: 1,
             createdAt: 1000,

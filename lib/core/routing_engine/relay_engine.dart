@@ -115,7 +115,7 @@ class RelayEngine {
           RelayPacketsCompanion.insert(
             id: id,
             destinationId: destination,
-            payload: payload,
+            payload: Value(payload),
             priority: priority,
             sizeBytes: payload.length,
             createdAt: now.millisecondsSinceEpoch,
@@ -184,7 +184,11 @@ class RelayEngine {
       final nextHop = route.hops.first;
       bool sent;
       try {
-        sent = await _send(nextHop, row.payload);
+        // Never null here: only `queued` rows reach `_attempt` (via
+        // `processQueue`'s own where-clause), and `reclaimPayloads()` only
+        // ever nulls a payload on a row that has already left `queued` for
+        // a terminal state (E04-B02).
+        sent = await _send(nextHop, row.payload!);
       } catch (_) {
         // A transport-level exception is treated exactly like a failed
         // send — never surfaced as a crash from a relay hop's own queue
@@ -231,6 +235,41 @@ class RelayEngine {
   Future<void> _setState(String id, RelayDeliveryState state) {
     return (_db.update(_db.relayPackets)..where((t) => t.id.equals(id)))
         .write(RelayPacketsCompanion(deliveryState: Value(state.name)));
+  }
+
+  /// Payload retention (E04-B02, FR-ROUTE-004, `epic.md` §Data model):
+  /// nulls out the `payload` BLOB for any row in a terminal state
+  /// (`forwarding` / `delivered` / `expired`) that is past its own
+  /// `expires_at`. The row itself — id, destination, size, timestamps and
+  /// state — is left intact for later diagnostics (T04 §3, E13); only the
+  /// third-party ciphertext bytes are reclaimed.
+  ///
+  /// 🧍-resolved 2026-08-27: no additional grace period beyond the
+  /// packet's own TTL — a row becomes eligible the instant it is both
+  /// terminal AND past `expires_at`, since the TTL the caller chose at
+  /// `enqueue()` time is already the "how long is this worth keeping"
+  /// signal. Deliberately excludes `queued`: an unexpired (or even expired
+  /// but not-yet-swept) `queued` row is still active-queue traffic, not
+  /// retained history, and must never lose its payload here.
+  Future<int> reclaimPayloads() async {
+    final now = _clock().millisecondsSinceEpoch;
+    const terminalStates = [
+      RelayDeliveryState.forwarding,
+      RelayDeliveryState.delivered,
+      RelayDeliveryState.expired,
+    ];
+    final rows = await (_db.select(_db.relayPackets)
+          ..where((t) =>
+              t.deliveryState.isIn(terminalStates.map((s) => s.name)) &
+              t.expiresAt.isSmallerOrEqualValue(now) &
+              t.payload.isNotNull()))
+        .get();
+
+    for (final row in rows) {
+      await (_db.update(_db.relayPackets)..where((t) => t.id.equals(row.id)))
+          .write(const RelayPacketsCompanion(payload: Value(null)));
+    }
+    return rows.length;
   }
 
   /// Timestamp + an in-process counter — unique per instance without

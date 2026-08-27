@@ -41,6 +41,19 @@ beyond an (optional, one-tap-away per FR-UI-004) route detail view.
 (id, destination, priority, size, created, expiry, delivery-state per
 FR-ROUTE-004) — local only, ephemeral.
 
+"Ephemeral" (E04-B02) means, precisely: the `payload` BLOB — the other
+party's ciphertext this device is temporarily holding as a relay hop — is
+reclaimed (nulled, schema v10, `payload` nullable) the instant a row in a
+terminal state (`forwarding` / `delivered` / `expired`) is past its own
+`expires_at`, via `RelayEngine.reclaimPayloads()`. No additional grace
+period beyond the packet's original TTL: the TTL passed to `enqueue()` is
+already the caller's "how long is this worth keeping" signal. A `queued`
+row's payload is never touched by this pass, only its state (see
+`sweepExpired()`). The row itself — id, destination, size, timestamps,
+state — is kept indefinitely, independent of the payload, for a later
+epic's diagnostics needs (E13, T04 §3); only the ciphertext bytes are
+time-bound.
+
 ## API surface
 Pigeon-generated Dart↔Kotlin bindings (ADR-0004) for transport control;
 internal routing-engine interface consumed by E05/E06.

@@ -2627,9 +2627,9 @@ class $RelayPacketsTable extends RelayPackets
   late final GeneratedColumn<Uint8List> payload = GeneratedColumn<Uint8List>(
     'payload',
     aliasedName,
-    false,
+    true,
     type: DriftSqlType.blob,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _priorityMeta = const VerificationMeta(
     'priority',
@@ -2730,8 +2730,6 @@ class $RelayPacketsTable extends RelayPackets
         _payloadMeta,
         payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta),
       );
-    } else if (isInserting) {
-      context.missing(_payloadMeta);
     }
     if (data.containsKey('priority')) {
       context.handle(
@@ -2796,7 +2794,7 @@ class $RelayPacketsTable extends RelayPackets
       payload: attachedDatabase.typeMapping.read(
         DriftSqlType.blob,
         data['${effectivePrefix}payload'],
-      )!,
+      ),
       priority: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}priority'],
@@ -2836,7 +2834,14 @@ class RelayPacketRow extends DataClass implements Insertable<RelayPacketRow> {
 
   /// Opaque, already-encrypted bytes. Never parsed, inspected or logged by
   /// anything in this table's own file or `relay_engine.dart` (FR-ROUTE-003).
-  final Uint8List payload;
+  ///
+  /// Nullable as of schema v10 (E04-B02): `RelayEngine.reclaimPayloads()`
+  /// nulls this out once a terminal-state row (`forwarding` / `delivered` /
+  /// `expired`) passes its own `expires_at` -- the row itself (id,
+  /// destination, size, timestamps, state) is kept for diagnostics (E13),
+  /// but the ciphertext bytes are not retained past the packet's own TTL.
+  /// See `epic.md` §Data model for the exact retention rule.
+  final Uint8List? payload;
 
   /// Higher values are forwarded first within a `processQueue()` pass.
   final int priority;
@@ -2858,7 +2863,7 @@ class RelayPacketRow extends DataClass implements Insertable<RelayPacketRow> {
   const RelayPacketRow({
     required this.id,
     required this.destinationId,
-    required this.payload,
+    this.payload,
     required this.priority,
     required this.sizeBytes,
     required this.createdAt,
@@ -2870,7 +2875,9 @@ class RelayPacketRow extends DataClass implements Insertable<RelayPacketRow> {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
     map['destination_id'] = Variable<String>(destinationId);
-    map['payload'] = Variable<Uint8List>(payload);
+    if (!nullToAbsent || payload != null) {
+      map['payload'] = Variable<Uint8List>(payload);
+    }
     map['priority'] = Variable<int>(priority);
     map['size_bytes'] = Variable<int>(sizeBytes);
     map['created_at'] = Variable<int>(createdAt);
@@ -2883,7 +2890,9 @@ class RelayPacketRow extends DataClass implements Insertable<RelayPacketRow> {
     return RelayPacketsCompanion(
       id: Value(id),
       destinationId: Value(destinationId),
-      payload: Value(payload),
+      payload: payload == null && nullToAbsent
+          ? const Value.absent()
+          : Value(payload),
       priority: Value(priority),
       sizeBytes: Value(sizeBytes),
       createdAt: Value(createdAt),
@@ -2900,7 +2909,7 @@ class RelayPacketRow extends DataClass implements Insertable<RelayPacketRow> {
     return RelayPacketRow(
       id: serializer.fromJson<String>(json['id']),
       destinationId: serializer.fromJson<String>(json['destinationId']),
-      payload: serializer.fromJson<Uint8List>(json['payload']),
+      payload: serializer.fromJson<Uint8List?>(json['payload']),
       priority: serializer.fromJson<int>(json['priority']),
       sizeBytes: serializer.fromJson<int>(json['sizeBytes']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
@@ -2914,7 +2923,7 @@ class RelayPacketRow extends DataClass implements Insertable<RelayPacketRow> {
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'destinationId': serializer.toJson<String>(destinationId),
-      'payload': serializer.toJson<Uint8List>(payload),
+      'payload': serializer.toJson<Uint8List?>(payload),
       'priority': serializer.toJson<int>(priority),
       'sizeBytes': serializer.toJson<int>(sizeBytes),
       'createdAt': serializer.toJson<int>(createdAt),
@@ -2926,7 +2935,7 @@ class RelayPacketRow extends DataClass implements Insertable<RelayPacketRow> {
   RelayPacketRow copyWith({
     String? id,
     String? destinationId,
-    Uint8List? payload,
+    Value<Uint8List?> payload = const Value.absent(),
     int? priority,
     int? sizeBytes,
     int? createdAt,
@@ -2935,7 +2944,7 @@ class RelayPacketRow extends DataClass implements Insertable<RelayPacketRow> {
   }) => RelayPacketRow(
     id: id ?? this.id,
     destinationId: destinationId ?? this.destinationId,
-    payload: payload ?? this.payload,
+    payload: payload.present ? payload.value : this.payload,
     priority: priority ?? this.priority,
     sizeBytes: sizeBytes ?? this.sizeBytes,
     createdAt: createdAt ?? this.createdAt,
@@ -3002,7 +3011,7 @@ class RelayPacketRow extends DataClass implements Insertable<RelayPacketRow> {
 class RelayPacketsCompanion extends UpdateCompanion<RelayPacketRow> {
   final Value<String> id;
   final Value<String> destinationId;
-  final Value<Uint8List> payload;
+  final Value<Uint8List?> payload;
   final Value<int> priority;
   final Value<int> sizeBytes;
   final Value<int> createdAt;
@@ -3023,7 +3032,7 @@ class RelayPacketsCompanion extends UpdateCompanion<RelayPacketRow> {
   RelayPacketsCompanion.insert({
     required String id,
     required String destinationId,
-    required Uint8List payload,
+    this.payload = const Value.absent(),
     required int priority,
     required int sizeBytes,
     required int createdAt,
@@ -3032,7 +3041,6 @@ class RelayPacketsCompanion extends UpdateCompanion<RelayPacketRow> {
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        destinationId = Value(destinationId),
-       payload = Value(payload),
        priority = Value(priority),
        sizeBytes = Value(sizeBytes),
        createdAt = Value(createdAt),
@@ -3065,7 +3073,7 @@ class RelayPacketsCompanion extends UpdateCompanion<RelayPacketRow> {
   RelayPacketsCompanion copyWith({
     Value<String>? id,
     Value<String>? destinationId,
-    Value<Uint8List>? payload,
+    Value<Uint8List?>? payload,
     Value<int>? priority,
     Value<int>? sizeBytes,
     Value<int>? createdAt,
@@ -4739,7 +4747,7 @@ typedef $$RelayPacketsTableCreateCompanionBuilder =
     RelayPacketsCompanion Function({
       required String id,
       required String destinationId,
-      required Uint8List payload,
+      Value<Uint8List?> payload,
       required int priority,
       required int sizeBytes,
       required int createdAt,
@@ -4751,7 +4759,7 @@ typedef $$RelayPacketsTableUpdateCompanionBuilder =
     RelayPacketsCompanion Function({
       Value<String> id,
       Value<String> destinationId,
-      Value<Uint8List> payload,
+      Value<Uint8List?> payload,
       Value<int> priority,
       Value<int> sizeBytes,
       Value<int> createdAt,
@@ -4931,7 +4939,7 @@ class $$RelayPacketsTableTableManager
               ({
                 Value<String> id = const Value.absent(),
                 Value<String> destinationId = const Value.absent(),
-                Value<Uint8List> payload = const Value.absent(),
+                Value<Uint8List?> payload = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<int> sizeBytes = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
@@ -4953,7 +4961,7 @@ class $$RelayPacketsTableTableManager
               ({
                 required String id,
                 required String destinationId,
-                required Uint8List payload,
+                Value<Uint8List?> payload = const Value.absent(),
                 required int priority,
                 required int sizeBytes,
                 required int createdAt,

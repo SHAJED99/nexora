@@ -56,7 +56,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -146,6 +146,68 @@ class AppDatabase extends _$AppDatabase {
             // E04-T04: new `relay_packets` table — additive, no changes to
             // existing tables (docs/conventions.md "Schema migrations").
             await m.createTable(relayPackets);
+          }
+          if (from < 10) {
+            // E04-B02: `relay_packets.payload` becomes nullable so
+            // `RelayEngine.reclaimPayloads()` can null out a terminal-state
+            // row's ciphertext once it passes its own `expires_at`, without
+            // dropping the row itself (kept for E13 diagnostics per T04
+            // §3). SQLite has no ALTER COLUMN, so loosening an existing
+            // NOT NULL column requires the standard rebuild: create the new
+            // shape, copy every existing row across (including installs
+            // that upgrade straight from < v9 and therefore never had this
+            // table until the `from < 9` step just above ran), drop the
+            // old table, rename the new one into place. Guarded to `from >=
+            // 9`: an install jumping from < v9 already gets the *current*
+            // Dart table definition (nullable payload included) from
+            // `createTable` above, so running this rebuild unconditionally
+            // would operate on a table that already has the right shape.
+            if (from >= 9) {
+              // Reviewer (E04-B02, 2026-08-27): the four rebuild statements
+              // MUST be atomic. Drift does not wrap `onUpgrade` in a
+              // transaction (`drift/src/runtime/executor/helpers/engines.dart`
+              // `_runMigrations` calls `beforeOpen` directly), and it only
+              // bumps `user_version` *after* onUpgrade returns. Un-wrapped, a
+              // crash/kill between any two of these statements (a realistic
+              // window on a large `relay_packets` table) leaves
+              // `user_version` at 9 with a stale `relay_packets_v10` already
+              // present — and the retry on next launch then dies on
+              // `table relay_packets_v10 already exists`, bricking the
+              // database permanently. Worse, a crash between the DROP and
+              // the RENAME leaves no `relay_packets` at all. Inside a
+              // transaction the step is all-or-nothing: a failure rolls the
+              // whole rebuild back, `user_version` stays 9, and the next
+              // launch retries from a clean v9 state.
+              await m.database.transaction(() async {
+                await m.database.customStatement(
+                  'CREATE TABLE relay_packets_v10 ('
+                  'id TEXT NOT NULL, '
+                  'destination_id TEXT NOT NULL, '
+                  'payload BLOB NULL, '
+                  'priority INTEGER NOT NULL, '
+                  'size_bytes INTEGER NOT NULL, '
+                  'created_at INTEGER NOT NULL, '
+                  'expires_at INTEGER NOT NULL, '
+                  'delivery_state TEXT NOT NULL, '
+                  'PRIMARY KEY (id)'
+                  ');',
+                );
+                // Column-order-dependent by design: the `SELECT *` order
+                // above is the v9 DDL order, which is identical to the new
+                // table's order and to `$RelayPacketsTable.$columns`
+                // (id, destination_id, payload, priority, size_bytes,
+                // created_at, expires_at, delivery_state). Any future
+                // reordering of `relay_tables.dart` must not touch this
+                // frozen historical step.
+                await m.database.customStatement(
+                  'INSERT INTO relay_packets_v10 SELECT * FROM relay_packets;',
+                );
+                await m.database.customStatement('DROP TABLE relay_packets;');
+                await m.database.customStatement(
+                  'ALTER TABLE relay_packets_v10 RENAME TO relay_packets;',
+                );
+              });
+            }
           }
         },
       );
