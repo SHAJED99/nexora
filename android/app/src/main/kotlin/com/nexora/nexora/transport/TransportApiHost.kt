@@ -1,5 +1,6 @@
 package com.nexora.nexora.transport
 
+import android.app.Activity
 import android.os.Handler
 import android.os.Looper
 import io.flutter.plugin.common.BinaryMessenger
@@ -11,18 +12,26 @@ import kotlinx.coroutines.SupervisorJob
  * Native Kotlin host for the Pigeon transport boundary (ADR-0004,
  * FR-PLAT-003). Implements the Dart-facing `TransportApi` (host calls) and
  * owns the `TransportEventsApi` (Kotlin -> Dart events) used to push
- * discovery/connection/data events back. Delegates all actual transport
- * behavior to `LoopbackTransport` — this task ships no real Bluetooth (see
- * epics/E04-mesh-routing/tasks/E04-T03a.md).
+ * discovery/connection/data events back.
+ *
+ * As of E04-T03b: `startDiscovery`/`stopDiscovery`/`connect`/`disconnect`
+ * delegate to `BluetoothTransport` (real Android Bluetooth Classic).
+ * `send()` still delegates to `LoopbackTransport` — real send/receive is
+ * T03c's scope (see epics/E04-mesh-routing/tasks/E04-T03b.md §4).
  */
-class TransportApiHost(binaryMessenger: BinaryMessenger) : TransportApi {
+class TransportApiHost(binaryMessenger: BinaryMessenger, activity: Activity) : TransportApi {
 
   private val eventsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
   private val eventsApi = TransportEventsApi(binaryMessenger)
-  private val transport = LoopbackTransport(
+  private val loopback = LoopbackTransport(
     eventsApi = eventsApi,
     eventsScope = eventsScope,
     handler = Handler(Looper.getMainLooper()),
+  )
+  private val bluetooth = BluetoothTransport(
+    activity = activity,
+    eventsApi = eventsApi,
+    eventsScope = eventsScope,
   )
 
   /** Registers this host to handle `TransportApi` calls from Dart. */
@@ -34,16 +43,22 @@ class TransportApiHost(binaryMessenger: BinaryMessenger) : TransportApi {
    * engine's binary messenger doesn't keep a dangling handler registered. */
   fun detach(messenger: BinaryMessenger) {
     TransportApi.setUp(messenger, null)
+    bluetooth.release()
   }
 
-  override fun startDiscovery() = transport.startDiscovery()
+  /** Forwarded by `MainActivity.onRequestPermissionsResult`. */
+  fun onRequestPermissionsResult(requestCode: Int, grantResults: IntArray) {
+    bluetooth.onRequestPermissionsResult(requestCode, grantResults)
+  }
 
-  override fun stopDiscovery() = transport.stopDiscovery()
+  override fun startDiscovery() = bluetooth.startDiscovery()
 
-  override fun connect(deviceId: String): Boolean = transport.connect(deviceId)
+  override fun stopDiscovery() = bluetooth.stopDiscovery()
 
-  override fun disconnect(deviceId: String) = transport.disconnect(deviceId)
+  override fun connect(deviceId: String): Boolean = bluetooth.connect(deviceId)
+
+  override fun disconnect(deviceId: String) = bluetooth.disconnect(deviceId)
 
   override fun send(deviceId: String, bytes: ByteArray): Boolean =
-      transport.send(deviceId, bytes)
+      loopback.send(deviceId, bytes)
 }
