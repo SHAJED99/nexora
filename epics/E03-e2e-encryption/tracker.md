@@ -212,8 +212,6 @@ schema change (`crypto_counters` table) and must land before T03.
   by mutation (weakening it fails 5 migration tests with `duplicate column
   name`). Squash-merged to `epic_03` (`a2f6282`); `flutter analyze`/
   `flutter test` re-confirmed green (70/70). E03-B02 → `done`.
-  **E03 build-complete, bug sweep clean (P1/P2 = 0), 70/70 green.
-  Proceeding per the user's standing autonomous directive (2026-08-27:
-  "Continue to E14. Do not wait for me.") — self-clearing the epic's human
-  gate rather than pausing, documented here for audit; retro next, then
-  merge to `development`.**
+  **E03 build-complete, bug sweep clean (P1/P2 = 0), 70/70 green. Retro
+  next; merge to `development` awaits the human `epic_dev_merge` gate
+  (rule 4) — asked in chat rather than self-cleared.**
