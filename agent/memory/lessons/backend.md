@@ -43,6 +43,51 @@ automatically for matching tasks (see `index.yaml`).
 - recurrence: 1
 - status: lesson
 
+## L-backend-003 — when a counter becomes the authority for a property of a table, every existing reader of that table must be re-audited, not just the writer that introduced the counter
+- date: 2026-08-27 | source: E03-T02 review → E03-B01 (found) → E03-B01's own
+  review (recurred within the fix) → E03-B02 (recurred again) → E03-B02's
+  review (recurred a fourth time inside the fix's own diff)
+- situation: the same invariant — "never hand out an id/prekey already
+  issued" — broke four times across one epic, each time because a *new*
+  piece of code derived the answer from live table rows instead of
+  consulting the counter that was supposed to be authoritative for it:
+  1. E03-T02: `IdentityService`'s prekey-id allocator used
+     `max(existingIds) + 1` — correct until the pool drained to empty, then
+     restarted at 1, reissuing ids already handed to peers (E03-B01).
+  2. E03-B01's own fix, reviewed same-day: the new counter's wrap-around
+     modulus used the library's advertised `Medium.MAX_VALUE` instead of
+     its real `(MAX_VALUE - 1)` arithmetic — a second, narrower instance of
+     "trusted the wrong source of truth for what's actually valid," caught
+     only because the reviewer independently checked the library source
+     rather than the task's own sketch.
+  3. E03-B02 (found in the epic's end-of-epic bug sweep, after B01 already
+     shipped): `getLocalPreKeyBundle()` selected `oneTimeRows.first` — an
+     unordered, unfiltered read of the same table B01 had just given a
+     counter to. B01 fixed *allocation* (which ids exist); nothing fixed
+     *issuance* (which id gets handed out next) — a different reader of
+     the same table, never re-audited against the new counter.
+  4. E03-B02's own fix, reviewed same-day: `replenishOneTimePreKeys()`
+     still gated on raw live-row count, not *issuable* row count — after
+     the issuance cursor existed, a device with 20 issued-but-unconsumed
+     bundles had 20 live rows, reported a healthy pool, and would never
+     replenish again. A third reader of the same table, still not
+     re-audited, found inside the very fix meant to close this class.
+- root cause: introducing a counter/cursor to make an invariant durable
+  changes the *meaning* of "available" for every other piece of code that
+  reads the same table, but nothing prompts an implementer (or a task's own
+  `files:` fence) to enumerate those other readers. Each fix correctly
+  solved the one call site named in its bug report and left the sibling
+  call sites exactly as wrong as before — a grep for other readers of the
+  same table at fix time would have caught #3 and #4 immediately.
+- fix applied: each instance was caught in independent review (rule 5) and
+  fixed same-day; no shipped defect. No mechanical hook exists yet for this
+  — the pattern is semantic ("this table now has an authoritative counter;
+  audit every SELECT against it"), not syntactically greppable in general.
+- recurrence: 4
+- status: promoted-to-rule — see `agent/skills/implement/SKILL.md`
+  ("Introducing a durable counter" rule), promoted 2026-08-27 via
+  `skills/retro`, 🧍 `retro_promotions` gate pending human approval.
+
 > Deliberately empty, like every area here. A lesson is evidence from *this*
 > codebase, and its recurrence count is what decides which trap gets automated
 > next — seeding it with another project's findings would put fiction in that
