@@ -1,7 +1,7 @@
 ---
 id: E04
 title: Mesh Discovery, Relay & Dynamic Routing
-status: in-progress
+status: done
 type: feature
 priority: { moscow: must, wsjf: 2.8 }
 depends_on: [E01, E03]
@@ -40,6 +40,19 @@ beyond an (optional, one-tap-away per FR-UI-004) route detail view.
 `routes` (candidate paths + measured cost factors), `relay_packets`
 (id, destination, priority, size, created, expiry, delivery-state per
 FR-ROUTE-004) — local only, ephemeral.
+
+"Ephemeral" (E04-B02) means, precisely: the `payload` BLOB — the other
+party's ciphertext this device is temporarily holding as a relay hop — is
+reclaimed (nulled, schema v10, `payload` nullable) the instant a row in a
+terminal state (`forwarding` / `delivered` / `expired`) is past its own
+`expires_at`, via `RelayEngine.reclaimPayloads()`. No additional grace
+period beyond the packet's original TTL: the TTL passed to `enqueue()` is
+already the caller's "how long is this worth keeping" signal. A `queued`
+row's payload is never touched by this pass, only its state (see
+`sweepExpired()`). The row itself — id, destination, size, timestamps,
+state — is kept indefinitely, independent of the payload, for a later
+epic's diagnostics needs (E13, T04 §3); only the ciphertext bytes are
+time-bound.
 
 ## API surface
 Pigeon-generated Dart↔Kotlin bindings (ADR-0004) for transport control;
@@ -101,7 +114,7 @@ latency/partition simulator" as an early task here, since every later route
 | Check | Result | Notes |
 |---|---|---|
 | EARS trace | ✅ pass | EARS-ROUTE-1/2/3/4 (epic-level) each covered: T02→ROUTE-1/2/4, T04→ROUTE-3/4b. New sub-ids introduced for genuinely new scope not named at epic level (EARS-SIM-1/2/3 for the simulator, EARS-TRANSPORT-1/2/3 for the Pigeon boundary, EARS-DISC-1/2 for Bluetooth, EARS-DEV-3/4 for the screen) — all trace to an FR id, none orphaned. |
-| Contract sanity | ✅ pass | One Pigeon schema (T03a) defines the transport boundary once; T03b/T03c extend its *implementation*, never redefine the contract. No two tasks define the same table/function differently — `routes` (T02) and `relay_packets` (T04) are disjoint tables. |
+| Contract sanity | ✅ pass, qualified 2026-08-27 (E04-B03) | One Pigeon schema (T03a) defines the transport boundary once; T03b/T03c extend its *implementation*, never redefine the contract. No two tasks define the same table/function differently — `routes` (T02) and `relay_packets` (T04) are disjoint tables. **Qualification:** this held for the tasks in scope when the report ran, but the end-of-epic bug sweep (E04-B03) found the contract itself was incomplete — no task had added a link-quality signal (RSSI/latency/loss) to the schema, so `RoutingEngine` had no production populator. The human approved extending the schema (2026-08-27) to close the gap; see §Carry-forward below. The claim "T03b/T03c never redefine the contract" is accurate for those two tasks specifically — it was E04-B03, not a T03b/T03c task, that extended the schema, and it did so with human sign-off as an explicit ADR-0004 boundary change, not a silent redefinition. |
 | Collision matrix | ✅ pass | T01/T03a share no files (checked). T02/T03b share no files (T02 is pure Dart routing_engine + persistence; T03b is native Kotlin only). T03c only touches files T03a created/T03b will have already modified, strictly sequential via `depends_on`. T05 touches only `devices_controller.dart` + its test, untouched by any other E04 task. |
 | Scope fences | ✅ pass | Every task's §4 is non-empty; T03a/T03b/T03c in particular are careful to state exactly what stays loopback/unimplemented at each stage — the most collision-prone three-way split in this epic. |
 | MoSCoW inflation | ⚠️ exception, justified | 7/7 tasks `must` — same reasoning as E03: this is infrastructure with a strict dependency chain (simulator→routing engine→relay; Pigeon plumbing→discovery→data transfer→relay) and no task is independently shippable value on its own. Flagged, not silently re-graded. |
@@ -124,6 +137,42 @@ exception (reasoning above), 0 unclassified findings, 0 collisions.
 Proceeding to dispatch under the human's standing instruction to continue
 through E14 without per-gate pauses — full findings stand as written above
 for later audit, nothing re-graded silently to force a clean pass.
+
+## Carry-forward
+
+- **E04-B03 — link-quality measurement is contract-only, not wired.**
+  `pigeons/transport.dart` now declares `TransportDevice.rssi` (nullable
+  `int`) and `TransportEventsApi.onLinkQuality(deviceId, latencyMs,
+  lossRate)` (human-approved ADR-0004 boundary extension, 2026-08-27), so
+  `RoutingEngine.recordLinkMeasurement`
+  (`lib/core/routing_engine/routing_engine.dart:141-155`) has a stable
+  production event to consume once something calls it. **Nothing does yet.**
+  No native Kotlin implementation populates `rssi` or emits
+  `onLinkQuality`, and no Dart caller invokes
+  `recordLinkMeasurement`. This blocks the routing engine from computing
+  real routes on-device — `computeRoute()` returns `null` for every
+  destination until this is wired (`RelayEngine` then queues every packet
+  until it expires). **Blocked FRs:** FR-ROUTE-001, FR-ROUTE-002.
+  **Owning epic: E05** — measuring real Android Bluetooth RSSI / round-trip
+  latency, emitting them across the now-extended contract, and calling
+  `RoutingEngine.recordLinkMeasurement` from the Dart side. Do not
+  synthesize placeholder measurement values to make the engine appear live
+  before that wiring lands — an honest `null` route beats a confident route
+  computed from invented data.
+
+## Bug sweep
+Run 2026-08-27 (`skills/bug-sweep`, Opus, against `epic_04` with all 7
+tasks done) — see `tracker.md` Event log for the full account. 3 findings,
+all fixed same-day: E04-B01 (S2, route migration silently suppressed by
+relay traffic), E04-B02 (S3, relay payload retention), E04-B03 (S3, no
+production link-quality data source). P1/P2 = 0 as of the last merge.
+
+## Epic-completion gate
+🧍 `epic_dev_merge` — ✅ cleared by human on 2026-08-27, explicitly
+informed of the one open risk: T03a/T03b/T03c/T05's on-device manual
+Bluetooth verification is unticked (no hardware-free test coverage exists
+for T03b/T03c by design). Human chose to merge now and verify on real
+hardware as a fast-follow, before E05/E06 send real traffic volume.
 
 ## Retro
 → `retro.md` (written after E04 completion)

@@ -91,6 +91,10 @@ dev_dependencies:
   drift_dev: ^2.20.3
   build_runner: ^2.4.13
 
+  # Pigeon codegen for the Dart<->Kotlin transport boundary — ADR-0004
+  # (already named as the accepted choice, not a new foundational pick).
+  pigeon: ^28.0.0
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

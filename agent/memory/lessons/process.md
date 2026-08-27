@@ -83,3 +83,35 @@ automatically for matching tasks (see `index.yaml`).
   control (git itself now ignores the path) rather than a rule to remember.
 - recurrence: 1
 - status: promoted-to-hook(.gitignore)
+
+## L-process-005 — a task's own `files:` fence can be individually correct and still leave a spec-level completeness gap the analyze report's cross-task-contradiction check doesn't catch
+- date: 2026-08-27 | source: E04-B03 (end-of-epic bug sweep)
+- situation: E04-T02 built a fully-tested routing engine consuming
+  `recordLinkMeasurement(latencyMs, lossRate, batteryDrain)`. E04-T03a
+  defined the Pigeon transport contract (ADR-0004's one boundary
+  definition point) with discovery/connection/data events but no
+  link-quality signal. Neither task was wrong against its own `files:`
+  fence and contract — T02 correctly didn't invent a data source outside
+  its scope, T03a correctly scoped to "define the boundary once." The
+  epic's analyze report's "Contract sanity" check passed, because it
+  checks whether tasks *contradict* each other, not whether the union of
+  what they build is *sufficient* for what the epic's own scope promises.
+  Result: a routing engine with zero production data source, undiscovered
+  until the end-of-epic sweep, on a real device `computeRoute()` would
+  always return `null`.
+- root cause: task-sharding's collision matrix and scope-fence checks
+  verify non-contradiction between tasks, not sufficiency of the whole.
+  "Every task is individually correct and non-overlapping" is a weaker
+  property than "the tasks together deliver the epic's stated scope" —
+  nothing in `skills/task-sharding`'s Analyze gate currently checks the
+  second thing.
+- fix applied: none yet — this occurrence was caught by the bug sweep
+  (a later, more expensive stage than task-sharding's own Analyze gate)
+  rather than at sharding time. Fixed for this instance via E04-B03
+  (extended the Pigeon contract, human-approved ADR-0004 boundary change).
+  No systemic fix applied — one occurrence isn't promotion territory yet.
+  A future occurrence should prompt adding a "does every FR/EARS id the
+  epic claims as in-scope have an actual producer, not just a consumer,
+  among the sharded tasks" check to `skills/task-sharding`'s Analyze gate.
+- recurrence: 1
+- status: lesson
