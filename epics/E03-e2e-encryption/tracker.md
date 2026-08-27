@@ -1,6 +1,7 @@
 # E03 · E2E Encryption & Threat Protection · Progress
 
-**Status:** build-complete, pending bug sweep + retro + 🧍 human gate · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 5/5
+**Status:** bug sweep found 1 live P1 (E03-B02) — must land before the human
+gate · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 5/7
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -10,6 +11,8 @@
 - [x] E03-T02 · Local identity generation + prekey bundle service · done · builder (sonnet) → reviewer (opus)
 - [x] E03-B01 · One-time prekey ids restart at 1 after pool drains (S2 bug) · done · builder (sonnet) → reviewer (opus)
 - [x] E03-T03 · Real core/crypto API — X3DH session + Double Ratchet encrypt/decrypt · done · builder (sonnet) → reviewer (opus)
+- [ ] E03-B02 · Same one-time prekey issued to every peer (S2, P1 — live, blocks epic gate) · todo · builder (any) → reviewer (opus)
+- [ ] E03-B03 · InvalidMessageException not catchable by type (S3, P3 — deferred to E05/E06) · backlog · —
 
 ## Dependency graph
 ```mermaid
@@ -149,3 +152,46 @@ schema change (`crypto_counters` table) and must land before T03.
   `done` across the epic (T01/T01b were left at `review-requested` post-merge
   by their reviewers — corrected for consistency).
   **E03 build-complete: 5/5 tasks done. Proceeding to bug sweep.**
+- 2026-08-27 Bug sweep (Opus, `agent/skills/bug-sweep`) run against
+  `epic_03` @ `4862642`, targeting cross-task seams per `skills/bug-sweep`
+  ("bugs live in the seams no task owned"). 6 seams probed end-to-end
+  through public APIs only. 2 defects found:
+  - **E03-B02 (S2, live today, not latent)**: `getLocalPreKeyBundle()`
+    returns row-zero unconditionally — every peer after the first gets the
+    SAME one-time prekey, so a second contact's first message is
+    permanently undecryptable. Verified: `bob=1 carol=1` (identical id AND
+    key material), 19 unused prekeys sitting idle — not exhaustion, a
+    selection bug. This is the *distribution* half of the invariant B01
+    fixed the *allocation* half of; no task's `files:` fence covered "one
+    device, two peers." Written up with a 7-step reviewer-verified repro,
+    3 named regression tests (confirmed red), 2 schema-change options
+    presented per rule 3.
+  - **E03-B03 (S3, advisory P3)**: `InvalidMessageException` isn't exported
+    from the `libsignal_protocol_dart` barrel — the commonest decrypt
+    failure has no catchable type, forcing a runtime-type-name string
+    match (already in T03's own test suite). Not blocking; reviewer's own
+    advisory is to schedule alongside whichever epic first writes a
+    `catch` around `decrypt()` (E05/E06), so the taxonomy is shaped by
+    real UI needs rather than designed in isolation.
+  - Confirmed NOT a defect: identity-trust rejection on a changed peer key
+    — genuinely wired on both the X3DH initiating and responder path,
+    verified end-to-end through the public `CryptoService` API (not in
+    isolation). FR-SEC-003's MITM claim holds.
+  - Confirmed accurate, not a bug: skipped/undelivered message keys stay
+    decryptable from a compromised device — correct Signal design (needed
+    for out-of-order delivery), bounds the forward-secrecy claim to
+    in-order messages. Carried as a documentation note, not a bug task.
+  - `flutter analyze`/`flutter test` unchanged, 65/65 green throughout.
+  🧍 `bug_priorities` gate: human set E03-B02 → **P1** (matches the
+  reviewer's advisory — must not leave this epic, since E06 is
+  multi-contact and this means every second contact is silently
+  unreachable) and E03-B03 → P3 (backlog, deferred to E05/E06). 🧍 rule-3
+  gate: human chose **Option 2 (monotonic issue cursor)** for E03-B02 —
+  a second counter on the existing `crypto_counters` table, reusing B01's
+  already-tested atomic transaction machinery, over a per-row `issued`
+  marker. Dispatching E03-B02.
+  **Retro flag**: this is the same invariant (never reuse an issued
+  one-time prekey) broken at two different points — B01 (allocation) then
+  B02 (distribution). L-backend-002's lesson ("a boundary case the test
+  plan didn't name") is now recurrence 3 across this pattern — promotion
+  territory per rule 8, to be handled at `skills/retro`.
