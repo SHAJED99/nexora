@@ -1,6 +1,6 @@
 # E03 · E2E Encryption & Threat Protection · Progress
 
-**Status:** in-progress · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 4/5
+**Status:** build-complete, pending bug sweep + retro + 🧍 human gate · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 5/5
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -9,7 +9,7 @@
 - [x] E03-T01b · Persist remote-peer identity trust across restarts (closes OQ-E03-T01-1) · done · builder (sonnet) → reviewer (opus)
 - [x] E03-T02 · Local identity generation + prekey bundle service · done · builder (sonnet) → reviewer (opus)
 - [x] E03-B01 · One-time prekey ids restart at 1 after pool drains (S2 bug) · done · builder (sonnet) → reviewer (opus)
-- [ ] E03-T03 · Real core/crypto API — X3DH session + Double Ratchet encrypt/decrypt · todo · builder (sonnet) → reviewer (opus)
+- [x] E03-T03 · Real core/crypto API — X3DH session + Double Ratchet encrypt/decrypt · done · builder (sonnet) → reviewer (opus)
 
 ## Dependency graph
 ```mermaid
@@ -32,6 +32,28 @@ schema change (`crypto_counters` table) and must land before T03.
   restart — doesn't block T02, blocks T03 until resolved) · design gate n/a
   (no UI). `flutter analyze`/`flutter test` re-confirmed green (42/42) by
   the reviewer independently.
+- 2026-08-27 · E03-T03 · Opus · APPROVE (full security lens; this task's own
+  risk note demanded a real proof, not a superficial one, so no "approve
+  with notes" on a weak security claim was acceptable here). Mutation-tested
+  the whole suite (swapped decrypt()'s PreKey branch to the wrong library
+  call → all 5 proof tests failed, confirming they're genuinely wired to
+  behavior, not decorative). 2 of 5 proof tests strengthened after being
+  found weaker than their names claimed: the relay-cannot-decrypt test
+  originally only proved a precondition check, not a cryptographic failure
+  — rewritten with a fully-resourced third party (own identity, keys, and a
+  genuine live session with Alice) failing on real MAC verification instead;
+  the post-compromise-recovery test's assertion (`throwsA(isException)`)
+  was loose enough to pass on an unrelated broken-fixture error — tightened
+  to the specific MAC/key-derivation failure. Forward-secrecy and replay
+  tests verified genuine via library-source reading plus a throwaway probe
+  proving the hypothesized false-positive shape does NOT occur.
+  `flutter analyze`/`flutter test` re-confirmed 65/65 by the reviewer
+  independently. 2 non-blocking notes carried to the sweep: skipped/
+  undelivered message keys stay decryptable from a compromised device
+  (inherent to Signal, bounds the forward-secrecy claim to in-order
+  messages — should be documented wherever users see that guarantee), and
+  `InvalidMessageException` isn't exported from the library barrel (E05/E06
+  can't catch the common decrypt-failure case by type).
 
 ## Blocked / Frozen
 (none)
@@ -112,3 +134,18 @@ schema change (`crypto_counters` table) and must land before T03.
   yielded the same counter value on an empty pool). Squash-merged to
   `epic_03` (`b907a0e`); `flutter analyze`/`flutter test` re-confirmed
   green (60/60). E03-B01 → `done`. E03-T03 fully unblocked — dispatching.
+- 2026-08-27 First E03-T03 attempt interrupted mid-run by a session-limit
+  API error; no commits existed, only a small untested uncommitted edit —
+  discarded, redispatched fresh (no work lost).
+- 2026-08-27 E03-T03 implemented on `epic_03_task_03` (off `epic_03`):
+  `CryptoService.establishSession/encrypt/decrypt` wrapping the library's
+  `SessionBuilder`/`SessionCipher`, replacing the genesis stub. Tests-first,
+  the 5 EARS security-proof tests written; `flutter analyze` clean,
+  `flutter test` 65/65 green. Reviewer (Opus, full security lens) approved
+  after mutation-testing the suite and strengthening 2 of 5 proof tests that
+  were weaker than their names claimed (see Review log above).
+  Squash-merged to `epic_03` (`91e8259`); `flutter analyze`/`flutter test`
+  re-confirmed green (65/65). E03-T03 → `done`. Task statuses normalized to
+  `done` across the epic (T01/T01b were left at `review-requested` post-merge
+  by their reviewers — corrected for consistency).
+  **E03 build-complete: 5/5 tasks done. Proceeding to bug sweep.**

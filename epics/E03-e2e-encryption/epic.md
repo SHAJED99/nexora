@@ -1,7 +1,7 @@
 ---
 id: E03
 title: E2E Encryption & Threat Protection
-status: in-progress
+status: build-complete
 type: feature
 priority: { moscow: must, wsjf: 3.5 }
 depends_on: [E01]
