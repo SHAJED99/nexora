@@ -1,6 +1,6 @@
 # E04 · Mesh Discovery, Relay & Dynamic Routing · Progress
 
-**Status:** in-progress · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 3/7
+**Status:** in-progress · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 6/7
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -8,10 +8,10 @@
 - [x] E04-T01 · Route/battery/latency/partition simulator · done · builder (sonnet) → reviewer (opus)
 - [x] E04-T02 · Routing engine (cost/selection/migration/failure recovery) · done · builder (sonnet) → reviewer (opus) x2
 - [x] E04-T03a · Pigeon transport schema + Dart facade + native loopback · done · builder (sonnet) → reviewer (opus)
-- [ ] E04-T03b · Real Bluetooth discovery + connect · in-progress · builder (sonnet) → reviewer (opus)
-- [ ] E04-T03c · Real Bluetooth data transfer · todo · builder (sonnet) → reviewer (opus)
+- [x] E04-T03b · Real Bluetooth discovery + connect · done · builder (sonnet) → reviewer (opus)
+- [x] E04-T03c · Real Bluetooth data transfer · done · builder (sonnet) → reviewer (opus)
 - [ ] E04-T04 · Store-and-forward relay engine · todo · builder (sonnet) → reviewer (opus)
-- [ ] E04-T05 · Wire real discovery into Devices screen · todo · builder-ui (sonnet) → reviewer (opus)
+- [x] E04-T05 · Wire real discovery into Devices screen · done · builder-ui (sonnet) → reviewer (opus)
 
 ## Dependency graph
 ```mermaid
@@ -76,3 +76,47 @@ chain — can start once discovery is real, in parallel with T03c/T04.
   in-memory only, matching epic.md's own "ephemeral" data model note, no
   follow-up task. Squash-merged (`d0cdb55`), 99/99 green. Dispatching
   E04-T03b (needs only T03a, already merged).
+- 2026-08-27 E04-T03b implemented + reviewed: real Bluetooth Classic
+  discovery (BroadcastReceiver) + connect (RFCOMM socket, dedicated
+  background thread, never blocks the platform thread). Reviewer verified
+  the threading contract end-to-end, receiver register/unregister
+  lifecycle, permission branching against the merged manifest. No blocking
+  issues found. On-device round-trip still blocked (same MIUI restriction,
+  third confirmation; only one physical radio reachable regardless).
+  Squash-merged (`fa1cca5`), 99/99 green.
+- 2026-08-27 E04-T03c implemented + reviewed (final Bluetooth piece):
+  length-prefixed send/receive framing, synchronized writes, partial-
+  read-safe read loop. Reviewer found send() could deadlock the platform
+  thread permanently (Pigeon's send channel has no TaskQueue, so send()
+  runs on the UI thread; RFCOMM writes can block indefinitely under flow
+  control, and disconnect() -- the only escape hatch -- is itself a host
+  call on that same blocked thread) -- bounded to 3s with teardown-on-
+  timeout. Also widened an exception catch that could have killed the
+  process, and fixed a thread-tracking race on fast disconnect/reconnect.
+  Squash-merged (`0a8dd27`), 99/99 green. Escalated as a standing item:
+  third consecutive transport task with zero real-hardware verification.
+- 2026-08-27 E04-T05 implemented + reviewed: DevicesController.discover()
+  wired to real TransportService discovery, routed through E02's
+  EvaluateConnectionRequestUseCase. Reviewer found a real defect: the
+  de-dup set permanently blacklisted device ids, so a discovered Unknown
+  device -- wiped from the list by load() (called by both verify() and
+  block()) since it has no Relationship row -- could never reappear
+  despite real Bluetooth re-announcing it every scan cycle. Fixed: dedup
+  is now an in-flight guard, not a permanent blacklist. Squash-merged
+  (`8330181`), 104/104 green. Zero devices reachable this session --
+  reviewer's explicit judgment: E04 must not be declared complete on
+  mocked evidence alone; recommends a required human two-phone pass
+  before the epic's development merge gate.
+- 2026-08-27 An Android emulator became available mid-session (plus the
+  human signed a real Google account into it). Used it for a real
+  end-to-end smoke test on `epic_04`: build + install succeeded, app
+  launched with zero crashes in logcat, and (via the accessibility tree --
+  screencap itself has a rendering bug on this AVD, confirmed unrelated to
+  the app) the full real Google Sign-In flow was exercised live: welcome
+  screen -> "Continue with Google" -> real account picker -> consent ->
+  "Signing in with Google..." -> "Signed in -- device 4122ffe0" -> /home.
+  This closes E01-T01's long-open manual second-device sign-in
+  verification gap as a side effect. Emulators cannot exercise real
+  Bluetooth radios, so this does NOT close the T03b/T03c/T05 on-device
+  Bluetooth gap above -- that still needs the physical MIUI device (or
+  two real radios).
