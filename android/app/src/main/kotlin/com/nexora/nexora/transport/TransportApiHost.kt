@@ -1,8 +1,6 @@
 package com.nexora.nexora.transport
 
 import android.app.Activity
-import android.os.Handler
-import android.os.Looper
 import io.flutter.plugin.common.BinaryMessenger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -14,20 +12,18 @@ import kotlinx.coroutines.SupervisorJob
  * owns the `TransportEventsApi` (Kotlin -> Dart events) used to push
  * discovery/connection/data events back.
  *
- * As of E04-T03b: `startDiscovery`/`stopDiscovery`/`connect`/`disconnect`
- * delegate to `BluetoothTransport` (real Android Bluetooth Classic).
- * `send()` still delegates to `LoopbackTransport` — real send/receive is
- * T03c's scope (see epics/E04-mesh-routing/tasks/E04-T03b.md §4).
+ * As of E04-T03c: `startDiscovery`/`stopDiscovery`/`connect`/`disconnect`/
+ * `send` all delegate to `BluetoothTransport` (real Android Bluetooth
+ * Classic, including real length-prefixed socket I/O) — no remaining
+ * loopback path here. `LoopbackTransport` itself is deliberately not
+ * deleted (E04-T03c §3): it stays useful for T04's non-hardware
+ * tests/dev builds, which instantiate it directly rather than through
+ * this host.
  */
 class TransportApiHost(binaryMessenger: BinaryMessenger, activity: Activity) : TransportApi {
 
   private val eventsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
   private val eventsApi = TransportEventsApi(binaryMessenger)
-  private val loopback = LoopbackTransport(
-    eventsApi = eventsApi,
-    eventsScope = eventsScope,
-    handler = Handler(Looper.getMainLooper()),
-  )
   private val bluetooth = BluetoothTransport(
     activity = activity,
     eventsApi = eventsApi,
@@ -60,5 +56,5 @@ class TransportApiHost(binaryMessenger: BinaryMessenger, activity: Activity) : T
   override fun disconnect(deviceId: String) = bluetooth.disconnect(deviceId)
 
   override fun send(deviceId: String, bytes: ByteArray): Boolean =
-      loopback.send(deviceId, bytes)
+      bluetooth.send(deviceId, bytes)
 }
