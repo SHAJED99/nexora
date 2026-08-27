@@ -66,12 +66,23 @@ class IdentityService {
     await _store.storeSignedPreKey(_signedPreKeyId, record);
   }
 
-  /// Keeps the one-time prekey pool from running dry. Counts prekeys
-  /// currently in the store; if below [minimum], allocates [batch] more ids
-  /// from the store's monotonic high-water mark
+  /// Keeps the one-time prekey pool from running dry. Counts the prekeys
+  /// that can still be *issued*; if below [minimum], allocates [batch] more
+  /// ids from the store's monotonic high-water mark
   /// ([DriftSignalProtocolStore.allocateOneTimePreKeyIds]) — never derived
   /// from the live rows, so a fully-drained pool never restarts id
   /// allocation at 1 and reissue ids already handed to peers (E03-B01).
+  ///
+  /// The depth check is
+  /// [DriftSignalProtocolStore.countIssuableOneTimePreKeys], NOT the raw row
+  /// count (added in review, E03-B02). Once issuance became cursor-driven, a
+  /// prekey that was handed to a peer who has not replied yet is still a
+  /// live row but can never be issued again. Counting rows would report a
+  /// full pool for a device whose every prekey is already in flight, this
+  /// method would return 0, and [getLocalPreKeyBundle] would then throw
+  /// `StateError` on every subsequent call with no recovery available to the
+  /// caller — the exact state a device reaches simply by adding [minimum]
+  /// contacts before any of them answers.
   ///
   /// Returns the count of newly generated prekeys (0 if already at or
   /// above [minimum]).
@@ -79,8 +90,8 @@ class IdentityService {
     int minimum = 20,
     int batch = 20,
   }) async {
-    final existingIds = await _oneTimePreKeyIds();
-    if (existingIds.length >= minimum) {
+    final issuable = await _store.countIssuableOneTimePreKeys();
+    if (issuable >= minimum) {
       return 0;
     }
 
@@ -93,14 +104,19 @@ class IdentityService {
   }
 
   /// Assembles the local identity key, registration id, signed prekey, and
-  /// one unconsumed one-time prekey into a [PreKeyBundle] for a remote peer
-  /// to X3DH with this device. Does not mark the one-time prekey consumed —
-  /// the receiving side of establishment (E03-T03) removes it when it's
-  /// actually used.
+  /// one not-previously-issued one-time prekey into a [PreKeyBundle] for a
+  /// remote peer to X3DH with this device. Each call returns a *distinct*
+  /// one-time prekey from the last (E03-B02) — selection and cursor advance
+  /// happen atomically in [DriftSignalProtocolStore.issueOneTimePreKey], so
+  /// two callers can never be handed the same prekey. Does not remove the
+  /// row from the store — the receiving side of establishment (E03-T03)
+  /// removes it when it's actually consumed.
   ///
   /// Throws [StateError] if [ensureLocalIdentity]/[ensureSignedPreKey]
-  /// haven't run yet, or if the one-time prekey pool is empty (no material
-  /// available for the first-message forward-secrecy guarantee).
+  /// haven't run yet, or if no un-issued one-time prekey remains in the
+  /// pool (no material available for the first-message forward-secrecy
+  /// guarantee — call [replenishOneTimePreKeys] first; per the task file,
+  /// invoking that automatically here is left to the caller, E05/E06).
   Future<PreKeyBundle> getLocalPreKeyBundle() async {
     // Throws StateError itself if no identity has been generated yet.
     final identityKeyPair = await _store.getIdentityKeyPair();
@@ -116,14 +132,14 @@ class IdentityService {
       signedPreKeyRows.first.record,
     );
 
-    final oneTimeRows = await _db.select(_db.signalOneTimePrekeys).get();
-    if (oneTimeRows.isEmpty) {
+    final issuedRow = await _store.issueOneTimePreKey();
+    if (issuedRow == null) {
       throw StateError(
         'No one-time prekeys available '
         '(call replenishOneTimePreKeys() first).',
       );
     }
-    final oneTimeRecord = PreKeyRecord.fromBuffer(oneTimeRows.first.record);
+    final oneTimeRecord = PreKeyRecord.fromBuffer(issuedRow.record);
 
     return PreKeyBundle(
       registrationId,
@@ -135,10 +151,5 @@ class IdentityService {
       signedPreKeyRecord.signature,
       identityKeyPair.getPublicKey(),
     );
-  }
-
-  Future<List<int>> _oneTimePreKeyIds() async {
-    final rows = await _db.select(_db.signalOneTimePrekeys).get();
-    return rows.map((row) => row.id).toList();
   }
 }

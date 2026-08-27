@@ -73,12 +73,23 @@ class SignalSessions extends Table {
 /// different key material (E03-B01 root cause). Kept as its own table
 /// rather than a column on `signal_identity` — clean separation between
 /// identity data and allocation state (human-approved 2026-08-27).
+///
+/// E03-B02: `next_issued_one_time_prekey_id` is a second, independent
+/// monotonic cursor — this one over *issuance* (which prekey
+/// `getLocalPreKeyBundle()` has already handed to a peer), not allocation
+/// (which prekey ids exist at all). `next_one_time_prekey_id` alone cannot
+/// serve this purpose: it advances only when new prekeys are minted, not
+/// when an existing one is handed out, so a second `getLocalPreKeyBundle()`
+/// call before the first bundle was consumed kept re-selecting the same
+/// row. Schema v6->v7, additive (human-approved 2026-08-27).
 class CryptoCounters extends Table {
   @override
   String get tableName => 'crypto_counters';
 
   IntColumn get id => integer()();
   IntColumn get nextOneTimePreKeyId =>
+      integer().withDefault(const Constant(1))();
+  IntColumn get nextIssuedOneTimePreKeyId =>
       integer().withDefault(const Constant(1))();
 
   @override

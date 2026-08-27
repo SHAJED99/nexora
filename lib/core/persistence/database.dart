@@ -52,7 +52,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -109,6 +109,29 @@ class AppDatabase extends _$AppDatabase {
                 ),
               );
             }
+          }
+          if (from >= 6 && from < 7) {
+            // E03-B02: distribution-side issue cursor — additive column,
+            // default 1 (matches a fresh `crypto_counters` row). No backfill
+            // needed: an install upgrading with prekeys already handed to
+            // peers has no durable record of which ones (that's the bug
+            // this fixes), so the cursor starts at 1 like a fresh device.
+            // Worst case on upgrade, a prekey issued pre-fix and still
+            // in-flight could be reissued once; the fix's guarantee is
+            // forward-only from here.
+            //
+            // Guarded to `from >= 6`: an install upgrading from before v6
+            // never had `crypto_counters` at all, so `createTable`
+            // (from < 6, above) already creates it with this device's
+            // *current* full Dart table definition — column included. Only
+            // an install that already had the v6 table (created without
+            // this column) needs it added here; adding it unconditionally
+            // would double-add the column for anyone jumping from < v6
+            // straight to v7 (`duplicate column name`).
+            await m.addColumn(
+              cryptoCounters,
+              cryptoCounters.nextIssuedOneTimePreKeyId,
+            );
           }
         },
       );

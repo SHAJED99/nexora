@@ -240,6 +240,70 @@ class DriftSignalProtocolStore extends SignalProtocolStore {
     });
   }
 
+  /// Atomically selects and reserves one not-previously-issued one-time
+  /// prekey for `getLocalPreKeyBundle()` to hand to a peer (E03-B02).
+  ///
+  /// Distinct from [allocateOneTimePreKeyIds]: that counter tracks which ids
+  /// exist at all (minting), this one tracks which of the *existing* ids
+  /// have already been handed to a peer (issuance) — the seam
+  /// `getLocalPreKeyBundle()` fell through, since it advanced only as a
+  /// side effect of a peer's successful X3DH (`removePreKey`), not once per
+  /// bundle issued. Selects the lowest live prekey id `>=` the persisted
+  /// `next_issued_one_time_prekey_id` cursor and advances that cursor past
+  /// it, in one transaction — mirrors [allocateOneTimePreKeyIds]'s atomic
+  /// read-then-advance pattern so two concurrent bundle requests can never
+  /// receive the same prekey.
+  ///
+  /// Returns `null` if no un-issued prekey remains live in the pool (pool
+  /// exhaustion) — the caller ([IdentityService.getLocalPreKeyBundle])
+  /// turns that into a `StateError`.
+  Future<SignalOneTimePrekey?> issueOneTimePreKey() async {
+    return _db.transaction(() async {
+      final counterRow = await (_db.select(_db.cryptoCounters)
+            ..where((t) => t.id.equals(_countersRowId)))
+          .getSingleOrNull();
+      final cursor = counterRow?.nextIssuedOneTimePreKeyId ?? 1;
+
+      final row = await (_db.select(_db.signalOneTimePrekeys)
+            ..where((t) => t.id.isBiggerOrEqualValue(cursor))
+            ..orderBy([(t) => OrderingTerm.asc(t.id)])
+            ..limit(1))
+          .getSingleOrNull();
+      if (row == null) {
+        return null;
+      }
+
+      await _db.into(_db.cryptoCounters).insertOnConflictUpdate(
+            CryptoCountersCompanion.insert(
+              id: const Value(_countersRowId),
+              nextIssuedOneTimePreKeyId: Value(row.id + 1),
+            ),
+          );
+      return row;
+    });
+  }
+
+  /// Counts the one-time prekeys [issueOneTimePreKey] can still hand out:
+  /// live rows at or above the issue cursor.
+  ///
+  /// Added in review (E03-B02): once issuance is cursor-driven, the raw row
+  /// count of `signal_one_time_prekeys` is no longer the pool's usable
+  /// depth — a row the cursor has already passed is still in the table but
+  /// can never be issued again. Any health check that wants to know "can
+  /// this device still hand a bundle to a new peer?" must ask this, not
+  /// `count(*)`, or it will report a healthy pool while every request
+  /// fails.
+  Future<int> countIssuableOneTimePreKeys() async {
+    final counterRow = await (_db.select(_db.cryptoCounters)
+          ..where((t) => t.id.equals(_countersRowId)))
+        .getSingleOrNull();
+    final cursor = counterRow?.nextIssuedOneTimePreKeyId ?? 1;
+    final rows = await (_db.select(_db.signalOneTimePrekeys)
+          ..where((t) => t.id.isBiggerOrEqualValue(cursor)))
+        .get();
+    return rows.length;
+  }
+
   // ---------------------------------------------------------------------
   // SignedPreKeyStore
   // ---------------------------------------------------------------------

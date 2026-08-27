@@ -1933,8 +1933,24 @@ class $CryptoCountersTable extends CryptoCounters
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _nextIssuedOneTimePreKeyIdMeta =
+      const VerificationMeta('nextIssuedOneTimePreKeyId');
   @override
-  List<GeneratedColumn> get $columns => [id, nextOneTimePreKeyId];
+  late final GeneratedColumn<int> nextIssuedOneTimePreKeyId =
+      GeneratedColumn<int>(
+        'next_issued_one_time_pre_key_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(1),
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    nextOneTimePreKeyId,
+    nextIssuedOneTimePreKeyId,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1959,6 +1975,15 @@ class $CryptoCountersTable extends CryptoCounters
         ),
       );
     }
+    if (data.containsKey('next_issued_one_time_pre_key_id')) {
+      context.handle(
+        _nextIssuedOneTimePreKeyIdMeta,
+        nextIssuedOneTimePreKeyId.isAcceptableOrUnknown(
+          data['next_issued_one_time_pre_key_id']!,
+          _nextIssuedOneTimePreKeyIdMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1976,6 +2001,10 @@ class $CryptoCountersTable extends CryptoCounters
         DriftSqlType.int,
         data['${effectivePrefix}next_one_time_pre_key_id'],
       )!,
+      nextIssuedOneTimePreKeyId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}next_issued_one_time_pre_key_id'],
+      )!,
     );
   }
 
@@ -1988,12 +2017,20 @@ class $CryptoCountersTable extends CryptoCounters
 class CryptoCounter extends DataClass implements Insertable<CryptoCounter> {
   final int id;
   final int nextOneTimePreKeyId;
-  const CryptoCounter({required this.id, required this.nextOneTimePreKeyId});
+  final int nextIssuedOneTimePreKeyId;
+  const CryptoCounter({
+    required this.id,
+    required this.nextOneTimePreKeyId,
+    required this.nextIssuedOneTimePreKeyId,
+  });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['next_one_time_pre_key_id'] = Variable<int>(nextOneTimePreKeyId);
+    map['next_issued_one_time_pre_key_id'] = Variable<int>(
+      nextIssuedOneTimePreKeyId,
+    );
     return map;
   }
 
@@ -2001,6 +2038,7 @@ class CryptoCounter extends DataClass implements Insertable<CryptoCounter> {
     return CryptoCountersCompanion(
       id: Value(id),
       nextOneTimePreKeyId: Value(nextOneTimePreKeyId),
+      nextIssuedOneTimePreKeyId: Value(nextIssuedOneTimePreKeyId),
     );
   }
 
@@ -2014,6 +2052,9 @@ class CryptoCounter extends DataClass implements Insertable<CryptoCounter> {
       nextOneTimePreKeyId: serializer.fromJson<int>(
         json['nextOneTimePreKeyId'],
       ),
+      nextIssuedOneTimePreKeyId: serializer.fromJson<int>(
+        json['nextIssuedOneTimePreKeyId'],
+      ),
     );
   }
   @override
@@ -2022,12 +2063,21 @@ class CryptoCounter extends DataClass implements Insertable<CryptoCounter> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'nextOneTimePreKeyId': serializer.toJson<int>(nextOneTimePreKeyId),
+      'nextIssuedOneTimePreKeyId': serializer.toJson<int>(
+        nextIssuedOneTimePreKeyId,
+      ),
     };
   }
 
-  CryptoCounter copyWith({int? id, int? nextOneTimePreKeyId}) => CryptoCounter(
+  CryptoCounter copyWith({
+    int? id,
+    int? nextOneTimePreKeyId,
+    int? nextIssuedOneTimePreKeyId,
+  }) => CryptoCounter(
     id: id ?? this.id,
     nextOneTimePreKeyId: nextOneTimePreKeyId ?? this.nextOneTimePreKeyId,
+    nextIssuedOneTimePreKeyId:
+        nextIssuedOneTimePreKeyId ?? this.nextIssuedOneTimePreKeyId,
   );
   CryptoCounter copyWithCompanion(CryptoCountersCompanion data) {
     return CryptoCounter(
@@ -2035,6 +2085,9 @@ class CryptoCounter extends DataClass implements Insertable<CryptoCounter> {
       nextOneTimePreKeyId: data.nextOneTimePreKeyId.present
           ? data.nextOneTimePreKeyId.value
           : this.nextOneTimePreKeyId,
+      nextIssuedOneTimePreKeyId: data.nextIssuedOneTimePreKeyId.present
+          ? data.nextIssuedOneTimePreKeyId.value
+          : this.nextIssuedOneTimePreKeyId,
     );
   }
 
@@ -2042,50 +2095,62 @@ class CryptoCounter extends DataClass implements Insertable<CryptoCounter> {
   String toString() {
     return (StringBuffer('CryptoCounter(')
           ..write('id: $id, ')
-          ..write('nextOneTimePreKeyId: $nextOneTimePreKeyId')
+          ..write('nextOneTimePreKeyId: $nextOneTimePreKeyId, ')
+          ..write('nextIssuedOneTimePreKeyId: $nextIssuedOneTimePreKeyId')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, nextOneTimePreKeyId);
+  int get hashCode =>
+      Object.hash(id, nextOneTimePreKeyId, nextIssuedOneTimePreKeyId);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is CryptoCounter &&
           other.id == this.id &&
-          other.nextOneTimePreKeyId == this.nextOneTimePreKeyId);
+          other.nextOneTimePreKeyId == this.nextOneTimePreKeyId &&
+          other.nextIssuedOneTimePreKeyId == this.nextIssuedOneTimePreKeyId);
 }
 
 class CryptoCountersCompanion extends UpdateCompanion<CryptoCounter> {
   final Value<int> id;
   final Value<int> nextOneTimePreKeyId;
+  final Value<int> nextIssuedOneTimePreKeyId;
   const CryptoCountersCompanion({
     this.id = const Value.absent(),
     this.nextOneTimePreKeyId = const Value.absent(),
+    this.nextIssuedOneTimePreKeyId = const Value.absent(),
   });
   CryptoCountersCompanion.insert({
     this.id = const Value.absent(),
     this.nextOneTimePreKeyId = const Value.absent(),
+    this.nextIssuedOneTimePreKeyId = const Value.absent(),
   });
   static Insertable<CryptoCounter> custom({
     Expression<int>? id,
     Expression<int>? nextOneTimePreKeyId,
+    Expression<int>? nextIssuedOneTimePreKeyId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (nextOneTimePreKeyId != null)
         'next_one_time_pre_key_id': nextOneTimePreKeyId,
+      if (nextIssuedOneTimePreKeyId != null)
+        'next_issued_one_time_pre_key_id': nextIssuedOneTimePreKeyId,
     });
   }
 
   CryptoCountersCompanion copyWith({
     Value<int>? id,
     Value<int>? nextOneTimePreKeyId,
+    Value<int>? nextIssuedOneTimePreKeyId,
   }) {
     return CryptoCountersCompanion(
       id: id ?? this.id,
       nextOneTimePreKeyId: nextOneTimePreKeyId ?? this.nextOneTimePreKeyId,
+      nextIssuedOneTimePreKeyId:
+          nextIssuedOneTimePreKeyId ?? this.nextIssuedOneTimePreKeyId,
     );
   }
 
@@ -2100,6 +2165,11 @@ class CryptoCountersCompanion extends UpdateCompanion<CryptoCounter> {
         nextOneTimePreKeyId.value,
       );
     }
+    if (nextIssuedOneTimePreKeyId.present) {
+      map['next_issued_one_time_pre_key_id'] = Variable<int>(
+        nextIssuedOneTimePreKeyId.value,
+      );
+    }
     return map;
   }
 
@@ -2107,7 +2177,8 @@ class CryptoCountersCompanion extends UpdateCompanion<CryptoCounter> {
   String toString() {
     return (StringBuffer('CryptoCountersCompanion(')
           ..write('id: $id, ')
-          ..write('nextOneTimePreKeyId: $nextOneTimePreKeyId')
+          ..write('nextOneTimePreKeyId: $nextOneTimePreKeyId, ')
+          ..write('nextIssuedOneTimePreKeyId: $nextIssuedOneTimePreKeyId')
           ..write(')'))
         .toString();
   }
@@ -3350,11 +3421,13 @@ typedef $$CryptoCountersTableCreateCompanionBuilder =
     CryptoCountersCompanion Function({
       Value<int> id,
       Value<int> nextOneTimePreKeyId,
+      Value<int> nextIssuedOneTimePreKeyId,
     });
 typedef $$CryptoCountersTableUpdateCompanionBuilder =
     CryptoCountersCompanion Function({
       Value<int> id,
       Value<int> nextOneTimePreKeyId,
+      Value<int> nextIssuedOneTimePreKeyId,
     });
 
 class $$CryptoCountersTableFilterComposer
@@ -3373,6 +3446,11 @@ class $$CryptoCountersTableFilterComposer
 
   ColumnFilters<int> get nextOneTimePreKeyId => $composableBuilder(
     column: $table.nextOneTimePreKeyId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nextIssuedOneTimePreKeyId => $composableBuilder(
+    column: $table.nextIssuedOneTimePreKeyId,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -3395,6 +3473,11 @@ class $$CryptoCountersTableOrderingComposer
     column: $table.nextOneTimePreKeyId,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get nextIssuedOneTimePreKeyId => $composableBuilder(
+    column: $table.nextIssuedOneTimePreKeyId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CryptoCountersTableAnnotationComposer
@@ -3411,6 +3494,11 @@ class $$CryptoCountersTableAnnotationComposer
 
   GeneratedColumn<int> get nextOneTimePreKeyId => $composableBuilder(
     column: $table.nextOneTimePreKeyId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get nextIssuedOneTimePreKeyId => $composableBuilder(
+    column: $table.nextIssuedOneTimePreKeyId,
     builder: (column) => column,
   );
 }
@@ -3450,17 +3538,21 @@ class $$CryptoCountersTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<int> nextOneTimePreKeyId = const Value.absent(),
+                Value<int> nextIssuedOneTimePreKeyId = const Value.absent(),
               }) => CryptoCountersCompanion(
                 id: id,
                 nextOneTimePreKeyId: nextOneTimePreKeyId,
+                nextIssuedOneTimePreKeyId: nextIssuedOneTimePreKeyId,
               ),
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
                 Value<int> nextOneTimePreKeyId = const Value.absent(),
+                Value<int> nextIssuedOneTimePreKeyId = const Value.absent(),
               }) => CryptoCountersCompanion.insert(
                 id: id,
                 nextOneTimePreKeyId: nextOneTimePreKeyId,
+                nextIssuedOneTimePreKeyId: nextIssuedOneTimePreKeyId,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
