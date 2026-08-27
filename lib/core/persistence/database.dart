@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'crypto_tables.dart';
 import 'relationships_table.dart';
+import 'relay_tables.dart';
 import 'routing_tables.dart';
 
 part 'database.g.dart';
@@ -46,6 +47,7 @@ class DeviceIdentities extends Table {
   SignalTrustedIdentities,
   CryptoCounters,
   Routes,
+  RelayPackets,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -54,7 +56,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -139,6 +141,11 @@ class AppDatabase extends _$AppDatabase {
             // E04-T02: new `routes` table — additive, no changes to
             // existing tables (docs/conventions.md "Schema migrations").
             await m.createTable(routes);
+          }
+          if (from < 9) {
+            // E04-T04: new `relay_packets` table — additive, no changes to
+            // existing tables (docs/conventions.md "Schema migrations").
+            await m.createTable(relayPackets);
           }
         },
       );
