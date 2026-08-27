@@ -131,9 +131,8 @@ the B02 merge — epic clear to proceed per `skills/bug-sweep`'s own gate
 ("the epic→dev PR opens only when P1/P2 = 0").
 
 ## Epic-completion gate
-🧍 `epic_dev_merge` — build-complete, bug sweep clean (P1/P2 = 0), 70/70
-green. Merge to `development` per rule 4 ("every merge into `development`
-or `main` are human calls") — _<pending>_.
+🧍 `epic_dev_merge` — ✅ cleared by human on 2026-08-27. Build-complete,
+bug sweep clean (P1/P2 = 0), 70/70 green.
 
 ## Retro
 → `retro.md` (written after E03 completion)

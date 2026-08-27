@@ -86,7 +86,8 @@ automatically for matching tasks (see `index.yaml`).
 - recurrence: 4
 - status: promoted-to-rule — see `agent/skills/implement/SKILL.md`
   ("Introducing a durable counter" rule), promoted 2026-08-27 via
-  `skills/retro`, 🧍 `retro_promotions` gate pending human approval.
+  `skills/retro`, 🧍 `retro_promotions` gate approved by human on
+  2026-08-27 (as drafted).
 
 > Deliberately empty, like every area here. A lesson is evidence from *this*
 > codebase, and its recurrence count is what decides which trap gets automated
