@@ -1,7 +1,7 @@
 ---
 id: E04
 title: Mesh Discovery, Relay & Dynamic Routing
-status: todo
+status: in-progress
 type: feature
 priority: { moscow: must, wsjf: 2.8 }
 depends_on: [E01, E03]
@@ -76,18 +76,54 @@ latency/partition simulator" as an early task here, since every later route
 
 ## Open Questions
 - **OQ-E04-1 — Routing cost formula (Q-ARCH-004).** Recommended default: weighted-sum per traffic-type profile (BRD §31's factor list), explicit placeholder weights, revisited once real usage data exists.
-  - **Status:** 🟡 open
-  - **Answer:** _<empty>_ — folds into this epic's task-sharding per prior human decision
-  - **Answered by:** _<empty>_
-  - **Date:** _<empty>_
+  - **Status:** ✅ resolved (folded into task-sharding, per the prior human
+    decision recorded here at genesis: use the recommended default)
+  - **Answer:** v1 weighted-sum heuristic: `cost = w1*latency_ms +
+    w2*(1-reliability) + w3*battery_drain_rate + w4*hop_count`, with two
+    named weight profiles (`interactive` for 1:1 chat — latency-weighted;
+    `bulk` for large transfers — reliability/battery-weighted). Exact
+    starting weights are a task-sharding implementation detail (placeholder,
+    explicitly flagged tunable in code, not a second foundational decision).
+  - **Answered by:** human (genesis-era decision, applied here 2026-08-27)
+  - **Date:** 2026-08-27
 - **OQ-E04-2 — Migration threshold (Q-FUNC-005).** Recommended default: fixed percentage improvement + minimum stability window, both placeholders.
-  - **Status:** 🟡 open
-  - **Answer:** _<empty>_ — folds into this epic's task-sharding per prior human decision
-  - **Answered by:** _<empty>_
-  - **Date:** _<empty>_
+  - **Status:** ✅ resolved (folded into task-sharding, per the prior human
+    decision recorded here at genesis: use the recommended default)
+  - **Answer:** Migrate only when a candidate route's cost is ≥20% better
+    AND has held that advantage for ≥10 consecutive samples (stability
+    window) — both named constants, explicitly flagged tunable.
+  - **Answered by:** human (genesis-era decision, applied here 2026-08-27)
+  - **Date:** 2026-08-27
 
 ## Analyze report
-<pending — appended once tasks are sharded>
+*(`skills/task-sharding` §6, run 2026-08-27 against E04-T01/T02/T03a/T03b/T03c/T04/T05)*
+
+| Check | Result | Notes |
+|---|---|---|
+| EARS trace | ✅ pass | EARS-ROUTE-1/2/3/4 (epic-level) each covered: T02→ROUTE-1/2/4, T04→ROUTE-3/4b. New sub-ids introduced for genuinely new scope not named at epic level (EARS-SIM-1/2/3 for the simulator, EARS-TRANSPORT-1/2/3 for the Pigeon boundary, EARS-DISC-1/2 for Bluetooth, EARS-DEV-3/4 for the screen) — all trace to an FR id, none orphaned. |
+| Contract sanity | ✅ pass | One Pigeon schema (T03a) defines the transport boundary once; T03b/T03c extend its *implementation*, never redefine the contract. No two tasks define the same table/function differently — `routes` (T02) and `relay_packets` (T04) are disjoint tables. |
+| Collision matrix | ✅ pass | T01/T03a share no files (checked). T02/T03b share no files (T02 is pure Dart routing_engine + persistence; T03b is native Kotlin only). T03c only touches files T03a created/T03b will have already modified, strictly sequential via `depends_on`. T05 touches only `devices_controller.dart` + its test, untouched by any other E04 task. |
+| Scope fences | ✅ pass | Every task's §4 is non-empty; T03a/T03b/T03c in particular are careful to state exactly what stays loopback/unimplemented at each stage — the most collision-prone three-way split in this epic. |
+| MoSCoW inflation | ⚠️ exception, justified | 7/7 tasks `must` — same reasoning as E03: this is infrastructure with a strict dependency chain (simulator→routing engine→relay; Pigeon plumbing→discovery→data transfer→relay) and no task is independently shippable value on its own. Flagged, not silently re-graded. |
+| Size | ✅ pass | T01 `S`, T02 `M`, T03a `M`, T03b `M`, T03c `S`, T04 `M`, T05 `S` — none `L`. T03 was originally sized `L` as a single "Bluetooth transport" task and explicitly split into three per this epic's own risk-mitigation note before this report ran — the split itself is evidence the sizing discipline worked, not a violation. |
+| Design | ✅ pass | Only T05 is `layer: frontend`; `design_contract: design/screens/devices.md` — the contract already exists (E02-T02) and is approved. T01-T04 are `n/a`, consistent with backend/cross-cutting scope. |
+
+**Net:** 6/7 clean pass, 1 flagged exception (MoSCoW), same shape and same
+reasoning as E03's — infrastructure epics with a strict linear/near-linear
+dependency chain legitimately have no optional slice to re-grade against.
+
+**Notable, disclosed upfront:** T03b and T03c cannot be meaningfully proven
+by `flutter test` — both task files say so explicitly and make honest
+on-device manual verification (with a disclosed coverage gap if only one
+Bluetooth-capable device is available) part of their Definition of Done,
+rather than fabricating a hardware mock that would pass regardless of
+correctness.
+
+🧍 **HUMAN GATE** (`analyze_report`): 6/7 clean, 1 disclosed MoSCoW
+exception (reasoning above), 0 unclassified findings, 0 collisions.
+Proceeding to dispatch under the human's standing instruction to continue
+through E14 without per-gate pauses — full findings stand as written above
+for later audit, nothing re-graded silently to force a clean pass.
 
 ## Retro
 → `retro.md` (written after E04 completion)
