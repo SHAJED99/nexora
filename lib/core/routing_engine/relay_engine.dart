@@ -173,8 +173,13 @@ class RelayEngine {
     for (var attempt = 0; attempt < 2; attempt++) {
       // Track this as the route currently in use so onRouteFailure (which
       // blacklists the active route's own first-hop link) blacklists the
-      // right link if this attempt fails.
-      _routingEngine.setActiveRoute(route!);
+      // right link if this attempt fails. Deliberately NOT setActiveRoute:
+      // this is a per-packet forward attempt over whatever computeRoute
+      // currently returns, not a validated route switch, and setActiveRoute
+      // would reset RoutingEngine's make-before-break migration-stability
+      // tracking on every single relay packet (E04-B01) -- silently
+      // suppressing EARS-ROUTE-2 for any destination this device relays to.
+      _routingEngine.noteAttemptedRoute(route!);
 
       final nextHop = route.hops.first;
       bool sent;

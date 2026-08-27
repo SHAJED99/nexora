@@ -121,6 +121,16 @@ class RoutingEngine {
   final Map<String, TrafficProfile> _lastProfile = {};
   final Map<String, _MigrationTracking> _migrationTracking = {};
 
+  /// The most recent route a caller told us it is CURRENTLY transmitting
+  /// over for a destination, via [noteAttemptedRoute] — deliberately kept
+  /// separate from [_activeRoutes] (E04-B01). [_activeRoutes] is the
+  /// validated "in use" route that [considerMigration] compares against;
+  /// [_lastAttemptedRoute] exists solely so [onRouteFailure] can blame the
+  /// correct first-hop link for a per-packet forward attempt (e.g.
+  /// `RelayEngine`'s) that used whatever [computeRoute] currently returns,
+  /// without that attempt being mistaken for a validated route switch.
+  final Map<String, Route> _lastAttemptedRoute = {};
+
   RoutingEngine({required this.selfId});
 
   /// Updates this device's view of a direct neighbor's link quality
@@ -171,9 +181,36 @@ class RoutingEngine {
   /// Explicitly marks [route] as the active route for its destination.
   /// Resets any in-progress migration-stability tracking for that
   /// destination, since switching routes starts a fresh comparison.
+  ///
+  /// Also discards any [noteAttemptedRoute] record for that destination
+  /// (E04-B01 review): a validated switch makes an earlier per-packet
+  /// attempt over a *different* path obsolete, and leaving it in place
+  /// would make [onRouteFailure] blacklist the stale attempt's first hop
+  /// instead of the route that actually just failed.
   void setActiveRoute(Route route) {
     _activeRoutes[route.destinationId] = route;
     _migrationTracking.remove(route.destinationId);
+    _lastAttemptedRoute.remove(route.destinationId);
+  }
+
+  /// Records [route] as the link currently being transmitted over for its
+  /// destination, WITHOUT implying a validated route switch (E04-B01).
+  ///
+  /// This exists for callers (e.g. `RelayEngine._attempt`) that need
+  /// `onRouteFailure` to blame the correct first-hop link for a forward
+  /// attempt that is just using whatever `computeRoute` currently returns —
+  /// not a genuine, validated migration. Deliberately does NOT write to
+  /// [_activeRoutes] (unlike [setActiveRoute]): [_activeRoutes] is what
+  /// [considerMigration] compares the best-known route against, and a
+  /// per-packet relay attempt runs on every `processQueue()` pass — writing
+  /// `computeRoute`'s answer (already the cheapest known route) into
+  /// [_activeRoutes] on every attempt would collapse the active/best gap
+  /// immediately and permanently suppress `migrateTo` from ever being
+  /// reached, which is the same defect this method exists to fix, just
+  /// relocated rather than removed. See E04-B01's regression test
+  /// `test_EARS_ROUTE_2_relay_traffic_does_not_reset_migration_window`.
+  void noteAttemptedRoute(Route route) {
+    _lastAttemptedRoute[route.destinationId] = route;
   }
 
   /// The lowest-cost known path to [destinationId] under [profile], or
@@ -245,10 +282,17 @@ class RoutingEngine {
   /// observed failing) as down, recomputes, and returns the next-best
   /// route — or `null` if none exists, so the caller can queue/retry
   /// rather than silently dropping the send.
+  ///
+  /// The failed link is identified from [_lastAttemptedRoute] first (set by
+  /// [noteAttemptedRoute] — the route a per-packet forwarder like
+  /// `RelayEngine` actually just tried), falling back to [_activeRoutes]
+  /// (set by [setActiveRoute]) when no attempt was recorded — e.g. a future
+  /// caller that validates and switches routes directly without going
+  /// through the attempt-tracking path (E04-B01).
   Route? onRouteFailure(String destinationId) {
-    final active = _activeRoutes[destinationId];
-    if (active != null && active.hops.isNotEmpty) {
-      removeLink(selfId, active.hops.first);
+    final failed = _lastAttemptedRoute[destinationId] ?? _activeRoutes[destinationId];
+    if (failed != null && failed.hops.isNotEmpty) {
+      removeLink(selfId, failed.hops.first);
     }
     final profile = _lastProfile[destinationId] ?? TrafficProfile.interactive;
     final next = _bestRoute(destinationId, profile);
@@ -258,6 +302,7 @@ class RoutingEngine {
       _activeRoutes.remove(destinationId);
     }
     _migrationTracking.remove(destinationId);
+    _lastAttemptedRoute.remove(destinationId);
     return next;
   }
 
