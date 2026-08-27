@@ -1,6 +1,6 @@
 # E04 · Mesh Discovery, Relay & Dynamic Routing · Progress
 
-**Status:** in-progress · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 6/7
+**Status:** build-complete, pending bug sweep · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 7/7
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -10,7 +10,7 @@
 - [x] E04-T03a · Pigeon transport schema + Dart facade + native loopback · done · builder (sonnet) → reviewer (opus)
 - [x] E04-T03b · Real Bluetooth discovery + connect · done · builder (sonnet) → reviewer (opus)
 - [x] E04-T03c · Real Bluetooth data transfer · done · builder (sonnet) → reviewer (opus)
-- [ ] E04-T04 · Store-and-forward relay engine · todo · builder (sonnet) → reviewer (opus)
+- [x] E04-T04 · Store-and-forward relay engine · done · builder (sonnet) → reviewer (opus)
 - [x] E04-T05 · Wire real discovery into Devices screen · done · builder-ui (sonnet) → reviewer (opus)
 
 ## Dependency graph
@@ -120,3 +120,19 @@ chain — can start once discovery is real, in parallel with T03c/T04.
   Bluetooth radios, so this does NOT close the T03b/T03c/T05 on-device
   Bluetooth gap above -- that still needs the physical MIUI device (or
   two real radios).
+- 2026-08-27 E04-T04 implemented + reviewed (final task): `relay_packets`
+  table, priority/age-ordered queue, TTL enforcement, route-failure retry.
+  Reviewer confirmed FR-ROUTE-003 (payload opacity) independently -- zero
+  `core/crypto` imports, zero logging primitives, byte-identical pass-
+  through proven with genuinely non-message-shaped garbage bytes. No
+  blocking issues, but surfaced a real spec-level contradiction (not a
+  coding defect): `epic.md`/T04 §2 claims relay forwarding closes T02's
+  make-before-break validation seam, but `processQueue()` forwards over
+  `computeRoute()` (always cheapest known path) with no gate on
+  `considerMigration`'s >=20%/>=10-sample threshold. Reviewer wrote a
+  guarded fix, proved by its own regression test that it couldn't actually
+  close the gap given the current greedy design, and correctly reverted
+  rather than ship an unverifiable change -- routed to the bug sweep/
+  planner instead of bounced back to the builder. Squash-merged
+  (`7b78f6b`), 112/112 green.
+  **E04 build-complete: 7/7 tasks done. Proceeding to bug sweep.**
