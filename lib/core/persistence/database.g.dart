@@ -2184,6 +2184,408 @@ class CryptoCountersCompanion extends UpdateCompanion<CryptoCounter> {
   }
 }
 
+class $RoutesTable extends Routes with TableInfo<$RoutesTable, RouteRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RoutesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _destinationIdMeta = const VerificationMeta(
+    'destinationId',
+  );
+  @override
+  late final GeneratedColumn<String> destinationId = GeneratedColumn<String>(
+    'destination_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hopsMeta = const VerificationMeta('hops');
+  @override
+  late final GeneratedColumn<String> hops = GeneratedColumn<String>(
+    'hops',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastCostMeta = const VerificationMeta(
+    'lastCost',
+  );
+  @override
+  late final GeneratedColumn<double> lastCost = GeneratedColumn<double>(
+    'last_cost',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastMeasuredAtMeta = const VerificationMeta(
+    'lastMeasuredAt',
+  );
+  @override
+  late final GeneratedColumn<int> lastMeasuredAt = GeneratedColumn<int>(
+    'last_measured_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stableSinceTickMeta = const VerificationMeta(
+    'stableSinceTick',
+  );
+  @override
+  late final GeneratedColumn<int> stableSinceTick = GeneratedColumn<int>(
+    'stable_since_tick',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    destinationId,
+    hops,
+    lastCost,
+    lastMeasuredAt,
+    stableSinceTick,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'routes';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RouteRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('destination_id')) {
+      context.handle(
+        _destinationIdMeta,
+        destinationId.isAcceptableOrUnknown(
+          data['destination_id']!,
+          _destinationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_destinationIdMeta);
+    }
+    if (data.containsKey('hops')) {
+      context.handle(
+        _hopsMeta,
+        hops.isAcceptableOrUnknown(data['hops']!, _hopsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_hopsMeta);
+    }
+    if (data.containsKey('last_cost')) {
+      context.handle(
+        _lastCostMeta,
+        lastCost.isAcceptableOrUnknown(data['last_cost']!, _lastCostMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_lastCostMeta);
+    }
+    if (data.containsKey('last_measured_at')) {
+      context.handle(
+        _lastMeasuredAtMeta,
+        lastMeasuredAt.isAcceptableOrUnknown(
+          data['last_measured_at']!,
+          _lastMeasuredAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastMeasuredAtMeta);
+    }
+    if (data.containsKey('stable_since_tick')) {
+      context.handle(
+        _stableSinceTickMeta,
+        stableSinceTick.isAcceptableOrUnknown(
+          data['stable_since_tick']!,
+          _stableSinceTickMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {destinationId, hops};
+  @override
+  RouteRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RouteRow(
+      destinationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}destination_id'],
+      )!,
+      hops: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}hops'],
+      )!,
+      lastCost: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}last_cost'],
+      )!,
+      lastMeasuredAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_measured_at'],
+      )!,
+      stableSinceTick: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}stable_since_tick'],
+      ),
+    );
+  }
+
+  @override
+  $RoutesTable createAlias(String alias) {
+    return $RoutesTable(attachedDatabase, alias);
+  }
+}
+
+class RouteRow extends DataClass implements Insertable<RouteRow> {
+  final String destinationId;
+
+  /// Ordered JSON array of hop node ids from this device to
+  /// [destinationId], e.g. `'["B","C"]'` for a 2-hop relay via B then C.
+  final String hops;
+
+  /// Last-computed cost for this route (lower is better) — a snapshot, not
+  /// a time series (task §4: no route-quality-over-time reporting).
+  final double lastCost;
+
+  /// Epoch-ms wall-clock timestamp of the last cost measurement — display
+  /// bookkeeping only, never used for the migration stability window.
+  final int lastMeasuredAt;
+
+  /// The engine's own tick count at which this route first started
+  /// holding its current cost advantage, for the >=10-consecutive-sample
+  /// migration stability window (§2, OQ-E04-2). Nullable: a route with no
+  /// tracked advantage yet.
+  final int? stableSinceTick;
+  const RouteRow({
+    required this.destinationId,
+    required this.hops,
+    required this.lastCost,
+    required this.lastMeasuredAt,
+    this.stableSinceTick,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['destination_id'] = Variable<String>(destinationId);
+    map['hops'] = Variable<String>(hops);
+    map['last_cost'] = Variable<double>(lastCost);
+    map['last_measured_at'] = Variable<int>(lastMeasuredAt);
+    if (!nullToAbsent || stableSinceTick != null) {
+      map['stable_since_tick'] = Variable<int>(stableSinceTick);
+    }
+    return map;
+  }
+
+  RoutesCompanion toCompanion(bool nullToAbsent) {
+    return RoutesCompanion(
+      destinationId: Value(destinationId),
+      hops: Value(hops),
+      lastCost: Value(lastCost),
+      lastMeasuredAt: Value(lastMeasuredAt),
+      stableSinceTick: stableSinceTick == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stableSinceTick),
+    );
+  }
+
+  factory RouteRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RouteRow(
+      destinationId: serializer.fromJson<String>(json['destinationId']),
+      hops: serializer.fromJson<String>(json['hops']),
+      lastCost: serializer.fromJson<double>(json['lastCost']),
+      lastMeasuredAt: serializer.fromJson<int>(json['lastMeasuredAt']),
+      stableSinceTick: serializer.fromJson<int?>(json['stableSinceTick']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'destinationId': serializer.toJson<String>(destinationId),
+      'hops': serializer.toJson<String>(hops),
+      'lastCost': serializer.toJson<double>(lastCost),
+      'lastMeasuredAt': serializer.toJson<int>(lastMeasuredAt),
+      'stableSinceTick': serializer.toJson<int?>(stableSinceTick),
+    };
+  }
+
+  RouteRow copyWith({
+    String? destinationId,
+    String? hops,
+    double? lastCost,
+    int? lastMeasuredAt,
+    Value<int?> stableSinceTick = const Value.absent(),
+  }) => RouteRow(
+    destinationId: destinationId ?? this.destinationId,
+    hops: hops ?? this.hops,
+    lastCost: lastCost ?? this.lastCost,
+    lastMeasuredAt: lastMeasuredAt ?? this.lastMeasuredAt,
+    stableSinceTick: stableSinceTick.present
+        ? stableSinceTick.value
+        : this.stableSinceTick,
+  );
+  RouteRow copyWithCompanion(RoutesCompanion data) {
+    return RouteRow(
+      destinationId: data.destinationId.present
+          ? data.destinationId.value
+          : this.destinationId,
+      hops: data.hops.present ? data.hops.value : this.hops,
+      lastCost: data.lastCost.present ? data.lastCost.value : this.lastCost,
+      lastMeasuredAt: data.lastMeasuredAt.present
+          ? data.lastMeasuredAt.value
+          : this.lastMeasuredAt,
+      stableSinceTick: data.stableSinceTick.present
+          ? data.stableSinceTick.value
+          : this.stableSinceTick,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RouteRow(')
+          ..write('destinationId: $destinationId, ')
+          ..write('hops: $hops, ')
+          ..write('lastCost: $lastCost, ')
+          ..write('lastMeasuredAt: $lastMeasuredAt, ')
+          ..write('stableSinceTick: $stableSinceTick')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    destinationId,
+    hops,
+    lastCost,
+    lastMeasuredAt,
+    stableSinceTick,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RouteRow &&
+          other.destinationId == this.destinationId &&
+          other.hops == this.hops &&
+          other.lastCost == this.lastCost &&
+          other.lastMeasuredAt == this.lastMeasuredAt &&
+          other.stableSinceTick == this.stableSinceTick);
+}
+
+class RoutesCompanion extends UpdateCompanion<RouteRow> {
+  final Value<String> destinationId;
+  final Value<String> hops;
+  final Value<double> lastCost;
+  final Value<int> lastMeasuredAt;
+  final Value<int?> stableSinceTick;
+  final Value<int> rowid;
+  const RoutesCompanion({
+    this.destinationId = const Value.absent(),
+    this.hops = const Value.absent(),
+    this.lastCost = const Value.absent(),
+    this.lastMeasuredAt = const Value.absent(),
+    this.stableSinceTick = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RoutesCompanion.insert({
+    required String destinationId,
+    required String hops,
+    required double lastCost,
+    required int lastMeasuredAt,
+    this.stableSinceTick = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : destinationId = Value(destinationId),
+       hops = Value(hops),
+       lastCost = Value(lastCost),
+       lastMeasuredAt = Value(lastMeasuredAt);
+  static Insertable<RouteRow> custom({
+    Expression<String>? destinationId,
+    Expression<String>? hops,
+    Expression<double>? lastCost,
+    Expression<int>? lastMeasuredAt,
+    Expression<int>? stableSinceTick,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (destinationId != null) 'destination_id': destinationId,
+      if (hops != null) 'hops': hops,
+      if (lastCost != null) 'last_cost': lastCost,
+      if (lastMeasuredAt != null) 'last_measured_at': lastMeasuredAt,
+      if (stableSinceTick != null) 'stable_since_tick': stableSinceTick,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RoutesCompanion copyWith({
+    Value<String>? destinationId,
+    Value<String>? hops,
+    Value<double>? lastCost,
+    Value<int>? lastMeasuredAt,
+    Value<int?>? stableSinceTick,
+    Value<int>? rowid,
+  }) {
+    return RoutesCompanion(
+      destinationId: destinationId ?? this.destinationId,
+      hops: hops ?? this.hops,
+      lastCost: lastCost ?? this.lastCost,
+      lastMeasuredAt: lastMeasuredAt ?? this.lastMeasuredAt,
+      stableSinceTick: stableSinceTick ?? this.stableSinceTick,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (destinationId.present) {
+      map['destination_id'] = Variable<String>(destinationId.value);
+    }
+    if (hops.present) {
+      map['hops'] = Variable<String>(hops.value);
+    }
+    if (lastCost.present) {
+      map['last_cost'] = Variable<double>(lastCost.value);
+    }
+    if (lastMeasuredAt.present) {
+      map['last_measured_at'] = Variable<int>(lastMeasuredAt.value);
+    }
+    if (stableSinceTick.present) {
+      map['stable_since_tick'] = Variable<int>(stableSinceTick.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RoutesCompanion(')
+          ..write('destinationId: $destinationId, ')
+          ..write('hops: $hops, ')
+          ..write('lastCost: $lastCost, ')
+          ..write('lastMeasuredAt: $lastMeasuredAt, ')
+          ..write('stableSinceTick: $stableSinceTick, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2200,6 +2602,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SignalTrustedIdentitiesTable signalTrustedIdentities =
       $SignalTrustedIdentitiesTable(this);
   late final $CryptoCountersTable cryptoCounters = $CryptoCountersTable(this);
+  late final $RoutesTable routes = $RoutesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2213,6 +2616,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     signalSessions,
     signalTrustedIdentities,
     cryptoCounters,
+    routes,
   ];
 }
 
@@ -3579,6 +3983,206 @@ typedef $$CryptoCountersTableProcessedTableManager =
       CryptoCounter,
       PrefetchHooks Function()
     >;
+typedef $$RoutesTableCreateCompanionBuilder =
+    RoutesCompanion Function({
+      required String destinationId,
+      required String hops,
+      required double lastCost,
+      required int lastMeasuredAt,
+      Value<int?> stableSinceTick,
+      Value<int> rowid,
+    });
+typedef $$RoutesTableUpdateCompanionBuilder =
+    RoutesCompanion Function({
+      Value<String> destinationId,
+      Value<String> hops,
+      Value<double> lastCost,
+      Value<int> lastMeasuredAt,
+      Value<int?> stableSinceTick,
+      Value<int> rowid,
+    });
+
+class $$RoutesTableFilterComposer
+    extends Composer<_$AppDatabase, $RoutesTable> {
+  $$RoutesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get destinationId => $composableBuilder(
+    column: $table.destinationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get hops => $composableBuilder(
+    column: $table.hops,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get lastCost => $composableBuilder(
+    column: $table.lastCost,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastMeasuredAt => $composableBuilder(
+    column: $table.lastMeasuredAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get stableSinceTick => $composableBuilder(
+    column: $table.stableSinceTick,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RoutesTableOrderingComposer
+    extends Composer<_$AppDatabase, $RoutesTable> {
+  $$RoutesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get destinationId => $composableBuilder(
+    column: $table.destinationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get hops => $composableBuilder(
+    column: $table.hops,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get lastCost => $composableBuilder(
+    column: $table.lastCost,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastMeasuredAt => $composableBuilder(
+    column: $table.lastMeasuredAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get stableSinceTick => $composableBuilder(
+    column: $table.stableSinceTick,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RoutesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RoutesTable> {
+  $$RoutesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get destinationId => $composableBuilder(
+    column: $table.destinationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get hops =>
+      $composableBuilder(column: $table.hops, builder: (column) => column);
+
+  GeneratedColumn<double> get lastCost =>
+      $composableBuilder(column: $table.lastCost, builder: (column) => column);
+
+  GeneratedColumn<int> get lastMeasuredAt => $composableBuilder(
+    column: $table.lastMeasuredAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get stableSinceTick => $composableBuilder(
+    column: $table.stableSinceTick,
+    builder: (column) => column,
+  );
+}
+
+class $$RoutesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RoutesTable,
+          RouteRow,
+          $$RoutesTableFilterComposer,
+          $$RoutesTableOrderingComposer,
+          $$RoutesTableAnnotationComposer,
+          $$RoutesTableCreateCompanionBuilder,
+          $$RoutesTableUpdateCompanionBuilder,
+          (RouteRow, BaseReferences<_$AppDatabase, $RoutesTable, RouteRow>),
+          RouteRow,
+          PrefetchHooks Function()
+        > {
+  $$RoutesTableTableManager(_$AppDatabase db, $RoutesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RoutesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RoutesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RoutesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> destinationId = const Value.absent(),
+                Value<String> hops = const Value.absent(),
+                Value<double> lastCost = const Value.absent(),
+                Value<int> lastMeasuredAt = const Value.absent(),
+                Value<int?> stableSinceTick = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RoutesCompanion(
+                destinationId: destinationId,
+                hops: hops,
+                lastCost: lastCost,
+                lastMeasuredAt: lastMeasuredAt,
+                stableSinceTick: stableSinceTick,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String destinationId,
+                required String hops,
+                required double lastCost,
+                required int lastMeasuredAt,
+                Value<int?> stableSinceTick = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RoutesCompanion.insert(
+                destinationId: destinationId,
+                hops: hops,
+                lastCost: lastCost,
+                lastMeasuredAt: lastMeasuredAt,
+                stableSinceTick: stableSinceTick,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RoutesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RoutesTable,
+      RouteRow,
+      $$RoutesTableFilterComposer,
+      $$RoutesTableOrderingComposer,
+      $$RoutesTableAnnotationComposer,
+      $$RoutesTableCreateCompanionBuilder,
+      $$RoutesTableUpdateCompanionBuilder,
+      (RouteRow, BaseReferences<_$AppDatabase, $RoutesTable, RouteRow>),
+      RouteRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3602,4 +4206,6 @@ class $AppDatabaseManager {
       );
   $$CryptoCountersTableTableManager get cryptoCounters =>
       $$CryptoCountersTableTableManager(_db, _db.cryptoCounters);
+  $$RoutesTableTableManager get routes =>
+      $$RoutesTableTableManager(_db, _db.routes);
 }

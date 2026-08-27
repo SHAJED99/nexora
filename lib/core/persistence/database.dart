@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'crypto_tables.dart';
 import 'relationships_table.dart';
+import 'routing_tables.dart';
 
 part 'database.g.dart';
 
@@ -44,6 +45,7 @@ class DeviceIdentities extends Table {
   SignalSessions,
   SignalTrustedIdentities,
   CryptoCounters,
+  Routes,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -52,7 +54,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -132,6 +134,11 @@ class AppDatabase extends _$AppDatabase {
               cryptoCounters,
               cryptoCounters.nextIssuedOneTimePreKeyId,
             );
+          }
+          if (from < 8) {
+            // E04-T02: new `routes` table — additive, no changes to
+            // existing tables (docs/conventions.md "Schema migrations").
+            await m.createTable(routes);
           }
         },
       );
