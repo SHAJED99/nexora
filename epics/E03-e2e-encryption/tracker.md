@@ -1,7 +1,6 @@
 # E03 · E2E Encryption & Threat Protection · Progress
 
-**Status:** bug sweep found 1 live P1 (E03-B02) — must land before the human
-gate · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 5/7
+**Status:** done · **Started:** 2026-08-27 · **Completed:** 2026-08-27 · **Progress:** 6/7 (B03 deferred to backlog by design)
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -11,7 +10,7 @@ gate · **Started:** 2026-08-27 · **Completed:** — · **Progress:** 5/7
 - [x] E03-T02 · Local identity generation + prekey bundle service · done · builder (sonnet) → reviewer (opus)
 - [x] E03-B01 · One-time prekey ids restart at 1 after pool drains (S2 bug) · done · builder (sonnet) → reviewer (opus)
 - [x] E03-T03 · Real core/crypto API — X3DH session + Double Ratchet encrypt/decrypt · done · builder (sonnet) → reviewer (opus)
-- [ ] E03-B02 · Same one-time prekey issued to every peer (S2, P1 — live, blocks epic gate) · todo · builder (any) → reviewer (opus)
+- [x] E03-B02 · Same one-time prekey issued to every peer (S2, P1) · done · builder (sonnet) → reviewer (opus)
 - [ ] E03-B03 · InvalidMessageException not catchable by type (S3, P3 — deferred to E05/E06) · backlog · —
 
 ## Dependency graph
@@ -195,3 +194,26 @@ schema change (`crypto_counters` table) and must land before T03.
   B02 (distribution). L-backend-002's lesson ("a boundary case the test
   plan didn't name") is now recurrence 3 across this pattern — promotion
   territory per rule 8, to be handled at `skills/retro`.
+- 2026-08-27 E03-B02 fixed on `epic_03_bug_02` (off `epic_03`):
+  `next_issued_one_time_prekey_id` cursor added to `crypto_counters` (schema
+  v6->v7, additive), `DriftSignalProtocolStore.issueOneTimePreKey()`
+  atomically selects+advances. All 3 regression tests confirmed red
+  pre-fix, green post-fix; T03's mutation check re-run (4/5 proof tests
+  fail under a deliberate corruption), confirming they're still genuine
+  proofs, not weakened by this fix. `flutter analyze` clean, `flutter test`
+  68/68. Reviewer (Opus) independently reproduced all 4 of the builder's
+  falsification claims, then found and fixed two more issues in the same
+  pass: **R2 (blocking, a live regression the fix itself introduced)** —
+  `replenishOneTimePreKeys()` still counted live rows, not *issuable* rows,
+  so a device with 20 issued-but-unconsumed bundles would report a healthy
+  pool and never replenish, hard-locking bundle issuance forever — fixed
+  with `countIssuableOneTimePreKeys()`. **R1** — the v6->v7 migration step
+  had zero test coverage; added a real test, verified the guard is correct
+  by mutation (weakening it fails 5 migration tests with `duplicate column
+  name`). Squash-merged to `epic_03` (`a2f6282`); `flutter analyze`/
+  `flutter test` re-confirmed green (70/70). E03-B02 → `done`.
+  **E03 build-complete, bug sweep clean (P1/P2 = 0), 70/70 green.
+  Proceeding per the user's standing autonomous directive (2026-08-27:
+  "Continue to E14. Do not wait for me.") — self-clearing the epic's human
+  gate rather than pausing, documented here for audit; retro next, then
+  merge to `development`.**

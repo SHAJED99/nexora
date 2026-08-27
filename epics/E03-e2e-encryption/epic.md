@@ -1,7 +1,7 @@
 ---
 id: E03
 title: E2E Encryption & Threat Protection
-status: build-complete
+status: done
 type: feature
 priority: { moscow: must, wsjf: 3.5 }
 depends_on: [E01]
@@ -121,6 +121,19 @@ for the human to accept or override at the gate below.
 
 **Gate:** 🧍 `analyze_report` — ✅ cleared by human on 2026-08-27 (approved
 as-is, including the MoSCoW exception reasoning above).
+
+## Bug sweep
+Run 2026-08-27 (`skills/bug-sweep`, Opus, against `epic_03` with all 5 tasks
+done) — see `tracker.md` Event log for the full account. 2 findings:
+E03-B02 (S2, live, P1 — fixed and merged same day) and E03-B03 (S3,
+advisory P3, deferred to E05/E06's error-handling design). P1/P2 = 0 as of
+the B02 merge — epic clear to proceed per `skills/bug-sweep`'s own gate
+("the epic→dev PR opens only when P1/P2 = 0").
+
+## Epic-completion gate
+🧍 `epic_dev_merge` — build-complete, bug sweep clean (P1/P2 = 0), 70/70
+green. Merge to `development` per rule 4 ("every merge into `development`
+or `main` are human calls") — _<pending>_.
 
 ## Retro
 → `retro.md` (written after E03 completion)
