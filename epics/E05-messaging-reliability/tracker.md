@@ -1,20 +1,45 @@
 # E05 · Messaging Reliability & Multi-Device Sync · Progress
 
-**Status:** todo · **Started:** — · **Completed:** — · **Progress:** 0/? (not yet sharded)
+**Status:** todo · **Started:** — · **Completed:** — · **Progress:** 0/5
 
 > Only the ORCHESTRATOR edits this file.
 
 ## Tasks
-_(populated by `skills/task-sharding` once E05 is approved)_
+- [ ] E05-T01 · Message domain model + delivery-state machine + tables · todo · builder (sonnet) → reviewer (opus)
+- [ ] E05-T02 · Offline outgoing message queue · todo · builder (sonnet) → reviewer (opus)
+- [ ] E05-T03 · Incoming message handling (dedup, ordering) · todo · builder (sonnet) → reviewer (opus)
+- [ ] E05-T04 · Multi-device sync cursors · todo · builder (sonnet) → reviewer (opus)
+- [ ] E05-T05 · Conflict resolution (security-restrictive precedence) · todo · builder (sonnet) → reviewer (opus)
 
 ## Dependency graph
-_(populated at sharding)_
+```mermaid
+graph LR
+  T01[E05-T01] --> T02[E05-T02]
+  T01 --> T03[E05-T03]
+  T01 --> T04[E05-T04]
+  T05[E05-T05]
+```
+T02/T03/T04 all depend only on T01 and touch disjoint files (`domain/
+send_message_use_case.dart` vs `domain/receive_message_use_case.dart` vs
+`persistence/sync_tables.dart` + `domain/sync_cursor_service.dart`) — safe
+to dispatch in parallel once T01 lands. T05 has no dependencies at all
+(pure functions over E02's existing `RelationshipState`) — safe to
+dispatch immediately, in parallel with T01.
 
 ## Review log
-(date · task · reviewer model · outcome · design gate %)
+(none yet)
 
 ## Blocked / Frozen
 (none)
 
 ## Event log (append-only)
-- 2026-08-26 E05 drafted as part of Wave 1 epic-breakdown, status todo, awaiting 🧍 `epic_breakdown_and_wave` approval.
+- 2026-08-27 E05 sharded into 5 tasks (task-sharding skill). No epic-level
+  Open Questions blocked sharding, but two task-level Open Questions were
+  surfaced and left open rather than guessed at: OQ-E05-T02-1 (no
+  prekey-bundle exchange mechanism exists anywhere yet — E01-E04 never
+  built one, so real end-to-end sending is impossible until it's answered,
+  likely E06's problem) and OQ-E05-T04-1 (the gap-fill protocol for
+  multi-device sync isn't built — this epic only produces the cursor data
+  such a mechanism would need). Both are honest scope boundaries, not
+  blockers to sharding these 5 tasks, which are each independently
+  buildable and testable without either gap being closed.

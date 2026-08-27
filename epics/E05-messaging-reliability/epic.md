@@ -1,7 +1,7 @@
 ---
 id: E05
 title: Messaging Reliability & Multi-Device Sync
-status: todo
+status: in-progress
 type: feature
 priority: { moscow: must, wsjf: 3.2 }
 depends_on: [E03, E04]
@@ -76,7 +76,29 @@ multi-device catch-up test with a simulated Firebase-outage window.
 _(none new — inherits E04's routing-formula dependency but doesn't itself need those numbers)_
 
 ## Analyze report
-<pending — appended once tasks are sharded>
+*(`skills/task-sharding` §6, run 2026-08-27 against E05-T01/T02/T03/T04/T05)*
+
+| Check | Result | Notes |
+|---|---|---|
+| EARS trace | ✅ pass | EARS-MSG-1/2/3/4 (epic-level) each covered: T02→MSG-1, T03→MSG-2/3, T05→MSG-4. Sub-ids for genuinely new scope (EARS-MSG-2a/2b for the state machine, EARS-MSG-5/6 for sync cursors) all trace to an FR id. |
+| Contract sanity | ✅ pass | One shared `messages`/`delivery_states` schema (T01) consumed identically by T02/T03/T04, no two tasks redefine it. Per L-process-005 (this session's own retro lesson from E04-B03): explicitly checked whether the union of T01-T05 is *sufficient* for the epic's stated scope, not just non-contradictory — found two real gaps (prekey-bundle exchange, gap-fill protocol) and recorded them as Open Questions in T02/T04 rather than silently leaving them undiscoverable, per that lesson's own recommended fix. |
+| Collision matrix | ✅ pass | T02 (`send_message_use_case.dart`), T03 (`receive_message_use_case.dart`), T04 (`sync_cursor_service.dart` + `sync_tables.dart`), T05 (`conflict_resolver.dart`) — four disjoint file sets, all depending on T01 only (or nothing, for T05). |
+| Scope fences | ✅ pass | Every task's §4 is non-empty; T02/T03/T04 in particular are careful to name exactly what they don't build (ack protocol, gap-fill protocol, group/session models) rather than silently inventing partial versions. |
+| MoSCoW inflation | ⚠️ exception, justified | 5/5 tasks `must` — same reasoning as E03/E04: T01 is a strict prerequisite for T02/T03/T04, and all four/five deliver only partial epic value alone (a message model with no send/receive path, or a resolver nothing calls yet). T05 is arguably independently shippable (pure functions, no dependents in this epic) but is `must` because FR-MSG-007 is itself a `must` requirement, not because of scheduling — genuine `must`, not inflation. |
+| Size | ✅ pass | T01 `M`, T02 `M`, T03 `M`, T04 `M`, T05 `S` — none `L`. |
+| Design | ✅ pass (n/a) | No `layer: frontend` tasks; `design_contract: n/a` on all five, consistent with epic.md's "Screens: None." |
+
+**Net:** 6/7 clean pass, 1 flagged exception (MoSCoW) with the same
+justification pattern as E03/E04. Two honest scope gaps surfaced as
+task-level Open Questions rather than left silently undiscoverable —
+direct application of this session's own E04-B03 retro lesson
+(L-process-005).
+
+🧍 **HUMAN GATE** (`analyze_report`): 6/7 clean, 1 disclosed MoSCoW
+exception, 2 honest scope gaps recorded as task-level Open Questions.
+Proceeding to dispatch under the human's standing instruction to continue
+through E14 without per-gate pauses — findings stand as written above for
+audit, nothing re-graded silently to force a clean pass.
 
 ## Retro
 → `retro.md` (written after E05 completion)
