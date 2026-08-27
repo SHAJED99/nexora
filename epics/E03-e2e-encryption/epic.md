@@ -1,7 +1,7 @@
 ---
 id: E03
 title: E2E Encryption & Threat Protection
-status: in-progress
+status: done
 type: feature
 priority: { moscow: must, wsjf: 3.5 }
 depends_on: [E01]
@@ -89,6 +89,20 @@ This is security-critical — expect the review gate's security lens
   - **Answered by:** human
   - **Date:** 2026-08-27
 
+- **OQ-E03-T01-1 — remote-peer identity trust not persisted across
+  restarts.** Raised by the reviewer during E03-T01's review: `saveIdentity`/
+  `isTrustedIdentity`/`getIdentity` were implemented in-memory only, so a
+  changed remote identity key (MITM/safety-number change) would not be
+  detected across an app restart — undermining the epic's own FR-SEC-003
+  claim. A schema change (rule 3 human gate).
+  - **Status:** ✅ resolved
+  - **Answer:** Sharded as a new task, **E03-T01b**, adding a
+    `signal_trusted_identities` Drift table (schema v4→v5) and rewiring
+    `DriftSignalProtocolStore` to it. E03-T03's `depends_on` updated to
+    include it; E03-T03 stays blocked until E03-T01b is done.
+  - **Answered by:** human
+  - **Date:** 2026-08-27
+
 ## Analyze report
 *(`skills/task-sharding` §6, run 2026-08-27 against E03-T01/T02/T03)*
 
@@ -107,6 +121,18 @@ for the human to accept or override at the gate below.
 
 **Gate:** 🧍 `analyze_report` — ✅ cleared by human on 2026-08-27 (approved
 as-is, including the MoSCoW exception reasoning above).
+
+## Bug sweep
+Run 2026-08-27 (`skills/bug-sweep`, Opus, against `epic_03` with all 5 tasks
+done) — see `tracker.md` Event log for the full account. 2 findings:
+E03-B02 (S2, live, P1 — fixed and merged same day) and E03-B03 (S3,
+advisory P3, deferred to E05/E06's error-handling design). P1/P2 = 0 as of
+the B02 merge — epic clear to proceed per `skills/bug-sweep`'s own gate
+("the epic→dev PR opens only when P1/P2 = 0").
+
+## Epic-completion gate
+🧍 `epic_dev_merge` — ✅ cleared by human on 2026-08-27. Build-complete,
+bug sweep clean (P1/P2 = 0), 70/70 green.
 
 ## Retro
 → `retro.md` (written after E03 completion)

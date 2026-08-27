@@ -92,6 +92,15 @@ is a wasted review cycle with your name on it.
 - loading/error/empty states present
 - no secrets or PII logged
 - every ADR your files touch is honoured, or listed in §Deviations with a reason
+- **introducing a durable counter/cursor?** grep for every other reader of
+  the same table/row and decide, per reader, whether it must now consult
+  the counter instead of deriving its answer from live data. A counter
+  changes what "available"/"next" means for the whole table, not just the
+  call site that motivated it — the counter's own reader can be correct
+  while a sibling `SELECT` a few files away silently keeps the old, now-wrong
+  assumption. (Real cost of skipping this: the same invariant broke four
+  times in one epic — E03-T02, its own fix, the sweep-found sibling bug, and
+  that fix's own fix — each time in a different reader of one table.)
 
 ### 7. Hand over
 `status: review-requested` → push → PR to the **epic** branch → 📋 DEV STATUS

@@ -10,6 +10,7 @@ import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'crypto_tables.dart';
 import 'relationships_table.dart';
 
 part 'database.g.dart';
@@ -34,7 +35,16 @@ class DeviceIdentities extends Table {
   TextColumn get accountUid => text().nullable()();
 }
 
-@DriftDatabase(tables: [DeviceIdentities, Relationships])
+@DriftDatabase(tables: [
+  DeviceIdentities,
+  Relationships,
+  SignalIdentity,
+  SignalSignedPrekeys,
+  SignalOneTimePrekeys,
+  SignalSessions,
+  SignalTrustedIdentities,
+  CryptoCounters,
+])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
@@ -42,7 +52,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -57,6 +67,71 @@ class AppDatabase extends _$AppDatabase {
             // E02-T01: new `relationships` table — additive, no changes to
             // existing tables.
             await m.createTable(relationships);
+          }
+          if (from < 4) {
+            // E03-T01: Signal protocol store tables — additive, no changes
+            // to existing tables (ADR-0003, docs/conventions.md "Schema
+            // migrations").
+            await m.createTable(signalIdentity);
+            await m.createTable(signalSignedPrekeys);
+            await m.createTable(signalOneTimePrekeys);
+            await m.createTable(signalSessions);
+          }
+          if (from < 5) {
+            // E03-T01b: durable remote-peer identity trust — additive, no
+            // changes to existing tables (closes OQ-E03-T01-1).
+            await m.createTable(signalTrustedIdentities);
+          }
+          if (from < 6) {
+            // E03-B01: dedicated monotonic-counter table — additive, no
+            // changes to existing tables. Fixes one-time-prekey id reuse
+            // after the pool drains (root cause: id allocation was derived
+            // from live rows only).
+            await m.createTable(cryptoCounters);
+
+            // Seed the counter from whatever one-time prekeys already
+            // exist on this device at migration time, so an install
+            // upgrading with a still-live (unconsumed) pool doesn't
+            // immediately collide with itself on the next replenish — the
+            // counter must never go backward relative to ids this device
+            // has already issued. A device with no prekeys yet (or none
+            // ever generated) leaves the table empty; the store treats an
+            // absent row as "start at 1".
+            final maxExisting = await customSelect(
+              'SELECT MAX(id) AS max_id FROM signal_one_time_prekeys',
+            ).getSingleOrNull();
+            final maxExistingId = maxExisting?.data['max_id'] as int?;
+            if (maxExistingId != null) {
+              await into(cryptoCounters).insert(
+                CryptoCountersCompanion.insert(
+                  id: const Value(0),
+                  nextOneTimePreKeyId: Value(maxExistingId + 1),
+                ),
+              );
+            }
+          }
+          if (from >= 6 && from < 7) {
+            // E03-B02: distribution-side issue cursor — additive column,
+            // default 1 (matches a fresh `crypto_counters` row). No backfill
+            // needed: an install upgrading with prekeys already handed to
+            // peers has no durable record of which ones (that's the bug
+            // this fixes), so the cursor starts at 1 like a fresh device.
+            // Worst case on upgrade, a prekey issued pre-fix and still
+            // in-flight could be reissued once; the fix's guarantee is
+            // forward-only from here.
+            //
+            // Guarded to `from >= 6`: an install upgrading from before v6
+            // never had `crypto_counters` at all, so `createTable`
+            // (from < 6, above) already creates it with this device's
+            // *current* full Dart table definition — column included. Only
+            // an install that already had the v6 table (created without
+            // this column) needs it added here; adding it unconditionally
+            // would double-add the column for anyone jumping from < v6
+            // straight to v7 (`duplicate column name`).
+            await m.addColumn(
+              cryptoCounters,
+              cryptoCounters.nextIssuedOneTimePreKeyId,
+            );
           }
         },
       );
