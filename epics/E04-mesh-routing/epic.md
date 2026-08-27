@@ -160,5 +160,19 @@ for later audit, nothing re-graded silently to force a clean pass.
   before that wiring lands — an honest `null` route beats a confident route
   computed from invented data.
 
+## Bug sweep
+Run 2026-08-27 (`skills/bug-sweep`, Opus, against `epic_04` with all 7
+tasks done) — see `tracker.md` Event log for the full account. 3 findings,
+all fixed same-day: E04-B01 (S2, route migration silently suppressed by
+relay traffic), E04-B02 (S3, relay payload retention), E04-B03 (S3, no
+production link-quality data source). P1/P2 = 0 as of the last merge.
+
+## Epic-completion gate
+🧍 `epic_dev_merge` — ✅ cleared by human on 2026-08-27, explicitly
+informed of the one open risk: T03a/T03b/T03c/T05's on-device manual
+Bluetooth verification is unticked (no hardware-free test coverage exists
+for T03b/T03c by design). Human chose to merge now and verify on real
+hardware as a fast-follow, before E05/E06 send real traffic volume.
+
 ## Retro
 → `retro.md` (written after E04 completion)
