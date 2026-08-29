@@ -23,6 +23,20 @@ Every EARS id in the task has ≥1 test that references it and actually asserts
 the behaviour. Read the tests. A test that passes on broken code is worse than
 no test — it's a green light with no wiring behind it.
 
+**Falsify the evidence.** Where a test is the *only* thing standing behind a
+fix, an invariant, or a concurrency claim: break the code deliberately —
+revert the guard, delete the version byte, remove the fix's one line — and
+confirm the test fails **for the right reason**, then restore it verbatim and
+confirm green. A passing test proves the code does what the test says; it
+cannot prove the test says anything. Where no test could ever fail for the
+claim (an ORM's upgrade-vs-fresh-install behaviour, a driver's locking), read
+the library's source and cite it, rather than accepting the PR body's
+reasoning. And prefer your **own** probe to the builder's test — the builder
+cannot have tuned the code to a probe they never saw. (This line exists
+because it kept working: in E05 alone it found a lost-update race under a
+green suite, exposed a regression test that passed pre-fix and proved
+nothing, and caught a missing index that no test could have caught.)
+
 ### 3. The suite — run it yourself
 `make test && make lint`. Do not trust the PR body. Do not trust the last CI
 run on a different commit.

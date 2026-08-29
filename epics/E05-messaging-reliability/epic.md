@@ -140,4 +140,10 @@ a real seam for whoever wires it, recorded in `tracker.md`, not a defect
 now).
 
 ## Retro
-→ `retro.md` (written after E05 completion)
+→ `retro.md` (written 2026-08-29). Four promotions proposed, 🧍
+`retro_promotions` ⏳ AWAITING HUMAN: L-backend-003 rule extended
+(`skills/implement` §6, writer-side atomicity), L-process-006 +
+L-process-007 promoted to rules (`skills/task-sharding` §0 and two new
+Analyze-gate rows), L-qa-001 promoted to a rule (`skills/review` §2).
+One red carry-forward: E04-B03's link-quality wiring was never picked up by
+E05 and is still unwired.

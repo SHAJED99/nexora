@@ -72,6 +72,24 @@ automatically for matching tasks (see `index.yaml`).
      bundles had 20 live rows, reported a healthy pool, and would never
      replenish again. A third reader of the same table, still not
      re-audited, found inside the very fix meant to close this class.
+  5. E05-T04 (`sync_cursor_service.dart:125-140`, found in round-1 review by
+     reviewer-opus): `recordLocalProgress` read the cursor via `cursorFor`,
+     `await`ed, then wrote via a separate `insertOnConflictUpdate` — a
+     read-then-write with a suspension point in the middle, so two
+     overlapping calls both read the stale value and the later write lost
+     the higher one (`Future.wait([record(...,10), record(...,4)])` left the
+     cursor at **4**). This is the same family — "the cursor is the
+     authority for this property" — but a **different failure mode from the
+     four above**: not a sibling reader that never learned about the
+     counter, but the counter's *own writer* updating it non-atomically.
+     The rule promoted after recurrence 4 (`implement/SKILL.md` §6) told the
+     builder to audit other **readers**; it said nothing about the writer's
+     own atomicity, so it did not fire here. Fixed (`1637be9`) by collapsing
+     guard+write into one `insert(onConflict: DoUpdate(..., where: old.seq <
+     new.seq))` statement — atomic in SQL, independent of drift's
+     transaction semantics — plus
+     `test_EARS_MSG_5_concurrent_calls_do_not_regress_cursor`, confirmed red
+     on the prior code before the fix.
 - root cause: introducing a counter/cursor to make an invariant durable
   changes the *meaning* of "available" for every other piece of code that
   reads the same table, but nothing prompts an implementer (or a task's own
@@ -79,15 +97,42 @@ automatically for matching tasks (see `index.yaml`).
   solved the one call site named in its bug report and left the sibling
   call sites exactly as wrong as before — a grep for other readers of the
   same table at fix time would have caught #3 and #4 immediately.
+  For instance #5 the root cause is one layer earlier: nothing prompts the
+  implementer to ask whether the *write* that maintains the counter is a
+  single atomic statement. "Read, decide, write" reads as obviously correct
+  code and is silently wrong the moment two callers overlap — and a
+  single-threaded happy-path test passes either way, so the suite gives no
+  signal.
 - fix applied: each instance was caught in independent review (rule 5) and
   fixed same-day; no shipped defect. No mechanical hook exists yet for this
   — the pattern is semantic ("this table now has an authoritative counter;
   audit every SELECT against it"), not syntactically greppable in general.
-- recurrence: 4
+  2026-08-29 (E05 retro): the §6 rule was **extended** rather than
+  re-promoted — it now also covers the writer's own atomicity and requires a
+  concurrency falsification test for any counter/cursor write, because
+  instance #5 proves the reader-only wording did not reach the shape that
+  actually recurred.
+- recurrence: 5
 - status: promoted-to-rule — see `agent/skills/implement/SKILL.md`
   ("Introducing a durable counter" rule), promoted 2026-08-27 via
   `skills/retro`, 🧍 `retro_promotions` gate approved by human on
-  2026-08-27 (as drafted).
+  2026-08-27 (as drafted); **rule extended 2026-08-29** (E05 retro,
+  writer-side atomicity + required concurrency falsification test),
+  🧍 `retro_promotions` ⏳ awaiting human for the extension.
+- promotion assessment (E05 retro, evidence-based — did the rule help?):
+  the rule did **not** prevent authorship (the builder wrote the race), and
+  it did not fire in self-review because its wording is about readers. What
+  it did buy: the *class* was recognised instantly at review — the reviewer
+  reached for a concurrency probe unprompted on both T03 and T04, source-
+  traced drift's locking on T03 to prove that path safe, and demonstrated
+  T04's lost update with a concrete two-call scenario before writing the
+  finding. One round, one statement, one regression test. Verdict: the rule
+  is earning its context cost at review altitude, not at authoring altitude
+  — so the correction is to make it name the shape that keeps being written
+  (extend the rule), not to escalate to a hook. A hook would have to detect
+  "a read and a write of the same durable counter separated by a suspension
+  point", which is a real dataflow analysis, not a grep; noted as a
+  recommendation for the human, not built.
 
 > Deliberately empty, like every area here. A lesson is evidence from *this*
 > codebase, and its recurrence count is what decides which trap gets automated
