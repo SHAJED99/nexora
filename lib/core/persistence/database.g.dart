@@ -3919,6 +3919,425 @@ class DeliveryStatesCompanion extends UpdateCompanion<DeliveryStateRow> {
   }
 }
 
+class $SyncCursorsTable extends SyncCursors
+    with TableInfo<$SyncCursorsTable, SyncCursorRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncCursorsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _localDeviceIdMeta = const VerificationMeta(
+    'localDeviceId',
+  );
+  @override
+  late final GeneratedColumn<String> localDeviceId = GeneratedColumn<String>(
+    'local_device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _remoteDeviceIdMeta = const VerificationMeta(
+    'remoteDeviceId',
+  );
+  @override
+  late final GeneratedColumn<String> remoteDeviceId = GeneratedColumn<String>(
+    'remote_device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _conversationIdMeta = const VerificationMeta(
+    'conversationId',
+  );
+  @override
+  late final GeneratedColumn<String> conversationId = GeneratedColumn<String>(
+    'conversation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastConfirmedSequenceNumberMeta =
+      const VerificationMeta('lastConfirmedSequenceNumber');
+  @override
+  late final GeneratedColumn<int> lastConfirmedSequenceNumber =
+      GeneratedColumn<int>(
+        'last_confirmed_sequence_number',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    localDeviceId,
+    remoteDeviceId,
+    conversationId,
+    lastConfirmedSequenceNumber,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_cursors';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncCursorRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('local_device_id')) {
+      context.handle(
+        _localDeviceIdMeta,
+        localDeviceId.isAcceptableOrUnknown(
+          data['local_device_id']!,
+          _localDeviceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_localDeviceIdMeta);
+    }
+    if (data.containsKey('remote_device_id')) {
+      context.handle(
+        _remoteDeviceIdMeta,
+        remoteDeviceId.isAcceptableOrUnknown(
+          data['remote_device_id']!,
+          _remoteDeviceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_remoteDeviceIdMeta);
+    }
+    if (data.containsKey('conversation_id')) {
+      context.handle(
+        _conversationIdMeta,
+        conversationId.isAcceptableOrUnknown(
+          data['conversation_id']!,
+          _conversationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_conversationIdMeta);
+    }
+    if (data.containsKey('last_confirmed_sequence_number')) {
+      context.handle(
+        _lastConfirmedSequenceNumberMeta,
+        lastConfirmedSequenceNumber.isAcceptableOrUnknown(
+          data['last_confirmed_sequence_number']!,
+          _lastConfirmedSequenceNumberMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastConfirmedSequenceNumberMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {
+    localDeviceId,
+    remoteDeviceId,
+    conversationId,
+  };
+  @override
+  SyncCursorRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncCursorRow(
+      localDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_device_id'],
+      )!,
+      remoteDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_device_id'],
+      )!,
+      conversationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}conversation_id'],
+      )!,
+      lastConfirmedSequenceNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_confirmed_sequence_number'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SyncCursorsTable createAlias(String alias) {
+    return $SyncCursorsTable(attachedDatabase, alias);
+  }
+}
+
+class SyncCursorRow extends DataClass implements Insertable<SyncCursorRow> {
+  /// This device's own device id (the "local" side of the pair).
+  final String localDeviceId;
+
+  /// The other device (of this user's own devices, per epic.md's
+  /// mesh-to-mesh multi-device sync) this cursor tracks progress against.
+  final String remoteDeviceId;
+  final String conversationId;
+
+  /// Highest `messages.sequence_number` confirmed seen from
+  /// `remoteDeviceId` for this conversation. Monotonic -- never written
+  /// backward (see `SyncCursorService.recordLocalProgress`).
+  final int lastConfirmedSequenceNumber;
+
+  /// Epoch-ms wall-clock time of the last update to this row.
+  final int updatedAt;
+  const SyncCursorRow({
+    required this.localDeviceId,
+    required this.remoteDeviceId,
+    required this.conversationId,
+    required this.lastConfirmedSequenceNumber,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['local_device_id'] = Variable<String>(localDeviceId);
+    map['remote_device_id'] = Variable<String>(remoteDeviceId);
+    map['conversation_id'] = Variable<String>(conversationId);
+    map['last_confirmed_sequence_number'] = Variable<int>(
+      lastConfirmedSequenceNumber,
+    );
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  SyncCursorsCompanion toCompanion(bool nullToAbsent) {
+    return SyncCursorsCompanion(
+      localDeviceId: Value(localDeviceId),
+      remoteDeviceId: Value(remoteDeviceId),
+      conversationId: Value(conversationId),
+      lastConfirmedSequenceNumber: Value(lastConfirmedSequenceNumber),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SyncCursorRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncCursorRow(
+      localDeviceId: serializer.fromJson<String>(json['localDeviceId']),
+      remoteDeviceId: serializer.fromJson<String>(json['remoteDeviceId']),
+      conversationId: serializer.fromJson<String>(json['conversationId']),
+      lastConfirmedSequenceNumber: serializer.fromJson<int>(
+        json['lastConfirmedSequenceNumber'],
+      ),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'localDeviceId': serializer.toJson<String>(localDeviceId),
+      'remoteDeviceId': serializer.toJson<String>(remoteDeviceId),
+      'conversationId': serializer.toJson<String>(conversationId),
+      'lastConfirmedSequenceNumber': serializer.toJson<int>(
+        lastConfirmedSequenceNumber,
+      ),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  SyncCursorRow copyWith({
+    String? localDeviceId,
+    String? remoteDeviceId,
+    String? conversationId,
+    int? lastConfirmedSequenceNumber,
+    int? updatedAt,
+  }) => SyncCursorRow(
+    localDeviceId: localDeviceId ?? this.localDeviceId,
+    remoteDeviceId: remoteDeviceId ?? this.remoteDeviceId,
+    conversationId: conversationId ?? this.conversationId,
+    lastConfirmedSequenceNumber:
+        lastConfirmedSequenceNumber ?? this.lastConfirmedSequenceNumber,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SyncCursorRow copyWithCompanion(SyncCursorsCompanion data) {
+    return SyncCursorRow(
+      localDeviceId: data.localDeviceId.present
+          ? data.localDeviceId.value
+          : this.localDeviceId,
+      remoteDeviceId: data.remoteDeviceId.present
+          ? data.remoteDeviceId.value
+          : this.remoteDeviceId,
+      conversationId: data.conversationId.present
+          ? data.conversationId.value
+          : this.conversationId,
+      lastConfirmedSequenceNumber: data.lastConfirmedSequenceNumber.present
+          ? data.lastConfirmedSequenceNumber.value
+          : this.lastConfirmedSequenceNumber,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncCursorRow(')
+          ..write('localDeviceId: $localDeviceId, ')
+          ..write('remoteDeviceId: $remoteDeviceId, ')
+          ..write('conversationId: $conversationId, ')
+          ..write('lastConfirmedSequenceNumber: $lastConfirmedSequenceNumber, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    localDeviceId,
+    remoteDeviceId,
+    conversationId,
+    lastConfirmedSequenceNumber,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncCursorRow &&
+          other.localDeviceId == this.localDeviceId &&
+          other.remoteDeviceId == this.remoteDeviceId &&
+          other.conversationId == this.conversationId &&
+          other.lastConfirmedSequenceNumber ==
+              this.lastConfirmedSequenceNumber &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SyncCursorsCompanion extends UpdateCompanion<SyncCursorRow> {
+  final Value<String> localDeviceId;
+  final Value<String> remoteDeviceId;
+  final Value<String> conversationId;
+  final Value<int> lastConfirmedSequenceNumber;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const SyncCursorsCompanion({
+    this.localDeviceId = const Value.absent(),
+    this.remoteDeviceId = const Value.absent(),
+    this.conversationId = const Value.absent(),
+    this.lastConfirmedSequenceNumber = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncCursorsCompanion.insert({
+    required String localDeviceId,
+    required String remoteDeviceId,
+    required String conversationId,
+    required int lastConfirmedSequenceNumber,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : localDeviceId = Value(localDeviceId),
+       remoteDeviceId = Value(remoteDeviceId),
+       conversationId = Value(conversationId),
+       lastConfirmedSequenceNumber = Value(lastConfirmedSequenceNumber),
+       updatedAt = Value(updatedAt);
+  static Insertable<SyncCursorRow> custom({
+    Expression<String>? localDeviceId,
+    Expression<String>? remoteDeviceId,
+    Expression<String>? conversationId,
+    Expression<int>? lastConfirmedSequenceNumber,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (localDeviceId != null) 'local_device_id': localDeviceId,
+      if (remoteDeviceId != null) 'remote_device_id': remoteDeviceId,
+      if (conversationId != null) 'conversation_id': conversationId,
+      if (lastConfirmedSequenceNumber != null)
+        'last_confirmed_sequence_number': lastConfirmedSequenceNumber,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncCursorsCompanion copyWith({
+    Value<String>? localDeviceId,
+    Value<String>? remoteDeviceId,
+    Value<String>? conversationId,
+    Value<int>? lastConfirmedSequenceNumber,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return SyncCursorsCompanion(
+      localDeviceId: localDeviceId ?? this.localDeviceId,
+      remoteDeviceId: remoteDeviceId ?? this.remoteDeviceId,
+      conversationId: conversationId ?? this.conversationId,
+      lastConfirmedSequenceNumber:
+          lastConfirmedSequenceNumber ?? this.lastConfirmedSequenceNumber,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (localDeviceId.present) {
+      map['local_device_id'] = Variable<String>(localDeviceId.value);
+    }
+    if (remoteDeviceId.present) {
+      map['remote_device_id'] = Variable<String>(remoteDeviceId.value);
+    }
+    if (conversationId.present) {
+      map['conversation_id'] = Variable<String>(conversationId.value);
+    }
+    if (lastConfirmedSequenceNumber.present) {
+      map['last_confirmed_sequence_number'] = Variable<int>(
+        lastConfirmedSequenceNumber.value,
+      );
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncCursorsCompanion(')
+          ..write('localDeviceId: $localDeviceId, ')
+          ..write('remoteDeviceId: $remoteDeviceId, ')
+          ..write('conversationId: $conversationId, ')
+          ..write('lastConfirmedSequenceNumber: $lastConfirmedSequenceNumber, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3939,6 +4358,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $RelayPacketsTable relayPackets = $RelayPacketsTable(this);
   late final $MessagesTable messages = $MessagesTable(this);
   late final $DeliveryStatesTable deliveryStates = $DeliveryStatesTable(this);
+  late final $SyncCursorsTable syncCursors = $SyncCursorsTable(this);
   late final Index idxMessagesConversationCreatedAt = Index(
     'idx_messages_conversation_created_at',
     'CREATE INDEX idx_messages_conversation_created_at ON messages (conversation_id, created_at)',
@@ -3960,6 +4380,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     relayPackets,
     messages,
     deliveryStates,
+    syncCursors,
     idxMessagesConversationCreatedAt,
   ];
 }
@@ -6201,6 +6622,214 @@ typedef $$DeliveryStatesTableProcessedTableManager =
       DeliveryStateRow,
       PrefetchHooks Function()
     >;
+typedef $$SyncCursorsTableCreateCompanionBuilder =
+    SyncCursorsCompanion Function({
+      required String localDeviceId,
+      required String remoteDeviceId,
+      required String conversationId,
+      required int lastConfirmedSequenceNumber,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$SyncCursorsTableUpdateCompanionBuilder =
+    SyncCursorsCompanion Function({
+      Value<String> localDeviceId,
+      Value<String> remoteDeviceId,
+      Value<String> conversationId,
+      Value<int> lastConfirmedSequenceNumber,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$SyncCursorsTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncCursorsTable> {
+  $$SyncCursorsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get localDeviceId => $composableBuilder(
+    column: $table.localDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteDeviceId => $composableBuilder(
+    column: $table.remoteDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastConfirmedSequenceNumber => $composableBuilder(
+    column: $table.lastConfirmedSequenceNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncCursorsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncCursorsTable> {
+  $$SyncCursorsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get localDeviceId => $composableBuilder(
+    column: $table.localDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remoteDeviceId => $composableBuilder(
+    column: $table.remoteDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastConfirmedSequenceNumber => $composableBuilder(
+    column: $table.lastConfirmedSequenceNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncCursorsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncCursorsTable> {
+  $$SyncCursorsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get localDeviceId => $composableBuilder(
+    column: $table.localDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get remoteDeviceId => $composableBuilder(
+    column: $table.remoteDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lastConfirmedSequenceNumber => $composableBuilder(
+    column: $table.lastConfirmedSequenceNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$SyncCursorsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncCursorsTable,
+          SyncCursorRow,
+          $$SyncCursorsTableFilterComposer,
+          $$SyncCursorsTableOrderingComposer,
+          $$SyncCursorsTableAnnotationComposer,
+          $$SyncCursorsTableCreateCompanionBuilder,
+          $$SyncCursorsTableUpdateCompanionBuilder,
+          (
+            SyncCursorRow,
+            BaseReferences<_$AppDatabase, $SyncCursorsTable, SyncCursorRow>,
+          ),
+          SyncCursorRow,
+          PrefetchHooks Function()
+        > {
+  $$SyncCursorsTableTableManager(_$AppDatabase db, $SyncCursorsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncCursorsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncCursorsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncCursorsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> localDeviceId = const Value.absent(),
+                Value<String> remoteDeviceId = const Value.absent(),
+                Value<String> conversationId = const Value.absent(),
+                Value<int> lastConfirmedSequenceNumber = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncCursorsCompanion(
+                localDeviceId: localDeviceId,
+                remoteDeviceId: remoteDeviceId,
+                conversationId: conversationId,
+                lastConfirmedSequenceNumber: lastConfirmedSequenceNumber,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String localDeviceId,
+                required String remoteDeviceId,
+                required String conversationId,
+                required int lastConfirmedSequenceNumber,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SyncCursorsCompanion.insert(
+                localDeviceId: localDeviceId,
+                remoteDeviceId: remoteDeviceId,
+                conversationId: conversationId,
+                lastConfirmedSequenceNumber: lastConfirmedSequenceNumber,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncCursorsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncCursorsTable,
+      SyncCursorRow,
+      $$SyncCursorsTableFilterComposer,
+      $$SyncCursorsTableOrderingComposer,
+      $$SyncCursorsTableAnnotationComposer,
+      $$SyncCursorsTableCreateCompanionBuilder,
+      $$SyncCursorsTableUpdateCompanionBuilder,
+      (
+        SyncCursorRow,
+        BaseReferences<_$AppDatabase, $SyncCursorsTable, SyncCursorRow>,
+      ),
+      SyncCursorRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6232,4 +6861,6 @@ class $AppDatabaseManager {
       $$MessagesTableTableManager(_db, _db.messages);
   $$DeliveryStatesTableTableManager get deliveryStates =>
       $$DeliveryStatesTableTableManager(_db, _db.deliveryStates);
+  $$SyncCursorsTableTableManager get syncCursors =>
+      $$SyncCursorsTableTableManager(_db, _db.syncCursors);
 }

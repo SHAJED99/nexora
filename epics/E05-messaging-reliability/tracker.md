@@ -1,14 +1,14 @@
 # E05 · Messaging Reliability & Multi-Device Sync · Progress
 
-**Status:** in-progress · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 3/5
+**Status:** in-progress · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 4/5
 
 > Only the ORCHESTRATOR edits this file.
 
 ## Tasks
 - [x] E05-T01 · Message domain model + delivery-state machine + tables · done · builder (sonnet) → reviewer (opus) APPROVE round 2, squash-merged 77d5b40
 - [x] E05-T02 · Offline outgoing message queue · done · builder (sonnet) → reviewer (opus) APPROVE, squash-merged ea7c9fb
-- [ ] E05-T03 · Incoming message handling (dedup, ordering) · review-requested (224/224 tests) · builder (sonnet) → reviewer (opus, in progress)
-- [ ] E05-T04 · Multi-device sync cursors · changes-requested (round 1: recordLocalProgress read-then-write race, demonstrated regressing the cursor 10->4 under concurrency) · builder (sonnet) → reviewer (opus)
+- [x] E05-T03 · Incoming message handling (dedup, ordering) · done · builder (sonnet) → reviewer (opus) APPROVE, squash-merged 984f83e
+- [ ] E05-T04 · Multi-device sync cursors · round 1 fix committed (guarded upsert, falsified red->green), independent re-review in progress · builder (sonnet) → reviewer (opus)
 - [x] E05-T05 · Conflict resolution (security-restrictive precedence) · done · builder (sonnet) → reviewer (opus) APPROVE, squash-merged af86907
 
 ## Dependency graph
@@ -33,6 +33,14 @@ dispatch immediately, in parallel with T01.
 (none)
 
 ## Event log (append-only)
+- 2026-08-29 E05-T03 built (builder-sonnet), reviewed APPROVE (reviewer-
+  opus traced drift's NativeDatabase transaction-locking source itself
+  to confirm the dedup-check-then-insert is genuinely serialized --
+  same race class as T04's bug, but here the lock is real, backed by
+  messages.id's own PRIMARY KEY as a second line of defence), squash-
+  merged to epic_05 (984f83e). Non-blocking note: message_tables.dart's
+  comment about deliveryState "never written directly" is about
+  mutation, not row creation -- writing accepted at insert is correct.
 - 2026-08-29 E05-T02 built (builder-sonnet), reviewed APPROVE (reviewer-
   opus, independently falsified the sequence_number concurrency claim
   with a 60-way concurrent probe and drift source-level analysis rather

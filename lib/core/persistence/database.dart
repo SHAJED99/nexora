@@ -15,6 +15,7 @@ import 'message_tables.dart';
 import 'relationships_table.dart';
 import 'relay_tables.dart';
 import 'routing_tables.dart';
+import 'sync_tables.dart';
 
 part 'database.g.dart';
 
@@ -51,6 +52,7 @@ class DeviceIdentities extends Table {
   RelayPackets,
   Messages,
   DeliveryStates,
+  SyncCursors,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -59,7 +61,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -231,6 +233,24 @@ class AppDatabase extends _$AppDatabase {
               'idx_messages_conversation_created_at ON messages '
               '(conversation_id, created_at);',
             );
+          }
+          if (from < 12) {
+            // E05-T04: new `sync_cursors` table -- additive only, no changes
+            // to existing tables (docs/conventions.md "Schema migrations").
+            // Purely additive `createTable`, unlike E04-B02's v9->v10
+            // rebuild (which needed an explicit transaction wrapper because
+            // it dropped/renamed an existing table) -- there is nothing to
+            // wrap in a transaction here since a single CREATE TABLE is
+            // already atomic in SQLite.
+            //
+            // No index to create alongside this one: `SyncCursors` declares
+            // no `@TableIndex` (see sync_tables.dart's comment) -- so unlike
+            // the `from < 11` step above, there is no companion
+            // `CREATE INDEX IF NOT EXISTS` needed here. (T01's round-1
+            // finding was that `createTable` never creates a declared
+            // index; the fix for *this* table is simply not declaring one,
+            // confirmed deliberately, not by omission.)
+            await m.createTable(syncCursors);
           }
         },
       );
