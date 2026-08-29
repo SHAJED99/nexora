@@ -21,6 +21,15 @@ not shardable.
 
 ## Procedure
 
+### 0. Read what the previous epics handed you
+Before slicing anything, open each `depends_on:` epic's `retro.md` (§Open
+follow-ups) and its `epic.md` §Bug sweep + bug files' advisories, and list
+every obligation addressed to this epic. That list is an input to the slicing,
+and the Analyze gate's **Inherited obligations** row checks it again at the
+end. An obligation written at one epic's merge gate has no reader unless this
+step creates one — and unread obligations get dropped silently, at full price
+(E05-B02: a whole EARS criterion with no mechanism, twice).
+
 ### 1. Slice vertically
 Walk the epic's EARS criteria. Group into slices where each task is **one
 mergeable unit of value** — roughly ½–1 agent-session. Vertical (endpoint +
@@ -80,6 +89,8 @@ same problems through five failed implementations.
 | **MoSCoW inflation** | >60% of tasks are `must` — re-grade; if everything is critical, nothing is |
 | **Size** | any `L` task not split or justified |
 | **Design** | a frontend task without a `design_contract:`, or one pointing at a contract that doesn't exist |
+| **Obligation ownership** | a task file describes *another* task's behaviour in prose ("T02 serializes the envelope", "the receiver dedups on this id") and that named task's own contract — its `files:`, `functions:`, §2/§3 — does not independently state the same obligation. Grep each task file for every other task id and for sibling-naming prose, then read the named task's contract. Two tasks silently agreeing that someone *else* does the work contradicts nothing, so Contract sanity passes and the work has no owner. Fix by moving the obligation into the owning task's contract, or by deleting the prose and raising an Open Question with a named owner — never by leaving the description where it is |
+| **Inherited obligations** | this epic's `depends_on:` epics handed it work that no task here claims. Read each dependency epic's `retro.md` §Open follow-ups, its bug files' review advisories, and its merge-gate notes for anything addressed to this epic ("E05 must wire…", "deferred to E06"). Every hit is listed in the report as covered-by-<task-id>, or carried as an explicit Open Question with an owner. A carry-forward that appears in neither is a fail — an advisory in a closed bug file has no reader, and this is exactly how one gets lost |
 
 Output an ANALYZE REPORT (pass/fail per check, with the offending ids) appended
 to `epic.md`.

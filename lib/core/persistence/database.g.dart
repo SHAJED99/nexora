@@ -3144,6 +3144,1200 @@ class RelayPacketsCompanion extends UpdateCompanion<RelayPacketRow> {
   }
 }
 
+class $MessagesTable extends Messages
+    with TableInfo<$MessagesTable, MessageRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MessagesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _conversationIdMeta = const VerificationMeta(
+    'conversationId',
+  );
+  @override
+  late final GeneratedColumn<String> conversationId = GeneratedColumn<String>(
+    'conversation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _senderDeviceIdMeta = const VerificationMeta(
+    'senderDeviceId',
+  );
+  @override
+  late final GeneratedColumn<String> senderDeviceId = GeneratedColumn<String>(
+    'sender_device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sequenceNumberMeta = const VerificationMeta(
+    'sequenceNumber',
+  );
+  @override
+  late final GeneratedColumn<int> sequenceNumber = GeneratedColumn<int>(
+    'sequence_number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ciphertextMeta = const VerificationMeta(
+    'ciphertext',
+  );
+  @override
+  late final GeneratedColumn<Uint8List> ciphertext = GeneratedColumn<Uint8List>(
+    'ciphertext',
+    aliasedName,
+    false,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deliveryStateMeta = const VerificationMeta(
+    'deliveryState',
+  );
+  @override
+  late final GeneratedColumn<String> deliveryState = GeneratedColumn<String>(
+    'delivery_state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    conversationId,
+    senderDeviceId,
+    sequenceNumber,
+    ciphertext,
+    createdAt,
+    deliveryState,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'messages';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MessageRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('conversation_id')) {
+      context.handle(
+        _conversationIdMeta,
+        conversationId.isAcceptableOrUnknown(
+          data['conversation_id']!,
+          _conversationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_conversationIdMeta);
+    }
+    if (data.containsKey('sender_device_id')) {
+      context.handle(
+        _senderDeviceIdMeta,
+        senderDeviceId.isAcceptableOrUnknown(
+          data['sender_device_id']!,
+          _senderDeviceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_senderDeviceIdMeta);
+    }
+    if (data.containsKey('sequence_number')) {
+      context.handle(
+        _sequenceNumberMeta,
+        sequenceNumber.isAcceptableOrUnknown(
+          data['sequence_number']!,
+          _sequenceNumberMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_sequenceNumberMeta);
+    }
+    if (data.containsKey('ciphertext')) {
+      context.handle(
+        _ciphertextMeta,
+        ciphertext.isAcceptableOrUnknown(data['ciphertext']!, _ciphertextMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_ciphertextMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('delivery_state')) {
+      context.handle(
+        _deliveryStateMeta,
+        deliveryState.isAcceptableOrUnknown(
+          data['delivery_state']!,
+          _deliveryStateMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_deliveryStateMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MessageRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MessageRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      conversationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}conversation_id'],
+      )!,
+      senderDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sender_device_id'],
+      )!,
+      sequenceNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sequence_number'],
+      )!,
+      ciphertext: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}ciphertext'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      deliveryState: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}delivery_state'],
+      )!,
+    );
+  }
+
+  @override
+  $MessagesTable createAlias(String alias) {
+    return $MessagesTable(attachedDatabase, alias);
+  }
+}
+
+class MessageRow extends DataClass implements Insertable<MessageRow> {
+  /// Client-generated, globally unique -- FR-MSG-003/EARS-MSG-2. Never
+  /// server-assigned (this app has no server, ADR-0005).
+  final String id;
+  final String conversationId;
+  final String senderDeviceId;
+
+  /// Monotonic per `(conversationId, senderDeviceId)`, assigned at compose
+  /// time -- offline, no live transport required (FR-MSG-004/EARS-MSG-3,
+  /// this task's §6 risk note). Assignment algorithm itself is T02's job;
+  /// this column only needs to be a plain INTEGER a client can set locally.
+  final int sequenceNumber;
+
+  /// Opaque, already-encrypted bytes. Never decrypted or inspected by
+  /// anything in this table's own file (this task's §4).
+  final Uint8List ciphertext;
+
+  /// Epoch-ms wall-clock creation time -- keyset pagination cursor, never
+  /// used for logical ordering (that's [sequenceNumber]'s job -- clock
+  /// drift across devices makes wall-clock time unfit for that).
+  final int createdAt;
+
+  /// A `DeliveryState.name` string (Queued/Sent/Accepted/Delivered/Stored/
+  /// Read/Failed, F-032) -- never written directly; always via
+  /// `DeliveryStateMachine.transition`.
+  final String deliveryState;
+  const MessageRow({
+    required this.id,
+    required this.conversationId,
+    required this.senderDeviceId,
+    required this.sequenceNumber,
+    required this.ciphertext,
+    required this.createdAt,
+    required this.deliveryState,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['conversation_id'] = Variable<String>(conversationId);
+    map['sender_device_id'] = Variable<String>(senderDeviceId);
+    map['sequence_number'] = Variable<int>(sequenceNumber);
+    map['ciphertext'] = Variable<Uint8List>(ciphertext);
+    map['created_at'] = Variable<int>(createdAt);
+    map['delivery_state'] = Variable<String>(deliveryState);
+    return map;
+  }
+
+  MessagesCompanion toCompanion(bool nullToAbsent) {
+    return MessagesCompanion(
+      id: Value(id),
+      conversationId: Value(conversationId),
+      senderDeviceId: Value(senderDeviceId),
+      sequenceNumber: Value(sequenceNumber),
+      ciphertext: Value(ciphertext),
+      createdAt: Value(createdAt),
+      deliveryState: Value(deliveryState),
+    );
+  }
+
+  factory MessageRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MessageRow(
+      id: serializer.fromJson<String>(json['id']),
+      conversationId: serializer.fromJson<String>(json['conversationId']),
+      senderDeviceId: serializer.fromJson<String>(json['senderDeviceId']),
+      sequenceNumber: serializer.fromJson<int>(json['sequenceNumber']),
+      ciphertext: serializer.fromJson<Uint8List>(json['ciphertext']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      deliveryState: serializer.fromJson<String>(json['deliveryState']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'conversationId': serializer.toJson<String>(conversationId),
+      'senderDeviceId': serializer.toJson<String>(senderDeviceId),
+      'sequenceNumber': serializer.toJson<int>(sequenceNumber),
+      'ciphertext': serializer.toJson<Uint8List>(ciphertext),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'deliveryState': serializer.toJson<String>(deliveryState),
+    };
+  }
+
+  MessageRow copyWith({
+    String? id,
+    String? conversationId,
+    String? senderDeviceId,
+    int? sequenceNumber,
+    Uint8List? ciphertext,
+    int? createdAt,
+    String? deliveryState,
+  }) => MessageRow(
+    id: id ?? this.id,
+    conversationId: conversationId ?? this.conversationId,
+    senderDeviceId: senderDeviceId ?? this.senderDeviceId,
+    sequenceNumber: sequenceNumber ?? this.sequenceNumber,
+    ciphertext: ciphertext ?? this.ciphertext,
+    createdAt: createdAt ?? this.createdAt,
+    deliveryState: deliveryState ?? this.deliveryState,
+  );
+  MessageRow copyWithCompanion(MessagesCompanion data) {
+    return MessageRow(
+      id: data.id.present ? data.id.value : this.id,
+      conversationId: data.conversationId.present
+          ? data.conversationId.value
+          : this.conversationId,
+      senderDeviceId: data.senderDeviceId.present
+          ? data.senderDeviceId.value
+          : this.senderDeviceId,
+      sequenceNumber: data.sequenceNumber.present
+          ? data.sequenceNumber.value
+          : this.sequenceNumber,
+      ciphertext: data.ciphertext.present
+          ? data.ciphertext.value
+          : this.ciphertext,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      deliveryState: data.deliveryState.present
+          ? data.deliveryState.value
+          : this.deliveryState,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MessageRow(')
+          ..write('id: $id, ')
+          ..write('conversationId: $conversationId, ')
+          ..write('senderDeviceId: $senderDeviceId, ')
+          ..write('sequenceNumber: $sequenceNumber, ')
+          ..write('ciphertext: $ciphertext, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('deliveryState: $deliveryState')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    conversationId,
+    senderDeviceId,
+    sequenceNumber,
+    $driftBlobEquality.hash(ciphertext),
+    createdAt,
+    deliveryState,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MessageRow &&
+          other.id == this.id &&
+          other.conversationId == this.conversationId &&
+          other.senderDeviceId == this.senderDeviceId &&
+          other.sequenceNumber == this.sequenceNumber &&
+          $driftBlobEquality.equals(other.ciphertext, this.ciphertext) &&
+          other.createdAt == this.createdAt &&
+          other.deliveryState == this.deliveryState);
+}
+
+class MessagesCompanion extends UpdateCompanion<MessageRow> {
+  final Value<String> id;
+  final Value<String> conversationId;
+  final Value<String> senderDeviceId;
+  final Value<int> sequenceNumber;
+  final Value<Uint8List> ciphertext;
+  final Value<int> createdAt;
+  final Value<String> deliveryState;
+  final Value<int> rowid;
+  const MessagesCompanion({
+    this.id = const Value.absent(),
+    this.conversationId = const Value.absent(),
+    this.senderDeviceId = const Value.absent(),
+    this.sequenceNumber = const Value.absent(),
+    this.ciphertext = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.deliveryState = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MessagesCompanion.insert({
+    required String id,
+    required String conversationId,
+    required String senderDeviceId,
+    required int sequenceNumber,
+    required Uint8List ciphertext,
+    required int createdAt,
+    required String deliveryState,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       conversationId = Value(conversationId),
+       senderDeviceId = Value(senderDeviceId),
+       sequenceNumber = Value(sequenceNumber),
+       ciphertext = Value(ciphertext),
+       createdAt = Value(createdAt),
+       deliveryState = Value(deliveryState);
+  static Insertable<MessageRow> custom({
+    Expression<String>? id,
+    Expression<String>? conversationId,
+    Expression<String>? senderDeviceId,
+    Expression<int>? sequenceNumber,
+    Expression<Uint8List>? ciphertext,
+    Expression<int>? createdAt,
+    Expression<String>? deliveryState,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (conversationId != null) 'conversation_id': conversationId,
+      if (senderDeviceId != null) 'sender_device_id': senderDeviceId,
+      if (sequenceNumber != null) 'sequence_number': sequenceNumber,
+      if (ciphertext != null) 'ciphertext': ciphertext,
+      if (createdAt != null) 'created_at': createdAt,
+      if (deliveryState != null) 'delivery_state': deliveryState,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MessagesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? conversationId,
+    Value<String>? senderDeviceId,
+    Value<int>? sequenceNumber,
+    Value<Uint8List>? ciphertext,
+    Value<int>? createdAt,
+    Value<String>? deliveryState,
+    Value<int>? rowid,
+  }) {
+    return MessagesCompanion(
+      id: id ?? this.id,
+      conversationId: conversationId ?? this.conversationId,
+      senderDeviceId: senderDeviceId ?? this.senderDeviceId,
+      sequenceNumber: sequenceNumber ?? this.sequenceNumber,
+      ciphertext: ciphertext ?? this.ciphertext,
+      createdAt: createdAt ?? this.createdAt,
+      deliveryState: deliveryState ?? this.deliveryState,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (conversationId.present) {
+      map['conversation_id'] = Variable<String>(conversationId.value);
+    }
+    if (senderDeviceId.present) {
+      map['sender_device_id'] = Variable<String>(senderDeviceId.value);
+    }
+    if (sequenceNumber.present) {
+      map['sequence_number'] = Variable<int>(sequenceNumber.value);
+    }
+    if (ciphertext.present) {
+      map['ciphertext'] = Variable<Uint8List>(ciphertext.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (deliveryState.present) {
+      map['delivery_state'] = Variable<String>(deliveryState.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MessagesCompanion(')
+          ..write('id: $id, ')
+          ..write('conversationId: $conversationId, ')
+          ..write('senderDeviceId: $senderDeviceId, ')
+          ..write('sequenceNumber: $sequenceNumber, ')
+          ..write('ciphertext: $ciphertext, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('deliveryState: $deliveryState, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DeliveryStatesTable extends DeliveryStates
+    with TableInfo<$DeliveryStatesTable, DeliveryStateRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DeliveryStatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _messageIdMeta = const VerificationMeta(
+    'messageId',
+  );
+  @override
+  late final GeneratedColumn<String> messageId = GeneratedColumn<String>(
+    'message_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stateMeta = const VerificationMeta('state');
+  @override
+  late final GeneratedColumn<String> state = GeneratedColumn<String>(
+    'state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _changedAtMeta = const VerificationMeta(
+    'changedAt',
+  );
+  @override
+  late final GeneratedColumn<int> changedAt = GeneratedColumn<int>(
+    'changed_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [messageId, state, changedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'delivery_states';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DeliveryStateRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('message_id')) {
+      context.handle(
+        _messageIdMeta,
+        messageId.isAcceptableOrUnknown(data['message_id']!, _messageIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_messageIdMeta);
+    }
+    if (data.containsKey('state')) {
+      context.handle(
+        _stateMeta,
+        state.isAcceptableOrUnknown(data['state']!, _stateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stateMeta);
+    }
+    if (data.containsKey('changed_at')) {
+      context.handle(
+        _changedAtMeta,
+        changedAt.isAcceptableOrUnknown(data['changed_at']!, _changedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_changedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {messageId, state};
+  @override
+  DeliveryStateRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DeliveryStateRow(
+      messageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}message_id'],
+      )!,
+      state: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}state'],
+      )!,
+      changedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}changed_at'],
+      )!,
+    );
+  }
+
+  @override
+  $DeliveryStatesTable createAlias(String alias) {
+    return $DeliveryStatesTable(attachedDatabase, alias);
+  }
+}
+
+class DeliveryStateRow extends DataClass
+    implements Insertable<DeliveryStateRow> {
+  final String messageId;
+
+  /// A `DeliveryState.name` string, same convention as `messages
+  /// .deliveryState`.
+  final String state;
+  final int changedAt;
+  const DeliveryStateRow({
+    required this.messageId,
+    required this.state,
+    required this.changedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['message_id'] = Variable<String>(messageId);
+    map['state'] = Variable<String>(state);
+    map['changed_at'] = Variable<int>(changedAt);
+    return map;
+  }
+
+  DeliveryStatesCompanion toCompanion(bool nullToAbsent) {
+    return DeliveryStatesCompanion(
+      messageId: Value(messageId),
+      state: Value(state),
+      changedAt: Value(changedAt),
+    );
+  }
+
+  factory DeliveryStateRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DeliveryStateRow(
+      messageId: serializer.fromJson<String>(json['messageId']),
+      state: serializer.fromJson<String>(json['state']),
+      changedAt: serializer.fromJson<int>(json['changedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'messageId': serializer.toJson<String>(messageId),
+      'state': serializer.toJson<String>(state),
+      'changedAt': serializer.toJson<int>(changedAt),
+    };
+  }
+
+  DeliveryStateRow copyWith({
+    String? messageId,
+    String? state,
+    int? changedAt,
+  }) => DeliveryStateRow(
+    messageId: messageId ?? this.messageId,
+    state: state ?? this.state,
+    changedAt: changedAt ?? this.changedAt,
+  );
+  DeliveryStateRow copyWithCompanion(DeliveryStatesCompanion data) {
+    return DeliveryStateRow(
+      messageId: data.messageId.present ? data.messageId.value : this.messageId,
+      state: data.state.present ? data.state.value : this.state,
+      changedAt: data.changedAt.present ? data.changedAt.value : this.changedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeliveryStateRow(')
+          ..write('messageId: $messageId, ')
+          ..write('state: $state, ')
+          ..write('changedAt: $changedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(messageId, state, changedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DeliveryStateRow &&
+          other.messageId == this.messageId &&
+          other.state == this.state &&
+          other.changedAt == this.changedAt);
+}
+
+class DeliveryStatesCompanion extends UpdateCompanion<DeliveryStateRow> {
+  final Value<String> messageId;
+  final Value<String> state;
+  final Value<int> changedAt;
+  final Value<int> rowid;
+  const DeliveryStatesCompanion({
+    this.messageId = const Value.absent(),
+    this.state = const Value.absent(),
+    this.changedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DeliveryStatesCompanion.insert({
+    required String messageId,
+    required String state,
+    required int changedAt,
+    this.rowid = const Value.absent(),
+  }) : messageId = Value(messageId),
+       state = Value(state),
+       changedAt = Value(changedAt);
+  static Insertable<DeliveryStateRow> custom({
+    Expression<String>? messageId,
+    Expression<String>? state,
+    Expression<int>? changedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (messageId != null) 'message_id': messageId,
+      if (state != null) 'state': state,
+      if (changedAt != null) 'changed_at': changedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DeliveryStatesCompanion copyWith({
+    Value<String>? messageId,
+    Value<String>? state,
+    Value<int>? changedAt,
+    Value<int>? rowid,
+  }) {
+    return DeliveryStatesCompanion(
+      messageId: messageId ?? this.messageId,
+      state: state ?? this.state,
+      changedAt: changedAt ?? this.changedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (messageId.present) {
+      map['message_id'] = Variable<String>(messageId.value);
+    }
+    if (state.present) {
+      map['state'] = Variable<String>(state.value);
+    }
+    if (changedAt.present) {
+      map['changed_at'] = Variable<int>(changedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeliveryStatesCompanion(')
+          ..write('messageId: $messageId, ')
+          ..write('state: $state, ')
+          ..write('changedAt: $changedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SyncCursorsTable extends SyncCursors
+    with TableInfo<$SyncCursorsTable, SyncCursorRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncCursorsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _localDeviceIdMeta = const VerificationMeta(
+    'localDeviceId',
+  );
+  @override
+  late final GeneratedColumn<String> localDeviceId = GeneratedColumn<String>(
+    'local_device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _remoteDeviceIdMeta = const VerificationMeta(
+    'remoteDeviceId',
+  );
+  @override
+  late final GeneratedColumn<String> remoteDeviceId = GeneratedColumn<String>(
+    'remote_device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _conversationIdMeta = const VerificationMeta(
+    'conversationId',
+  );
+  @override
+  late final GeneratedColumn<String> conversationId = GeneratedColumn<String>(
+    'conversation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastConfirmedSequenceNumberMeta =
+      const VerificationMeta('lastConfirmedSequenceNumber');
+  @override
+  late final GeneratedColumn<int> lastConfirmedSequenceNumber =
+      GeneratedColumn<int>(
+        'last_confirmed_sequence_number',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    localDeviceId,
+    remoteDeviceId,
+    conversationId,
+    lastConfirmedSequenceNumber,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_cursors';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncCursorRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('local_device_id')) {
+      context.handle(
+        _localDeviceIdMeta,
+        localDeviceId.isAcceptableOrUnknown(
+          data['local_device_id']!,
+          _localDeviceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_localDeviceIdMeta);
+    }
+    if (data.containsKey('remote_device_id')) {
+      context.handle(
+        _remoteDeviceIdMeta,
+        remoteDeviceId.isAcceptableOrUnknown(
+          data['remote_device_id']!,
+          _remoteDeviceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_remoteDeviceIdMeta);
+    }
+    if (data.containsKey('conversation_id')) {
+      context.handle(
+        _conversationIdMeta,
+        conversationId.isAcceptableOrUnknown(
+          data['conversation_id']!,
+          _conversationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_conversationIdMeta);
+    }
+    if (data.containsKey('last_confirmed_sequence_number')) {
+      context.handle(
+        _lastConfirmedSequenceNumberMeta,
+        lastConfirmedSequenceNumber.isAcceptableOrUnknown(
+          data['last_confirmed_sequence_number']!,
+          _lastConfirmedSequenceNumberMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastConfirmedSequenceNumberMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {
+    localDeviceId,
+    remoteDeviceId,
+    conversationId,
+  };
+  @override
+  SyncCursorRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncCursorRow(
+      localDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_device_id'],
+      )!,
+      remoteDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_device_id'],
+      )!,
+      conversationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}conversation_id'],
+      )!,
+      lastConfirmedSequenceNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_confirmed_sequence_number'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SyncCursorsTable createAlias(String alias) {
+    return $SyncCursorsTable(attachedDatabase, alias);
+  }
+}
+
+class SyncCursorRow extends DataClass implements Insertable<SyncCursorRow> {
+  /// This device's own device id (the "local" side of the pair).
+  final String localDeviceId;
+
+  /// The other device (of this user's own devices, per epic.md's
+  /// mesh-to-mesh multi-device sync) this cursor tracks progress against.
+  final String remoteDeviceId;
+  final String conversationId;
+
+  /// Highest `messages.sequence_number` confirmed seen from
+  /// `remoteDeviceId` for this conversation. Monotonic -- never written
+  /// backward (see `SyncCursorService.recordLocalProgress`).
+  final int lastConfirmedSequenceNumber;
+
+  /// Epoch-ms wall-clock time of the last update to this row.
+  final int updatedAt;
+  const SyncCursorRow({
+    required this.localDeviceId,
+    required this.remoteDeviceId,
+    required this.conversationId,
+    required this.lastConfirmedSequenceNumber,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['local_device_id'] = Variable<String>(localDeviceId);
+    map['remote_device_id'] = Variable<String>(remoteDeviceId);
+    map['conversation_id'] = Variable<String>(conversationId);
+    map['last_confirmed_sequence_number'] = Variable<int>(
+      lastConfirmedSequenceNumber,
+    );
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  SyncCursorsCompanion toCompanion(bool nullToAbsent) {
+    return SyncCursorsCompanion(
+      localDeviceId: Value(localDeviceId),
+      remoteDeviceId: Value(remoteDeviceId),
+      conversationId: Value(conversationId),
+      lastConfirmedSequenceNumber: Value(lastConfirmedSequenceNumber),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SyncCursorRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncCursorRow(
+      localDeviceId: serializer.fromJson<String>(json['localDeviceId']),
+      remoteDeviceId: serializer.fromJson<String>(json['remoteDeviceId']),
+      conversationId: serializer.fromJson<String>(json['conversationId']),
+      lastConfirmedSequenceNumber: serializer.fromJson<int>(
+        json['lastConfirmedSequenceNumber'],
+      ),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'localDeviceId': serializer.toJson<String>(localDeviceId),
+      'remoteDeviceId': serializer.toJson<String>(remoteDeviceId),
+      'conversationId': serializer.toJson<String>(conversationId),
+      'lastConfirmedSequenceNumber': serializer.toJson<int>(
+        lastConfirmedSequenceNumber,
+      ),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  SyncCursorRow copyWith({
+    String? localDeviceId,
+    String? remoteDeviceId,
+    String? conversationId,
+    int? lastConfirmedSequenceNumber,
+    int? updatedAt,
+  }) => SyncCursorRow(
+    localDeviceId: localDeviceId ?? this.localDeviceId,
+    remoteDeviceId: remoteDeviceId ?? this.remoteDeviceId,
+    conversationId: conversationId ?? this.conversationId,
+    lastConfirmedSequenceNumber:
+        lastConfirmedSequenceNumber ?? this.lastConfirmedSequenceNumber,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SyncCursorRow copyWithCompanion(SyncCursorsCompanion data) {
+    return SyncCursorRow(
+      localDeviceId: data.localDeviceId.present
+          ? data.localDeviceId.value
+          : this.localDeviceId,
+      remoteDeviceId: data.remoteDeviceId.present
+          ? data.remoteDeviceId.value
+          : this.remoteDeviceId,
+      conversationId: data.conversationId.present
+          ? data.conversationId.value
+          : this.conversationId,
+      lastConfirmedSequenceNumber: data.lastConfirmedSequenceNumber.present
+          ? data.lastConfirmedSequenceNumber.value
+          : this.lastConfirmedSequenceNumber,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncCursorRow(')
+          ..write('localDeviceId: $localDeviceId, ')
+          ..write('remoteDeviceId: $remoteDeviceId, ')
+          ..write('conversationId: $conversationId, ')
+          ..write('lastConfirmedSequenceNumber: $lastConfirmedSequenceNumber, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    localDeviceId,
+    remoteDeviceId,
+    conversationId,
+    lastConfirmedSequenceNumber,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncCursorRow &&
+          other.localDeviceId == this.localDeviceId &&
+          other.remoteDeviceId == this.remoteDeviceId &&
+          other.conversationId == this.conversationId &&
+          other.lastConfirmedSequenceNumber ==
+              this.lastConfirmedSequenceNumber &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SyncCursorsCompanion extends UpdateCompanion<SyncCursorRow> {
+  final Value<String> localDeviceId;
+  final Value<String> remoteDeviceId;
+  final Value<String> conversationId;
+  final Value<int> lastConfirmedSequenceNumber;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const SyncCursorsCompanion({
+    this.localDeviceId = const Value.absent(),
+    this.remoteDeviceId = const Value.absent(),
+    this.conversationId = const Value.absent(),
+    this.lastConfirmedSequenceNumber = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncCursorsCompanion.insert({
+    required String localDeviceId,
+    required String remoteDeviceId,
+    required String conversationId,
+    required int lastConfirmedSequenceNumber,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : localDeviceId = Value(localDeviceId),
+       remoteDeviceId = Value(remoteDeviceId),
+       conversationId = Value(conversationId),
+       lastConfirmedSequenceNumber = Value(lastConfirmedSequenceNumber),
+       updatedAt = Value(updatedAt);
+  static Insertable<SyncCursorRow> custom({
+    Expression<String>? localDeviceId,
+    Expression<String>? remoteDeviceId,
+    Expression<String>? conversationId,
+    Expression<int>? lastConfirmedSequenceNumber,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (localDeviceId != null) 'local_device_id': localDeviceId,
+      if (remoteDeviceId != null) 'remote_device_id': remoteDeviceId,
+      if (conversationId != null) 'conversation_id': conversationId,
+      if (lastConfirmedSequenceNumber != null)
+        'last_confirmed_sequence_number': lastConfirmedSequenceNumber,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncCursorsCompanion copyWith({
+    Value<String>? localDeviceId,
+    Value<String>? remoteDeviceId,
+    Value<String>? conversationId,
+    Value<int>? lastConfirmedSequenceNumber,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return SyncCursorsCompanion(
+      localDeviceId: localDeviceId ?? this.localDeviceId,
+      remoteDeviceId: remoteDeviceId ?? this.remoteDeviceId,
+      conversationId: conversationId ?? this.conversationId,
+      lastConfirmedSequenceNumber:
+          lastConfirmedSequenceNumber ?? this.lastConfirmedSequenceNumber,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (localDeviceId.present) {
+      map['local_device_id'] = Variable<String>(localDeviceId.value);
+    }
+    if (remoteDeviceId.present) {
+      map['remote_device_id'] = Variable<String>(remoteDeviceId.value);
+    }
+    if (conversationId.present) {
+      map['conversation_id'] = Variable<String>(conversationId.value);
+    }
+    if (lastConfirmedSequenceNumber.present) {
+      map['last_confirmed_sequence_number'] = Variable<int>(
+        lastConfirmedSequenceNumber.value,
+      );
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncCursorsCompanion(')
+          ..write('localDeviceId: $localDeviceId, ')
+          ..write('remoteDeviceId: $remoteDeviceId, ')
+          ..write('conversationId: $conversationId, ')
+          ..write('lastConfirmedSequenceNumber: $lastConfirmedSequenceNumber, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3162,6 +4356,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CryptoCountersTable cryptoCounters = $CryptoCountersTable(this);
   late final $RoutesTable routes = $RoutesTable(this);
   late final $RelayPacketsTable relayPackets = $RelayPacketsTable(this);
+  late final $MessagesTable messages = $MessagesTable(this);
+  late final $DeliveryStatesTable deliveryStates = $DeliveryStatesTable(this);
+  late final $SyncCursorsTable syncCursors = $SyncCursorsTable(this);
+  late final Index idxMessagesConversationCreatedAt = Index(
+    'idx_messages_conversation_created_at',
+    'CREATE INDEX idx_messages_conversation_created_at ON messages (conversation_id, created_at)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3177,6 +4378,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     cryptoCounters,
     routes,
     relayPackets,
+    messages,
+    deliveryStates,
+    syncCursors,
+    idxMessagesConversationCreatedAt,
   ];
 }
 
@@ -5004,6 +6209,627 @@ typedef $$RelayPacketsTableProcessedTableManager =
       RelayPacketRow,
       PrefetchHooks Function()
     >;
+typedef $$MessagesTableCreateCompanionBuilder =
+    MessagesCompanion Function({
+      required String id,
+      required String conversationId,
+      required String senderDeviceId,
+      required int sequenceNumber,
+      required Uint8List ciphertext,
+      required int createdAt,
+      required String deliveryState,
+      Value<int> rowid,
+    });
+typedef $$MessagesTableUpdateCompanionBuilder =
+    MessagesCompanion Function({
+      Value<String> id,
+      Value<String> conversationId,
+      Value<String> senderDeviceId,
+      Value<int> sequenceNumber,
+      Value<Uint8List> ciphertext,
+      Value<int> createdAt,
+      Value<String> deliveryState,
+      Value<int> rowid,
+    });
+
+class $$MessagesTableFilterComposer
+    extends Composer<_$AppDatabase, $MessagesTable> {
+  $$MessagesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get senderDeviceId => $composableBuilder(
+    column: $table.senderDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sequenceNumber => $composableBuilder(
+    column: $table.sequenceNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get ciphertext => $composableBuilder(
+    column: $table.ciphertext,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deliveryState => $composableBuilder(
+    column: $table.deliveryState,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MessagesTableOrderingComposer
+    extends Composer<_$AppDatabase, $MessagesTable> {
+  $$MessagesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get senderDeviceId => $composableBuilder(
+    column: $table.senderDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sequenceNumber => $composableBuilder(
+    column: $table.sequenceNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get ciphertext => $composableBuilder(
+    column: $table.ciphertext,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deliveryState => $composableBuilder(
+    column: $table.deliveryState,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MessagesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MessagesTable> {
+  $$MessagesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get senderDeviceId => $composableBuilder(
+    column: $table.senderDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sequenceNumber => $composableBuilder(
+    column: $table.sequenceNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<Uint8List> get ciphertext => $composableBuilder(
+    column: $table.ciphertext,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get deliveryState => $composableBuilder(
+    column: $table.deliveryState,
+    builder: (column) => column,
+  );
+}
+
+class $$MessagesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MessagesTable,
+          MessageRow,
+          $$MessagesTableFilterComposer,
+          $$MessagesTableOrderingComposer,
+          $$MessagesTableAnnotationComposer,
+          $$MessagesTableCreateCompanionBuilder,
+          $$MessagesTableUpdateCompanionBuilder,
+          (
+            MessageRow,
+            BaseReferences<_$AppDatabase, $MessagesTable, MessageRow>,
+          ),
+          MessageRow,
+          PrefetchHooks Function()
+        > {
+  $$MessagesTableTableManager(_$AppDatabase db, $MessagesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MessagesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MessagesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MessagesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> conversationId = const Value.absent(),
+                Value<String> senderDeviceId = const Value.absent(),
+                Value<int> sequenceNumber = const Value.absent(),
+                Value<Uint8List> ciphertext = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<String> deliveryState = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MessagesCompanion(
+                id: id,
+                conversationId: conversationId,
+                senderDeviceId: senderDeviceId,
+                sequenceNumber: sequenceNumber,
+                ciphertext: ciphertext,
+                createdAt: createdAt,
+                deliveryState: deliveryState,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String conversationId,
+                required String senderDeviceId,
+                required int sequenceNumber,
+                required Uint8List ciphertext,
+                required int createdAt,
+                required String deliveryState,
+                Value<int> rowid = const Value.absent(),
+              }) => MessagesCompanion.insert(
+                id: id,
+                conversationId: conversationId,
+                senderDeviceId: senderDeviceId,
+                sequenceNumber: sequenceNumber,
+                ciphertext: ciphertext,
+                createdAt: createdAt,
+                deliveryState: deliveryState,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MessagesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MessagesTable,
+      MessageRow,
+      $$MessagesTableFilterComposer,
+      $$MessagesTableOrderingComposer,
+      $$MessagesTableAnnotationComposer,
+      $$MessagesTableCreateCompanionBuilder,
+      $$MessagesTableUpdateCompanionBuilder,
+      (MessageRow, BaseReferences<_$AppDatabase, $MessagesTable, MessageRow>),
+      MessageRow,
+      PrefetchHooks Function()
+    >;
+typedef $$DeliveryStatesTableCreateCompanionBuilder =
+    DeliveryStatesCompanion Function({
+      required String messageId,
+      required String state,
+      required int changedAt,
+      Value<int> rowid,
+    });
+typedef $$DeliveryStatesTableUpdateCompanionBuilder =
+    DeliveryStatesCompanion Function({
+      Value<String> messageId,
+      Value<String> state,
+      Value<int> changedAt,
+      Value<int> rowid,
+    });
+
+class $$DeliveryStatesTableFilterComposer
+    extends Composer<_$AppDatabase, $DeliveryStatesTable> {
+  $$DeliveryStatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get messageId => $composableBuilder(
+    column: $table.messageId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get changedAt => $composableBuilder(
+    column: $table.changedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DeliveryStatesTableOrderingComposer
+    extends Composer<_$AppDatabase, $DeliveryStatesTable> {
+  $$DeliveryStatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get messageId => $composableBuilder(
+    column: $table.messageId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get changedAt => $composableBuilder(
+    column: $table.changedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DeliveryStatesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DeliveryStatesTable> {
+  $$DeliveryStatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get messageId =>
+      $composableBuilder(column: $table.messageId, builder: (column) => column);
+
+  GeneratedColumn<String> get state =>
+      $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumn<int> get changedAt =>
+      $composableBuilder(column: $table.changedAt, builder: (column) => column);
+}
+
+class $$DeliveryStatesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DeliveryStatesTable,
+          DeliveryStateRow,
+          $$DeliveryStatesTableFilterComposer,
+          $$DeliveryStatesTableOrderingComposer,
+          $$DeliveryStatesTableAnnotationComposer,
+          $$DeliveryStatesTableCreateCompanionBuilder,
+          $$DeliveryStatesTableUpdateCompanionBuilder,
+          (
+            DeliveryStateRow,
+            BaseReferences<
+              _$AppDatabase,
+              $DeliveryStatesTable,
+              DeliveryStateRow
+            >,
+          ),
+          DeliveryStateRow,
+          PrefetchHooks Function()
+        > {
+  $$DeliveryStatesTableTableManager(
+    _$AppDatabase db,
+    $DeliveryStatesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DeliveryStatesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DeliveryStatesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DeliveryStatesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> messageId = const Value.absent(),
+                Value<String> state = const Value.absent(),
+                Value<int> changedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DeliveryStatesCompanion(
+                messageId: messageId,
+                state: state,
+                changedAt: changedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String messageId,
+                required String state,
+                required int changedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => DeliveryStatesCompanion.insert(
+                messageId: messageId,
+                state: state,
+                changedAt: changedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DeliveryStatesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DeliveryStatesTable,
+      DeliveryStateRow,
+      $$DeliveryStatesTableFilterComposer,
+      $$DeliveryStatesTableOrderingComposer,
+      $$DeliveryStatesTableAnnotationComposer,
+      $$DeliveryStatesTableCreateCompanionBuilder,
+      $$DeliveryStatesTableUpdateCompanionBuilder,
+      (
+        DeliveryStateRow,
+        BaseReferences<_$AppDatabase, $DeliveryStatesTable, DeliveryStateRow>,
+      ),
+      DeliveryStateRow,
+      PrefetchHooks Function()
+    >;
+typedef $$SyncCursorsTableCreateCompanionBuilder =
+    SyncCursorsCompanion Function({
+      required String localDeviceId,
+      required String remoteDeviceId,
+      required String conversationId,
+      required int lastConfirmedSequenceNumber,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$SyncCursorsTableUpdateCompanionBuilder =
+    SyncCursorsCompanion Function({
+      Value<String> localDeviceId,
+      Value<String> remoteDeviceId,
+      Value<String> conversationId,
+      Value<int> lastConfirmedSequenceNumber,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$SyncCursorsTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncCursorsTable> {
+  $$SyncCursorsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get localDeviceId => $composableBuilder(
+    column: $table.localDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteDeviceId => $composableBuilder(
+    column: $table.remoteDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastConfirmedSequenceNumber => $composableBuilder(
+    column: $table.lastConfirmedSequenceNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncCursorsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncCursorsTable> {
+  $$SyncCursorsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get localDeviceId => $composableBuilder(
+    column: $table.localDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remoteDeviceId => $composableBuilder(
+    column: $table.remoteDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastConfirmedSequenceNumber => $composableBuilder(
+    column: $table.lastConfirmedSequenceNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncCursorsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncCursorsTable> {
+  $$SyncCursorsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get localDeviceId => $composableBuilder(
+    column: $table.localDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get remoteDeviceId => $composableBuilder(
+    column: $table.remoteDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lastConfirmedSequenceNumber => $composableBuilder(
+    column: $table.lastConfirmedSequenceNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$SyncCursorsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncCursorsTable,
+          SyncCursorRow,
+          $$SyncCursorsTableFilterComposer,
+          $$SyncCursorsTableOrderingComposer,
+          $$SyncCursorsTableAnnotationComposer,
+          $$SyncCursorsTableCreateCompanionBuilder,
+          $$SyncCursorsTableUpdateCompanionBuilder,
+          (
+            SyncCursorRow,
+            BaseReferences<_$AppDatabase, $SyncCursorsTable, SyncCursorRow>,
+          ),
+          SyncCursorRow,
+          PrefetchHooks Function()
+        > {
+  $$SyncCursorsTableTableManager(_$AppDatabase db, $SyncCursorsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncCursorsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncCursorsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncCursorsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> localDeviceId = const Value.absent(),
+                Value<String> remoteDeviceId = const Value.absent(),
+                Value<String> conversationId = const Value.absent(),
+                Value<int> lastConfirmedSequenceNumber = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncCursorsCompanion(
+                localDeviceId: localDeviceId,
+                remoteDeviceId: remoteDeviceId,
+                conversationId: conversationId,
+                lastConfirmedSequenceNumber: lastConfirmedSequenceNumber,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String localDeviceId,
+                required String remoteDeviceId,
+                required String conversationId,
+                required int lastConfirmedSequenceNumber,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SyncCursorsCompanion.insert(
+                localDeviceId: localDeviceId,
+                remoteDeviceId: remoteDeviceId,
+                conversationId: conversationId,
+                lastConfirmedSequenceNumber: lastConfirmedSequenceNumber,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncCursorsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncCursorsTable,
+      SyncCursorRow,
+      $$SyncCursorsTableFilterComposer,
+      $$SyncCursorsTableOrderingComposer,
+      $$SyncCursorsTableAnnotationComposer,
+      $$SyncCursorsTableCreateCompanionBuilder,
+      $$SyncCursorsTableUpdateCompanionBuilder,
+      (
+        SyncCursorRow,
+        BaseReferences<_$AppDatabase, $SyncCursorsTable, SyncCursorRow>,
+      ),
+      SyncCursorRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -5031,4 +6857,10 @@ class $AppDatabaseManager {
       $$RoutesTableTableManager(_db, _db.routes);
   $$RelayPacketsTableTableManager get relayPackets =>
       $$RelayPacketsTableTableManager(_db, _db.relayPackets);
+  $$MessagesTableTableManager get messages =>
+      $$MessagesTableTableManager(_db, _db.messages);
+  $$DeliveryStatesTableTableManager get deliveryStates =>
+      $$DeliveryStatesTableTableManager(_db, _db.deliveryStates);
+  $$SyncCursorsTableTableManager get syncCursors =>
+      $$SyncCursorsTableTableManager(_db, _db.syncCursors);
 }

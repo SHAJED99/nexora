@@ -92,15 +92,33 @@ is a wasted review cycle with your name on it.
 - loading/error/empty states present
 - no secrets or PII logged
 - every ADR your files touch is honoured, or listed in §Deviations with a reason
-- **introducing a durable counter/cursor?** grep for every other reader of
-  the same table/row and decide, per reader, whether it must now consult
-  the counter instead of deriving its answer from live data. A counter
-  changes what "available"/"next" means for the whole table, not just the
-  call site that motivated it — the counter's own reader can be correct
-  while a sibling `SELECT` a few files away silently keeps the old, now-wrong
-  assumption. (Real cost of skipping this: the same invariant broke four
-  times in one epic — E03-T02, its own fix, the sweep-found sibling bug, and
-  that fix's own fix — each time in a different reader of one table.)
+- **introducing a durable counter/cursor?** Two checks, both required — the
+  first is about everyone else's code, the second about yours:
+  1. **Audit every other reader.** grep for every other reader of
+     the same table/row and decide, per reader, whether it must now consult
+     the counter instead of deriving its answer from live data. A counter
+     changes what "available"/"next" means for the whole table, not just the
+     call site that motivated it — the counter's own reader can be correct
+     while a sibling `SELECT` a few files away silently keeps the old,
+     now-wrong assumption.
+  2. **Make the write itself atomic, and prove it.** The update that
+     maintains the counter must be a *single* statement the database applies
+     indivisibly (`INSERT … ON CONFLICT DO UPDATE … WHERE old < new`, or an
+     `UPDATE … WHERE` guard). Any shape of "read it, decide, write it" with
+     an `await` in between is a lost update waiting for two overlapping
+     callers, and it reads as obviously-correct code. A transaction is the
+     weaker fallback: it works only if you can cite the driver's actual
+     isolation/locking behaviour, so a single guarded statement is preferred
+     because it is race-free regardless. Then **write the falsification
+     test** — fire the two concurrent calls that would lose the update
+     (`Future.wait([write(10), write(4)])` → assert 10, not 4), confirm it
+     fails on the pre-fix code, and keep it. A single-threaded happy-path
+     test passes either way and is not evidence.
+
+  (Real cost of skipping this: one invariant class broke five times across
+  three epics — E03-T02, its own fix, the sweep-found sibling reader, that
+  fix's own fix (all check 1), and E05-T04's non-atomic cursor write
+  (check 2, which the rule did not name until it had already recurred).)
 
 ### 7. Hand over
 `status: review-requested` → push → PR to the **epic** branch → 📋 DEV STATUS
