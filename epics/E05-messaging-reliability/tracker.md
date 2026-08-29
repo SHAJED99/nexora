@@ -1,14 +1,14 @@
 # E05 · Messaging Reliability & Multi-Device Sync · Progress
 
-**Status:** in-progress · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 1/5
+**Status:** in-progress · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 2/5
 
 > Only the ORCHESTRATOR edits this file.
 
 ## Tasks
-- [ ] E05-T01 · Message domain model + delivery-state machine + tables · changes-requested (round 1: index missing on upgrade migration) · builder (sonnet) → reviewer (opus)
-- [ ] E05-T02 · Offline outgoing message queue · todo · builder (sonnet) → reviewer (opus)
-- [ ] E05-T03 · Incoming message handling (dedup, ordering) · todo · builder (sonnet) → reviewer (opus)
-- [ ] E05-T04 · Multi-device sync cursors · todo · builder (sonnet) → reviewer (opus)
+- [x] E05-T01 · Message domain model + delivery-state machine + tables · done · builder (sonnet) → reviewer (opus) APPROVE round 2, squash-merged 77d5b40
+- [ ] E05-T02 · Offline outgoing message queue · in-progress · builder (sonnet) → reviewer (opus)
+- [ ] E05-T03 · Incoming message handling (dedup, ordering) · in-progress · builder (sonnet) → reviewer (opus)
+- [ ] E05-T04 · Multi-device sync cursors · changes-requested (round 1: recordLocalProgress read-then-write race, demonstrated regressing the cursor 10->4 under concurrency) · builder (sonnet) → reviewer (opus)
 - [x] E05-T05 · Conflict resolution (security-restrictive precedence) · done · builder (sonnet) → reviewer (opus) APPROVE, squash-merged af86907
 
 ## Dependency graph
