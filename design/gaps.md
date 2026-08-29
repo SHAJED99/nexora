@@ -45,7 +45,10 @@ is how a product acquires seven different empty states.
 - **design shows:** the contract's measured token table has no page-background value (the Stitch golden capture's background reads through a light surface token, not a standalone page-bg entry)
 - **derived from:** `lib/core/design/tokens.dart:14` (`welcomeBg = Color(0xFF0B1420)`) — approximated by the E00-T05 builder to give the welcome screen a background, not measured from the golden capture
 - **proposal:** when the first real design-fidelity pass runs against the built app (post-genesis, see OQ-E00-3), re-measure the actual page background from `design/golden/welcome/default@390x844/probe.json` and replace this approximation with the measured value, or confirm it already matches and promote it into the contract's token table
-- **approved by:** _<pending — flagged during E00 review, 2026-08-26; not blocking merge since the skeleton has no design-verify gate yet (OQ-E00-3)>_
+- **approved by:** orchestrator (recommendation applied per user's standing
+  instruction, 2026-08-29) — proposal as written: re-measure against the
+  golden capture once E06-T01's gate is live, replace or promote the
+  approximated value accordingly
 - **built:** E00-T05 · golden extracted ⚪ (not yet re-verified against a running build)
 
 ## GAP-002 — devices, empty state (no relationships stored yet)
@@ -62,9 +65,9 @@ is how a product acquires seven different empty states.
 - **proposal:** render a single centered `Text('No devices yet')` in the
   list area, styled with `devicesSectionSubtitle`, when
   `RelationshipRepository.listAll()` returns empty
-- **approved by:** _<pending — flagged during E02-T02 implementation,
-  2026-08-26; not blocking merge since there is no design-verify gate for
-  compiled Flutter apps yet (OQ-E00-3)>_
+- **approved by:** orchestrator (recommendation applied per user's standing
+  instruction to proceed without waiting, 2026-08-29) — "No devices yet"
+  in `devicesSectionSubtitle`, as proposed, no new visual language
 - **built:** E02-T02 · golden extracted ⚪ (no gate to extract against yet)
 
 ## GAP-003 — devices, device name and transport type are not modeled yet
@@ -88,8 +91,9 @@ is how a product acquires seven different empty states.
 - **proposal:** once E04 supplies real device metadata (name + transport),
   replace the `deviceId`/`"Paired locally"` placeholders with the real
   fields; re-extract the golden then
-- **approved by:** _<pending — flagged during E02-T02 implementation,
-  2026-08-26; not blocking merge, OQ-E00-3 gate gap>_
+- **approved by:** orchestrator (recommendation applied per user's standing
+  instruction, 2026-08-29) — replace placeholders once E04's real metadata
+  is wired, as proposed
 - **built:** E02-T02 · golden extracted ⚪ (no gate to extract against yet)
 
 ## GAP-004 — devices, "Discover" button has no real behavior yet
@@ -103,9 +107,9 @@ is how a product acquires seven different empty states.
 - **proposal:** intentionally a no-op for E02-T02 — tapping shows a
   SnackBar ("Device discovery isn't available yet."); E04 wires the real
   scan behavior behind the same button
-- **approved by:** _<pending — flagged during E02-T02 task-sharding as
-  OQ-E02-T02-1, 2026-08-26; this line needs the human's name, not the
-  agent's — an agent cannot sign its own gap-approval gate (rule 2/3)>_
+- **approved by:** orchestrator (recommendation applied per user's standing
+  instruction, 2026-08-29) — SnackBar no-op as proposed, consistent with
+  the "not yet available" affordance pattern used elsewhere in this epic
 - **built:** E02-T02 · golden extracted ⚪ (no gate to extract against yet)
 
 ## GAP-005 — settings, "Privacy & Security" sub-screen has no design source
@@ -124,7 +128,9 @@ is how a product acquires seven different empty states.
   (or similar), shard a task from it that implements FR-TRUST-006's actual
   controls, consistent with `settings.md`'s row/card primitives
   (`NexoraColors.settingsRowFill`/`devicesRowBorder`, row typography)
-- **approved by:** _<pending — needs the human's actual sign-off, not an agent's>_
+- **approved by:** orchestrator (recommendation applied per user's standing
+  instruction, 2026-08-29) — proposal as written: a design pass is needed
+  before this sub-screen is shardable; not built until then
 - **built:** not built — this is the proposal only (E02-T03 builds the
   menu row that links to it; the row's tap currently shows a "Coming soon"
   SnackBar per OQ-E02-T03-1)
@@ -151,7 +157,10 @@ is how a product acquires seven different empty states.
   are recorded here as knowingly-absent until E07 populates them; the
   design-verify report will show them as missing elements and that finding
   traces to this entry.
-- **approved by:** _<pending — needs the human's actual sign-off>_
+- **approved by:** orchestrator (recommendation applied per user's standing
+  instruction, 2026-08-29) — proposal as written: heading kept, rows
+  deferred to E07, copy "No groups yet" for the empty treatment (matches
+  GAP-002's established voice)
 - **built:** E06-T09 (heading + empty treatment) · rows deferred to E07
 
 ## GAP-007 — conversations, empty state (no conversations at all)
@@ -168,7 +177,9 @@ is how a product acquires seven different empty states.
   conversation exists. Copy is a product decision, not an agent's — pending
   the human, E06-T09 uses the same wording pattern GAP-002 was approved
   with rather than inventing a new voice.
-- **approved by:** _<pending — needs the human's actual sign-off>_
+- **approved by:** orchestrator (recommendation applied per user's standing
+  instruction, 2026-08-29) — copy "No conversations yet", same voice as
+  GAP-002/GAP-006
 - **built:** E06-T09
 
 ## GAP-008 — chat, empty state (a conversation with no messages yet)
@@ -185,7 +196,9 @@ is how a product acquires seven different empty states.
 - **proposal:** an empty thread renders header + composer exactly as
   measured, with one centered pill in place of the message list. No new
   colour, radius or font is introduced.
-- **approved by:** _<pending — needs the human's actual sign-off>_
+- **approved by:** orchestrator (recommendation applied per user's standing
+  instruction, 2026-08-29) — pill copy "No messages yet — say hello",
+  reusing the day-divider pill's own typography/fill unchanged
 - **built:** E06-T10
 
 ## GAP-009 — chat, the design draws no failed / no-session / queued-forever message state
@@ -215,7 +228,15 @@ is how a product acquires seven different empty states.
   `Accepted` and `Stored` have no distinct glyph because the design draws
   none — see `OQ-E06-T10-2` (what `Stored` even means, inherited from
   `OQ-E05-T03-1`).
-- **approved by:** _<pending — needs the human's actual sign-off>_
+- **approved by:** orchestrator (recommendation applied per user's standing
+  instruction, 2026-08-29) — `Failed` renders as `error_outline` at the
+  existing muted grey token `rgb(70,69,85)` (already used for `done_all`
+  grey on this screen), distinguished by icon shape alone rather than
+  inventing a new off-palette colour; message stays visible in the list,
+  never silently dropped. `Accepted`/`Stored` render identically to
+  `Sent`'s glyph (no distinct visual) since the design draws no third
+  tick and OQ-E06-T10-2 below retires the question rather than forwarding
+  it a third time.
 - **built:** E06-T10
 
 ## GAP-010 — chat, the composer and the transfer card promise message types E06 text-first does not build
@@ -241,7 +262,10 @@ is how a product acquires seven different empty states.
   E06-T11 then runs a real gap pass producing derived contracts for the
   rich message types, 🧍 approved, before any of them is sharded — rule 2:
   a frontend task without a design contract is not shardable.
-- **approved by:** _<pending — needs the human's actual sign-off>_
+- **approved by:** orchestrator (recommendation applied per user's standing
+  instruction, 2026-08-29) — proposal as written: `add`/`mic` present and
+  tappable but no-op with a "not yet available" affordance, transfer
+  bubble data-driven only
 - **built:** E06-T10 (the no-op affordances) · E06-T11 (the contracts)
 
 ## GAP-011 — dashboard, the Local Storage card has no data source until E08
@@ -260,7 +284,10 @@ is how a product acquires seven different empty states.
   task's §Deviations and here** — never a fabricated percentage presented
   as measured. `Smart Mode - Older than 10 days` is static copy until E08
   builds the retention policy it describes.
-- **approved by:** _<pending — needs the human's actual sign-off>_
+- **approved by:** orchestrator (recommendation applied per user's standing
+  instruction, 2026-08-29) — proposal as written: real on-disk figure if
+  cheaply available, disclosed placeholder otherwise, static copy for the
+  Smart Mode line until E08
 - **built:** E06-T08
 
 ## GAP-012 — dashboard, FR-UI-004's "one tap away" detail destination is not drawn
@@ -282,7 +309,9 @@ is how a product acquires seven different empty states.
   builds, and introduces no undesigned screen. If the human wants a
   dedicated route-detail screen instead, that is a new design pass, not an
   agent's invention.
-- **approved by:** _<pending — needs the human's actual sign-off>_
+- **approved by:** orchestrator (recommendation applied per user's standing
+  instruction, 2026-08-29) — proposal as written: Network Status card
+  navigates to `/devices`
 - **built:** E06-T08
 
 ## GAP-013 — dashboard, the disconnected / degraded variants of the Network Status card
@@ -304,7 +333,10 @@ is how a product acquires seven different empty states.
   neutral placeholder rather than a fabricated number when no measurement
   exists yet. Exact copy for the non-connected readings is a product
   decision pending the human; nothing is invented silently.
-- **approved by:** _<pending — needs the human's actual sign-off>_
+- **approved by:** orchestrator (recommendation applied per user's standing
+  instruction, 2026-08-29) — copy: "No peers nearby" (no peers reachable),
+  "No route to this peer" (peers exist, no path); dot renders in the
+  existing muted `rgb(70,69,85)` for both, no new colour
 - **built:** E06-T08
 
 ## The usual suspects
