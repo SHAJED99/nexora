@@ -50,6 +50,21 @@
 // no `processQueue()` call, no `transport.incomingData` listener. Everything
 // here is construction only — starting the inbound pipeline is T05's job and
 // the queue driver is T06's (including T06's own 🧍 trigger-model decision).
+//
+// **E06-T06 update: `coordinator` is now constructed and exposed here too**,
+// same rule as every other member — one instance per process, built once by
+// [MessagingStack.create]. `create()` still does NOT call
+// `coordinator.start()` itself: that would silently start the mesh's
+// heartbeat from inside a pure composition root, which is exactly the
+// "does NOT start anything" contract this file has always kept. `main.dart`
+// and `bindings.dart` are outside E06-T06's own `files:` fence (its task
+// file lists only this file and `sync_cursor_service.dart` for the `update:`
+// set), so the actual `coordinator.start()` call site at the app's real
+// lifecycle entry point is deliberately NOT wired here — logged as a
+// Deviation in that task's own self-review, not silently done or silently
+// skipped. `coordinator` is fully constructed and ready for whichever
+// component calls `start()` (most likely T11's chat screen, given E06-T06
+// blocks both T07 and T11).
 // **Does NOT call `establishSession`** — sending stays honestly broken with
 // `AppFailure('messaging.no_session')` until T07 lands; see
 // `test_no_session_send_fails_honestly` in this task's test file.
@@ -115,6 +130,8 @@ import '../routing_engine/relay_engine.dart';
 import '../routing_engine/routing_engine.dart';
 import '../transport/transport_service.dart';
 import 'ciphertext_codec.dart';
+import 'inbound_pipeline.dart';
+import 'messaging_coordinator.dart';
 import 'relay_packet_frame.dart';
 
 // `MessageEnvelope` is re-exported by `receive_message_use_case.dart`
@@ -141,6 +158,15 @@ const int _localSignalDeviceId = 1;
 /// drift apart silently.
 const int _defaultPriority = 0;
 const Duration _defaultTtl = Duration(days: 3);
+
+/// `OQ-E06-T06-1`'s resolved answer (option (c)): the `Timer.periodic` floor
+/// that guarantees `sweepExpired()`/`reclaimPayloads()` still run on a
+/// schedule even with zero mesh traffic. [MessagingStack.create]'s own
+/// `coordinatorTickInterval` parameter defaults to this constant but is
+/// still an injected value, never a literal baked into
+/// `MessagingCoordinator` itself (task file §5's contract: "injected, never
+/// hard-coded at a call site") — a test or a future caller can override it.
+const Duration _defaultCoordinatorTickInterval = Duration(seconds: 60);
 
 /// `ready`, or `unavailable` with a human-readable (never secret, never
 /// device-id- or key-bearing) reason — task file §3/§5. A screen reads this
@@ -204,7 +230,21 @@ class MessagingStack {
     required this.syncCursors,
     required this.selfDeviceId,
     required this.status,
-  });
+    required Duration coordinatorTickInterval,
+  }) {
+    // E06-T06: `inbound`/`coordinator` need a fully-constructed `this` (both
+    // are bound to this exact stack instance), so they are built in the
+    // constructor body -- after every other `final` field above is already
+    // set by the initializer list -- rather than passed in like the rest.
+    // Neither is started here: `create()`'s own contract is "does NOT start
+    // anything" (this file's header), unchanged by this task.
+    inbound = InboundPipeline(stack: this);
+    coordinator = MessagingCoordinator(
+      stack: this,
+      inbound: inbound,
+      tickInterval: coordinatorTickInterval,
+    );
+  }
 
   /// The single app-wide `AppDatabase` — passed in, never constructed here
   /// (task file §5: "the single app-wide AppDatabase already registered in
@@ -219,6 +259,17 @@ class MessagingStack {
   final SendMessageUseCase sendMessage;
   final ReceiveMessageUseCase receiveMessage;
   final SyncCursorService syncCursors;
+
+  /// E06-T06: the receive-side wedge (E06-T05), bound to this exact stack.
+  /// Constructed here, never started by [create] (see this file's header)
+  /// — `coordinator.start()` is what actually starts it.
+  late final InboundPipeline inbound;
+
+  /// E06-T06: the relay-queue/inbound-pipeline/sync-cursor driver — closes
+  /// E05-B02. Constructed here, never started by [create]; see this file's
+  /// header for exactly why the actual `start()` call site is deliberately
+  /// not wired in this file.
+  late final MessagingCoordinator coordinator;
 
   /// This device's own local identity (ADR-0005: local, not Firebase-
   /// derived) — from `DeviceIdentityRepository`. May be `''` if no local
@@ -238,6 +289,7 @@ class MessagingStack {
     TransportService? transport,
     DateTime Function() clock = DateTime.now,
     DriftSignalProtocolStore? store,
+    Duration coordinatorTickInterval = _defaultCoordinatorTickInterval,
   }) async {
     final resolvedTransport = transport ?? TransportService();
     final resolvedStore = store ?? DriftSignalProtocolStore(db);
@@ -345,12 +397,17 @@ class MessagingStack {
       syncCursors: syncCursors,
       selfDeviceId: selfDeviceId,
       status: status,
+      coordinatorTickInterval: coordinatorTickInterval,
     );
   }
 
   /// Closes transport subscriptions and the database. Test-only — the app
-  /// process never calls this (task file §5).
+  /// process never calls this (task file §5). Also stops [coordinator]
+  /// (which stops [inbound] as part of its own `stop()`) so a disposed
+  /// stack's timer/subscriptions do not keep firing in a test process after
+  /// the stack itself is gone.
   Future<void> dispose() async {
+    await coordinator.stop();
     await transport.dispose();
     await db.close();
   }
