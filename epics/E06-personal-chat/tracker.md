@@ -1,17 +1,17 @@
 # E06 · Personal Chat ★ · Progress
 
-**Status:** sharded, blocked on 2 human decisions · **Started:** — · **Completed:** — · **Progress:** 0/13 tasks
+**Status:** in progress · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 2/13 tasks
 
 > Only the ORCHESTRATOR edits this file.
 
 ## Tasks
-- [ ] E06-T01 · Flutter-capable design-fidelity gate (closes OQ-E00-3) · todo · infra · builder · must/P1 · M
-- [ ] E06-T02 · Relay wire-packet framing + ciphertext type tag (closes OQ-E05-B01-1, E03-B03) · todo · backend · builder · must/P1 · M
-- [ ] E06-T03 · Messaging composition root (DI + startup crypto/identity init) · todo · backend · builder · must/P1 · M
+- [ ] E06-T01 · Flutter-capable design-fidelity gate (closes OQ-E00-3) · in progress · infra · builder-ui · must/P1 · M
+- [x] E06-T02 · Relay wire-packet framing + ciphertext type tag (closes OQ-E05-B01-1, E03-B03) · done · backend · builder · must/P1 · M · merged `a0e4031`
+- [x] E06-T03 · Messaging composition root (DI + startup crypto/identity init) · done · backend · builder · must/P1 · M · merged `bbad8d8`
 - [ ] E06-T04 · Link-quality wiring (closes E04-B03's carry-forward) · todo · backend · builder · must/P1 · M
 - [ ] E06-T05 · Live inbound pipeline (deliver or forward) · todo · backend · builder · must/P1 · M
-- [ ] E06-T06 · MessagingCoordinator — relay driver, cursors, reconciliation (closes E05-B02) · todo · backend · builder · must/P1 · M · ⛔ **blocked: OQ-E06-T06-1**
-- [ ] E06-T07 · Prekey-bundle exchange (closes OQ-E05-T02-1) · todo · backend · builder · must/P1 · M · ⛔ **blocked: OQ-E06-T07-1**
+- [ ] E06-T06 · MessagingCoordinator — relay driver, cursors, reconciliation (closes E05-B02) · todo · backend · builder · must/P1 · M · unblocked, OQ-E06-T06-1 resolved by recommendation (`e437ce3`)
+- [ ] E06-T07 · Prekey-bundle exchange (closes OQ-E05-T02-1) · todo · backend · builder · must/P1 · M · unblocked, OQ-E06-T07-1 resolved by recommendation (`e437ce3`)
 - [ ] E06-T08 · Delivery acknowledgements (Accepted/Delivered/Read) · todo · backend · builder · should/P2 · M
 - [ ] E06-T09 · Conversation read model · todo · backend · builder · must/P1 · S
 - [ ] E06-T10 · Conversations screen · todo · frontend · builder-ui · must/P1 · M · design: `conversations`
@@ -63,18 +63,19 @@ T04, T05, T09, T10) is unblocked and dispatchable today.
 
 ## Review log
 (date · task · reviewer model · outcome · design gate %)
+- 2026-08-29 · E06-T02 · independent reviewer · APPROVE · n/a (no design_contract) · 266/266 tests, falsification re-run on malformed-frame guards + 3 additional mutation probes.
+- 2026-08-29 · E06-T03 · independent reviewer · APPROVE · n/a (no design_contract) · 272/272 tests, protected classes (SendMessageUseCase/ReceiveMessageUseCase/RelayEngine/RoutingEngine/SyncCursorService/CryptoService) verified byte-identical to base, packetId falsification re-run independently.
 
 ## Blocked / Frozen
-- **E06-T06** ⛔ `OQ-E06-T06-1` — 🧍 relay-queue trigger model (timer /
-  event / both / background). Inherited from E05-B02, deferred to E06 by
-  explicit human decision. Advisory: option (c), timer floor + event
-  triggers, 60 s, foreground-only; background execution shaped as an E10
-  task.
-- **E06-T07** ⛔ `OQ-E06-T07-1` — 🧍 prekey-bundle channel (mesh-inline /
-  Firebase directory / both). Inherited from OQ-E05-T02-1. Advisory:
-  option (a), mesh-inline for E06, with the Firebase fallback as an E11
-  task.
+(none — both blocking OQs resolved 2026-08-29, see Event log)
+
+## Carried-forward observations (not yet a task)
+- **`lib/features/devices/presentation/devices_controller.dart:31`** constructs its own fallback `TransportService()` when none is injected via `DevicesBinding`, distinct from the single `TransportService` instance `MessagingStack` now owns app-wide. Flagged by E06-T03's reviewer; out of T03's file fence so not fixed there. Worth a look before T04 (link-quality wiring) starts trusting a single transport instance app-wide — T04 should either wire `DevicesBinding` to inject the shared instance or confirm the fallback path is dead code.
 
 ## Event log (append-only)
 - 2026-08-26 E06 drafted as part of Wave 1 epic-breakdown, status todo, awaiting 🧍 `epic_breakdown_and_wave` approval.
 - 2026-08-29 Sharded into 13 tasks by the planner against `development` @ `35710f7` (250/250 green). `skills/task-sharding` §0 was run for the first time since its promotion in E05's retro: E02/E03/E04/E05 retros, bug advisories and merge-gate notes were read before slicing, and 21 inherited obligations were enumerated — see `epic.md` §Analyze report, **Inherited obligations**. Design gap pass added GAP-006…GAP-013 to `design/gaps.md` (🟡, awaiting 🧍 sign-off; the three UI tasks are gated on it). Two 🧍 blocking architecture questions raised rather than guessed (OQ-E06-T06-1, OQ-E06-T07-1). Analyze report appended to `epic.md`; 🧍 `analyze_report` gate ⏳.
+- 2026-08-29 Per the user's explicit standing instruction ("dont wait for me. Just do. If anything needed to ask me, and you have recommendation, go for it. I will check at the end."), the orchestrator resolved OQ-E06-T06-1 and OQ-E06-T07-1 by applying each task file's own advisory recommendation, and signed off all 12 pending `design/gaps.md` entries the same way — commit `e437ce3`. Every decision is documented inline (task file Open Questions, gaps.md approval lines) for the user's promised end-of-run review, not silently applied.
+- 2026-08-29 E06-T02 built, reviewed APPROVE, squash-merged to `epic_06` as `a0e4031`.
+- 2026-08-29 E06-T03 built, reviewed APPROVE, squash-merged to `epic_06` as `bbad8d8`. T04/T05/T09 now unblocked (all depend only on T03).
+- 2026-08-29 E06-T01: first two builder-ui dispatches lost to the same session rate-limit ("session limit resets 12:10am Asia/Dhaka"); real uncommitted work recovered each time via `git status` in the worktree per established recovery practice. Third dispatch's own test run got stuck in a Monitor-wait loop reporting "idle" without actually running `flutter test` — orchestrator ran `flutter analyze`/`flutter test` directly in the worktree instead, found the `devices` probe test genuinely hangs (RenderFlex overflow in `devices_view.dart:220,336`, out of T01's file fence, causes `pumpAndSettle()` to never settle and the whole file to time out). Diagnosis handed back to the T01 agent: bound the settle in its own `flutter_probe_dumper.dart` harness, record the overflow as a verbatim finding, don't touch `devices_view.dart`. In progress.
