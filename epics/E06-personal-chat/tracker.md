@@ -1,6 +1,6 @@
 # E06 · Personal Chat ★ · Progress
 
-**Status:** in progress · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 5/13 tasks
+**Status:** in progress · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 6/13 tasks
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -10,12 +10,12 @@
 - [x] E06-T03 · Messaging composition root (DI + startup crypto/identity init) · done · backend · builder · must/P1 · M · merged `bbad8d8`
 - [x] E06-T04 · Link-quality wiring (closes E04-B03's carry-forward) · done · backend · builder · must/P1 · M · merged `b7123f6`
 - [x] E06-T05 · Live inbound pipeline (deliver or forward) · done · backend · builder · must/P1 · M · merged `83b9aab`
-- [ ] E06-T06 · MessagingCoordinator — relay driver, cursors, reconciliation (closes E05-B02) · todo · backend · builder · must/P1 · M · unblocked, OQ-E06-T06-1 resolved by recommendation (`e437ce3`)
+- [x] E06-T06 · MessagingCoordinator — relay driver, cursors, reconciliation (closes E05-B02) · done · backend · builder · must/P1 · M · merged `262beaa`
 - [ ] E06-T07 · Prekey-bundle exchange (closes OQ-E05-T02-1) · todo · backend · builder · must/P1 · M · unblocked, OQ-E06-T07-1 resolved by recommendation (`e437ce3`)
 - [ ] E06-T08 · Delivery acknowledgements (Accepted/Delivered/Read) · todo · backend · builder · should/P2 · M
 - [x] E06-T09 · Conversation read model · done · backend · builder · must/P1 · S · merged `8393f6d`
 - [ ] E06-T10 · Conversations screen · todo · frontend · builder-ui · must/P1 · M · design: `conversations`
-- [ ] E06-T11 · Chat screen (text-only) — **the wedge** · todo · frontend · builder-ui · must/P1 · M · design: `chat`
+- [ ] E06-T11 · Chat screen (text-only) — **the wedge** · todo · frontend · builder-ui · must/P1 · M · design: `chat` · contract amended: also starts `MessagingCoordinator` (OQ-E06-T06-4)
 - [ ] E06-T12 · Dashboard screen · todo · frontend · builder-ui · should/P2 · M · design: `dashboard`
 - [ ] E06-T13 · Design gap pass for voice/PTT/attachments/location · todo · docs · planner · could/P3 · S
 
@@ -68,6 +68,7 @@ T04, T05, T09, T10) is unblocked and dispatchable today.
 - 2026-08-29 · E06-T04 · independent reviewer · APPROVE · n/a (no design_contract) · 279/279 tests, `flutter build apk --debug` re-run independently, no-synthesis prohibition verified by direct grep, EARS-ROUTE-12 falsification re-run independently.
 - 2026-08-29 · E06-T09 · independent reviewer · APPROVE · n/a (no design_contract) · 281/281 tests, single-grouped-query property re-verified with an independent unfiltered counter, tie-break determinism falsified and restored.
 - 2026-08-29 · E06-T05 · independent reviewer · APPROVE · n/a (no design_contract) · 281/281 tests, FR-ROUTE-003 falsified independently, duplicateMessage-vs-undecryptable judgment call scrutinized and confirmed sound.
+- 2026-08-30 · E06-T06 · independent reviewer · APPROVE · n/a (no design_contract) · 306/306 tests, concurrent-caller falsification (L-backend-003 recurrence 5) re-run independently, re-entrancy guard traced and confirmed coalescing not dropping, reconciliation join reviewed against AEAD's collision guarantee. Flagged the `coordinator.start()` ownership gap that became OQ-E06-T06-4.
 
 ## Blocked / Frozen
 (none — both blocking OQs resolved 2026-08-29, see Event log)
@@ -86,4 +87,5 @@ T04, T05, T09, T10) is unblocked and dispatchable today.
 - 2026-08-29 E06-T04 built, reviewed APPROVE, squash-merged to `epic_06` as `b7123f6`.
 - 2026-08-29 E06-T09 built, reviewed APPROVE, squash-merged to `epic_06` as `8393f6d`.
 - 2026-08-29 E06-T05 built, reviewed APPROVE, squash-merged to `epic_06` as `83b9aab`. T06 now unblocked (both its dependency T05 and its blocking OQ-E06-T06-1 are resolved).
-- 2026-08-29 E06-T05 built (281/281 tests, FR-ROUTE-003 boundary falsified by the builder), independent review dispatched -- in progress.
+- 2026-08-30 E06-T06's first dispatch lost to another session rate-limit ("session limit resets 2:30am Asia/Dhaka") with a clean worktree (no uncommitted work — it had only been reading files); redispatched fresh with an instruction to commit incrementally. Second dispatch built, reviewed APPROVE, squash-merged to `epic_06` as `262beaa`. Reviewer flagged coordinator.start() has no caller anywhere in the app (correctly out of T06's own files: fence) and that neither T07 nor T11 named it as an owned obligation -- resolved as OQ-E06-T06-4: E06-T11.md's files: fence amended to add lib/app/bindings.dart with an explicit one-line coordinator.start() call, so the obligation has a binding owner instead of living only in T06's prose (L-process-006 shape, caught before it repeated a third time). T07 now unblocked (depends on T06; its own OQ-E06-T07-1 already resolved).
+- 2026-08-30 E06-T01: same rate-limit also interrupted a second attempt, this time mid-cleanup with real but partially-broken uncommitted work (an orphaned debug-print block referencing an undeclared variable, left from an in-progress cleanup of a legitimate bounded-walk-visit safety net). Orchestrator read the diff directly, confirmed the bounded-pumpAndSettle fix and the Scaffold-scoped walk (sidesteps a second, distinct hang inside Navigator/Overlay internals on a screen with an active RenderFlex overflow) were both complete and correct, removed the orphaned debug block, and added a missing reset of the walk-visit counter between the file's ~7 `dumpScreenProbe` calls (the counter was global and unreset, so an early screen's visits would have silently eaten into a later screen's budget). `flutter analyze` clean. Full `flutter test` run kicked off directly and is in progress (previous run timed out at 300s without visible output; moved to background, being watched via Monitor for the process to exit).
