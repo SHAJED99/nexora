@@ -228,22 +228,32 @@ class _DeviceRow extends StatelessWidget {
               ),
               const Spacer(),
               if (relationship.state == RelationshipState.unknown)
-                OnProcessButtonWidget(
-                  backgroundColor: Colors.transparent,
-                  borderRadius: BorderRadius.circular(4),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                  constraints: const BoxConstraints(minWidth: 56, minHeight: 24),
-                  onTap: () async {
-                    await controller.verify(relationship.deviceId);
-                    return null;
-                  },
-                  child: const Text('Verify',
-                      style: NexoraTextStyles.devicesVerifyLabel),
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: OnProcessButtonWidget(
+                      backgroundColor: Colors.transparent,
+                      borderRadius: BorderRadius.circular(4),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      constraints:
+                          const BoxConstraints(minWidth: 56, minHeight: 24),
+                      onTap: () async {
+                        await controller.verify(relationship.deviceId);
+                        return null;
+                      },
+                      child: const Text('Verify',
+                          style: NexoraTextStyles.devicesVerifyLabel),
+                    ),
+                  ),
                 )
               else
-                Text(
-                  'Last seen: ${_formatLastSeen(relationship.updatedAt)}',
-                  style: NexoraTextStyles.devicesLastSeen,
+                Flexible(
+                  child: Text(
+                    'Last seen: ${_formatLastSeen(relationship.updatedAt)}',
+                    style: NexoraTextStyles.devicesLastSeen,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                  ),
                 ),
             ],
           ),
@@ -336,10 +346,34 @@ class _BottomNav extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _NavItem(icon: Icons.dashboard, label: 'Dashboard', active: false, onTap: () {}),
-          _NavItem(icon: Icons.chat, label: 'Conversations', active: false, onTap: () {}),
-          _NavItem(icon: Icons.router, label: 'Devices', active: true, onTap: () {}),
-          _NavItem(icon: Icons.settings, label: 'Settings', active: false, onTap: () {}),
+          Expanded(
+            child: _NavItem(
+                icon: Icons.dashboard,
+                label: 'Dashboard',
+                active: false,
+                onTap: () {}),
+          ),
+          Expanded(
+            child: _NavItem(
+                icon: Icons.chat,
+                label: 'Conversations',
+                active: false,
+                onTap: () {}),
+          ),
+          Expanded(
+            child: _NavItem(
+                icon: Icons.router,
+                label: 'Devices',
+                active: true,
+                onTap: () {}),
+          ),
+          Expanded(
+            child: _NavItem(
+                icon: Icons.settings,
+                label: 'Settings',
+                active: false,
+                onTap: () {}),
+          ),
         ],
       ),
     );

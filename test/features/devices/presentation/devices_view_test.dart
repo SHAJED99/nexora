@@ -96,6 +96,32 @@ void main() {
     await emptyDb.close();
   });
 
+  testWidgets(
+      'test_devices_view_renders_all_four_states_with_no_overflow',
+      (tester) async {
+    // Regression test for E06-B01: two RenderFlex overflows (badge row
+    // trailing content, and _BottomNav's four unflexed _NavItems) hung the
+    // Flutter test harness itself for its full 10-minute default timeout
+    // when pumped at the design contract's 390x844 viewport. This must
+    // complete quickly on its own — an unbounded pumpAndSettle() (no
+    // timeout argument) IS the proof; bounding it would only hide a hang.
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(GetMaterialApp(home: const DevicesView()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Trusted Node'), findsOneWidget);
+    expect(find.text('Allowed'), findsOneWidget);
+    expect(find.text('Unknown'), findsOneWidget);
+    expect(find.text('Blocked'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('kebab menu Block action calls BlockUseCase and updates row',
       (tester) async {
     await tester.pumpWidget(GetMaterialApp(home: const DevicesView()));
