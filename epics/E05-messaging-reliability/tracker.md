@@ -1,15 +1,15 @@
 # E05 · Messaging Reliability & Multi-Device Sync · Progress
 
-**Status:** todo · **Started:** — · **Completed:** — · **Progress:** 0/5
+**Status:** in-progress · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 1/5
 
 > Only the ORCHESTRATOR edits this file.
 
 ## Tasks
-- [ ] E05-T01 · Message domain model + delivery-state machine + tables · todo · builder (sonnet) → reviewer (opus)
+- [ ] E05-T01 · Message domain model + delivery-state machine + tables · changes-requested (round 1: index missing on upgrade migration) · builder (sonnet) → reviewer (opus)
 - [ ] E05-T02 · Offline outgoing message queue · todo · builder (sonnet) → reviewer (opus)
 - [ ] E05-T03 · Incoming message handling (dedup, ordering) · todo · builder (sonnet) → reviewer (opus)
 - [ ] E05-T04 · Multi-device sync cursors · todo · builder (sonnet) → reviewer (opus)
-- [ ] E05-T05 · Conflict resolution (security-restrictive precedence) · todo · builder (sonnet) → reviewer (opus)
+- [x] E05-T05 · Conflict resolution (security-restrictive precedence) · done · builder (sonnet) → reviewer (opus) APPROVE, squash-merged af86907
 
 ## Dependency graph
 ```mermaid
@@ -33,6 +33,17 @@ dispatch immediately, in parallel with T01.
 (none)
 
 ## Event log (append-only)
+- 2026-08-29 E05-T05 built (builder-sonnet), reviewed APPROVE (reviewer-opus,
+  independent verification of RelationshipState ordering against
+  relationship.dart + FR-TRUST-004), squash-merged to epic_05 (af86907).
+- 2026-08-29 E05-T01 built (builder-sonnet, resumed from an interrupted
+  prior session), 180/180 tests, status review-requested; independent
+  opus review found a real blocker (round 1, CHANGES): the v10->v11
+  migration's createTable() does not also create the declared
+  idx_messages_conversation_created_at index (drift only does this via
+  createAll() on fresh installs) -- upgrading installs silently get no
+  index on the keyset-paginated messages query. Fix dispatched to
+  builder-sonnet.
 - 2026-08-27 E05 sharded into 5 tasks (task-sharding skill). No epic-level
   Open Questions blocked sharding, but two task-level Open Questions were
   surfaced and left open rather than guessed at: OQ-E05-T02-1 (no
