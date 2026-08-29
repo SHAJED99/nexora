@@ -37,8 +37,15 @@
 //
 // Does NOT implement ack/retry/incoming handling/UI (task file §4) — a
 // `Failed` transition here is terminal; every code path ends in a definite
-// `Sent` or `Failed` state, never a message left stuck at `Queued` with no
-// resolution (task file §6).
+// `Sent` or `Failed` *row state*, never a message left stuck at `Queued`
+// with no resolution (task file §6). `Sent` here means only "durably
+// accepted into this device's local relay queue" (task file §2, corrected
+// by E05-B03) — `RelayEngine.enqueue()` is a bare, local INSERT that does
+// not consult a route, open a connection, or touch a radio, so reaching
+// `Sent` is NOT a delivery guarantee, NOT proof a route exists, and NOT
+// proof any byte left this device. It says nothing about what happens
+// after enqueue (that is `RelayEngine.processQueue()`'s job, not observed
+// here).
 import 'package:drift/drift.dart';
 
 import '../../../core/auth/google_auth_service.dart' show AppFailure;

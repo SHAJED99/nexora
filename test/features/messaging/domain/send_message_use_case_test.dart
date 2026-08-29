@@ -15,6 +15,8 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/auth/google_auth_service.dart' show AppFailure;
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/routing_engine/relay_engine.dart';
+import 'package:nexora/core/routing_engine/routing_engine.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/messaging/domain/send_message_use_case.dart';
 
@@ -305,4 +307,77 @@ void main() {
     // message existing must not perturb conv-a's numbering.
     expect(a2.sequenceNumber, greaterThan(a1.sequenceNumber));
   });
+
+  // E05-B03 regression: `Sent` documents (task file §2, corrected) "durably
+  // accepted into this device's relay queue" -- NOT "delivered", NOT "a
+  // route exists", NOT "left the device". This test pins that documented
+  // meaning explicitly, against the *real* E04 `RelayEngine`/`RoutingEngine`
+  // (not the fake `enqueue` seam the other tests above use), with a
+  // `RoutingEngine` that has recorded no routes/links at all -- so there is
+  // no possible route for this message. If `Sent` meant "reached a first
+  // hop" (the overclaim E05-B03 removed from §2), this message could never
+  // reach it and the row would have to stay `Queued` or move to `Failed`.
+  // Per the corrected, single definition, it must read `Sent` anyway,
+  // because `RelayEngine.enqueue()` -- a bare local, durable INSERT into
+  // `relay_packets` (`relay_engine.dart`) -- never consults the routing
+  // table at all.
+  test('test_sent_means_enqueued_not_delivered', () async {
+    final routingEngine = RoutingEngine(selfId: 'self');
+    final relayEngine = RelayEngine(
+      selfId: 'self',
+      db: db,
+      routingEngine: routingEngine,
+      // Never expected to be invoked: SendMessageUseCase only calls
+      // RelayEngine.enqueue(), never processQueue(), so no forward attempt
+      // -- and therefore no call to `send` -- ever happens on this path.
+      send: (nextHopId, payload) async {
+        fail(
+          'RelaySendFn must not be invoked by SendMessageUseCase.call(): '
+          'it only calls RelayEngine.enqueue(), never processQueue()',
+        );
+      },
+    );
+
+    final useCase = SendMessageUseCase(
+      db: db,
+      selfDeviceId: 'self',
+      encrypt: _fakeEncryptor(),
+      enqueue: relayEngine.enqueue,
+    );
+
+    final message = await useCase.call(
+      'conv-1',
+      'recipient-with-session',
+      _plaintext('hello'),
+    );
+
+    // Documented meaning (task file §2, post-E05-B03): Sent == durably
+    // accepted into this device's relay queue. Nothing here asserts or
+    // implies delivery, a route, or a first hop.
+    expect(message.deliveryState, DeliveryState.sent);
+
+    final rows = await db.select(db.messages).get();
+    expect(rows.single.deliveryState, DeliveryState.sent.name);
+
+    // Corroborate the "queue, not delivery" meaning directly: the packet
+    // sits in `relay_packets` as `queued` (RelayEngine's own state, not
+    // forwarded anywhere), because no route exists for RelayEngine's own
+    // processQueue() to have used even if it had been called.
+    final relayRows = await db.select(db.relayPackets).get();
+    expect(relayRows, hasLength(1));
+    expect(relayRows.single.deliveryState, RelayDeliveryState.queued.name);
+  });
+
+  // E05-B03 also asks for a test that the `failed` branch still fires on a
+  // genuine DB error, not only via an injected throwing seam. Per the bug
+  // file's own guidance: `RelayEngine.enqueue()` is, by design (E04-T04), a
+  // bare INSERT that cannot fail short of a real DB-level error (disk full,
+  // constraint violation, closed connection) -- provoking one of those
+  // deterministically, without an artificial seam, would mean corrupting or
+  // closing the real `AppDatabase` mid-test, which is not a reliable or
+  // meaningful signal here and was already the judgement call other E05/E04
+  // tasks made about this exact seam (see T02 §9's own disclosure of the
+  // `MessageEnqueueFn` seam). Recorded explicitly, per the bug file's own
+  // "or an explicit note that it cannot" allowance, in T02 §9 rather than
+  // forcing a fake test here.
 }

@@ -24,8 +24,10 @@ across devices).
 
 ## Scope
 **In scope**
-- Offline outgoing queue (compose while offline → queued → sent when a
-  route exists)
+- Offline outgoing queue (compose while offline → queued → sent once
+  durably accepted into this device's local relay queue — per E05-B03,
+  "sent" does not mean a route existed or the message left the device;
+  that stronger meaning was corrected out of T02 §2)
 - Delivery-state machine: Queued/Sent/Accepted/Delivered/Stored/Read/Failed
 - Idempotency (unique ids, dedup) and logical ordering under out-of-order
   packet arrival
