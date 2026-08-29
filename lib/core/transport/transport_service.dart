@@ -27,6 +27,28 @@ class _IncomingDataEvent {
   final Uint8List bytes;
 }
 
+/// A link-quality measurement for a direct neighbor — the producer side of
+/// E04-B03's declared-but-unfed Pigeon contract (`onLinkQuality`), wired by
+/// E06-T04. `rssi` is folded in from the most recently discovered
+/// `TransportDevice` for [deviceId] (via `discoveredDevices`), and is
+/// nullable because the Pigeon contract declares it nullable and a device
+/// may genuinely have none.
+class LinkQuality {
+  const LinkQuality({
+    required this.deviceId,
+    required this.latencyMs,
+    required this.lossRate,
+    required this.observedAt,
+    this.rssi,
+  });
+
+  final String deviceId;
+  final int latencyMs;
+  final double lossRate;
+  final int? rssi;
+  final DateTime observedAt;
+}
+
 /// Dart-idiomatic facade over the generated `TransportApi` (host calls) and
 /// `TransportEventsApi` (native -> Dart events). Exposes streams instead of
 /// raw Pigeon callback registration, and awaits the eventual connection-state
@@ -62,6 +84,13 @@ class TransportService {
       StreamController<_ConnectionStateEvent>.broadcast();
   final StreamController<_IncomingDataEvent> _dataController =
       StreamController<_IncomingDataEvent>.broadcast();
+  final StreamController<LinkQuality> _linkQualityController =
+      StreamController<LinkQuality>.broadcast();
+
+  /// The most recently reported RSSI per device id, folded into
+  /// [linkQuality] events (`TransportDevice.rssi` and `onLinkQuality` travel
+  /// over two separate native events; this is the join between them).
+  final Map<String, int?> _lastKnownRssi = {};
 
   /// Emits a device each time the native layer reports one discovered
   /// (`onDeviceDiscovered`). EARS-TRANSPORT-2.
@@ -131,8 +160,16 @@ class TransportService {
           .where((_ConnectionStateEvent e) => e.deviceId == deviceId)
           .map((_ConnectionStateEvent e) => e.state);
 
-  void _handleDeviceDiscovered(TransportDevice device) =>
-      _discoveredController.add(device);
+  /// The producer side of E04-B03's declared-but-unfed contract: one event
+  /// per native `onLinkQuality` callback, `rssi` folded in when known
+  /// (E06-T04). `LinkQualityFeed` is the consumer that closes the loop into
+  /// `RoutingEngine`.
+  Stream<LinkQuality> get linkQuality => _linkQualityController.stream;
+
+  void _handleDeviceDiscovered(TransportDevice device) {
+    _lastKnownRssi[device.id] = device.rssi;
+    _discoveredController.add(device);
+  }
 
   void _handleDeviceLost(String deviceId) => _lostController.add(deviceId);
 
@@ -141,6 +178,16 @@ class TransportService {
 
   void _handleDataReceived(String deviceId, Uint8List bytes) =>
       _dataController.add(_IncomingDataEvent(deviceId, bytes));
+
+  void _handleLinkQuality(String deviceId, int latencyMs, double lossRate) {
+    _linkQualityController.add(LinkQuality(
+      deviceId: deviceId,
+      latencyMs: latencyMs,
+      lossRate: lossRate,
+      rssi: _lastKnownRssi[deviceId],
+      observedAt: DateTime.now(),
+    ));
+  }
 
   /// Releases the stream controllers. Does not tear down the Pigeon
   /// `TransportEventsApi` handler registration (Pigeon has no per-instance
@@ -153,6 +200,7 @@ class TransportService {
     await _lostController.close();
     await _connectionStateController.close();
     await _dataController.close();
+    await _linkQualityController.close();
   }
 }
 
@@ -175,15 +223,10 @@ class _EventsHandler extends TransportEventsApi {
   void onDataReceived(String deviceId, Uint8List bytes) =>
       _service._handleDataReceived(deviceId, bytes);
 
-  // E04-B03: `onLinkQuality` was added to the Pigeon contract so a
-  // production link-quality signal has somewhere to land, but no native
-  // implementation emits it yet (contract-only, see pigeons/transport.dart).
-  // Intentionally a no-op here rather than a new stream/getter — wiring a
-  // real consumer (RoutingEngine.recordLinkMeasurement) is E05's job, and
-  // adding unused Dart-facade plumbing now would be scope creep on a
-  // contract-only bug fix. This override exists purely so
-  // `_EventsHandler`, which implements the abstract `TransportEventsApi`,
-  // still compiles.
+  // E06-T04: onLinkQuality now has a real consumer — forwarded into
+  // TransportService.linkQuality, which LinkQualityFeed subscribes to and
+  // records against RoutingEngine.
   @override
-  void onLinkQuality(String deviceId, int latencyMs, double lossRate) {}
+  void onLinkQuality(String deviceId, int latencyMs, double lossRate) =>
+      _service._handleLinkQuality(deviceId, latencyMs, lossRate);
 }

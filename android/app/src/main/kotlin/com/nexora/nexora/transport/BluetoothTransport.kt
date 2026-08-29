@@ -96,6 +96,14 @@ class BluetoothTransport(
      * (see [send]) rather than left half-written.
      */
     private const val SEND_TIMEOUT_MS = 3_000L
+
+    /** Bounded window of recent `send()` attempts per device, used to
+     * compute `lossRate` as a real ratio (E06-T04, §6 risk: never let this
+     * grow unbounded, and never let it silently blend in attempts from a
+     * torn-down connection — cleared on both [disconnect] and [release]
+     * below so a later reconnect under the same device id starts with a
+     * clean window rather than stale history). */
+    private const val LINK_QUALITY_WINDOW_SIZE = 20
   }
 
   private val bluetoothManager =
@@ -113,6 +121,12 @@ class BluetoothTransport(
    * connection for that device tears down — see [disconnect] and
    * [release]. */
   private val readThreads = ConcurrentHashMap<String, Thread>()
+
+  /** Per-device bounded window of recent `send()` outcomes (true = write
+   * completed successfully), the real basis for the `lossRate` reported to
+   * `onLinkQuality` (E06-T04). Guarded by `synchronized(window)` since
+   * `send()` can run from more than one caller thread. */
+  private val sendOutcomes = ConcurrentHashMap<String, ArrayDeque<Boolean>>()
 
   private var discoveryReceiver: BroadcastReceiver? = null
 
@@ -209,6 +223,9 @@ class BluetoothTransport(
         // Already closed / peer gone — not actionable here.
       }
     }
+    // A future reconnect under the same device id must not inherit this
+    // connection's loss history — see the field's own doc comment.
+    sendOutcomes.remove(deviceId)
     eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.DISCONNECTED) }
   }
 
@@ -226,6 +243,15 @@ class BluetoothTransport(
     val socket = openSockets[deviceId] ?: return false
     val result = AtomicBoolean(false)
     val done = CountDownLatch(1)
+    // Real, measured wall-clock time for this write to complete — the
+    // basis for the `latencyMs` reported to `onLinkQuality` below (E06-T04,
+    // §3: "latencyMs is a real round-trip observation"). This is the one
+    // round trip the transport layer can actually observe without a new
+    // application-level ack protocol (out of this task's fence — see §4):
+    // `OutputStream.write()` on a connected RFCOMM socket blocks under the
+    // link layer's own flow control, so its completion time reflects real
+    // link conditions rather than a synthesized value.
+    val startNanos = System.nanoTime()
     Thread({
           result.set(writeFrame(socket, bytes))
           done.countDown()
@@ -246,11 +272,40 @@ class BluetoothTransport(
       // permanently desynced (this framing has no resync marker), so tear the
       // connection down: closing the socket both aborts the stuck write with
       // an IOException and unblocks the read loop, and DISCONNECTED travels
-      // to Dart the same way every other teardown does.
+      // to Dart the same way every other teardown does. disconnect() already
+      // clears this device's sendOutcomes window, so there is nothing further
+      // to record here — a timed-out write has no valid latency measurement
+      // to report (E06-T04 §3: emit nothing for a value that cannot be
+      // measured, never a placeholder).
       disconnect(deviceId)
       return false
     }
-    return result.get()
+    val success = result.get()
+    val lossRate = recordSendOutcome(deviceId, success)
+    if (success) {
+      val latencyMs = (System.nanoTime() - startNanos) / 1_000_000L
+      eventsScope.launch { eventsApi.onLinkQuality(deviceId, latencyMs, lossRate) }
+    }
+    // A failed (but settled, non-timeout) write has no valid latency to
+    // report either — only lossRate degrades for it, folded into the next
+    // successful send's onLinkQuality call.
+    return success
+  }
+
+  /**
+   * Records [success] into [deviceId]'s bounded outcome window and returns
+   * the resulting loss ratio (`0.0-1.0`) — the real basis for the
+   * `lossRate` reported to `onLinkQuality`. Thread-safe: `send()` can be
+   * invoked from more than one caller.
+   */
+  private fun recordSendOutcome(deviceId: String, success: Boolean): Double {
+    val window = sendOutcomes.getOrPut(deviceId) { ArrayDeque() }
+    synchronized(window) {
+      window.addLast(success)
+      while (window.size > LINK_QUALITY_WINDOW_SIZE) window.removeFirst()
+      val failures = window.count { !it }
+      return failures.toDouble() / window.size
+    }
   }
 
   private fun writeFrame(socket: BluetoothSocket, bytes: ByteArray): Boolean {
@@ -356,6 +411,7 @@ class BluetoothTransport(
       }
     }
     openSockets.clear()
+    sendOutcomes.clear()
   }
 
   private fun doStartDiscovery() {
@@ -402,9 +458,18 @@ class BluetoothTransport(
         } catch (e: SecurityException) {
           null
         } ?: address
+    // E06-T04: populate rssi from the scan result's own EXTRA_RSSI — it is
+    // already in this broadcast and was previously dropped on the floor
+    // (task §3). Android has no separate `hasExtra` contract for this key;
+    // `Short.MIN_VALUE` is the documented sentinel `getShortExtra` returns
+    // when the extra is absent, folded to `null` here rather than
+    // synthesizing a fake dBm value (§2: "a measured value or no value,
+    // never a default").
+    val rssiExtra = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE)
+    val rssi = if (rssiExtra == Short.MIN_VALUE) null else rssiExtra.toLong()
     eventsScope.launch {
       eventsApi.onDeviceDiscovered(
-          TransportDevice(id = address, displayName = name, type = TransportType.BLUETOOTH),
+          TransportDevice(id = address, displayName = name, type = TransportType.BLUETOOTH, rssi = rssi),
       )
     }
   }

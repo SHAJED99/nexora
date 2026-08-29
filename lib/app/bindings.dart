@@ -15,6 +15,7 @@
 import 'package:get/get.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/routing_engine/link_quality_feed.dart';
 import 'package:nexora/features/home/presentation/home_controller.dart';
 import 'package:nexora/features/login/data/device_identity_repository.dart';
 import 'package:nexora/features/login/domain/sign_in_use_case.dart';
@@ -79,5 +80,19 @@ class AppBinding extends Bindings {
     Get.put(messagingStack.relayEngine, permanent: true);
     Get.put(messagingStack.routingEngine, permanent: true);
     Get.put(messagingStack.transport, permanent: true);
+
+    // E06-T04: the producer/consumer wiring E04-B03 named and E05 never
+    // wrote. Without this, `RoutingEngine._knownLinks` has no production
+    // populator and `computeRoute()` always returns `null` on a real
+    // device — every other messaging task is downstream of this being
+    // true. Constructed from the already-registered singletons above
+    // (never a second `TransportService`/`RoutingEngine`), started once.
+    Get.put(
+      LinkQualityFeed(
+        transport: messagingStack.transport,
+        routing: messagingStack.routingEngine,
+      ),
+      permanent: true,
+    ).start();
   }
 }

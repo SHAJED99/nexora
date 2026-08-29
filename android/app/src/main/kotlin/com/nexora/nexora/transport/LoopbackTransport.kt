@@ -31,6 +31,17 @@ class LoopbackTransport(
      * radio. */
     const val LOOPBACK_DEVICE_ID = "loopback-device"
     private const val LOOPBACK_DEVICE_NAME = "Loopback (debug)"
+
+    /** Deterministic stand-in latency for the loopback link (E06-T04, §3:
+     * "LoopbackTransport.kt emits deterministic values so the loopback
+     * path stays testable end to end"). There is no real radio to measure,
+     * so this is a fixed, named, documented constant — never presented as
+     * a real device's measurement — rather than a randomised or invented
+     * "plausible" value. */
+    private const val LOOPBACK_LINK_LATENCY_MS = LOOPBACK_DELAY_MS
+
+    /** Loopback never drops a frame. */
+    private const val LOOPBACK_LINK_LOSS_RATE = 0.0
   }
 
   fun startDiscovery() {
@@ -80,6 +91,10 @@ class LoopbackTransport(
     handler.postDelayed({
       eventsScope.launch {
         eventsApi.onDataReceived(deviceId, bytes)
+        // E06-T04: deterministic stand-in link-quality signal so the
+        // loopback path exercises RoutingEngine end to end without a real
+        // radio — see the constants' doc comments above.
+        eventsApi.onLinkQuality(deviceId, LOOPBACK_LINK_LATENCY_MS, LOOPBACK_LINK_LOSS_RATE)
       }
     }, LOOPBACK_DELAY_MS)
     return true
