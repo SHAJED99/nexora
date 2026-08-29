@@ -16,20 +16,36 @@ import { openSource } from './lib/source.mjs';
 import { probeFn } from './lib/probe.mjs';
 import { pixelDiff } from './lib/pixel.mjs';
 import { matchElements, copyDiff, styleDeltas, layoutDeltas, tokenDiff, label } from './lib/compare.mjs';
+import { loadFlutterProbe } from './lib/flutter_probe.mjs';
 
-export async function verify({ sourcesFile = 'design/sources.yaml', screenFilter = null, implBase = null, reportDir = 'design/reports', quiet = false } = {}) {
+// `--impl flutter` (or IMPL=flutter, the Makefile passes IMPL straight
+// through as `--impl $(IMPL)`) switches the impl side from a headless-browser
+// DOM capture to a pre-built Flutter probe JSON, one per screen, resolved
+// from `sources.yaml`'s `impl_flutter.dir` (default build/design-probe).
+// `--impl-probe <path>` is a direct override: a single probe JSON file used
+// for whichever screen SCREEN= filters to, regardless of screen id — meant
+// for a single-screen-filtered run. Neither path touches the existing
+// `--impl <url>` / no-arg behavior below, which still opens a browser.
+const FLUTTER_IMPL = 'flutter';
+
+export async function verify({ sourcesFile = 'design/sources.yaml', screenFilter = null, implBase = null, implProbe = null, reportDir = 'design/reports', quiet = false } = {}) {
   const cfg = loadSources(sourcesFile);
   const th = loadThresholds();
   const screens = cfg.screens.filter((s) => !screenFilter || s.id === screenFilter);
   if (!screens.length) throw new Error(`no screen matched ${screenFilter || '(none configured)'}`);
 
-  const browser = await launch();
+  const useFlutterProbe = !!implProbe || implBase === FLUTTER_IMPL;
+  const flutterDir = cfg.impl_flutter?.dir || 'build/design-probe';
+
+  const browser = useFlutterProbe ? null : await launch();
   let impl = null;
   const results = [];
   try {
-    impl = implBase
-      ? { url: implBase.replace(/\/$/, ''), close: async () => {} }
-      : await openSource(cfg.impl, 'impl');
+    if (!useFlutterProbe) {
+      impl = implBase
+        ? { url: implBase.replace(/\/$/, ''), close: async () => {} }
+        : await openSource(cfg.impl, 'impl');
+    }
 
     for (const screen of screens) {
       for (const state of screen.states) {
@@ -41,13 +57,21 @@ export async function verify({ sourcesFile = 'design/sources.yaml', screenFilter
           }
           const golden = readJson(gPath);
           const outDir = path.join(ROOT, reportDir, screen.id, `${state.name}@${vp.name}`);
-          const url = impl.url + (state.impl_path || screen.impl_path || '/');
 
-          const built = await capture(browser, url, {
-            viewport: vp, probeFn, mask: screen.mask,
-            setup: state.impl_setup || state.setup || [],
-            screenshotPath: path.join(outDir, 'built.png'),
-          });
+          let built;
+          let url;
+          if (useFlutterProbe) {
+            const dumpPath = implProbe || path.join(ROOT, flutterDir, `${screen.id}.json`);
+            url = `flutter-probe:${rel(dumpPath)}`;
+            built = loadFlutterProbe(dumpPath);
+          } else {
+            url = impl.url + (state.impl_path || screen.impl_path || '/');
+            built = await capture(browser, url, {
+              viewport: vp, probeFn, mask: screen.mask,
+              setup: state.impl_setup || state.setup || [],
+              screenshotPath: path.join(outDir, 'built.png'),
+            });
+          }
 
           const { pairs, missing, extra, roleChanges } = matchElements(golden.elements, built.elements);
           const findings = {
@@ -58,8 +82,12 @@ export async function verify({ sourcesFile = 'design/sources.yaml', screenFilter
             style: styleDeltas(pairs, th.tolerance),
             layout: layoutDeltas(pairs, th.tolerance.layout_box_px),
             tokens: tokenDiff(golden.tokens, built.tokens, th.tolerance),
-            pixel: pixelDiff(path.join(dir, 'page.png'), path.join(outDir, 'built.png'),
-              path.join(outDir, 'diff.png'), { threshold: th.pixel?.antialias_threshold ?? 0.12 }),
+            // No screenshot exists on the Flutter probe path — pixel comparison
+            // is explicitly skipped there, never silently omitted (§4/§6).
+            pixel: useFlutterProbe
+              ? null
+              : pixelDiff(path.join(dir, 'page.png'), path.join(outDir, 'built.png'),
+                  path.join(outDir, 'diff.png'), { threshold: th.pixel?.antialias_threshold ?? 0.12 }),
           };
 
           const hard = [
@@ -92,7 +120,7 @@ export async function verify({ sourcesFile = 'design/sources.yaml', screenFilter
     }
   } finally {
     if (impl) await impl.close();
-    await browser.close();
+    if (browser) await browser.close();
   }
   return results;
 }
@@ -112,8 +140,9 @@ function writeReport(r) {
 ${r.hard.length ? `\n**Hard failures (block the merge):**\n${r.hard.map((h) => `- ❌ ${h}`).join('\n')}\n` : ''}
 ${r.soft.length ? `\n**Soft warnings (explain or fix):**\n${r.soft.map((h) => `- ⚠️ ${h}`).join('\n')}\n` : ''}
 - Built: ${r.url}
-- Images: \`built.png\` · \`diff.png\` (red = drift) · golden \`page.png\`
-${f.pixel ? `- Pixel: ${f.pixel.mismatchPct}% over ${f.pixel.comparedArea}; page height Δ${f.pixel.sizeDelta.h}px\n` : ''}
+${f.pixel === null
+  ? '- Pixel: skipped (no DOM/screenshot on the Flutter probe path — see docs/design-gate-flutter.md §6)\n'
+  : `- Images: \`built.png\` · \`diff.png\` (red = drift) · golden \`page.png\`\n- Pixel: ${f.pixel.mismatchPct}% over ${f.pixel.comparedArea}; page height Δ${f.pixel.sizeDelta.h}px\n`}
 ## ❌ Missing — in the design, not in the build
 ${fmt(f.missing, ['element'])}
 
@@ -166,6 +195,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       sourcesFile: args.sources || 'design/sources.yaml',
       screenFilter: args.screen || null,
       implBase: args.impl && args.impl !== true ? args.impl : null,
+      implProbe: args['impl-probe'] && args['impl-probe'] !== true ? args['impl-probe'] : null,
     });
     const failed = results.filter((r) => !r.pass);
     console.log(`\ndesign: ${results.length - failed.length}/${results.length} screen-state(s) pass the gate`);

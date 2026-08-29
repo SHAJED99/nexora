@@ -15,7 +15,7 @@ PORT ?= 8787
 OUT ?= harness-status.html
 
 .PHONY: next status review validate health metrics metrics-json hooks lessons \
-        design-extract design-contract design-verify design-selftest \
+        design-extract design-contract design-verify design-selftest design-probe \
         dashboard dashboard-snapshot help
 
 # ── Work queue ────────────────────────────────────────────────────────────────
@@ -43,6 +43,8 @@ design-verify:   ## THE GATE: built UI vs contract → pass/fail + delta report
 	$(NODE) design/tools/verify.mjs $(if $(SCREEN),--screen $(SCREEN),) $(if $(IMPL),--impl $(IMPL),)
 design-selftest: ## prove the gate works (faithful impl passes, drifted impl fails)
 	$(NODE) design/tools/selftest.mjs
+design-probe:     ## build/design-probe/<screen>.json dumps from flutter_test (E06-T01)
+	flutter test test/design/design_probe_test.dart
 
 # ── Memory & metrics ──────────────────────────────────────────────────────────
 lessons:         ## lessons by area + promotion candidates (recurrence >= 2)
