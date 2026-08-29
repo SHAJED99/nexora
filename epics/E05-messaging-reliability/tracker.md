@@ -1,6 +1,6 @@
 # E05 · Messaging Reliability & Multi-Device Sync · Progress
 
-**Status:** in-progress · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 4/5
+**Status:** built, bug-sweep pending · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 5/5
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -8,7 +8,7 @@
 - [x] E05-T01 · Message domain model + delivery-state machine + tables · done · builder (sonnet) → reviewer (opus) APPROVE round 2, squash-merged 77d5b40
 - [x] E05-T02 · Offline outgoing message queue · done · builder (sonnet) → reviewer (opus) APPROVE, squash-merged ea7c9fb
 - [x] E05-T03 · Incoming message handling (dedup, ordering) · done · builder (sonnet) → reviewer (opus) APPROVE, squash-merged 984f83e
-- [ ] E05-T04 · Multi-device sync cursors · round 1 fix committed (guarded upsert, falsified red->green), independent re-review in progress · builder (sonnet) → reviewer (opus)
+- [x] E05-T04 · Multi-device sync cursors · done · builder (sonnet) → reviewer (opus) APPROVE round 2, squash-merged 6b638c9
 - [x] E05-T05 · Conflict resolution (security-restrictive precedence) · done · builder (sonnet) → reviewer (opus) APPROVE, squash-merged af86907
 
 ## Dependency graph
@@ -33,6 +33,31 @@ dispatch immediately, in parallel with T01.
 (none)
 
 ## Event log (append-only)
+- 2026-08-29 End-of-epic bug sweep (reviewer-opus) found 3 real seam bugs
+  (baseline 245/245 tests, clean analyze) and confirmed 5 candidate
+  seams as non-issues (delivery_states orphan, T02 crash-recovery
+  window, OQ-E05-T04-1 gap-fill, migration v10->v11->v12 collision,
+  ConflictResolver ratchet -- all correctly out of E05's scope or
+  benign today). Real bugs: E05-B01 (S2, send/receive envelope seam --
+  T02 never serializes the MessageEnvelope T03 requires, so nothing
+  sent this epic is receivable), E05-B02 (S2, nothing drives
+  RelayEngine's queue -- processQueue/sweepExpired/reclaimPayloads have
+  zero callers, EARS-MSG-1's "send once a route is available" half is
+  unimplemented), E05-B03 (S3, "Sent" is written on a bare local INSERT
+  with no route check, task file's own §2/§3 contradict each other on
+  what it means). Human decisions: B02 deferred to E06 (app-lifecycle/
+  background-policy owner); B03 Option A (Sent = enqueued locally, docs
+  fixed to match, no new state). B01 dispatched for a real fix
+  (self-contained, no human decision needed). B03 dispatched as a
+  documentation + regression-test fix per Option A.
+- 2026-08-29 E05-T04 round-1 fix (guarded single-statement upsert
+  replacing the read-then-write) reviewed APPROVE (reviewer-opus
+  falsified independently: reverted the fix, confirmed the regression
+  test fails for the exact right reason, restored, confirmed green;
+  ran two additional stress probes -- 20x50 and 400 interleaved
+  concurrent calls -- both clean), squash-merged to epic_05 (6b638c9).
+  All 5 E05 tasks now built, reviewed, and merged to epic_05. Next:
+  bug sweep across task seams, then retro, then human merge gate.
 - 2026-08-29 E05-T03 built (builder-sonnet), reviewed APPROVE (reviewer-
   opus traced drift's NativeDatabase transaction-locking source itself
   to confirm the dedup-check-then-insert is genuinely serialized --

@@ -100,5 +100,42 @@ Proceeding to dispatch under the human's standing instruction to continue
 through E14 without per-gate pauses — findings stand as written above for
 audit, nothing re-graded silently to force a clean pass.
 
+## Bug sweep
+Run 2026-08-29 (`skills/bug-sweep`, Opus, against `epic_05` @ `af86907`
+with all 5 tasks done). Baseline verified by the reviewer, not taken from
+the PR bodies: `flutter analyze` → 0 issues; `flutter test` → **245/245
+pass**.
+
+**3 real findings, all open — P1/P2 not yet zero, so the epic→development
+PR does not open yet** (`skills/release` gate). Priorities are `TBD-human`
+(🧍 `bug_priorities`, rule 3); severities below are the reviewer's.
+
+| Bug | Sev | What |
+|---|---|---|
+| E05-B01 | S2 | The wire envelope has a consumer but no producer — T02 encrypts raw plaintext, T03 deserializes a `MessageEnvelope` from it. No message this epic sends is receivable by this epic's receiver (reviewer probe: `FormatException`). EARS-MSG-2/3 are proven only against test-fabricated envelopes. |
+| E05-B02 | S2 | Nothing calls `RelayEngine.processQueue()`/`sweepExpired()`/`reclaimPayloads()`. EARS-MSG-1's "and send once a route is available" half has no mechanism; E04-B02's retention guarantee, explicitly handed to E05 at E04's merge gate, is still unscheduled. |
+| E05-B03 | S3 | `Sent` is applied on a bare INSERT that cannot fail, contradicting T02 §2's own definition; a message reads `Sent` with no radio or route, and the `Failed` branch is unreachable in production. |
+
+E05-B01 and E05-B02 share one root cause — the epic delivered five correct
+components and no composition layer, and no task's `files:` fence contained
+the wiring. Fix E05-B01 before E05-B02.
+
+**Confirmed non-issues** (checked, with reasoning, so they are not
+re-litigated): the `delivery_states` orphan table (no E05 EARS requires
+transition-history rows; T01 §3 scoped it conditionally — correctly
+deferred); OQ-E05-T04-1, the missing gap-fill protocol (nothing in T01–T05
+depends on it; genuinely epic-external, carry forward as a documented Open
+Question, not a gate); the v10→v11→v12 migration sequence (additive and
+disjoint, and drift's `createTable` emits `CREATE TABLE IF NOT EXISTS`
+(`drift-2.34.3/lib/src/runtime/query_builder/migration.dart:319`) so the
+unwrapped multi-statement v11 step is retry-safe — E04-B02's brick scenario
+does not apply); the T02 crash-between-`enqueue`-and-`Sent` window (the
+relay packet is already durably enqueued, so nothing is lost and nothing
+double-sends — a stale label, not a dangling state); and
+`ConflictResolver.resolveTrust`'s "unknown pulls down trusted" ratchet
+(nothing calls `ConflictResolver` in this epic, so it is unreachable today —
+a real seam for whoever wires it, recorded in `tracker.md`, not a defect
+now).
+
 ## Retro
 → `retro.md` (written after E05 completion)
