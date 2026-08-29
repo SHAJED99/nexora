@@ -1,6 +1,6 @@
 # E05 · Messaging Reliability & Multi-Device Sync · Progress
 
-**Status:** built, bug-sweep pending · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 5/5
+**Status:** bugs resolved, retro pending · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 5/5 tasks + 3/3 bugs (B01 fixed P2, B02 deferred to E06, B03 fixed P3)
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -33,6 +33,15 @@ dispatch immediately, in parallel with T01.
 (none)
 
 ## Event log (append-only)
+- 2026-08-29 E05-B01 fixed (2 rounds: round 1 built the envelope seam fix,
+  round 2 fixed a non-discriminating regression test + disclosed a new
+  crash-window hazard), reviewed APPROVE both rounds by reviewer-opus
+  (round 2 re-falsified the test independently), squash-merged to
+  epic_05 (2074198). E05-B03 fixed (Option A, docs+test only), reviewed
+  APPROVE, squash-merged (d3e3aa7). Human set priorities: B01=P2,
+  B03=P3. E05-B02 deferred to E06 per human decision, owner named in
+  its own file. P1/P2 = 0 unresolved -- epic ready for retro then the
+  human merge gate.
 - 2026-08-29 End-of-epic bug sweep (reviewer-opus) found 3 real seam bugs
   (baseline 245/245 tests, clean analyze) and confirmed 5 candidate
   seams as non-issues (delivery_states orphan, T02 crash-recovery
