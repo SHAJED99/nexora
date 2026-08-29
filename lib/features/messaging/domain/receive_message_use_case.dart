@@ -2,19 +2,39 @@
 //
 // The receiving-side mirror of T02 (E05-T02, outgoing): given a sender's
 // device address and a ciphertext packet, decrypt it (E03's `CryptoService`),
-// recover the envelope T02's sending side serialized INTO the plaintext
-// before encrypting, dedup by the envelope's client-generated `id`
-// (FR-MSG-003/EARS-MSG-2), and persist using the envelope's
-// `sequenceNumber` for logical ordering rather than arrival order
-// (FR-MSG-004/EARS-MSG-3) — never re-deriving order from wall-clock time or
-// arrival order (T01's own note: clock drift across devices).
+// recover the envelope the sending side serializes INTO the plaintext before
+// encrypting (`SendMessageUseCase`, `message_envelope.dart` — as of E05-B01;
+// before that fix this comment's claim was FALSE, see E05-B01.md), dedup by
+// the envelope's client-generated `id` (FR-MSG-003/EARS-MSG-2), and persist
+// using the envelope's `sequenceNumber` for logical ordering rather than
+// arrival order (FR-MSG-004/EARS-MSG-3) — never re-deriving order from
+// wall-clock time or arrival order (T01's own note: clock drift across
+// devices).
 //
 // Pure use case (task file §4): no transport wiring (no subscription to
 // `TransportService.incomingData` — that's a scheduler/coordinator concern,
 // most likely E06's), no Delivered/Stored/Read transitions (UI/application
 // events, also later), no group envelopes/Sender-Keys (E07), no re-deriving
 // E04's routing.
-import 'dart:convert';
+//
+// KNOWN REMAINING GAP (E05-B01, not closed by this bug fix — see its
+// "Related gap in the same seam" section and OQ-E05-B01-1): `call`'s
+// `ciphertext` parameter is typed `CiphertextMessage`, but E04's
+// `RelayEngine`/transport only ever carries raw `Uint8List` wire bytes
+// (`send_message_use_case.dart` hands `RelayEngine.enqueue` a `Uint8List`,
+// never a `CiphertextMessage`). Nothing in this codebase re-types relayed
+// wire bytes back into a `CiphertextMessage`
+// (`PreKeySignalMessage`/`SignalMessage` reconstruction from raw bytes is
+// never called anywhere in `lib/`), and this task's own contract (§4) is
+// explicit that transport wiring is out of scope here. Whoever first wires a
+// live transport receive path (most likely E06) must build that bridge --
+// `libsignal_protocol_dart` (0.8.2) exposes `PreKeySignalMessage(bytes)` and
+// `SignalMessage.fromSerialized(bytes)` constructors but no single
+// type-discriminating "reconstruct whichever one this is" entry point, so
+// the bridge needs either an out-of-band type tag (e.g. carried by whatever
+// transport envelope wraps the wire bytes) or a try-PreKey-then-SignalMessage
+// fallback -- deliberately not built here without a real caller or a test
+// that would exercise it.
 import 'dart:typed_data';
 
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
@@ -23,6 +43,13 @@ import '../../../core/crypto/crypto_stub.dart';
 import '../../../core/persistence/database.dart';
 import 'delivery_state_machine.dart';
 import 'message.dart';
+import 'message_envelope.dart';
+
+/// Re-exported so existing imports of `MessageEnvelope` from this file (this
+/// task's own test suite included) keep working unchanged now that the class
+/// itself lives in `message_envelope.dart`, shared with `SendMessageUseCase`
+/// (E05-B01).
+export 'message_envelope.dart';
 
 /// Signal device-id half of every [SignalProtocolAddress] this app mints,
 /// per the existing single-device-per-identity convention already used by
@@ -32,125 +59,6 @@ import 'message.dart';
 /// looked-up parameter rather than a constant — a localized change, not a
 /// rework (same reasoning E03-T02 already recorded for its own use of `1`).
 const int _localSignalDeviceId = 1;
-
-/// The minimal wire envelope this task defines (task file §3/§5): NOT raw
-/// ciphertext bytes — decrypt only recovers opaque plaintext (E03's
-/// `CryptoService` never defines message structure), so the sending side
-/// (T02) serializes this envelope INTO the plaintext before encrypting, and
-/// this task deserializes it AFTER decrypting. Encryption still covers the
-/// whole envelope: a relay never sees `conversationId`/`sequenceNumber`
-/// (FR-ROUTE-003 still holds) — only the two encryption endpoints ever see
-/// the envelope's plaintext fields.
-///
-/// Fixed-width/length-prefixed binary encoding, deliberately not a general
-/// serialization framework (task file §5): `[u32 idLen][idBytes]
-/// [u32 conversationIdLen][conversationIdBytes][u64 sequenceNumber]
-/// [payload bytes: remainder]`, all integers big-endian.
-class MessageEnvelope {
-  const MessageEnvelope({
-    required this.id,
-    required this.conversationId,
-    required this.sequenceNumber,
-    required this.payload,
-  });
-
-  final String id;
-  final String conversationId;
-
-  /// Monotonic per `(conversationId, senderDeviceId)`, assigned by the
-  /// sender at compose time (T02) — this is the field that lets this task
-  /// persist messages in correct logical order regardless of the order
-  /// packets physically arrived in (FR-MSG-004/EARS-MSG-3).
-  final int sequenceNumber;
-
-  final Uint8List payload;
-
-  /// Encodes this envelope into the bytes T02 hands to
-  /// `CryptoService.encrypt` as plaintext. Exposed here (not just on the
-  /// sending side) so this task's own round-trip test
-  /// (`test_envelope_roundtrip_preserves_all_fields`) and any future T02
-  /// implementation share one definition of the wire format rather than two
-  /// independently-guessed ones.
-  Uint8List serialize() {
-    final idBytes = Uint8List.fromList(utf8.encode(id));
-    final conversationIdBytes = Uint8List.fromList(utf8.encode(conversationId));
-
-    final totalLength =
-        4 + idBytes.length + 4 + conversationIdBytes.length + 8 + payload.length;
-    final buffer = ByteData(totalLength);
-    var offset = 0;
-
-    buffer.setUint32(offset, idBytes.length);
-    offset += 4;
-    for (final byte in idBytes) {
-      buffer.setUint8(offset, byte);
-      offset += 1;
-    }
-
-    buffer.setUint32(offset, conversationIdBytes.length);
-    offset += 4;
-    for (final byte in conversationIdBytes) {
-      buffer.setUint8(offset, byte);
-      offset += 1;
-    }
-
-    buffer.setUint64(offset, sequenceNumber);
-    offset += 8;
-
-    final result = buffer.buffer.asUint8List();
-    result.setRange(offset, offset + payload.length, payload);
-    return result;
-  }
-
-  /// Decodes bytes produced by [serialize]. Throws [FormatException] if
-  /// `bytes` is shorter than the fixed-width header requires — a corrupt or
-  /// truncated envelope must fail loudly, not silently return a wrong field.
-  static MessageEnvelope deserialize(Uint8List bytes) {
-    if (bytes.length < 4) {
-      throw const FormatException(
-        'MessageEnvelope: truncated, missing id-length header',
-      );
-    }
-    final view = ByteData.sublistView(bytes);
-    var offset = 0;
-
-    final idLength = view.getUint32(offset);
-    offset += 4;
-    if (bytes.length < offset + idLength + 4) {
-      throw const FormatException(
-        'MessageEnvelope: truncated, missing id bytes or '
-        'conversationId-length header',
-      );
-    }
-    final id = utf8.decode(bytes.sublist(offset, offset + idLength));
-    offset += idLength;
-
-    final conversationIdLength = view.getUint32(offset);
-    offset += 4;
-    if (bytes.length < offset + conversationIdLength + 8) {
-      throw const FormatException(
-        'MessageEnvelope: truncated, missing conversationId bytes or '
-        'sequenceNumber',
-      );
-    }
-    final conversationId = utf8.decode(
-      bytes.sublist(offset, offset + conversationIdLength),
-    );
-    offset += conversationIdLength;
-
-    final sequenceNumber = view.getUint64(offset);
-    offset += 8;
-
-    final payload = Uint8List.fromList(bytes.sublist(offset));
-
-    return MessageEnvelope(
-      id: id,
-      conversationId: conversationId,
-      sequenceNumber: sequenceNumber,
-      payload: payload,
-    );
-  }
-}
 
 /// Decrypt, dedup, and correctly-ordered persistence of one incoming packet
 /// (task file §3/§5). The only public entry point is [call]; its signature

@@ -102,3 +102,16 @@ dispatch immediately, in parallel with T01.
   such a mechanism would need). Both are honest scope boundaries, not
   blockers to sharding these 5 tasks, which are each independently
   buildable and testable without either gap being closed.
+- 2026-08-29 E05-B01's fix (produce/consume the wire envelope on the
+  send/receive seam) raised a new open question, OQ-E05-B01-1: who
+  reconstructs a `CiphertextMessage` from relayed wire bytes, and how —
+  `libsignal_protocol_dart` 0.8.2's `PreKeySignalMessage`/`SignalMessage`
+  constructors aren't self-describing from bytes alone, and no caller in
+  `lib/` builds either today. Recorded in full in `E05-B01.md` (§Open
+  Questions and the source header of `receive_message_use_case.dart`), not
+  yet in this tracker until now. Reviewer's own suggested cheapest fix:
+  `CryptoService.encrypt` already returns a `CiphertextMessage` whose
+  `getType()` is known at send time — carry that type tag alongside the
+  wire bytes in E04's own relay-packet framing (if it has room), rather than
+  a try-both-message-types heuristic on receive. Whoever wires a live
+  transport receive path (most likely E06) needs this closed first.

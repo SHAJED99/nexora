@@ -1,9 +1,58 @@
 // features/messaging/domain — outgoing message queue (E05-T02).
 //
 // The one place a message goes from user intent to a Queued-then-Sent/Failed
-// row (task file §1/§3): compose -> encrypt (E03's `CryptoService`) ->
-// persist `Queued` (T01's `messages` table + `DeliveryStateMachine`) ->
-// hand off to E04's `RelayEngine` -> `Sent`/`Failed`.
+// row (task file §1/§3): compose -> reserve a sequence number + persist
+// `Queued` -> serialize the shared wire envelope (`message_envelope.dart`,
+// E05-B01) -> encrypt it (E03's `CryptoService`) -> hand off to E04's
+// `RelayEngine` -> `Sent`/`Failed`.
+//
+// FIXED BY E05-B01: this file used to encrypt the caller's raw `plaintext`
+// directly, never building a `MessageEnvelope` at all -- so nothing this use
+// case sent could ever be deserialized by `ReceiveMessageUseCase` on the
+// other end (see E05-B01.md for the full defect/repro). It now builds and
+// serializes a `MessageEnvelope` (id, conversationId, sequenceNumber,
+// payload) and encrypts THAT.
+//
+// Ordering constraint this fix had to solve (E05-B01 §Proposed fix
+// direction): the envelope must carry the sequence number, but the sequence
+// number used to be assigned *inside* a transaction *after* encryption. The
+// fix reorders this to: reserve the sequence number (read `MAX` + insert a
+// `Queued` placeholder row) inside a transaction FIRST, then build the
+// envelope and encrypt it OUTSIDE any transaction, then update that same
+// row's `ciphertext` column with the real bytes. This keeps the
+// transactional critical section exactly what it always was -- a DB-only
+// read + insert, with no crypto call ever held open inside it -- so the
+// L-backend-003 / task §6 concurrency guarantee (independently verified by
+// T02's own review via drift source-level analysis and a 60-way concurrent
+// stress probe) is unchanged: two concurrent `call()`s still cannot both
+// observe the same `MAX(sequence_number)` before either inserts, because
+// that read+insert is still the only thing happening inside the transaction.
+//
+// One consequence of reserving before encrypting: if encryption then fails
+// (no E03 session yet), the sequence number has already been consumed and a
+// row already inserted -- unlike before this fix, a row now exists for a
+// message that could never be encrypted. It is never left at `Queued`,
+// though: this file transitions it to `Failed` before rethrowing, so every
+// code path still ends in a definite state (task file §6) and the earlier
+// no-session test (`test_no_session_surfaces_app_failure_not_crash`, which
+// only asserts no row is left `Queued`, not that no row exists) still holds.
+//
+// A SECOND, undisclosed-until-now consequence of the same reorder (E05-B01
+// review round 2, F2): there is now a genuine crash window between phase 1's
+// commit (sequence number reserved, `Queued` row inserted with placeholder
+// `ciphertext: Uint8List(0)`) and phase 3's `UPDATE` that writes the real
+// ciphertext. If the process is killed in that window -- after phase 1
+// commits, before phase 3 runs -- a `Queued` row with EMPTY ciphertext
+// persists durably, and NOTHING in today's schema distinguishes it from a
+// normal, healthy `Queued` row (both are `Queued` with no other marker).
+// This was not possible pre-E05-B01: no row existed at all until encryption
+// had already succeeded. This is not fixed here -- there is no caller wiring
+// this use case to a real transport yet (task file §4), so nothing reads or
+// retries `Queued` rows today -- but it is a real gap for whoever builds a
+// retry/outbox scanner (E06, most likely per T02/T03's own §4 scope fences):
+// that scanner must treat a `Queued` row with empty/short `ciphertext` as
+// "encryption never completed, re-run from the envelope" rather than as a
+// row merely awaiting relay delivery. See E05-T02.md §6 Risks.
 //
 // This task does NOT reimplement E03's crypto or E04's relay/transport — it
 // only calls them. It is wired to those real APIs through two small,
@@ -52,20 +101,23 @@ import '../../../core/auth/google_auth_service.dart' show AppFailure;
 import '../../../core/persistence/database.dart';
 import 'delivery_state_machine.dart';
 import 'message.dart';
+import 'message_envelope.dart';
 
 /// The seam this use case needs from E03's `CryptoService.encrypt`
 /// (`SignalProtocolAddress`, `Uint8List` -> `Future<CiphertextMessage>`),
 /// narrowed to plain device-id strings and serialized bytes so this file
 /// doesn't need to depend on `libsignal_protocol_dart` types directly.
-/// Production wiring: `(recipientDeviceId, plaintext) async =>
+/// Production wiring: `(recipientDeviceId, envelopeBytes) async =>
 /// (await CryptoService.instance.encrypt(SignalProtocolAddress(recipientDeviceId, 1),
-/// plaintext)).serialize()`. Throws whatever `CryptoService.encrypt` itself
+/// envelopeBytes)).serialize()`. The second parameter is the *serialized
+/// `MessageEnvelope`* (E05-B01), not the caller's raw `plaintext` -- see the
+/// file header for why. Throws whatever `CryptoService.encrypt` itself
 /// throws — in particular a [StateError] when no session exists yet for
 /// `recipientDeviceId` (E03-T03's own documented contract), which this
 /// use case maps to a clear [AppFailure] (task file §3 step 2).
 typedef MessageEncryptFn = Future<Uint8List> Function(
   String recipientDeviceId,
-  Uint8List plaintext,
+  Uint8List envelopeBytes,
 );
 
 /// The seam this use case needs from E04's `RelayEngine.enqueue` — its
@@ -117,35 +169,28 @@ class SendMessageUseCase {
   /// outcome (`sent` or `failed`) — never left at `queued` (task file §6).
   ///
   /// Throws `AppFailure('messaging.no_session')` if no E03 session exists
-  /// yet with [recipientDeviceId] — surfaced clearly, not a crash, and no
-  /// row is persisted for a message that could never be encrypted in the
-  /// first place.
+  /// yet with [recipientDeviceId] — surfaced clearly, not a crash. As of
+  /// E05-B01, a row IS persisted in this case (the sequence number is
+  /// reserved before encryption is attempted, see the file header) but is
+  /// transitioned straight to `Failed`, never left at `Queued`.
   Future<Message> call(
     String conversationId,
     String recipientDeviceId,
     Uint8List plaintext,
   ) async {
-    final Uint8List ciphertext;
-    try {
-      ciphertext = await _encrypt(recipientDeviceId, plaintext);
-    } on StateError catch (e) {
-      // The shape `CryptoService.encrypt` throws when no session exists yet
-      // (E03-T03's own documented contract) -- surfaced as a clear,
-      // greppable AppFailure rather than a raw StateError reaching a caller
-      // (docs/conventions.md "Error handling"; task file §3 step 2).
-      throw AppFailure('messaging.no_session', cause: e);
-    }
-
     final id = _generateId();
     final now = _clock();
 
-    // Atomic sequence-number assignment + persist, in one transaction
-    // (L-backend-003 / task §6's risk note: a naive read-then-write outside
-    // a transaction lets two concurrent sends in the same conversation read
-    // the same MAX() and both assign the same sequence_number). The
-    // critical section is deliberately just the read + insert -- no
-    // external call (crypto/relay) is ever made while this transaction is
-    // open, so it stays short and never blocks on the network/relay step.
+    // Phase 1 (E05-B01): reserve the sequence number + persist a `Queued`
+    // placeholder row, atomically, BEFORE any crypto call -- this is the
+    // ordering fix. The envelope encrypted in phase 2 must carry this
+    // sequence number, so the number has to be known first; but the
+    // transactional critical section that guards it must stay exactly what
+    // it was (L-backend-003 / task §6's risk note: a naive read-then-write
+    // outside a transaction lets two concurrent sends in the same
+    // conversation read the same MAX() and both assign the same
+    // sequence_number) -- a DB-only read + insert, with no external call
+    // (crypto/relay) ever made while this transaction is open.
     //
     // T01's review flagged that `messages` has no DB-level UNIQUE
     // constraint on `(conversation_id, sender_device_id, sequence_number)`
@@ -162,13 +207,18 @@ class SendMessageUseCase {
       final currentMax = maxRow?.read(_db.messages.sequenceNumber.max());
       final next = (currentMax ?? -1) + 1;
 
+      // `ciphertext` is a NOT NULL blob column with no default -- an empty
+      // placeholder reserves the row/sequence number without pretending any
+      // encryption has happened yet; phase 2 below overwrites it with the
+      // real bytes (or, on encrypt failure, this row is transitioned to
+      // Failed and the placeholder is never observed as "Sent").
       await _db.into(_db.messages).insert(
             MessagesCompanion.insert(
               id: id,
               conversationId: conversationId,
               senderDeviceId: _selfDeviceId,
               sequenceNumber: next,
-              ciphertext: ciphertext,
+              ciphertext: Uint8List(0),
               createdAt: now.millisecondsSinceEpoch,
               deliveryState: DeliveryState.queued.name,
             ),
@@ -181,12 +231,55 @@ class SendMessageUseCase {
       conversationId: conversationId,
       senderDeviceId: _selfDeviceId,
       sequenceNumber: sequenceNumber,
-      ciphertext: ciphertext,
+      ciphertext: Uint8List(0),
       createdAt: now.millisecondsSinceEpoch,
       deliveryState: DeliveryState.queued,
     );
 
-    // Hand off to E04's relay engine -- deliberately outside the above
+    // Phase 2 (E05-B01): build + serialize the envelope now that the
+    // sequence number is known, then encrypt it -- deliberately OUTSIDE any
+    // transaction, same as before this fix, so the crypto call never holds
+    // the DB lock open.
+    final envelope = MessageEnvelope(
+      id: id,
+      conversationId: conversationId,
+      sequenceNumber: sequenceNumber,
+      payload: plaintext,
+    );
+
+    final Uint8List ciphertext;
+    try {
+      ciphertext = await _encrypt(recipientDeviceId, envelope.serialize());
+    } on StateError catch (e) {
+      // The shape `CryptoService.encrypt` throws when no session exists yet
+      // (E03-T03's own documented contract). The sequence number is already
+      // reserved and a placeholder row already persisted (phase 1 above) --
+      // unlike before E05-B01, that reservation can't be undone without
+      // reintroducing the race this ordering was chosen to avoid, so the
+      // reserved row is transitioned to Failed (never left at Queued, task
+      // file §6) before surfacing a clear, greppable AppFailure rather than
+      // a raw StateError reaching a caller (docs/conventions.md "Error
+      // handling"; task file §3 step 2).
+      await _applyTransition(message, DeliveryState.failed);
+      throw AppFailure('messaging.no_session', cause: e);
+    }
+
+    // Phase 3: persist the real ciphertext over the placeholder -- the row
+    // stays Queued at this point, now genuinely encrypted and ready to hand
+    // off.
+    await (_db.update(_db.messages)..where((t) => t.id.equals(id)))
+        .write(MessagesCompanion(ciphertext: Value(ciphertext)));
+    message = Message(
+      id: message.id,
+      conversationId: message.conversationId,
+      senderDeviceId: message.senderDeviceId,
+      sequenceNumber: message.sequenceNumber,
+      ciphertext: ciphertext,
+      createdAt: message.createdAt,
+      deliveryState: message.deliveryState,
+    );
+
+    // Hand off to E04's relay engine -- deliberately outside any
     // transaction so the Queued row is durably committed and independently
     // observable before this (potentially slow) step even starts (task
     // file §2: composition must be synchronous-feeling and always succeed
