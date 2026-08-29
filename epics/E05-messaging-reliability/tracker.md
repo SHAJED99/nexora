@@ -1,13 +1,13 @@
 # E05 · Messaging Reliability & Multi-Device Sync · Progress
 
-**Status:** in-progress · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 2/5
+**Status:** in-progress · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 3/5
 
 > Only the ORCHESTRATOR edits this file.
 
 ## Tasks
 - [x] E05-T01 · Message domain model + delivery-state machine + tables · done · builder (sonnet) → reviewer (opus) APPROVE round 2, squash-merged 77d5b40
-- [ ] E05-T02 · Offline outgoing message queue · in-progress · builder (sonnet) → reviewer (opus)
-- [ ] E05-T03 · Incoming message handling (dedup, ordering) · in-progress · builder (sonnet) → reviewer (opus)
+- [x] E05-T02 · Offline outgoing message queue · done · builder (sonnet) → reviewer (opus) APPROVE, squash-merged ea7c9fb
+- [ ] E05-T03 · Incoming message handling (dedup, ordering) · review-requested (224/224 tests) · builder (sonnet) → reviewer (opus, in progress)
 - [ ] E05-T04 · Multi-device sync cursors · changes-requested (round 1: recordLocalProgress read-then-write race, demonstrated regressing the cursor 10->4 under concurrency) · builder (sonnet) → reviewer (opus)
 - [x] E05-T05 · Conflict resolution (security-restrictive precedence) · done · builder (sonnet) → reviewer (opus) APPROVE, squash-merged af86907
 
@@ -33,6 +33,21 @@ dispatch immediately, in parallel with T01.
 (none)
 
 ## Event log (append-only)
+- 2026-08-29 E05-T02 built (builder-sonnet), reviewed APPROVE (reviewer-
+  opus, independently falsified the sequence_number concurrency claim
+  with a 60-way concurrent probe and drift source-level analysis rather
+  than trusting the passing test), squash-merged to epic_05 (ea7c9fb).
+  Five non-blocking observations recorded for the epic bug sweep:
+  (1) contract ambiguity between epic §2 and task §3 on what "Sent"
+  means -- RelayEngine.enqueue essentially cannot fail, so Failed is
+  near-dead in production; reconcile before E06 renders a Sent tick;
+  (2) delivery_states (T01's transition log) is written by nobody yet;
+  (3) a crash between enqueue-success and the Sent UPDATE leaves a
+  Queued row nothing reconciles (correct per scope, but a real seam for
+  T04/T05's future gap-fill); (4) _generateId is unique per instance
+  only (consistent with already-approved RelayEngine._generateId
+  precedent); (5) CryptoService.init() never being called would surface
+  as the same messaging.no_session failure as a real missing session.
 - 2026-08-29 E05-T05 built (builder-sonnet), reviewed APPROVE (reviewer-opus,
   independent verification of RelationshipState ordering against
   relationship.dart + FR-TRUST-004), squash-merged to epic_05 (af86907).
