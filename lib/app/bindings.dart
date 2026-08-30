@@ -87,6 +87,16 @@ class AppBinding extends Bindings {
     Get.put(messagingStack.syncCursors, permanent: true);
     Get.put(messagingStack.relayEngine, permanent: true);
     Get.put(messagingStack.routingEngine, permanent: true);
+    // E06-B02: this registration is also what `DevicesBinding` now resolves
+    // via `Get.find<TransportService>()` to inject the shared instance into
+    // `DevicesController` -- it MUST run (as it already does, here, at app
+    // startup, before any route's `Bindings.dependencies()` can run) before
+    // the user can navigate to `/devices`, or `Get.find` there throws.
+    // Never remove this registration or make it lazy: `DevicesController`
+    // needs a resolvable shared `TransportService` the very first time the
+    // user opens the Devices screen, and a second live `TransportService`
+    // (the previous, broken behaviour) silently steals every native
+    // transport-channel handler this instance owns.
     Get.put(messagingStack.transport, permanent: true);
 
     // E06-T04: the producer/consumer wiring E04-B03 named and E05 never

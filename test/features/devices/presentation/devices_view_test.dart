@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/design/tokens.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/devices/presentation/devices_binding.dart';
 import 'package:nexora/features/devices/presentation/devices_controller.dart';
 import 'package:nexora/features/devices/presentation/devices_view.dart';
@@ -16,7 +17,27 @@ import 'package:nexora/features/trust/domain/block_use_case.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late AppDatabase db;
+
+  final TestDefaultBinaryMessenger messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  var suffixCounter = 0;
+
+  // E06-B02: `DevicesBinding` now resolves its `TransportService` via
+  // `Get.find` (the same shared-instance registration `app/bindings.dart`
+  // does in production) instead of letting `DevicesController`'s
+  // constructor fall back to building its own — so this test double must be
+  // registered before `DevicesBinding().dependencies()` runs, same pattern
+  // as `devices_controller_test.dart`'s `buildDiscoveringController`. A
+  // distinct `messageChannelSuffix` per test keeps each test's platform
+  // channel registration from clobbering another's, same as
+  // `messaging_stack_test.dart`.
+  TransportService newTransportService() => TransportService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: 'devices-view-test-${suffixCounter++}',
+      );
 
   setUp(() async {
     Get.testMode = true;
@@ -29,6 +50,7 @@ void main() {
 
     Get.put<RelationshipRepository>(repository, permanent: true);
     Get.put<BlockUseCase>(BlockUseCase(repository), permanent: true);
+    Get.put<TransportService>(newTransportService(), permanent: true);
     DevicesBinding().dependencies();
   });
 
@@ -87,6 +109,7 @@ void main() {
     final repository = RelationshipRepository(emptyDb);
     Get.put<RelationshipRepository>(repository, permanent: true);
     Get.put<BlockUseCase>(BlockUseCase(repository), permanent: true);
+    Get.put<TransportService>(newTransportService(), permanent: true);
     DevicesBinding().dependencies();
 
     await tester.pumpWidget(GetMaterialApp(home: const DevicesView()));
