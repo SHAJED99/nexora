@@ -168,7 +168,48 @@ void main() {
   test(
     'test_EARS_GROUP_5_v12_upgrades_to_v13_additively',
     () async {
-      final db = await _openAtV12();
+      // Pre-existing tables the 12->13 step must not alter, rename, or drop
+      // a column of (this task's §4). Snapshotted below, from the raw v12
+      // handle, before `AppDatabase` -- and therefore the migration -- ever
+      // touches it.
+      const preExistingTables = [
+        'device_identities',
+        'relationships',
+        'signal_identity',
+        'signal_signed_prekeys',
+        'signal_one_time_prekeys',
+        'signal_sessions',
+        'signal_trusted_identities',
+        'crypto_counters',
+        'routes',
+        'relay_packets',
+        'messages',
+        'delivery_states',
+        'sync_cursors',
+      ];
+
+      final raw = sqlite3.sqlite3.openInMemory();
+      _createV12Tables(raw);
+      _seedV12Data(raw);
+
+      // Snapshot each pre-existing table's exact `CREATE TABLE` DDL text
+      // from `sqlite_master` while still on the raw v12 handle -- this is
+      // what makes the post-migration comparison below prove the DDL is
+      // byte-identical, not merely that a same-named table still exists.
+      final preMigrationSql = <String, String>{
+        for (final tableName in preExistingTables)
+          tableName: raw
+                  .select(
+                    "SELECT sql FROM sqlite_master WHERE type='table' "
+                    'AND name = ?',
+                    [tableName],
+                  )
+                  .single['sql']
+              as String,
+      };
+
+      raw.userVersion = 12;
+      final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
       addTearDown(db.close);
 
       // The four new tables exist and are usable through the real Dart
@@ -217,22 +258,8 @@ void main() {
       // Byte-identical schema check on every non-group table: the CREATE
       // TABLE SQL captured by sqlite_master for each must be exactly what
       // it was pre-migration (no altered/renamed/dropped column, per this
-      // task's §4).
-      final preExistingTables = [
-        'device_identities',
-        'relationships',
-        'signal_identity',
-        'signal_signed_prekeys',
-        'signal_one_time_prekeys',
-        'signal_sessions',
-        'signal_trusted_identities',
-        'crypto_counters',
-        'routes',
-        'relay_packets',
-        'messages',
-        'delivery_states',
-        'sync_cursors',
-      ];
+      // task's §4). Compares the actual DDL text against the pre-migration
+      // snapshot taken above -- not just that a same-named table exists.
       for (final tableName in preExistingTables) {
         final rows = await db
             .customSelect(
@@ -241,6 +268,11 @@ void main() {
             )
             .get();
         expect(rows, hasLength(1), reason: '$tableName should still exist');
+        expect(
+          rows.single.read<String>('sql'),
+          preMigrationSql[tableName],
+          reason: '$tableName DDL should be byte-identical after migration',
+        );
       }
     },
   );
