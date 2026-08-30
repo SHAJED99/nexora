@@ -4338,6 +4338,1689 @@ class SyncCursorsCompanion extends UpdateCompanion<SyncCursorRow> {
   }
 }
 
+class $GroupsTable extends Groups with TableInfo<$GroupsTable, GroupRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $GroupsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdByDeviceIdMeta = const VerificationMeta(
+    'createdByDeviceId',
+  );
+  @override
+  late final GeneratedColumn<String> createdByDeviceId =
+      GeneratedColumn<String>(
+        'created_by_device_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _membershipEpochMeta = const VerificationMeta(
+    'membershipEpoch',
+  );
+  @override
+  late final GeneratedColumn<int> membershipEpoch = GeneratedColumn<int>(
+    'membership_epoch',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<bool> isDeleted = GeneratedColumn<bool>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    createdAt,
+    createdByDeviceId,
+    membershipEpoch,
+    isDeleted,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'groups';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<GroupRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('created_by_device_id')) {
+      context.handle(
+        _createdByDeviceIdMeta,
+        createdByDeviceId.isAcceptableOrUnknown(
+          data['created_by_device_id']!,
+          _createdByDeviceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdByDeviceIdMeta);
+    }
+    if (data.containsKey('membership_epoch')) {
+      context.handle(
+        _membershipEpochMeta,
+        membershipEpoch.isAcceptableOrUnknown(
+          data['membership_epoch']!,
+          _membershipEpochMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  GroupRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return GroupRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      createdByDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}created_by_device_id'],
+      )!,
+      membershipEpoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}membership_epoch'],
+      )!,
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+    );
+  }
+
+  @override
+  $GroupsTable createAlias(String alias) {
+    return $GroupsTable(attachedDatabase, alias);
+  }
+}
+
+class GroupRow extends DataClass implements Insertable<GroupRow> {
+  final String id;
+  final String name;
+
+  /// Epoch-ms wall-clock creation time.
+  final int createdAt;
+  final String createdByDeviceId;
+  final int membershipEpoch;
+  final bool isDeleted;
+  const GroupRow({
+    required this.id,
+    required this.name,
+    required this.createdAt,
+    required this.createdByDeviceId,
+    required this.membershipEpoch,
+    required this.isDeleted,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['created_at'] = Variable<int>(createdAt);
+    map['created_by_device_id'] = Variable<String>(createdByDeviceId);
+    map['membership_epoch'] = Variable<int>(membershipEpoch);
+    map['is_deleted'] = Variable<bool>(isDeleted);
+    return map;
+  }
+
+  GroupsCompanion toCompanion(bool nullToAbsent) {
+    return GroupsCompanion(
+      id: Value(id),
+      name: Value(name),
+      createdAt: Value(createdAt),
+      createdByDeviceId: Value(createdByDeviceId),
+      membershipEpoch: Value(membershipEpoch),
+      isDeleted: Value(isDeleted),
+    );
+  }
+
+  factory GroupRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return GroupRow(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      createdByDeviceId: serializer.fromJson<String>(json['createdByDeviceId']),
+      membershipEpoch: serializer.fromJson<int>(json['membershipEpoch']),
+      isDeleted: serializer.fromJson<bool>(json['isDeleted']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'createdByDeviceId': serializer.toJson<String>(createdByDeviceId),
+      'membershipEpoch': serializer.toJson<int>(membershipEpoch),
+      'isDeleted': serializer.toJson<bool>(isDeleted),
+    };
+  }
+
+  GroupRow copyWith({
+    String? id,
+    String? name,
+    int? createdAt,
+    String? createdByDeviceId,
+    int? membershipEpoch,
+    bool? isDeleted,
+  }) => GroupRow(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    createdAt: createdAt ?? this.createdAt,
+    createdByDeviceId: createdByDeviceId ?? this.createdByDeviceId,
+    membershipEpoch: membershipEpoch ?? this.membershipEpoch,
+    isDeleted: isDeleted ?? this.isDeleted,
+  );
+  GroupRow copyWithCompanion(GroupsCompanion data) {
+    return GroupRow(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      createdByDeviceId: data.createdByDeviceId.present
+          ? data.createdByDeviceId.value
+          : this.createdByDeviceId,
+      membershipEpoch: data.membershipEpoch.present
+          ? data.membershipEpoch.value
+          : this.membershipEpoch,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupRow(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('createdByDeviceId: $createdByDeviceId, ')
+          ..write('membershipEpoch: $membershipEpoch, ')
+          ..write('isDeleted: $isDeleted')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    createdAt,
+    createdByDeviceId,
+    membershipEpoch,
+    isDeleted,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is GroupRow &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.createdAt == this.createdAt &&
+          other.createdByDeviceId == this.createdByDeviceId &&
+          other.membershipEpoch == this.membershipEpoch &&
+          other.isDeleted == this.isDeleted);
+}
+
+class GroupsCompanion extends UpdateCompanion<GroupRow> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<int> createdAt;
+  final Value<String> createdByDeviceId;
+  final Value<int> membershipEpoch;
+  final Value<bool> isDeleted;
+  final Value<int> rowid;
+  const GroupsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.createdByDeviceId = const Value.absent(),
+    this.membershipEpoch = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  GroupsCompanion.insert({
+    required String id,
+    required String name,
+    required int createdAt,
+    required String createdByDeviceId,
+    this.membershipEpoch = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       createdAt = Value(createdAt),
+       createdByDeviceId = Value(createdByDeviceId);
+  static Insertable<GroupRow> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<int>? createdAt,
+    Expression<String>? createdByDeviceId,
+    Expression<int>? membershipEpoch,
+    Expression<bool>? isDeleted,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (createdAt != null) 'created_at': createdAt,
+      if (createdByDeviceId != null) 'created_by_device_id': createdByDeviceId,
+      if (membershipEpoch != null) 'membership_epoch': membershipEpoch,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  GroupsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<int>? createdAt,
+    Value<String>? createdByDeviceId,
+    Value<int>? membershipEpoch,
+    Value<bool>? isDeleted,
+    Value<int>? rowid,
+  }) {
+    return GroupsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      createdAt: createdAt ?? this.createdAt,
+      createdByDeviceId: createdByDeviceId ?? this.createdByDeviceId,
+      membershipEpoch: membershipEpoch ?? this.membershipEpoch,
+      isDeleted: isDeleted ?? this.isDeleted,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (createdByDeviceId.present) {
+      map['created_by_device_id'] = Variable<String>(createdByDeviceId.value);
+    }
+    if (membershipEpoch.present) {
+      map['membership_epoch'] = Variable<int>(membershipEpoch.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<bool>(isDeleted.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('createdByDeviceId: $createdByDeviceId, ')
+          ..write('membershipEpoch: $membershipEpoch, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $GroupMembersTable extends GroupMembers
+    with TableInfo<$GroupMembersTable, GroupMemberRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $GroupMembersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _roleMeta = const VerificationMeta('role');
+  @override
+  late final GeneratedColumn<String> role = GeneratedColumn<String>(
+    'role',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _joinedAtEpochMeta = const VerificationMeta(
+    'joinedAtEpoch',
+  );
+  @override
+  late final GeneratedColumn<int> joinedAtEpoch = GeneratedColumn<int>(
+    'joined_at_epoch',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _removedAtEpochMeta = const VerificationMeta(
+    'removedAtEpoch',
+  );
+  @override
+  late final GeneratedColumn<int> removedAtEpoch = GeneratedColumn<int>(
+    'removed_at_epoch',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    groupId,
+    deviceId,
+    role,
+    joinedAtEpoch,
+    removedAtEpoch,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'group_members';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<GroupMemberRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('role')) {
+      context.handle(
+        _roleMeta,
+        role.isAcceptableOrUnknown(data['role']!, _roleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_roleMeta);
+    }
+    if (data.containsKey('joined_at_epoch')) {
+      context.handle(
+        _joinedAtEpochMeta,
+        joinedAtEpoch.isAcceptableOrUnknown(
+          data['joined_at_epoch']!,
+          _joinedAtEpochMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_joinedAtEpochMeta);
+    }
+    if (data.containsKey('removed_at_epoch')) {
+      context.handle(
+        _removedAtEpochMeta,
+        removedAtEpoch.isAcceptableOrUnknown(
+          data['removed_at_epoch']!,
+          _removedAtEpochMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {groupId, deviceId};
+  @override
+  GroupMemberRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return GroupMemberRow(
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      role: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}role'],
+      )!,
+      joinedAtEpoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}joined_at_epoch'],
+      )!,
+      removedAtEpoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}removed_at_epoch'],
+      ),
+    );
+  }
+
+  @override
+  $GroupMembersTable createAlias(String alias) {
+    return $GroupMembersTable(attachedDatabase, alias);
+  }
+}
+
+class GroupMemberRow extends DataClass implements Insertable<GroupMemberRow> {
+  final String groupId;
+  final String deviceId;
+
+  /// A [GroupRole] value's `.name`, never an integer index.
+  final String role;
+
+  /// The `groups.membership_epoch` value in effect when this member joined
+  /// (§2) — the floor below which this member is never handed a sender-key
+  /// record (FR-GROUP-006).
+  final int joinedAtEpoch;
+
+  /// NULL = current member. Set (never cleared) once a member is removed —
+  /// the row itself is never deleted (§2).
+  final int? removedAtEpoch;
+  const GroupMemberRow({
+    required this.groupId,
+    required this.deviceId,
+    required this.role,
+    required this.joinedAtEpoch,
+    this.removedAtEpoch,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['group_id'] = Variable<String>(groupId);
+    map['device_id'] = Variable<String>(deviceId);
+    map['role'] = Variable<String>(role);
+    map['joined_at_epoch'] = Variable<int>(joinedAtEpoch);
+    if (!nullToAbsent || removedAtEpoch != null) {
+      map['removed_at_epoch'] = Variable<int>(removedAtEpoch);
+    }
+    return map;
+  }
+
+  GroupMembersCompanion toCompanion(bool nullToAbsent) {
+    return GroupMembersCompanion(
+      groupId: Value(groupId),
+      deviceId: Value(deviceId),
+      role: Value(role),
+      joinedAtEpoch: Value(joinedAtEpoch),
+      removedAtEpoch: removedAtEpoch == null && nullToAbsent
+          ? const Value.absent()
+          : Value(removedAtEpoch),
+    );
+  }
+
+  factory GroupMemberRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return GroupMemberRow(
+      groupId: serializer.fromJson<String>(json['groupId']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      role: serializer.fromJson<String>(json['role']),
+      joinedAtEpoch: serializer.fromJson<int>(json['joinedAtEpoch']),
+      removedAtEpoch: serializer.fromJson<int?>(json['removedAtEpoch']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'groupId': serializer.toJson<String>(groupId),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'role': serializer.toJson<String>(role),
+      'joinedAtEpoch': serializer.toJson<int>(joinedAtEpoch),
+      'removedAtEpoch': serializer.toJson<int?>(removedAtEpoch),
+    };
+  }
+
+  GroupMemberRow copyWith({
+    String? groupId,
+    String? deviceId,
+    String? role,
+    int? joinedAtEpoch,
+    Value<int?> removedAtEpoch = const Value.absent(),
+  }) => GroupMemberRow(
+    groupId: groupId ?? this.groupId,
+    deviceId: deviceId ?? this.deviceId,
+    role: role ?? this.role,
+    joinedAtEpoch: joinedAtEpoch ?? this.joinedAtEpoch,
+    removedAtEpoch: removedAtEpoch.present
+        ? removedAtEpoch.value
+        : this.removedAtEpoch,
+  );
+  GroupMemberRow copyWithCompanion(GroupMembersCompanion data) {
+    return GroupMemberRow(
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      role: data.role.present ? data.role.value : this.role,
+      joinedAtEpoch: data.joinedAtEpoch.present
+          ? data.joinedAtEpoch.value
+          : this.joinedAtEpoch,
+      removedAtEpoch: data.removedAtEpoch.present
+          ? data.removedAtEpoch.value
+          : this.removedAtEpoch,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupMemberRow(')
+          ..write('groupId: $groupId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('role: $role, ')
+          ..write('joinedAtEpoch: $joinedAtEpoch, ')
+          ..write('removedAtEpoch: $removedAtEpoch')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(groupId, deviceId, role, joinedAtEpoch, removedAtEpoch);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is GroupMemberRow &&
+          other.groupId == this.groupId &&
+          other.deviceId == this.deviceId &&
+          other.role == this.role &&
+          other.joinedAtEpoch == this.joinedAtEpoch &&
+          other.removedAtEpoch == this.removedAtEpoch);
+}
+
+class GroupMembersCompanion extends UpdateCompanion<GroupMemberRow> {
+  final Value<String> groupId;
+  final Value<String> deviceId;
+  final Value<String> role;
+  final Value<int> joinedAtEpoch;
+  final Value<int?> removedAtEpoch;
+  final Value<int> rowid;
+  const GroupMembersCompanion({
+    this.groupId = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.role = const Value.absent(),
+    this.joinedAtEpoch = const Value.absent(),
+    this.removedAtEpoch = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  GroupMembersCompanion.insert({
+    required String groupId,
+    required String deviceId,
+    required String role,
+    required int joinedAtEpoch,
+    this.removedAtEpoch = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : groupId = Value(groupId),
+       deviceId = Value(deviceId),
+       role = Value(role),
+       joinedAtEpoch = Value(joinedAtEpoch);
+  static Insertable<GroupMemberRow> custom({
+    Expression<String>? groupId,
+    Expression<String>? deviceId,
+    Expression<String>? role,
+    Expression<int>? joinedAtEpoch,
+    Expression<int>? removedAtEpoch,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (groupId != null) 'group_id': groupId,
+      if (deviceId != null) 'device_id': deviceId,
+      if (role != null) 'role': role,
+      if (joinedAtEpoch != null) 'joined_at_epoch': joinedAtEpoch,
+      if (removedAtEpoch != null) 'removed_at_epoch': removedAtEpoch,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  GroupMembersCompanion copyWith({
+    Value<String>? groupId,
+    Value<String>? deviceId,
+    Value<String>? role,
+    Value<int>? joinedAtEpoch,
+    Value<int?>? removedAtEpoch,
+    Value<int>? rowid,
+  }) {
+    return GroupMembersCompanion(
+      groupId: groupId ?? this.groupId,
+      deviceId: deviceId ?? this.deviceId,
+      role: role ?? this.role,
+      joinedAtEpoch: joinedAtEpoch ?? this.joinedAtEpoch,
+      removedAtEpoch: removedAtEpoch ?? this.removedAtEpoch,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (role.present) {
+      map['role'] = Variable<String>(role.value);
+    }
+    if (joinedAtEpoch.present) {
+      map['joined_at_epoch'] = Variable<int>(joinedAtEpoch.value);
+    }
+    if (removedAtEpoch.present) {
+      map['removed_at_epoch'] = Variable<int>(removedAtEpoch.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupMembersCompanion(')
+          ..write('groupId: $groupId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('role: $role, ')
+          ..write('joinedAtEpoch: $joinedAtEpoch, ')
+          ..write('removedAtEpoch: $removedAtEpoch, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $GroupSenderKeysTable extends GroupSenderKeys
+    with TableInfo<$GroupSenderKeysTable, GroupSenderKeyRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $GroupSenderKeysTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _senderDeviceIdMeta = const VerificationMeta(
+    'senderDeviceId',
+  );
+  @override
+  late final GeneratedColumn<String> senderDeviceId = GeneratedColumn<String>(
+    'sender_device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _membershipEpochMeta = const VerificationMeta(
+    'membershipEpoch',
+  );
+  @override
+  late final GeneratedColumn<int> membershipEpoch = GeneratedColumn<int>(
+    'membership_epoch',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _recordMeta = const VerificationMeta('record');
+  @override
+  late final GeneratedColumn<Uint8List> record = GeneratedColumn<Uint8List>(
+    'record',
+    aliasedName,
+    false,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    groupId,
+    senderDeviceId,
+    membershipEpoch,
+    record,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'group_sender_keys';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<GroupSenderKeyRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('sender_device_id')) {
+      context.handle(
+        _senderDeviceIdMeta,
+        senderDeviceId.isAcceptableOrUnknown(
+          data['sender_device_id']!,
+          _senderDeviceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_senderDeviceIdMeta);
+    }
+    if (data.containsKey('membership_epoch')) {
+      context.handle(
+        _membershipEpochMeta,
+        membershipEpoch.isAcceptableOrUnknown(
+          data['membership_epoch']!,
+          _membershipEpochMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_membershipEpochMeta);
+    }
+    if (data.containsKey('record')) {
+      context.handle(
+        _recordMeta,
+        record.isAcceptableOrUnknown(data['record']!, _recordMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_recordMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {
+    groupId,
+    senderDeviceId,
+    membershipEpoch,
+  };
+  @override
+  GroupSenderKeyRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return GroupSenderKeyRow(
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      senderDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sender_device_id'],
+      )!,
+      membershipEpoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}membership_epoch'],
+      )!,
+      record: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}record'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $GroupSenderKeysTable createAlias(String alias) {
+    return $GroupSenderKeysTable(attachedDatabase, alias);
+  }
+}
+
+class GroupSenderKeyRow extends DataClass
+    implements Insertable<GroupSenderKeyRow> {
+  final String groupId;
+  final String senderDeviceId;
+  final int membershipEpoch;
+  final Uint8List record;
+
+  /// Epoch-ms wall-clock time this row was last written.
+  final int updatedAt;
+  const GroupSenderKeyRow({
+    required this.groupId,
+    required this.senderDeviceId,
+    required this.membershipEpoch,
+    required this.record,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['group_id'] = Variable<String>(groupId);
+    map['sender_device_id'] = Variable<String>(senderDeviceId);
+    map['membership_epoch'] = Variable<int>(membershipEpoch);
+    map['record'] = Variable<Uint8List>(record);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  GroupSenderKeysCompanion toCompanion(bool nullToAbsent) {
+    return GroupSenderKeysCompanion(
+      groupId: Value(groupId),
+      senderDeviceId: Value(senderDeviceId),
+      membershipEpoch: Value(membershipEpoch),
+      record: Value(record),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory GroupSenderKeyRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return GroupSenderKeyRow(
+      groupId: serializer.fromJson<String>(json['groupId']),
+      senderDeviceId: serializer.fromJson<String>(json['senderDeviceId']),
+      membershipEpoch: serializer.fromJson<int>(json['membershipEpoch']),
+      record: serializer.fromJson<Uint8List>(json['record']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'groupId': serializer.toJson<String>(groupId),
+      'senderDeviceId': serializer.toJson<String>(senderDeviceId),
+      'membershipEpoch': serializer.toJson<int>(membershipEpoch),
+      'record': serializer.toJson<Uint8List>(record),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  GroupSenderKeyRow copyWith({
+    String? groupId,
+    String? senderDeviceId,
+    int? membershipEpoch,
+    Uint8List? record,
+    int? updatedAt,
+  }) => GroupSenderKeyRow(
+    groupId: groupId ?? this.groupId,
+    senderDeviceId: senderDeviceId ?? this.senderDeviceId,
+    membershipEpoch: membershipEpoch ?? this.membershipEpoch,
+    record: record ?? this.record,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  GroupSenderKeyRow copyWithCompanion(GroupSenderKeysCompanion data) {
+    return GroupSenderKeyRow(
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      senderDeviceId: data.senderDeviceId.present
+          ? data.senderDeviceId.value
+          : this.senderDeviceId,
+      membershipEpoch: data.membershipEpoch.present
+          ? data.membershipEpoch.value
+          : this.membershipEpoch,
+      record: data.record.present ? data.record.value : this.record,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupSenderKeyRow(')
+          ..write('groupId: $groupId, ')
+          ..write('senderDeviceId: $senderDeviceId, ')
+          ..write('membershipEpoch: $membershipEpoch, ')
+          ..write('record: $record, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    groupId,
+    senderDeviceId,
+    membershipEpoch,
+    $driftBlobEquality.hash(record),
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is GroupSenderKeyRow &&
+          other.groupId == this.groupId &&
+          other.senderDeviceId == this.senderDeviceId &&
+          other.membershipEpoch == this.membershipEpoch &&
+          $driftBlobEquality.equals(other.record, this.record) &&
+          other.updatedAt == this.updatedAt);
+}
+
+class GroupSenderKeysCompanion extends UpdateCompanion<GroupSenderKeyRow> {
+  final Value<String> groupId;
+  final Value<String> senderDeviceId;
+  final Value<int> membershipEpoch;
+  final Value<Uint8List> record;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const GroupSenderKeysCompanion({
+    this.groupId = const Value.absent(),
+    this.senderDeviceId = const Value.absent(),
+    this.membershipEpoch = const Value.absent(),
+    this.record = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  GroupSenderKeysCompanion.insert({
+    required String groupId,
+    required String senderDeviceId,
+    required int membershipEpoch,
+    required Uint8List record,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : groupId = Value(groupId),
+       senderDeviceId = Value(senderDeviceId),
+       membershipEpoch = Value(membershipEpoch),
+       record = Value(record),
+       updatedAt = Value(updatedAt);
+  static Insertable<GroupSenderKeyRow> custom({
+    Expression<String>? groupId,
+    Expression<String>? senderDeviceId,
+    Expression<int>? membershipEpoch,
+    Expression<Uint8List>? record,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (groupId != null) 'group_id': groupId,
+      if (senderDeviceId != null) 'sender_device_id': senderDeviceId,
+      if (membershipEpoch != null) 'membership_epoch': membershipEpoch,
+      if (record != null) 'record': record,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  GroupSenderKeysCompanion copyWith({
+    Value<String>? groupId,
+    Value<String>? senderDeviceId,
+    Value<int>? membershipEpoch,
+    Value<Uint8List>? record,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return GroupSenderKeysCompanion(
+      groupId: groupId ?? this.groupId,
+      senderDeviceId: senderDeviceId ?? this.senderDeviceId,
+      membershipEpoch: membershipEpoch ?? this.membershipEpoch,
+      record: record ?? this.record,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (senderDeviceId.present) {
+      map['sender_device_id'] = Variable<String>(senderDeviceId.value);
+    }
+    if (membershipEpoch.present) {
+      map['membership_epoch'] = Variable<int>(membershipEpoch.value);
+    }
+    if (record.present) {
+      map['record'] = Variable<Uint8List>(record.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupSenderKeysCompanion(')
+          ..write('groupId: $groupId, ')
+          ..write('senderDeviceId: $senderDeviceId, ')
+          ..write('membershipEpoch: $membershipEpoch, ')
+          ..write('record: $record, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $GroupEventsTable extends GroupEvents
+    with TableInfo<$GroupEventsTable, GroupEventRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $GroupEventsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _epochMeta = const VerificationMeta('epoch');
+  @override
+  late final GeneratedColumn<int> epoch = GeneratedColumn<int>(
+    'epoch',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actorDeviceIdMeta = const VerificationMeta(
+    'actorDeviceId',
+  );
+  @override
+  late final GeneratedColumn<String> actorDeviceId = GeneratedColumn<String>(
+    'actor_device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _subjectDeviceIdMeta = const VerificationMeta(
+    'subjectDeviceId',
+  );
+  @override
+  late final GeneratedColumn<String> subjectDeviceId = GeneratedColumn<String>(
+    'subject_device_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    groupId,
+    epoch,
+    kind,
+    actorDeviceId,
+    subjectDeviceId,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'group_events';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<GroupEventRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('epoch')) {
+      context.handle(
+        _epochMeta,
+        epoch.isAcceptableOrUnknown(data['epoch']!, _epochMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_epochMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('actor_device_id')) {
+      context.handle(
+        _actorDeviceIdMeta,
+        actorDeviceId.isAcceptableOrUnknown(
+          data['actor_device_id']!,
+          _actorDeviceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_actorDeviceIdMeta);
+    }
+    if (data.containsKey('subject_device_id')) {
+      context.handle(
+        _subjectDeviceIdMeta,
+        subjectDeviceId.isAcceptableOrUnknown(
+          data['subject_device_id']!,
+          _subjectDeviceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  GroupEventRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return GroupEventRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      epoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}epoch'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      actorDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}actor_device_id'],
+      )!,
+      subjectDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}subject_device_id'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $GroupEventsTable createAlias(String alias) {
+    return $GroupEventsTable(attachedDatabase, alias);
+  }
+}
+
+class GroupEventRow extends DataClass implements Insertable<GroupEventRow> {
+  final String id;
+  final String groupId;
+
+  /// The `groups.membership_epoch` in effect when this event was recorded.
+  final int epoch;
+
+  /// A [GroupEventKind] value's `.name`, never an integer index.
+  final String kind;
+  final String actorDeviceId;
+
+  /// The member the event is about (e.g. who was added/removed), when the
+  /// event kind has one. NULL for group-level events like `renamed`.
+  final String? subjectDeviceId;
+
+  /// Epoch-ms wall-clock creation time.
+  final int createdAt;
+  const GroupEventRow({
+    required this.id,
+    required this.groupId,
+    required this.epoch,
+    required this.kind,
+    required this.actorDeviceId,
+    this.subjectDeviceId,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['group_id'] = Variable<String>(groupId);
+    map['epoch'] = Variable<int>(epoch);
+    map['kind'] = Variable<String>(kind);
+    map['actor_device_id'] = Variable<String>(actorDeviceId);
+    if (!nullToAbsent || subjectDeviceId != null) {
+      map['subject_device_id'] = Variable<String>(subjectDeviceId);
+    }
+    map['created_at'] = Variable<int>(createdAt);
+    return map;
+  }
+
+  GroupEventsCompanion toCompanion(bool nullToAbsent) {
+    return GroupEventsCompanion(
+      id: Value(id),
+      groupId: Value(groupId),
+      epoch: Value(epoch),
+      kind: Value(kind),
+      actorDeviceId: Value(actorDeviceId),
+      subjectDeviceId: subjectDeviceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(subjectDeviceId),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory GroupEventRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return GroupEventRow(
+      id: serializer.fromJson<String>(json['id']),
+      groupId: serializer.fromJson<String>(json['groupId']),
+      epoch: serializer.fromJson<int>(json['epoch']),
+      kind: serializer.fromJson<String>(json['kind']),
+      actorDeviceId: serializer.fromJson<String>(json['actorDeviceId']),
+      subjectDeviceId: serializer.fromJson<String?>(json['subjectDeviceId']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'groupId': serializer.toJson<String>(groupId),
+      'epoch': serializer.toJson<int>(epoch),
+      'kind': serializer.toJson<String>(kind),
+      'actorDeviceId': serializer.toJson<String>(actorDeviceId),
+      'subjectDeviceId': serializer.toJson<String?>(subjectDeviceId),
+      'createdAt': serializer.toJson<int>(createdAt),
+    };
+  }
+
+  GroupEventRow copyWith({
+    String? id,
+    String? groupId,
+    int? epoch,
+    String? kind,
+    String? actorDeviceId,
+    Value<String?> subjectDeviceId = const Value.absent(),
+    int? createdAt,
+  }) => GroupEventRow(
+    id: id ?? this.id,
+    groupId: groupId ?? this.groupId,
+    epoch: epoch ?? this.epoch,
+    kind: kind ?? this.kind,
+    actorDeviceId: actorDeviceId ?? this.actorDeviceId,
+    subjectDeviceId: subjectDeviceId.present
+        ? subjectDeviceId.value
+        : this.subjectDeviceId,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  GroupEventRow copyWithCompanion(GroupEventsCompanion data) {
+    return GroupEventRow(
+      id: data.id.present ? data.id.value : this.id,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      epoch: data.epoch.present ? data.epoch.value : this.epoch,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      actorDeviceId: data.actorDeviceId.present
+          ? data.actorDeviceId.value
+          : this.actorDeviceId,
+      subjectDeviceId: data.subjectDeviceId.present
+          ? data.subjectDeviceId.value
+          : this.subjectDeviceId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupEventRow(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('epoch: $epoch, ')
+          ..write('kind: $kind, ')
+          ..write('actorDeviceId: $actorDeviceId, ')
+          ..write('subjectDeviceId: $subjectDeviceId, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    groupId,
+    epoch,
+    kind,
+    actorDeviceId,
+    subjectDeviceId,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is GroupEventRow &&
+          other.id == this.id &&
+          other.groupId == this.groupId &&
+          other.epoch == this.epoch &&
+          other.kind == this.kind &&
+          other.actorDeviceId == this.actorDeviceId &&
+          other.subjectDeviceId == this.subjectDeviceId &&
+          other.createdAt == this.createdAt);
+}
+
+class GroupEventsCompanion extends UpdateCompanion<GroupEventRow> {
+  final Value<String> id;
+  final Value<String> groupId;
+  final Value<int> epoch;
+  final Value<String> kind;
+  final Value<String> actorDeviceId;
+  final Value<String?> subjectDeviceId;
+  final Value<int> createdAt;
+  final Value<int> rowid;
+  const GroupEventsCompanion({
+    this.id = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.epoch = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.actorDeviceId = const Value.absent(),
+    this.subjectDeviceId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  GroupEventsCompanion.insert({
+    required String id,
+    required String groupId,
+    required int epoch,
+    required String kind,
+    required String actorDeviceId,
+    this.subjectDeviceId = const Value.absent(),
+    required int createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       groupId = Value(groupId),
+       epoch = Value(epoch),
+       kind = Value(kind),
+       actorDeviceId = Value(actorDeviceId),
+       createdAt = Value(createdAt);
+  static Insertable<GroupEventRow> custom({
+    Expression<String>? id,
+    Expression<String>? groupId,
+    Expression<int>? epoch,
+    Expression<String>? kind,
+    Expression<String>? actorDeviceId,
+    Expression<String>? subjectDeviceId,
+    Expression<int>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (groupId != null) 'group_id': groupId,
+      if (epoch != null) 'epoch': epoch,
+      if (kind != null) 'kind': kind,
+      if (actorDeviceId != null) 'actor_device_id': actorDeviceId,
+      if (subjectDeviceId != null) 'subject_device_id': subjectDeviceId,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  GroupEventsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? groupId,
+    Value<int>? epoch,
+    Value<String>? kind,
+    Value<String>? actorDeviceId,
+    Value<String?>? subjectDeviceId,
+    Value<int>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return GroupEventsCompanion(
+      id: id ?? this.id,
+      groupId: groupId ?? this.groupId,
+      epoch: epoch ?? this.epoch,
+      kind: kind ?? this.kind,
+      actorDeviceId: actorDeviceId ?? this.actorDeviceId,
+      subjectDeviceId: subjectDeviceId ?? this.subjectDeviceId,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (epoch.present) {
+      map['epoch'] = Variable<int>(epoch.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (actorDeviceId.present) {
+      map['actor_device_id'] = Variable<String>(actorDeviceId.value);
+    }
+    if (subjectDeviceId.present) {
+      map['subject_device_id'] = Variable<String>(subjectDeviceId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupEventsCompanion(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('epoch: $epoch, ')
+          ..write('kind: $kind, ')
+          ..write('actorDeviceId: $actorDeviceId, ')
+          ..write('subjectDeviceId: $subjectDeviceId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4359,9 +6042,27 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $MessagesTable messages = $MessagesTable(this);
   late final $DeliveryStatesTable deliveryStates = $DeliveryStatesTable(this);
   late final $SyncCursorsTable syncCursors = $SyncCursorsTable(this);
+  late final $GroupsTable groups = $GroupsTable(this);
+  late final $GroupMembersTable groupMembers = $GroupMembersTable(this);
+  late final $GroupSenderKeysTable groupSenderKeys = $GroupSenderKeysTable(
+    this,
+  );
+  late final $GroupEventsTable groupEvents = $GroupEventsTable(this);
   late final Index idxMessagesConversationCreatedAt = Index(
     'idx_messages_conversation_created_at',
     'CREATE INDEX idx_messages_conversation_created_at ON messages (conversation_id, created_at)',
+  );
+  late final Index idxGroupMembersCurrent = Index(
+    'idx_group_members_current',
+    'CREATE INDEX idx_group_members_current ON group_members (group_id, removed_at_epoch)',
+  );
+  late final Index idxGroupSingleOwner = Index(
+    'idx_group_single_owner',
+    'CREATE UNIQUE INDEX idx_group_single_owner ON group_members (group_id) WHERE role = \'owner\' AND removed_at_epoch IS NULL',
+  );
+  late final Index idxGroupEventsGroupEpoch = Index(
+    'idx_group_events_group_epoch',
+    'CREATE INDEX idx_group_events_group_epoch ON group_events (group_id, epoch)',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -4381,7 +6082,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     messages,
     deliveryStates,
     syncCursors,
+    groups,
+    groupMembers,
+    groupSenderKeys,
+    groupEvents,
     idxMessagesConversationCreatedAt,
+    idxGroupMembersCurrent,
+    idxGroupSingleOwner,
+    idxGroupEventsGroupEpoch,
   ];
 }
 
@@ -6830,6 +8538,879 @@ typedef $$SyncCursorsTableProcessedTableManager =
       SyncCursorRow,
       PrefetchHooks Function()
     >;
+typedef $$GroupsTableCreateCompanionBuilder =
+    GroupsCompanion Function({
+      required String id,
+      required String name,
+      required int createdAt,
+      required String createdByDeviceId,
+      Value<int> membershipEpoch,
+      Value<bool> isDeleted,
+      Value<int> rowid,
+    });
+typedef $$GroupsTableUpdateCompanionBuilder =
+    GroupsCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<int> createdAt,
+      Value<String> createdByDeviceId,
+      Value<int> membershipEpoch,
+      Value<bool> isDeleted,
+      Value<int> rowid,
+    });
+
+class $$GroupsTableFilterComposer
+    extends Composer<_$AppDatabase, $GroupsTable> {
+  $$GroupsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get createdByDeviceId => $composableBuilder(
+    column: $table.createdByDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get membershipEpoch => $composableBuilder(
+    column: $table.membershipEpoch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$GroupsTableOrderingComposer
+    extends Composer<_$AppDatabase, $GroupsTable> {
+  $$GroupsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get createdByDeviceId => $composableBuilder(
+    column: $table.createdByDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get membershipEpoch => $composableBuilder(
+    column: $table.membershipEpoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$GroupsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $GroupsTable> {
+  $$GroupsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get createdByDeviceId => $composableBuilder(
+    column: $table.createdByDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get membershipEpoch => $composableBuilder(
+    column: $table.membershipEpoch,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+}
+
+class $$GroupsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $GroupsTable,
+          GroupRow,
+          $$GroupsTableFilterComposer,
+          $$GroupsTableOrderingComposer,
+          $$GroupsTableAnnotationComposer,
+          $$GroupsTableCreateCompanionBuilder,
+          $$GroupsTableUpdateCompanionBuilder,
+          (GroupRow, BaseReferences<_$AppDatabase, $GroupsTable, GroupRow>),
+          GroupRow,
+          PrefetchHooks Function()
+        > {
+  $$GroupsTableTableManager(_$AppDatabase db, $GroupsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$GroupsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$GroupsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$GroupsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<String> createdByDeviceId = const Value.absent(),
+                Value<int> membershipEpoch = const Value.absent(),
+                Value<bool> isDeleted = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => GroupsCompanion(
+                id: id,
+                name: name,
+                createdAt: createdAt,
+                createdByDeviceId: createdByDeviceId,
+                membershipEpoch: membershipEpoch,
+                isDeleted: isDeleted,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required int createdAt,
+                required String createdByDeviceId,
+                Value<int> membershipEpoch = const Value.absent(),
+                Value<bool> isDeleted = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => GroupsCompanion.insert(
+                id: id,
+                name: name,
+                createdAt: createdAt,
+                createdByDeviceId: createdByDeviceId,
+                membershipEpoch: membershipEpoch,
+                isDeleted: isDeleted,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$GroupsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $GroupsTable,
+      GroupRow,
+      $$GroupsTableFilterComposer,
+      $$GroupsTableOrderingComposer,
+      $$GroupsTableAnnotationComposer,
+      $$GroupsTableCreateCompanionBuilder,
+      $$GroupsTableUpdateCompanionBuilder,
+      (GroupRow, BaseReferences<_$AppDatabase, $GroupsTable, GroupRow>),
+      GroupRow,
+      PrefetchHooks Function()
+    >;
+typedef $$GroupMembersTableCreateCompanionBuilder =
+    GroupMembersCompanion Function({
+      required String groupId,
+      required String deviceId,
+      required String role,
+      required int joinedAtEpoch,
+      Value<int?> removedAtEpoch,
+      Value<int> rowid,
+    });
+typedef $$GroupMembersTableUpdateCompanionBuilder =
+    GroupMembersCompanion Function({
+      Value<String> groupId,
+      Value<String> deviceId,
+      Value<String> role,
+      Value<int> joinedAtEpoch,
+      Value<int?> removedAtEpoch,
+      Value<int> rowid,
+    });
+
+class $$GroupMembersTableFilterComposer
+    extends Composer<_$AppDatabase, $GroupMembersTable> {
+  $$GroupMembersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get joinedAtEpoch => $composableBuilder(
+    column: $table.joinedAtEpoch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get removedAtEpoch => $composableBuilder(
+    column: $table.removedAtEpoch,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$GroupMembersTableOrderingComposer
+    extends Composer<_$AppDatabase, $GroupMembersTable> {
+  $$GroupMembersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get joinedAtEpoch => $composableBuilder(
+    column: $table.joinedAtEpoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get removedAtEpoch => $composableBuilder(
+    column: $table.removedAtEpoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$GroupMembersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $GroupMembersTable> {
+  $$GroupMembersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get groupId =>
+      $composableBuilder(column: $table.groupId, builder: (column) => column);
+
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get role =>
+      $composableBuilder(column: $table.role, builder: (column) => column);
+
+  GeneratedColumn<int> get joinedAtEpoch => $composableBuilder(
+    column: $table.joinedAtEpoch,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get removedAtEpoch => $composableBuilder(
+    column: $table.removedAtEpoch,
+    builder: (column) => column,
+  );
+}
+
+class $$GroupMembersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $GroupMembersTable,
+          GroupMemberRow,
+          $$GroupMembersTableFilterComposer,
+          $$GroupMembersTableOrderingComposer,
+          $$GroupMembersTableAnnotationComposer,
+          $$GroupMembersTableCreateCompanionBuilder,
+          $$GroupMembersTableUpdateCompanionBuilder,
+          (
+            GroupMemberRow,
+            BaseReferences<_$AppDatabase, $GroupMembersTable, GroupMemberRow>,
+          ),
+          GroupMemberRow,
+          PrefetchHooks Function()
+        > {
+  $$GroupMembersTableTableManager(_$AppDatabase db, $GroupMembersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$GroupMembersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$GroupMembersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$GroupMembersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> groupId = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<String> role = const Value.absent(),
+                Value<int> joinedAtEpoch = const Value.absent(),
+                Value<int?> removedAtEpoch = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => GroupMembersCompanion(
+                groupId: groupId,
+                deviceId: deviceId,
+                role: role,
+                joinedAtEpoch: joinedAtEpoch,
+                removedAtEpoch: removedAtEpoch,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String groupId,
+                required String deviceId,
+                required String role,
+                required int joinedAtEpoch,
+                Value<int?> removedAtEpoch = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => GroupMembersCompanion.insert(
+                groupId: groupId,
+                deviceId: deviceId,
+                role: role,
+                joinedAtEpoch: joinedAtEpoch,
+                removedAtEpoch: removedAtEpoch,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$GroupMembersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $GroupMembersTable,
+      GroupMemberRow,
+      $$GroupMembersTableFilterComposer,
+      $$GroupMembersTableOrderingComposer,
+      $$GroupMembersTableAnnotationComposer,
+      $$GroupMembersTableCreateCompanionBuilder,
+      $$GroupMembersTableUpdateCompanionBuilder,
+      (
+        GroupMemberRow,
+        BaseReferences<_$AppDatabase, $GroupMembersTable, GroupMemberRow>,
+      ),
+      GroupMemberRow,
+      PrefetchHooks Function()
+    >;
+typedef $$GroupSenderKeysTableCreateCompanionBuilder =
+    GroupSenderKeysCompanion Function({
+      required String groupId,
+      required String senderDeviceId,
+      required int membershipEpoch,
+      required Uint8List record,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$GroupSenderKeysTableUpdateCompanionBuilder =
+    GroupSenderKeysCompanion Function({
+      Value<String> groupId,
+      Value<String> senderDeviceId,
+      Value<int> membershipEpoch,
+      Value<Uint8List> record,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$GroupSenderKeysTableFilterComposer
+    extends Composer<_$AppDatabase, $GroupSenderKeysTable> {
+  $$GroupSenderKeysTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get senderDeviceId => $composableBuilder(
+    column: $table.senderDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get membershipEpoch => $composableBuilder(
+    column: $table.membershipEpoch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get record => $composableBuilder(
+    column: $table.record,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$GroupSenderKeysTableOrderingComposer
+    extends Composer<_$AppDatabase, $GroupSenderKeysTable> {
+  $$GroupSenderKeysTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get senderDeviceId => $composableBuilder(
+    column: $table.senderDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get membershipEpoch => $composableBuilder(
+    column: $table.membershipEpoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get record => $composableBuilder(
+    column: $table.record,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$GroupSenderKeysTableAnnotationComposer
+    extends Composer<_$AppDatabase, $GroupSenderKeysTable> {
+  $$GroupSenderKeysTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get groupId =>
+      $composableBuilder(column: $table.groupId, builder: (column) => column);
+
+  GeneratedColumn<String> get senderDeviceId => $composableBuilder(
+    column: $table.senderDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get membershipEpoch => $composableBuilder(
+    column: $table.membershipEpoch,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<Uint8List> get record =>
+      $composableBuilder(column: $table.record, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$GroupSenderKeysTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $GroupSenderKeysTable,
+          GroupSenderKeyRow,
+          $$GroupSenderKeysTableFilterComposer,
+          $$GroupSenderKeysTableOrderingComposer,
+          $$GroupSenderKeysTableAnnotationComposer,
+          $$GroupSenderKeysTableCreateCompanionBuilder,
+          $$GroupSenderKeysTableUpdateCompanionBuilder,
+          (
+            GroupSenderKeyRow,
+            BaseReferences<
+              _$AppDatabase,
+              $GroupSenderKeysTable,
+              GroupSenderKeyRow
+            >,
+          ),
+          GroupSenderKeyRow,
+          PrefetchHooks Function()
+        > {
+  $$GroupSenderKeysTableTableManager(
+    _$AppDatabase db,
+    $GroupSenderKeysTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$GroupSenderKeysTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$GroupSenderKeysTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$GroupSenderKeysTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> groupId = const Value.absent(),
+                Value<String> senderDeviceId = const Value.absent(),
+                Value<int> membershipEpoch = const Value.absent(),
+                Value<Uint8List> record = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => GroupSenderKeysCompanion(
+                groupId: groupId,
+                senderDeviceId: senderDeviceId,
+                membershipEpoch: membershipEpoch,
+                record: record,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String groupId,
+                required String senderDeviceId,
+                required int membershipEpoch,
+                required Uint8List record,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => GroupSenderKeysCompanion.insert(
+                groupId: groupId,
+                senderDeviceId: senderDeviceId,
+                membershipEpoch: membershipEpoch,
+                record: record,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$GroupSenderKeysTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $GroupSenderKeysTable,
+      GroupSenderKeyRow,
+      $$GroupSenderKeysTableFilterComposer,
+      $$GroupSenderKeysTableOrderingComposer,
+      $$GroupSenderKeysTableAnnotationComposer,
+      $$GroupSenderKeysTableCreateCompanionBuilder,
+      $$GroupSenderKeysTableUpdateCompanionBuilder,
+      (
+        GroupSenderKeyRow,
+        BaseReferences<_$AppDatabase, $GroupSenderKeysTable, GroupSenderKeyRow>,
+      ),
+      GroupSenderKeyRow,
+      PrefetchHooks Function()
+    >;
+typedef $$GroupEventsTableCreateCompanionBuilder =
+    GroupEventsCompanion Function({
+      required String id,
+      required String groupId,
+      required int epoch,
+      required String kind,
+      required String actorDeviceId,
+      Value<String?> subjectDeviceId,
+      required int createdAt,
+      Value<int> rowid,
+    });
+typedef $$GroupEventsTableUpdateCompanionBuilder =
+    GroupEventsCompanion Function({
+      Value<String> id,
+      Value<String> groupId,
+      Value<int> epoch,
+      Value<String> kind,
+      Value<String> actorDeviceId,
+      Value<String?> subjectDeviceId,
+      Value<int> createdAt,
+      Value<int> rowid,
+    });
+
+class $$GroupEventsTableFilterComposer
+    extends Composer<_$AppDatabase, $GroupEventsTable> {
+  $$GroupEventsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actorDeviceId => $composableBuilder(
+    column: $table.actorDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get subjectDeviceId => $composableBuilder(
+    column: $table.subjectDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$GroupEventsTableOrderingComposer
+    extends Composer<_$AppDatabase, $GroupEventsTable> {
+  $$GroupEventsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actorDeviceId => $composableBuilder(
+    column: $table.actorDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get subjectDeviceId => $composableBuilder(
+    column: $table.subjectDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$GroupEventsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $GroupEventsTable> {
+  $$GroupEventsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get groupId =>
+      $composableBuilder(column: $table.groupId, builder: (column) => column);
+
+  GeneratedColumn<int> get epoch =>
+      $composableBuilder(column: $table.epoch, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get actorDeviceId => $composableBuilder(
+    column: $table.actorDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get subjectDeviceId => $composableBuilder(
+    column: $table.subjectDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$GroupEventsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $GroupEventsTable,
+          GroupEventRow,
+          $$GroupEventsTableFilterComposer,
+          $$GroupEventsTableOrderingComposer,
+          $$GroupEventsTableAnnotationComposer,
+          $$GroupEventsTableCreateCompanionBuilder,
+          $$GroupEventsTableUpdateCompanionBuilder,
+          (
+            GroupEventRow,
+            BaseReferences<_$AppDatabase, $GroupEventsTable, GroupEventRow>,
+          ),
+          GroupEventRow,
+          PrefetchHooks Function()
+        > {
+  $$GroupEventsTableTableManager(_$AppDatabase db, $GroupEventsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$GroupEventsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$GroupEventsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$GroupEventsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> groupId = const Value.absent(),
+                Value<int> epoch = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String> actorDeviceId = const Value.absent(),
+                Value<String?> subjectDeviceId = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => GroupEventsCompanion(
+                id: id,
+                groupId: groupId,
+                epoch: epoch,
+                kind: kind,
+                actorDeviceId: actorDeviceId,
+                subjectDeviceId: subjectDeviceId,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String groupId,
+                required int epoch,
+                required String kind,
+                required String actorDeviceId,
+                Value<String?> subjectDeviceId = const Value.absent(),
+                required int createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => GroupEventsCompanion.insert(
+                id: id,
+                groupId: groupId,
+                epoch: epoch,
+                kind: kind,
+                actorDeviceId: actorDeviceId,
+                subjectDeviceId: subjectDeviceId,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$GroupEventsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $GroupEventsTable,
+      GroupEventRow,
+      $$GroupEventsTableFilterComposer,
+      $$GroupEventsTableOrderingComposer,
+      $$GroupEventsTableAnnotationComposer,
+      $$GroupEventsTableCreateCompanionBuilder,
+      $$GroupEventsTableUpdateCompanionBuilder,
+      (
+        GroupEventRow,
+        BaseReferences<_$AppDatabase, $GroupEventsTable, GroupEventRow>,
+      ),
+      GroupEventRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6863,4 +9444,12 @@ class $AppDatabaseManager {
       $$DeliveryStatesTableTableManager(_db, _db.deliveryStates);
   $$SyncCursorsTableTableManager get syncCursors =>
       $$SyncCursorsTableTableManager(_db, _db.syncCursors);
+  $$GroupsTableTableManager get groups =>
+      $$GroupsTableTableManager(_db, _db.groups);
+  $$GroupMembersTableTableManager get groupMembers =>
+      $$GroupMembersTableTableManager(_db, _db.groupMembers);
+  $$GroupSenderKeysTableTableManager get groupSenderKeys =>
+      $$GroupSenderKeysTableTableManager(_db, _db.groupSenderKeys);
+  $$GroupEventsTableTableManager get groupEvents =>
+      $$GroupEventsTableTableManager(_db, _db.groupEvents);
 }
