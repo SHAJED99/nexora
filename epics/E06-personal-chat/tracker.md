@@ -1,6 +1,6 @@
 # E06 · Personal Chat ★ · Progress
 
-**Status:** bug sweep complete, 🧍 awaiting human priority on B02/B03/B04 before epic→development PR · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 13/13 tasks (+ B01 fixed; B02/B03/B04 filed, unfixed)
+**Status:** priorities set (B02=P1, B03=P2, B04=P3 deferred), fixing B02/B03 before epic→development PR · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 13/13 tasks (+ B01 fixed; B02/B03 in progress, B04 deferred to E11)
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -82,7 +82,7 @@ T04, T05, T09, T10) is unblocked and dispatchable today.
 - 2026-08-30 · E06-T12 (round 2, fix) · independent reviewer · APPROVE · **First OpenRouter pilot**: the replacement line was drafted by a free OpenRouter model (`minimax/minimax-m2.7:free`, $0 cost) after the earlier OpenCode-based approach was blocked by this session's own permission classifier (`--dangerously-skip-permissions` on an autonomous file-editing loop). The orchestrator reviewed the model's suggestion, applied it directly via its own edit tool, and independently re-ran `flutter analyze`/`flutter test`/the design-verify gate before committing — same verification rigor as any other change, with the model used only for drafting text, never given direct file-write or command-execution authority. Off-palette findings 2→1, confirmed exactly as predicted; the one remaining is a genuine 8-bit alpha rounding artifact. 382/382 tests. Squash-merged to `epic_06` as `e93281e`. **All 13 of Epic 06's tasks are now complete.**
 
 ## Blocked / Frozen
-- **Epic→`development` PR** ⛔ blocked on `bug_priorities` (🧍 human gate, `skills/bug-sweep`): three bugs filed by the end-of-epic sweep (B02 S1, B03 S3, B04 S3), all with `priority: TBD-human` — severity is the reviewer's call and is set; priority is the human's and is not. The PR opens only when P1/P2 = 0 among them.
+- **Epic→`development` PR** ⛔ blocked until P1/P2 = 0. Human priority gate cleared 2026-08-30: `E06-B02` (S1) → **P1**, `E06-B04` (S3) → **P3** (deferred, recommended re-home E11), `E06-B03` (S3) → **P2**. B02 and B03 now dispatched for fixing; B04 stays recorded and deferred, not blocking.
 
 ## Bug sweep (2026-08-30, independent reviewer)
 Full report: see Event log. Baseline: 382/382 tests, `flutter analyze` clean, zero design-gate regression across all 4 screens (each reproduces its own task's last-recorded %). Three real cross-task-seam defects found and filed:
