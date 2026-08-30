@@ -47,7 +47,7 @@ automatically for matching tasks (see `index.yaml`).
 - status: promoted-to-rule — `agent/skills/design-fidelity/SKILL.md` (new
   stated rule, "never reshape the widget tree to score better against the
   gate's own measurement limits"), 2026-08-30 via `skills/retro`,
-  🧍 `retro_promotions` ⏳ awaiting human. Promoted at a single real
+  🧍 `retro_promotions` ✅ approved by the human, 2026-08-30. Promoted at a single real
   occurrence because the near-miss count shows the lesson was already
   known and already had to be re-taught twice by hand in one epic — the
   exact signal the ladder exists to catch before a third, unwarned task

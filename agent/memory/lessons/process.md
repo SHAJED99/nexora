@@ -262,8 +262,8 @@ automatically for matching tasks (see `index.yaml`).
   the epic's own carried-forward observations before dispatching the next
   task" step) and a cross-reference from `agent/skills/task-sharding/SKILL.md`'s
   existing Inherited-obligations row (which currently only reads *other*
-  epics), 2026-08-30 via `skills/retro`, 🧍 `retro_promotions` ⏳ awaiting
-  human.
+  epics), 2026-08-30 via `skills/retro`, 🧍 `retro_promotions` ✅ approved
+  by the human, 2026-08-30.
 
 ## L-process-009 — a bug task file has no required §4 scope-fence, unlike a feature task file, and an agent fixing a bug fills that gap with its own judgement
 - date: 2026-08-30 | source: `make health` H4, this retro — `E06-B02`,
@@ -296,7 +296,8 @@ automatically for matching tasks (see `index.yaml`).
   task file in the project so far)
 - status: promoted-to-rule — `agent/skills/bug-sweep/SKILL.md` ("Writing a
   bug task that gets fixed once" section, new required scope-fence bullet),
-  2026-08-30 via `skills/retro`, 🧍 `retro_promotions` ⏳ awaiting human.
+  2026-08-30 via `skills/retro`, 🧍 `retro_promotions` ✅ approved by the
+  human, 2026-08-30.
 
 ## L-process-010 — a rate-limit-deviation review's `reviewed_by` free text documents the deviation honestly but isn't machine-parseable against `harness.yaml`'s model list, so rule 5 becomes unverifiable by anything except reading the prose
 - date: 2026-08-30 | source: `make health` H5 — `E06-B01`, `E06-T07`

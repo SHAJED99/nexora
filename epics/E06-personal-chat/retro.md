@@ -156,8 +156,8 @@ Added to `skills/design-fidelity`.
   say this (E01 through E05 all carried the same line). It should stop
   being a retro line.
 
-## What got promoted (🧍 `retro_promotions` — ⏳ AWAITING HUMAN)
-Skill files are code; these edits are written and pending review, not
+## What got promoted (🧍 `retro_promotions` — ✅ APPROVED BY THE HUMAN, 2026-08-30)
+Skill files are code; these edits were written and reviewed, not
 self-approved.
 
 | Lesson | Recurrence | Decision | Where |
