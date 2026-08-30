@@ -118,6 +118,7 @@
 //    returns a fully-constructed, non-null object either way (task file §5's
 //    own contract: "a stack with status unavailable and every member still
 //    non-null-safe to reference").
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
@@ -132,6 +133,7 @@ import '../transport/transport_service.dart';
 import '../../features/trust/data/relationship_repository.dart';
 import '../../features/trust/domain/evaluate_connection_request_use_case.dart';
 import 'ciphertext_codec.dart';
+import 'delivery_ack.dart';
 import 'inbound_pipeline.dart';
 import 'messaging_coordinator.dart';
 import 'prekey_exchange.dart';
@@ -261,7 +263,33 @@ class MessagingStack {
       evaluateConnectionRequest:
           EvaluateConnectionRequestUseCase(RelationshipRepository(db)),
     );
-    inbound.registerControlHandler(prekeyExchange.handleControlFrame);
+    inbound.registerControlHandler(
+      kControlKindPrekeyExchange,
+      prekeyExchange.handleControlFrame,
+    );
+
+    // E06-T08: same "needs a fully-constructed `this`" reasoning as
+    // `prekeyExchange` above. Registered onto its OWN `controlKind` slot
+    // (`OQ-E06-T08-2`'s retrofit of the single-slot seam T07 occupied
+    // first) rather than fighting `prekeyExchange` for the one slot that
+    // used to exist. Also subscribed here, unconditionally, to
+    // `inbound.delivered` -- a broadcast stream that produces nothing until
+    // `coordinator.start()` actually calls `inbound.start()` (this file's
+    // own "does NOT start anything" contract, unchanged: subscribing to a
+    // dormant stream starts nothing by itself) -- so every newly-persisted,
+    // non-duplicate inbound message automatically gets an
+    // accepted+delivered ack sent back to its sender with no call site
+    // needed outside this composition root (task file §3).
+    deliveryAckService = DeliveryAckService(stack: this);
+    inbound.registerControlHandler(
+      kControlKindDeliveryAck,
+      deliveryAckService.handleControlFrame,
+    );
+    inbound.delivered.listen((message) {
+      unawaited(
+        deliveryAckService.onMessageStored(message, message.senderDeviceId),
+      );
+    });
   }
 
   /// The single app-wide `AppDatabase` — passed in, never constructed here
@@ -302,6 +330,13 @@ class MessagingStack {
   /// registered as `inbound`'s one control handler by the time [create]
   /// returns -- no separate wiring call needed at any call site.
   late final PrekeyExchange prekeyExchange;
+
+  /// E06-T08: delivery acknowledgements (`accepted`/`delivered`/`read`).
+  /// Constructed here, registered on `inbound`'s `controlKind == 2` slot,
+  /// and already subscribed to `inbound.delivered` -- see the constructor
+  /// body's own comment for why that subscription starts nothing by
+  /// itself.
+  late final DeliveryAckService deliveryAckService;
 
   /// This device's own local identity (ADR-0005: local, not Firebase-
   /// derived) — from `DeviceIdentityRepository`. May be `''` if no local

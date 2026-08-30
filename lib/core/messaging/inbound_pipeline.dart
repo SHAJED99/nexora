@@ -86,6 +86,13 @@ import 'relay_packet_frame.dart';
 /// frames addressed to this device — T07 (prekey bundles) and T08 (acks)
 /// register their own handler here instead of editing this file (task file
 /// §3). This task defines the seam and registers nothing.
+///
+/// **E06-T08 retrofit (`OQ-E06-T08-2`).** The frame this handler receives
+/// has already had its leading `controlKind` byte read AND stripped by
+/// [InboundPipeline._handleBuffer] — `frame.payload` here is exactly the
+/// registering sub-protocol's own body, with no foreign byte prepended.
+/// This typedef's signature is otherwise unchanged from E06-T05/T07: only
+/// the dispatch mechanism above it changed, not what a handler is handed.
 typedef ControlHandler = Future<void> Function(RelayPacketFrame frame);
 
 /// Silent-drop counters (task file §5) — the bug sweep's and the Dashboard's
@@ -116,8 +123,13 @@ class InboundCounters {
   /// Newly persisted by `ReceiveMessageUseCase` and emitted on [InboundPipeline.delivered].
   int delivered = 0;
 
-  /// Addressed to this device, `payloadType == control`, and no handler is
-  /// registered — dropped and counted, never guessed at (task file §3).
+  /// Addressed to this device, `payloadType == control`, and either no
+  /// handler is registered for the frame's leading `controlKind` byte, or
+  /// the frame's control payload was empty (no `controlKind` byte to read
+  /// at all) — dropped and counted, never guessed at (task file §3;
+  /// `OQ-E06-T08-2`'s retrofit folds the second case into the same counter
+  /// rather than inventing a new one for what is still, at heart, "nobody
+  /// registered to handle this").
   int unhandledControl = 0;
 }
 
@@ -150,7 +162,11 @@ class InboundPipeline {
   final Map<String, StreamSubscription<Uint8List>> _dataSubscriptions =
       <String, StreamSubscription<Uint8List>>{};
 
-  ControlHandler? _controlHandler;
+  /// `OQ-E06-T08-2` retrofit: one named slot per `controlKind` byte instead
+  /// of one named slot total — `PrekeyExchange` (T07, `controlKind == 1`)
+  /// and `DeliveryAckService` (T08, `controlKind == 2`) each get their own
+  /// key rather than fighting over the single slot this field used to be.
+  final Map<int, ControlHandler> _controlHandlers = <int, ControlHandler>{};
 
   final InboundCounters counters = InboundCounters();
 
@@ -164,17 +180,23 @@ class InboundPipeline {
   Stream<Message> get delivered => _deliveredController.stream;
 
   /// The declared extension point for `PayloadType.control` frames (task
-  /// file §3/§5). Throws [StateError] if a handler is already registered —
-  /// this task defines one named registration slot; nobody registers into it
-  /// here.
-  void registerControlHandler(ControlHandler handler) {
-    if (_controlHandler != null) {
+  /// file §3/§5), keyed by [controlKind] since `OQ-E06-T08-2`'s retrofit.
+  /// Throws [StateError] if a handler is already registered for THAT
+  /// [controlKind] — still one named registration slot per control
+  /// sub-protocol, just no longer only one slot total. `[controlKind]`'s
+  /// values are owned by whichever sub-protocol registers them
+  /// (`PrekeyExchange` uses `1`, `DeliveryAckService` uses `2` — see each
+  /// file's own declared constant); this method does not police the
+  /// numbering itself, matching E06-T05's original "the seam, not the
+  /// policy" scope.
+  void registerControlHandler(int controlKind, ControlHandler handler) {
+    if (_controlHandlers.containsKey(controlKind)) {
       throw StateError(
         'InboundPipeline.registerControlHandler: a control handler is '
-        'already registered',
+        'already registered for controlKind $controlKind',
       );
     }
-    _controlHandler = handler;
+    _controlHandlers[controlKind] = handler;
   }
 
   /// Begins consuming `TransportService.incomingData` for every connected
@@ -285,18 +307,37 @@ class InboundPipeline {
 
     // Everything below is addressed to this device.
     if (frame.payloadType == PayloadType.control) {
-      final ControlHandler? handler = _controlHandler;
+      // `OQ-E06-T08-2` retrofit: the leading byte of a control payload is
+      // now which sub-protocol owns the rest of it -- read and STRIP it
+      // here, once, so every registered handler keeps seeing exactly its
+      // own body (this file's `ControlHandler` typedef doc).
+      if (frame.payload.isEmpty) {
+        counters.unhandledControl++;
+        return;
+      }
+      final int controlKind = frame.payload[0];
+      final ControlHandler? handler = _controlHandlers[controlKind];
       if (handler == null) {
         // Dropped and counted, never guessed at (task file §3).
         counters.unhandledControl++;
         return;
       }
+      final RelayPacketFrame innerFrame = RelayPacketFrame(
+        payloadType: frame.payloadType,
+        packetId: frame.packetId,
+        destination: frame.destination,
+        source: frame.source,
+        priority: frame.priority,
+        createdAtMs: frame.createdAtMs,
+        expiresAtMs: frame.expiresAtMs,
+        payload: frame.payload.sublist(1),
+      );
       try {
-        await handler(frame);
+        await handler(innerFrame);
       } catch (_) {
-        // A future control handler's own failure (T07/T08) must not take
-        // this pipeline down either -- same "a bad packet never kills the
-        // loop" policy as the ciphertext branch below.
+        // A registered control handler's own failure (T07/T08) must not
+        // take this pipeline down either -- same "a bad packet never kills
+        // the loop" policy as the ciphertext branch below.
       }
       return;
     }

@@ -84,6 +84,20 @@
 // (`test_EARS_COMM_14_concurrent_ensure_session_uses_one_bundle` is the
 // falsification asset).
 //
+// **`OQ-E06-T08-2` retrofit (E06-T08).** `InboundPipeline`'s control-handler
+// seam was a single named slot when this file was first built; E06-T08
+// (delivery acks) needed a second control sub-protocol sharing the same
+// `PayloadType.control` tag, so `InboundPipeline.registerControlHandler`
+// now takes a `controlKind` key (`inbound_pipeline.dart`). This file's own
+// `_sendControlFrame` prepends [kControlKindPrekeyExchange] to every
+// outbound control frame; `InboundPipeline` reads and strips that byte
+// before calling [handleControlFrame], so this file's `_ControlBody` tag
+// scheme, trust gate, coalescing and provenance logic below are completely
+// unchanged by the retrofit — the only lines that moved are inside
+// `_sendControlFrame` itself. `handleControlFrame`'s own body still expects
+// exactly the same shape it always did: raw `_ControlBody` bytes, no
+// foreign byte prepended.
+//
 // **Response provenance (EARS-COMM-16's sibling risk).** An inbound
 // `bundleResponse`/`bundleUnavailable` is matched against
 // `_outstandingRequests[requestId]` and is accepted only if that entry
@@ -127,6 +141,14 @@ import 'relay_packet_frame.dart';
 /// imported across files and is independently redeclared per file instead
 /// — the same constraint applies here).
 const int _remoteSignalDeviceId = 1;
+
+/// The `controlKind` byte [InboundPipeline] dispatches on
+/// (`inbound_pipeline.dart`, `OQ-E06-T08-2`) — registered in
+/// `messaging_stack.dart` against [PrekeyExchange.handleControlFrame].
+/// `2` is `DeliveryAckService`'s own reserved value (`delivery_ack.dart`,
+/// E06-T08); this device's own control sub-protocol has held `1` since
+/// before that retrofit existed, so it is kept rather than renumbered.
+const int kControlKindPrekeyExchange = 1;
 
 /// How long an outbound `bundleRequest` waits for a response before
 /// [PrekeyExchange.ensureSession] fails with [TimeoutException] (task file
@@ -536,6 +558,15 @@ class PrekeyExchange {
 
   Future<void> _sendControlFrame(String peerDeviceId, Uint8List body) async {
     final now = _clock();
+    // `OQ-E06-T08-2` retrofit: prepend the `controlKind` byte so
+    // `InboundPipeline` can tell this sub-protocol's frames apart from
+    // `DeliveryAckService`'s (both use `PayloadType.control`) — stripped
+    // back off before [handleControlFrame] ever sees it
+    // (`inbound_pipeline.dart`), so this file's own `_ControlBody` framing
+    // above is completely unaffected.
+    final framedBody = Uint8List(body.length + 1);
+    framedBody[0] = kControlKindPrekeyExchange;
+    framedBody.setRange(1, framedBody.length, body);
     final frame = RelayPacketFrame(
       payloadType: PayloadType.control,
       packetId: _nextRequestId(),
@@ -544,7 +575,7 @@ class PrekeyExchange {
       priority: 0,
       createdAtMs: now.millisecondsSinceEpoch,
       expiresAtMs: now.add(_controlFrameTtl).millisecondsSinceEpoch,
-      payload: body,
+      payload: framedBody,
     );
     // Direct transport send -- NOT `relayEngine.enqueue` -- per the
     // resolved `OQ-E06-T07-1`: this exchange only ever works with both
