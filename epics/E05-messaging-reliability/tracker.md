@@ -1,6 +1,6 @@
 # E05 · Messaging Reliability & Multi-Device Sync · Progress
 
-**Status:** bugs resolved, retro pending · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 5/5 tasks + 3/3 bugs (B01 fixed P2, B02 deferred to E06, B03 fixed P3)
+**Status:** bugs resolved, retro pending · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 5/5 tasks + 3/3 bugs (B01 fixed P2, B02 fixed under E06-T06 P1 (retro-set), B03 fixed P3)
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -124,3 +124,12 @@ dispatch immediately, in parallel with T01.
   wire bytes in E04's own relay-packet framing (if it has room), rather than
   a try-both-message-types heuristic on receive. Whoever wires a live
   transport receive path (most likely E06) needs this closed first.
+- 2026-08-30 E05-B02 bookkeeping closed: `E06-T06` built the deferred-to-E06
+  coordinator, was independently reviewed APPROVE, and squash-merged to
+  `epic_06` as `262beaa` (see `epics/E06-personal-chat/tracker.md` Review
+  log, 2026-08-30). `E05-B02.md`'s `status`/`priority` were left
+  `blocked`/`TBD-human` after that merge — a doc-sync gap, not an open bug.
+  Set `status: done`, `priority: must/P1` (retroactive, reflecting the fix's
+  actual severity), DoD boxes ticked with evidence. No new code — verified
+  `lib/core/messaging/messaging_coordinator.dart:305-312` already drives
+  `processQueue()`/`sweepExpired()`/`reclaimPayloads()` on `development`.
