@@ -23,8 +23,29 @@ automatically for matching tasks (see `index.yaml`).
   validator could be more honest about "frontmatter failed to parse" vs
   "field X is missing", and task templates could show a quoted example
   for any free-text field.
-- recurrence: 1
+- recurrence: 2
 - status: lesson
+- **2026-08-30 (E06 post-merge status check) — recurred, and the consequence
+  got worse.** `E06-T01.md`'s `executed_by:` field (not `review_outcome:`
+  this time — the same shape, a different free-text field) had an unquoted
+  colon inside a long run-log-style description. `scheduler.py --validate`
+  and `--status` printed the "bad frontmatter" warning on **every single
+  run this whole epic** — it was visible the entire time and never acted
+  on, because the warning reads as background noise next to the
+  pass/fail summary beneath it. The concrete cost this time: `--status`
+  silently miscounted E06-T01 as `todo` (the YAML-parse-failure default)
+  in the epic progress table, even though the task was long done and
+  merged — an epic that was actually 16/17 done + 1 blocked displayed as
+  having an untouched task. Found only because a human asked "is the
+  status data right?" and the answer required actually reading the
+  warning that had been printing the whole time. Fixed the same way as
+  before (quote the value). Not yet promoted to a rule/hook — the
+  detection already exists (the validator prints it every time); the gap
+  is that a soft `⚠` warning sitting above a clean-looking pass/fail
+  summary doesn't get read. Two occurrences, two different fields, same
+  shape: the next occurrence should trigger promoting this from "always
+  quote free-text values" (a habit) to a hook that fails `--validate`
+  outright on any unparseable task frontmatter, not just warns.
 
 ## L-process-002 — an agent should never sign a human-only gate-approval line, but it keeps needing to be told, not assumed
 - date: 2026-08-27 | source: E02-T02 review (Opus), E02-T03 (avoided proactively)

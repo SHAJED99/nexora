@@ -1,7 +1,7 @@
 ---
 id: E05
 title: Messaging Reliability & Multi-Device Sync
-status: in-progress
+status: done
 type: feature
 priority: { moscow: must, wsjf: 3.2 }
 depends_on: [E03, E04]

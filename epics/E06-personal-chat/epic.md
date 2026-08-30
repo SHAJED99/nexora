@@ -1,7 +1,7 @@
 ---
 id: E06
 title: Personal Chat
-status: todo
+status: done
 type: feature
 priority: { moscow: must, wsjf: 4.2 }
 depends_on: [E02, E03, E04, E05]
