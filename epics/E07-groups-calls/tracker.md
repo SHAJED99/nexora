@@ -8,7 +8,7 @@ T01+T12 dispatched) · **Started:** 2026-08-31 ·
 
 | Task | Title | Layer | Size | MoSCoW | depends_on | Status |
 |---|---|---|---|---|---|---|
-| E07-T01 | Group data model + schema migration | backend | M | must | — | in-progress · builder (sonnet) → reviewer (opus) |
+| E07-T01 | Group data model + schema migration | backend | M | must | — | changes-requested · builder (sonnet) → reviewer (opus) · 1 finding (see §Review log) |
 | E07-T02 | Group role permission matrix | backend | S | must | T01 | todo |
 | E07-T03 | Group membership control protocol | backend | M | must | T02 | todo |
 | E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | todo |
@@ -106,6 +106,70 @@ _(empty at sharding — created deliberately so it has a reader from day one.
 each new dispatch and cross-check the next task's `files:` fence.** E06's
 highest-severity finding, `E06-B02` (S1), sat correctly recorded in this
 exact section for eight tasks with no reader.)_
+
+## Review log
+
+### E07-T01 — 2026-08-31 — 📋 **CHANGES** (reviewer: opus; `executed_by`: builder-sonnet ✅ rule 5)
+
+- **scope:** in-contract. `git diff --name-only epic_07...epic_07_task_01` =
+  exactly the 4 files in `files:` + the task file. `git diff` on
+  `crypto_tables.dart` / `message_tables.dart` / `relay_tables.dart` /
+  `relationships_table.dart` / `sync_tables.dart` is **empty** (verified).
+  §4 respected — no `SenderKeyStore`, no permission matrix, no rotation, no
+  `Conversations` table, no new dependency.
+- **OQ-E07-4 (all three human decisions verified in the built DDL,** dumped
+  from `sqlite_master` by my own probe, not read off the source**):**
+  1. ✅ `group_sender_keys ... PRIMARY KEY ("group_id", "sender_device_id", "membership_epoch")` — epoch **in** the PK.
+  2. ✅ `group_members."removed_at_epoch" INTEGER NULL`; row retained, never deleted (`group_tables.dart:118-121`).
+  3. ✅ `group_events` is its own table; `messages` untouched.
+- **suite:** ✅ ran myself — `flutter analyze` → *No issues found!*;
+  `flutter test` → **391/391 pass** (384 prior + 7 new). Builder's numbers confirmed.
+- **regeneration:** ✅ `database.g.dart` not hand-edited — I re-ran
+  `dart run build_runner build` and the result is **content-identical** to the
+  committed file (`git diff` empty; md5 differs only by CRLF/LF). The 3895/1306
+  line churn is drift's manager-class boilerplate, machine output throughout.
+- **index materialization (the E05-T01 lesson):** ✅ all three indexes are
+  created by explicit `customStatement` in the `from < 13` step
+  (`database.dart:277-295`), and my probe confirms they exist **on both paths** —
+  fresh `createAll` install *and* v12 upgrade — with the correct DDL, including
+  the partial predicate `WHERE role = 'owner' AND removed_at_epoch IS NULL`.
+- **falsification re-run (independently, not trusting the builder's claim):**
+  removed the `idx_group_single_owner` `customStatement` →
+  `test_EARS_GROUP_4_second_current_owner_is_rejected` failed
+  (*Expected: throws anything / Actual: Instance of 'Future<int>'*) **and**
+  `test_EARS_GROUP_5_v12_upgrades_to_v13_additively` failed
+  (*idx_group_single_owner should exist*). Both failed **for the right reason**.
+  Restored → md5 `269f8b51a1a5a8500213539be4f49130`, byte-identical, suite green.
+- **EARS:** 3/3 have a test named by their id; **GROUP-3 ✅, GROUP-4 ✅,
+  GROUP-5 ⚠️ partially verified** — see the finding.
+- **design gate:** n/a (`design_contract: n/a`, pure persistence).
+- **security lens:** n/a — no auth/payment/RBAC surface. No key material is
+  generated, parsed or logged; `record` stays an opaque BLOB.
+
+**❌ Finding (must fix, 1):**
+`test/core/persistence/group_tables_test.dart:221-244` — the
+`preExistingTables` loop is labelled *"Byte-identical schema check on every
+non-group table: the CREATE TABLE SQL captured by sqlite_master for each must
+be exactly what it was pre-migration"* and it does `SELECT sql FROM
+sqlite_master`, but then **discards the `sql` column and asserts only
+`expect(rows, hasLength(1))`** — i.e. it proves the table still *exists*,
+never that its DDL is unchanged. §8 requires the assertion explicitly
+("assert … that `messages`, `relationships` and every `signal_*` table are
+**byte-identical in schema** to before"), the test's own comment claims it,
+and the §9 DoD box is ticked for it — three places assert a check that isn't
+there. **Why it matters:** an `ALTER TABLE` added to the `from < 13` step by
+any future task would leave this test fully green. That is exactly the
+E05-T01 class of migration bug the task's §6 warns against, in the one test
+guarding the epic's riskiest property. Fix: capture the `sql` strings before
+opening `AppDatabase`, and compare after the migration.
+
+**Note — the underlying property is TRUE, only unproven by the suite.** My own
+probe captured `sqlite_master.sql` for `messages`,
+`idx_messages_conversation_created_at`, `relationships` and `signal_sessions`
+pre-migration and string-compared post-migration: all identical, and the set
+added by 12→13 is exactly the 4 tables + 3 indexes and nothing else. So this
+is a **test-strength** fix, not a code fix — `group_tables.dart` and the
+migration step need no change.
 
 ## Bug sweep
 _(after all 13 tasks land — `skills/bug-sweep`. Note `L-process-009`: every
