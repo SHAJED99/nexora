@@ -2,6 +2,8 @@
 // (docs/conventions.md "Naming"). See docs/routes.md for the full table
 // including the routes not yet wired (owned by their feature epics).
 import 'package:get/get.dart';
+import 'package:nexora/features/chat/presentation/chat_binding.dart';
+import 'package:nexora/features/chat/presentation/chat_view.dart';
 import 'package:nexora/features/conversations/presentation/conversations_binding.dart';
 import 'package:nexora/features/conversations/presentation/conversations_view.dart';
 import 'package:nexora/features/devices/presentation/devices_binding.dart';
@@ -28,6 +30,10 @@ abstract final class Routes {
 
   /// design/screens/conversations.md (E06-T10).
   static const conversations = '/conversations';
+
+  /// design/screens/chat.md (E06-T11). `id` = `conversationId` =
+  /// peer device id (T09 §2).
+  static const chat = '/chat/:id';
 }
 
 final appPages = <GetPage<dynamic>>[
@@ -48,5 +54,10 @@ final appPages = <GetPage<dynamic>>[
     name: Routes.conversations,
     page: () => const ConversationsView(),
     binding: ConversationsBinding(),
+  ),
+  GetPage<dynamic>(
+    name: Routes.chat,
+    page: () => const ChatView(),
+    binding: ChatBinding(),
   ),
 ];

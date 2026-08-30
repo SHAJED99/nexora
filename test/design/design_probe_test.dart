@@ -26,10 +26,13 @@ import 'package:get/get.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/transport/transport_service.dart';
+import 'package:nexora/features/chat/presentation/chat_controller.dart';
+import 'package:nexora/features/chat/presentation/chat_view.dart';
 import 'package:nexora/features/conversations/presentation/conversations_binding.dart';
 import 'package:nexora/features/conversations/presentation/conversations_view.dart';
 import 'package:nexora/features/devices/presentation/devices_binding.dart';
 import 'package:nexora/features/devices/presentation/devices_view.dart';
+import 'package:nexora/features/messaging/data/conversation_repository.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
 import 'package:nexora/features/trust/domain/block_use_case.dart';
@@ -142,6 +145,101 @@ void main() {
         tester,
         screenId: 'conversations',
         screen: GetMaterialApp(home: const ConversationsView()),
+      );
+    });
+  });
+
+  // ── E06-T11: `chat` ───────────────────────────────────────────────────────
+  group('screen probes — chat (make design-probe)', () {
+    late AppDatabase db;
+    late MessagingStack stack;
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+
+    setUp(() async {
+      Get.testMode = true;
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      final repository = RelationshipRepository(db);
+      // A trusted peer with a five-message thread — the same COUNT and
+      // rough incoming/outgoing shape as design/screens/chat.md's populated
+      // thread (elements 10-25), so the probe's overall layout height is
+      // comparable to the golden capture's. Real device ids/timestamps and
+      // (since no session is ever established here) an undecryptable body
+      // won't literally match the design's copy ("Ahmed"/"Are you
+      // free..."/etc.) — that is a real, expected finding
+      // (design/gaps.md GAP-003), not something faked here to dodge it,
+      // matching E06-T01/T10's own precedent.
+      await repository.upsert('device-trusted', RelationshipState.trusted);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      const senders = [
+        'device-trusted', // incoming — mirrors element 10
+        'self-probe-device', // outgoing — mirrors element 12
+        'device-trusted', // incoming — mirrors element 15
+        'self-probe-device', // outgoing — mirrors element 20
+        'self-probe-device', // outgoing — mirrors element 23
+      ];
+      for (var i = 0; i < senders.length; i++) {
+        await db.into(db.messages).insert(
+              MessagesCompanion.insert(
+                id: 'probe-chat-message-$i',
+                conversationId: 'device-trusted',
+                senderDeviceId: senders[i],
+                sequenceNumber: i,
+                ciphertext: Uint8List.fromList(List<int>.filled(32, 7 + i)),
+                createdAt: now + i * 60000,
+                deliveryState: DeliveryState.accepted.name,
+              ),
+            );
+      }
+
+      stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'self-probe-device',
+        transport: TransportService(
+          binaryMessenger: messenger,
+          messageChannelSuffix: 'chat-probe',
+        ),
+      );
+      Get.put<MessagingStack>(stack, permanent: true);
+      // `ChatController` is deliberately NOT constructed here in `setUp` --
+      // found directly: `Get.put<ChatController>` from inside `setUp`'s own
+      // async function left the built widget with only the header/composer
+      // (15 elements, no message-list content at all) even though the
+      // controller's own `messages`/`loading` state was correct by the time
+      // `testWidgets` ran. Constructing it in the `testWidgets` body itself
+      // (immediately before `dumpScreenProbe`, same as this file's
+      // `devices`/`conversations` probes already do for THEIR controllers)
+      // reliably produces the full 35-element dump instead. Not fully
+      // root-caused (an Obx/GetX zone interaction across the setUp/test
+      // boundary is the leading suspect); logged here rather than left
+      // silent, and reported in this task's Run log for anyone chasing the
+      // same symptom on a later screen.
+    });
+
+    tearDown(() async {
+      await stack.dispose();
+      Get.reset();
+    });
+
+    testWidgets('chat', (tester) async {
+      // Direct construction rather than `ChatBinding().dependencies()` --
+      // that binding reads `Get.parameters['id']` from the router, which
+      // this probe (built via `GetMaterialApp(home: ...)`, no route push)
+      // never populates. Every dependency below is the SAME already-
+      // constructed stack member `ChatBinding` itself would have used.
+      Get.put<ChatController>(
+        ChatController(
+          conversationId: 'device-trusted',
+          repo: ConversationRepository(db, selfDeviceId: stack.selfDeviceId),
+          send: stack.sendMessage,
+          sessions: stack.prekeyExchange,
+          crypto: stack.cryptoService,
+          acks: stack.deliveryAckService,
+        ),
+      );
+      await dumpScreenProbe(
+        tester,
+        screenId: 'chat',
+        screen: GetMaterialApp(home: const ChatView()),
       );
     });
   });

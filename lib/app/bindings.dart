@@ -74,6 +74,14 @@ class AppBinding extends Bindings {
     // exactly the correctness defect task file §2 describes, not a style
     // choice.
     Get.put(messagingStack, permanent: true);
+    // E06-T11 (OQ-E06-T06-4): the one lifecycle call `messaging_stack.dart`'s
+    // own header names as still missing — `coordinator` is fully constructed
+    // by `MessagingStack.create` but `create()` deliberately never starts it
+    // (that file's own "does NOT start anything" contract). Without this,
+    // EARS-MSG-1 stays true only in E06-T06's own tests, never in the app a
+    // user runs. No new binding, no new singleton, no other change to this
+    // file's existing registrations.
+    messagingStack.coordinator.start();
     Get.put(messagingStack.sendMessage, permanent: true);
     Get.put(messagingStack.receiveMessage, permanent: true);
     Get.put(messagingStack.syncCursors, permanent: true);
