@@ -8,7 +8,7 @@ T01+T12 dispatched) · **Started:** 2026-08-31 ·
 
 | Task | Title | Layer | Size | MoSCoW | depends_on | Status |
 |---|---|---|---|---|---|---|
-| E07-T01 | Group data model + schema migration | backend | M | must | — | changes-requested · builder (sonnet) → reviewer (opus) · 1 finding (see §Review log) |
+| E07-T01 | Group data model + schema migration | backend | M | must | — | done · builder (sonnet) → reviewer (opus) · ✅ APPROVE round 2, round-1 finding closed (see §Review log); awaiting orchestrator squash-merge |
 | E07-T02 | Group role permission matrix | backend | S | must | T01 | todo |
 | E07-T03 | Group membership control protocol | backend | M | must | T02 | todo |
 | E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | todo |
@@ -107,6 +107,16 @@ each new dispatch and cross-check the next task's `files:` fence.** E06's
 highest-severity finding, `E06-B02` (S1), sat correctly recorded in this
 exact section for eight tasks with no reader.)_
 
+- **2026-08-31 · E07-T01 · migration-test completeness (advisory, S4).**
+  `test_EARS_GROUP_5_v12_upgrades_to_v13_additively` proves every pre-existing
+  table's DDL is byte-identical across 12→13 and that the 4 expected tables +
+  3 expected indexes exist — but it does not assert the added set is *exactly*
+  those 7, so an unintended 8th entity created by a future migration step would
+  not fail it. Property holds today (reviewer-probed at round 1). **Fold into
+  whichever later E07 task edits the `from < 13` step or adds a `from < 14`
+  step** (`E07-T02`/`T03`/`T04` all depend on T01 and may touch
+  `database.dart`), or explicitly note why it stays out of scope.
+
 ## Review log
 
 ### E07-T01 — 2026-08-31 — 📋 **CHANGES** (reviewer: opus; `executed_by`: builder-sonnet ✅ rule 5)
@@ -170,6 +180,60 @@ pre-migration and string-compared post-migration: all identical, and the set
 added by 12→13 is exactly the 4 tables + 3 indexes and nothing else. So this
 is a **test-strength** fix, not a code fix — `group_tables.dart` and the
 migration step need no change.
+
+### E07-T01 — 2026-08-31 — ✅ **APPROVE** (round 2; reviewer: opus; `executed_by`: builder-sonnet ✅ rule 5)
+
+Round-1's single finding is **closed**. Verified independently from the diff and
+a re-run, not from the builder's transcript.
+
+- **scope: in-contract.** `git diff d319db6..a9fe875 --name-only` returns exactly
+  two paths: `test/core/persistence/group_tables_test.dart` and
+  `epics/E07-groups-calls/tasks/E07-T01.md`. The three production files are
+  provably untouched — blob hashes are identical on both sides:
+  `group_tables.dart` `e6a7436…`, `database.dart` `7d4d3e7…`,
+  `database.g.dart` `bc28885…`. So round 1's substantive approval still stands
+  unchanged; this round only re-judged test strength.
+- **the fix is real, not dressed up.** `group_tables_test.dart:191-209` opens a
+  raw `sqlite3` in-memory handle, builds the v12 schema, and snapshots each
+  pre-existing table's `sqlite_master.sql` into `preMigrationSql` — all of it
+  **before** `AppDatabase.forTesting(...)` is constructed at line 212. The
+  "before" snapshot therefore cannot have been taken through a migrated
+  connection; the migration provably has not run at snapshot time.
+  The assertion at `group_tables_test.dart:271-275` is a genuine string
+  equality on the `sql` column (`rows.single.read<String>('sql')` vs the
+  snapshot), not a weaker check. The map is typed `<String, String>` and built
+  with `.single`, so a missing table throws rather than silently comparing
+  against `null` — the degenerate always-green path is closed too.
+- **EARS: 3/3.** EARS-GROUP-3 → `test_EARS_GROUP_3_new_group_has_epoch_zero_and_one_owner`;
+  EARS-GROUP-4 → `test_EARS_GROUP_4_second_current_owner_is_rejected` (verified
+  round 1 by falsification); EARS-GROUP-5 →
+  `test_EARS_GROUP_5_v12_upgrades_to_v13_additively`, which now actually proves
+  the "without altering any pre-existing table" clause it is named for.
+- **suite: pass.** `flutter analyze` → *No issues found!*; `flutter test` →
+  **391/391**, re-run by the reviewer on `a9fe875`.
+- **falsification — reviewer's own probe, not the builder's.** Inserted
+  `ALTER TABLE messages ADD COLUMN reviewer_probe_e07t01 TEXT;` into the
+  `from < 13` step (`database.dart:275`, a different column name and site than
+  the builder's `temp_falsification_check`, so the code cannot have been tuned
+  to it). The test failed **for the right reason**: a DDL mismatch at
+  `group_tables_test.dart:271`, reason string *"messages DDL should be
+  byte-identical after migration"*, differing at offset 272 with the injected
+  column visible in Actual. **The decisive detail:** the failure landed on
+  line 271 (the new equality), *not* line 270 (`hasLength(1)`) — the pre-fix
+  assertion passed this mutation, which is precisely the round-1 finding and
+  precisely what the fix now catches. Probe reverted; `git diff` empty; full
+  suite back to **391/391**.
+- **design gate: n/a** (`design_contract: n/a`, pure persistence).
+- **security: n/a** — no auth/payment/RBAC path. The single-owner invariant is
+  DB-enforced (`idx_group_single_owner`), verified round 1.
+
+**Carried forward (advisory, NOT a blocker):** round 1 also suggested
+*considering* an assertion that the set 12→13 *adds* is exactly the 4 tables +
+3 indexes, which would catch an unintended extra entity. That was phrased as
+optional and remains unimplemented; the current test verifies the 7 expected
+entities exist but would not notice an 8th. The property holds today (confirmed
+by the round-1 probe). Recorded in §Carried-forward observations for whichever
+later E07 task touches this migration — not grounds to hold this PR.
 
 ## Bug sweep
 _(after all 13 tasks land — `skills/bug-sweep`. Note `L-process-009`: every
