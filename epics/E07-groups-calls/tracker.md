@@ -133,6 +133,66 @@ transport, with `NullCallMediaTransport` as the honest v1 seam.
   `epic_07` before this task branched — reverting it would have erased a
   real human decision, not corrected a stale checklist item. See
   `epics/E07-groups-calls/tasks/E07-T12.md` Run log for full evidence.
+- 2026-08-31 · E07-T13 · independent reviewer (sonnet-5, ≠ executed_by
+  claude-opus-5/planner, rule 5) · APPROVE · n/a (docs task, `design_contract:
+  n/a`). Diff is exactly `design/gaps.md`, `epics/E07-groups-calls/epic.md`
+  and this task file — no Dart file touched (`git diff --stat` against
+  `epic_07` confirmed 3 files, 445 insertions, 0 code files), `pubspec.yaml`
+  unchanged, `flutter analyze` clean and `flutter test` 337/337 green
+  (worktree not on this branch's exact commit, but irrelevant here since the
+  diff contains zero Dart changes by construction). **Load-bearing claim
+  independently re-derived, not trusted from the transcript:** read
+  `spec/srs.md` directly — FR-STORE-002 ("store voice messages, PTT
+  recordings, and call recordings locally on-device") does read as a stored
+  artifact, not a live channel; FR-CALL-001/002/003 (the entire call
+  chapter) never mention PTT; FR-NOTIFY-001 and FR-PLAT-001 list PTT as its
+  own item alongside voice messages/calls, consistent with either reading
+  but not asserting a live one. The spec reading behind outcome (b) is
+  accurate and not cherry-picked. **GAP-023 read in full:** supersedes
+  GAP-017 by reference — confirmed by diffing `design/gaps.md`, which
+  contains **zero removed/changed lines**, only two pure-insertion hunks (a
+  new blockquote note above the clearance history, and the new GAP-023
+  section) — GAP-017's own block is untouched. The proposed UI delta (P1-P6)
+  is genuinely derivative: press-and-hold on the existing `mic` button (no
+  new element), GAP-014's V3/V4/V5 transmitting treatment unchanged, one new
+  string `Transmitting…`, no stop/cancel (release commits), the delivered
+  bubble V10-V16 unchanged — no new token, geometry or glyph invented.
+  `approved by:` is bare (`_<human>_ on _<date>_`), not self-approved.
+  **Group PTT reasoning judged sound, not a dodge:** under the
+  message-artifact reading (itself spec-supported, not invented for
+  convenience), two members holding the button simultaneously do produce two
+  independent voice-message clips with no shared resource to arbitrate —
+  the floor-control problem only exists under the live-channel reading,
+  which GAP-023 explicitly flags as an open fork for the human rather than
+  silently foreclosing. This is a genuine consequence of the chosen
+  interpretation, not a reframing that avoids the question — and the entry
+  says outright that floor control returns if the human takes the other
+  fork, rather than hiding that cost. **The `files:`-fence deviation
+  (inlining the delta into GAP-023 instead of `chat-ptt.md`/`chat-voice.md`)
+  was the right call**: §5 named those files as the artifact shape but
+  `files:`'s `create:` is empty and `chat-voice.md` is not in `update:`;
+  rule 6 makes the fence binding over a conflicting task-authoring
+  instruction, and amending an already-approved contract file before the
+  human approves the amendment is exactly what `L-process-002` exists to
+  prevent. A named follow-on docs task to fold the rows into
+  `chat-voice.md` post-approval is the correct resolution — stopping to
+  escalate would have been needless process for a documented, reasoned,
+  rule-6-compliant substitution that stayed inside the letter of the task's
+  own `files:` contract. `IMP-001` confirmed untouched (`git diff` empty).
+  `epic.md`'s `OQ-E07-2` confirmed 🟢 with the GAP-023 answer copied
+  verbatim (matched sentence-for-sentence against the GAP-023 source, not
+  paraphrased) into both the §Open Questions entry and the §Tasks/
+  §Follow-on/§Risks rows, all consistent with outcome (b). **Noted, not
+  fixed (out of this task's scope, flagged by the planner and confirmed
+  present):** `epic.md`'s `OQ-E07-3` block carries three leftover template
+  lines (`**Answer:** _<empty>_` / `**Answered by:** _<human>_` / `**Date:**
+  _<YYYY-MM-DD>_`) sitting directly below the human's real, filled-in
+  Status/Answered by/Date lines for that question — left for the
+  orchestrator's own cleanup commit, correctly not touched here since it
+  sits inside a human decision record. **GAP-023 itself is not approved by
+  this review** — it is 🟡, `design_contract_approval` still open on it, and
+  that sign-off is a separate 🧍 human gate outside this review's scope to
+  grant.
 
 ## Carried-forward observations (not yet a task)
 _(empty at sharding — created deliberately so it has a reader from day one.
