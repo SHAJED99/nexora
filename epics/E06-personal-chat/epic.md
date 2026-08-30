@@ -94,6 +94,26 @@ Voice messages, PTT, attachments and location-in-chat become shardable once
 T13's derived contracts are 🧍 approved. They are in FR-COMM-001's scope and
 in this epic's; they are not in this shard.
 
+T13 ran that gap pass on 2026-08-30 and produced three derived contracts plus
+one recorded question. The follow-ons below are **listed, not sharded** — they
+become shardable the moment `design/gaps.md`'s `design_contract_approval` gate
+line reads cleared, and not one moment earlier. Sharding them now would
+approve the contracts and consume them in the same breath, which is exactly
+what the gate exists to prevent.
+
+| Prospective task | Title | Layer | Est. | Design contract | Blocked by |
+|---|---|---|---|---|---|
+| E06-T14 | Voice messages — record, cancel, playback bubble | frontend | M | `design/screens/chat-voice.md` | 🧍 GAP-014 cleared **and** the press-and-hold / tap-to-toggle choice answered |
+| E06-T15 | Voice-message capture + storage plumbing (codec, duration cap, on-disk placement) | backend | M | n/a | E06-T14's contract; overlaps E08's storage scope — settle the boundary before sharding |
+| E06-T16 | Attachments — picker, send, in-progress/complete/failed card | frontend | M | `design/screens/chat-attachment.md` | 🧍 GAP-015 cleared **and** the picker container form (sheet vs menu) answered |
+| E06-T17 | Attachment transfer plumbing (chunking, resume, size limits) | backend | M | n/a | E06-T16's contract; E08 owns retention — fence it explicitly |
+| E06-T18 | Location-in-chat — share row + location bubble incl. FR-LOC-005 staleness | frontend | S | `design/screens/chat-location.md` | 🧍 GAP-016 cleared **and** E09's permission model existing (FR-LOC-001/002/003) |
+| — | **PTT** | — | — | **none — deliberately** | `OQ-E06-T13-1` / GAP-017. No contract, no derivable primitive. Advisory: re-home to E07 alongside the real-time transport work; a re-home is a scope decision and goes through `skills/change-impact` |
+
+Ids above are **placeholders for the planning pass that follows approval**,
+not reservations — the pass may split, merge or renumber them, and E06-T15 /
+E06-T17 may turn out to belong to E08 rather than here.
+
 ## Test strategy
 End-to-end: two real (or emulated) devices, one sends a text message while
 the other is offline, message queues, arrives on reconnect, decrypts

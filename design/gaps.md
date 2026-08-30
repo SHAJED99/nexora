@@ -1,10 +1,20 @@
 # Design gaps — what the design doesn't cover, and what we'll do about it
 
-**Gate:** 🧍 `design_contract_approval` — ✅ cleared by human on 2026-08-26
-(the original 7-screen contract extraction + gap pass, per Q-DESIGN-001 in
-`spec/questions.md`. Gaps added later by feature epics — GAP-002/003/004 —
-each carry their own `approved by:` line below and are tracked
-independently; several are still pending your actual sign-off.)
+**Gate:** 🧍 `design_contract_approval` — ⏳ AWAITING HUMAN
+(reopened by **E06-T13**, 2026-08-30, for **GAP-014 · GAP-015 · GAP-016 ·
+GAP-017** — the rich-message-type gap pass — and for the three derived
+contracts they propose: `design/screens/chat-voice.md`,
+`design/screens/chat-attachment.md`, `design/screens/chat-location.md`.
+None of those four entries is approved; each carries an empty `approved by:`
+line, and **no voice / attachment / location task may be sharded or built
+until this line reads cleared**.)
+
+**Clearance history**
+- ✅ cleared by human on 2026-08-26 — the original 7-screen contract
+  extraction + gap pass, per Q-DESIGN-001 in `spec/questions.md`.
+- Gaps added later by feature epics (GAP-001…GAP-013) each carry their own
+  `approved by:` line below and are tracked independently; several are still
+  pending the human's actual sign-off.
 
 Rule 2 has two halves. Every part of the provided design gets implemented as
 accurately as possible **and** every journey it omits gets completed from the
@@ -338,6 +348,179 @@ is how a product acquires seven different empty states.
   "No route to this peer" (peers exist, no path); dot renders in the
   existing muted `rgb(70,69,85)` for both, no new colour
 - **built:** E06-T08
+
+<!-- ── E06-T13 rich-message-type gap pass — the second half of FR-COMM-001,
+     2026-08-30. These four are NOT approved. Every `approved by:` line below
+     is deliberately empty (L-process-002 — an agent-approved design gap has
+     already cost this project once). The gate line at the top of this file is
+     ⏳ AWAITING HUMAN for exactly these entries. ── -->
+
+## GAP-014 — chat, voice messages: no recording UI and no playback bubble
+- **status:** 🟡 proposed
+- **screen:** chat (`design/screens/chat.md`) → new derived contract
+  `design/screens/chat-voice.md`
+- **spec:** FR-COMM-001 — "personal communication via text, **voice
+  messages**, PTT, voice calls, attachments, and location sharing";
+  FR-UI-001 (Material 3, no competing visual language). E06 `epic.md` §Risks
+  puts these behind text-first as follow-on tasks inside this epic.
+- **design shows:** a `mic` button on the accent fill (chat elements 30-31)
+  and nothing else. No recording state, no elapsed counter, no cancel
+  affordance, no voice bubble, no playback control anywhere in the design
+  source.
+- **derived from:** `chat.md`'s own measured primitives only — the composer
+  button geometry (48×48, `r9999px`, chat 26/30), the accent fill
+  `rgb(53, 37, 205)` with `rgb(255, 255, 255)` glyphs (chat 30-31), the
+  header icon-button (40×46, `r9999px`, chat 1/7) for cancel, the
+  timestamp treatment (`12px` `w500` `rgb(70, 69, 85)`, chat 11/13) for the
+  elapsed counter, the text-bubble box (270-272×48, chat 12/15/20) for the
+  playback bubble, and the measured `2px` radius for the progress track.
+  `circle` is borrowed as an existing glyph from
+  `design/screens/dashboard.md` (element 7), the way GAP-009 borrowed that
+  screen's glyphs rather than inventing new ones.
+- **proposal:** three surfaces, all inside the existing chat screen — a
+  recording composer (dot + `M:SS` counter + `Recording…` + cancel), a
+  cancel affordance, and a playback bubble (play/pause + a plain progress
+  track + duration) that is the text bubble with its body replaced. Detail
+  in `design/screens/chat-voice.md`. **Three things are deliberately put to
+  you rather than decided:**
+  (a) **press-and-hold vs tap-to-toggle recording** — a real product choice,
+  not a detail: hold buys a slide-to-cancel gesture and no stop button and is
+  unusable for a long message; toggle buys an explicit stop button and costs
+  an extra tap on a two-second one. The contract specifies **both** variants'
+  elements so the visual language is fixed either way; the unchosen variant's
+  rows get struck at approval. No advisory pick — the answer depends on how
+  long a typical NEXORA voice message is, which is your knowledge, not the
+  agent's.
+  (b) **waveform vs plain progress** — the design draws no waveform primitive
+  anywhere, so the contract proposes a plain track built from the measured
+  `2px` radius. A waveform is a new design element and needs you.
+  (c) **glyph names** for stop / close / play / pause. No contract in
+  `design/screens/` draws any of them. Their family, size and colour are
+  measured tokens; only the glyph identity is proposed copy, flagged
+  `[glyph — pending human confirmation]` in the contract.
+  Codec, bit rate, max length and storage are explicitly **not** proposed
+  here — engineering, and partly E08's.
+- **approved by:**
+- **built:** not built — contract only; the voice-message frontend task is
+  not shardable until this entry is cleared
+
+## GAP-015 — chat, attachments: the picker has no destination and the transfer card has no terminal states
+- **status:** 🟡 proposed
+- **screen:** chat (`design/screens/chat.md`) → new derived contract
+  `design/screens/chat-attachment.md`
+- **spec:** FR-COMM-001 — "…**attachments**…"; FR-UI-001
+- **design shows:** the `add` button (chat 26-27), and — unusually for this
+  pass — a real, fully drawn attachment primitive: the in-progress transfer
+  bubble `troubleshoot` / `Backup: Family Photos` / `In progress... 78%`
+  (chat 16-18). What it does **not** draw is where `add` leads, and what the
+  card looks like once the transfer completes or fails.
+- **derived from:** that transfer card itself, kept exactly as measured —
+  `troubleshoot` `24px` `rgb(0, 101, 145)`, title `12px` `w700`
+  `rgb(11, 28, 48)`, subtitle `12px` `w500` `rgb(70, 69, 85)` (chat 16-18).
+  The picker reuses the screen's own card tokens (`rgb(255, 255, 255)` fill,
+  `12px` radius, `rgba(199, 196, 216, 0.2)` border, the single measured
+  shadow) with the `add` button's icon treatment (`24px`
+  `rgb(53, 37, 205)`, chat 27) on its rows. `check_circle` is borrowed from
+  `design/screens/dashboard.md` (element 23) but tinted with **this** card's
+  own `rgb(0, 101, 145)` so no new value enters the chat screen; the failed
+  state inherits GAP-009's already-approved `error_outline` at
+  `rgb(70, 69, 85)` rather than re-opening that decision.
+- **proposal:** four states, one card. A source picker from `add`
+  (photo/video, camera, file — plus the location row GAP-016 specifies, in
+  the same picker), the in-progress card unchanged, a completed card
+  (`check_circle` + file size in the subtitle slot), and a failed card
+  (`error_outline` + `Transfer failed`) that **stays in the thread** rather
+  than disappearing. Progress stays a percentage in text; the design draws
+  no progress bar and one is not invented. **Put to you rather than decided:**
+  the picker's **container form** — bottom sheet vs anchored menu — because
+  the design draws no sheet, menu or dialog anywhere, and the picker's row
+  contents are derivable while its container is not. Advisory: a bottom
+  sheet, since the composer is at the bottom of a 390×844 viewport and the
+  app has no anchored-menu precedent to be consistent with — but this is a
+  recommendation, not a decision. Also flagged: the three source glyphs.
+  File size limits, chunking, MIME allow-lists and retention are **not**
+  proposed here — E08 owns storage.
+- **approved by:**
+- **built:** not built — contract only; the attachment frontend task is not
+  shardable until this entry is cleared
+
+## GAP-016 — chat, location-in-chat: no share entry point and no received bubble
+- **status:** 🟡 proposed
+- **screen:** chat (`design/screens/chat.md`) → new derived contract
+  `design/screens/chat-location.md`
+- **spec:** FR-COMM-001 — "…and **location sharing**"; FR-LOC-005 (never
+  represent stale location as live — the one location requirement this
+  contract genuinely must discharge in pixels); FR-UI-001
+- **design shows:** nothing. No location affordance, no location bubble, no
+  map, no pin, and no image anywhere in the chat contract other than the
+  38×38 avatar (chat element 3).
+- **derived from:** the same transfer-card treatment as GAP-015 (chat 16-18)
+  inside the text bubble's box (270-272×48, chat 12/15/20) — icon `24px`,
+  title `12px` `w700`, subtitle `12px` `w500`, the picker row treatment
+  (`24px` `rgb(53, 37, 205)` + `12px` `w500` `rgb(11, 28, 48)`, chat 27) for
+  the share entry, the muted `rgb(70, 69, 85)` for the disabled and
+  unavailable treatments, and the existing timestamp + delivery-tick
+  elements (chat 11/14/22/25) unchanged.
+- **proposal:** one row in GAP-015's picker (`Location`), and a location
+  message rendered as a **card, not a map** — the design owns no map
+  primitive and deriving one would be inventing an element, so the bubble is
+  the transfer card's icon/title/subtitle with the subtitle carrying the
+  freshness string (`Shared just now` vs `Last known · h:mm AM`, which is how
+  FR-LOC-005 is discharged and is therefore not optional). An unavailable
+  location keeps its card in the thread with the muted treatment rather than
+  vanishing. **Explicit boundary — this contract governs rendering only and
+  must not be read as redefining anything it touches:** FR-TRUST-006's
+  location-access control stays where it is (GAP-005's undesigned
+  Privacy & Security sub-screen); FR-MSG-007's `LOCATION-OFF > LOCATION-ON`
+  conflict precedence is untouched and a rendered bubble is never evidence
+  that sharing is permitted — the permission check happens before the bubble
+  exists; **FR-LOC-001…005 and location sharing as a capability belong to
+  E09**, and this contract assumes a message the permission layer already
+  allowed. Live-vs-static location, update frequency and share duration are
+  E09's, not proposed here. **Put to you rather than decided:** whether an
+  in-thread **map preview** is wanted at all (it would be a new design
+  element and a new dependency, so it is a design pass plus rule 3, not a
+  derivation), and the `place` / `location_off` glyph names.
+- **approved by:**
+- **built:** not built — contract only; the location-in-chat frontend task is
+  not shardable until this entry is cleared, and it additionally depends on
+  E09's permission model existing
+
+## GAP-017 — chat, PTT: no design source, no derivable primitive, and no contract proposed
+- **status:** 🟡 proposed — **as a question, not as a proposal.** Tracked as
+  **`OQ-E06-T13-1`** in `epics/E06-personal-chat/tasks/E06-T13.md`
+  §Open Questions and in `epic.md` §Open Questions. Owner: **human**.
+- **screen:** chat (`design/screens/chat.md`) — **no derived contract
+  written, deliberately**
+- **spec:** FR-COMM-001 — "…text, voice messages, **PTT**, voice calls…";
+  `spec/feature-list.md` §Personal Communication UC ("User sends/receives
+  text, voice messages, PTT, attachments, location with a contact")
+- **design shows:** nothing that implies a PTT mode. The `mic` button (chat
+  30-31) reads as voice-message recording and is already claimed by GAP-014;
+  there is no transmitting state, no channel indicator, no listening state,
+  and no half-duplex affordance anywhere in any of the seven contracts.
+- **derived from:** **N/A — nothing.** Push-to-talk is a *mode* (hold to
+  transmit, release to listen, near-real-time), not a message bubble.
+  Composing one out of bubble geometry and a mic button would not be
+  deriving an omitted state from existing primitives; it would be inventing
+  an interaction model, which rule 2 forbids as squarely as dropping an
+  element does. The honest output here is a question.
+- **proposal:** **none — this entry exists to record that no proposal is
+  being made.** The questions that must be answered before PTT can have a
+  design at all: is it a live half-duplex stream (which is a transport
+  problem, much closer to E07's voice-call work than to messaging), or a
+  fast voice-message loop layered on GAP-014? Does a PTT transmission leave
+  a message in the thread afterwards, or is it ephemeral? Is it
+  per-conversation, or its own surface? **Advisory recommendation: park PTT
+  until E07's voice-call work settles the real-time transport question**,
+  then design it once against a transport that exists — a half-duplex live
+  stream shares E07's problems and almost none of E06's. Recorded with an
+  owner so it is not silently dropped from FR-COMM-001's scope; a
+  re-home to E07 is itself a scope decision and would go through
+  `skills/change-impact`.
+- **approved by:**
+- **built:** not built and not shardable — no contract exists, and rule 2
+  forbids a frontend task without one
 
 ## The usual suspects
 
