@@ -103,12 +103,12 @@ what the gate exists to prevent.
 
 | Prospective task | Title | Layer | Est. | Design contract | Blocked by |
 |---|---|---|---|---|---|
-| E06-T14 | Voice messages — record, cancel, playback bubble | frontend | M | `design/screens/chat-voice.md` | 🧍 GAP-014 cleared **and** the press-and-hold / tap-to-toggle choice answered |
+| E06-T14 | Voice messages — record, cancel, playback bubble | frontend | M | `design/screens/chat-voice.md` | ✅ cleared 2026-08-30 — GAP-014 approved, tap-to-toggle chosen |
 | E06-T15 | Voice-message capture + storage plumbing (codec, duration cap, on-disk placement) | backend | M | n/a | E06-T14's contract; overlaps E08's storage scope — settle the boundary before sharding |
-| E06-T16 | Attachments — picker, send, in-progress/complete/failed card | frontend | M | `design/screens/chat-attachment.md` | 🧍 GAP-015 cleared **and** the picker container form (sheet vs menu) answered |
+| E06-T16 | Attachments — picker, send, in-progress/complete/failed card | frontend | M | `design/screens/chat-attachment.md` | ✅ cleared 2026-08-30 — GAP-015 approved, bottom sheet chosen |
 | E06-T17 | Attachment transfer plumbing (chunking, resume, size limits) | backend | M | n/a | E06-T16's contract; E08 owns retention — fence it explicitly |
-| E06-T18 | Location-in-chat — share row + location bubble incl. FR-LOC-005 staleness | frontend | S | `design/screens/chat-location.md` | 🧍 GAP-016 cleared **and** E09's permission model existing (FR-LOC-001/002/003) |
-| — | **PTT** | — | — | **none — deliberately** | `OQ-E06-T13-1` / GAP-017. No contract, no derivable primitive. Advisory: re-home to E07 alongside the real-time transport work; a re-home is a scope decision and goes through `skills/change-impact` |
+| E06-T18 | Location-in-chat — share row + location bubble incl. FR-LOC-005 staleness | frontend | S | `design/screens/chat-location.md` | ✅ GAP-016 cleared 2026-08-30 (card-only, no map) — still needs E09's permission model existing (FR-LOC-001/002/003) |
+| — | **PTT** | — | — | **none — deliberately** | Decided 2026-08-30: parked, re-homed to E07 via `skills/change-impact`. See `OQ-E06-T13-1` / GAP-017 — not an E06 task |
 
 Ids above are **placeholders for the planning pass that follows approval**,
 not reservations — the pass may split, merge or renumber them, and E06-T15 /
@@ -145,7 +145,7 @@ Raised at sharding (2026-08-29). Two are 🧍 **blocking** and gate the wedge.
 | OQ-E06-T11-1 | T11 | important | No design source for a failed message. Advisory: reuse the queued glyph; design a real treatment with T13's gap pass |
 | OQ-E06-T11-2 | T11 | important | What `Stored` means (inherited OQ-E05-T03-1, now two epics old). Advisory: document as unused now, retire at the next SRS amendment |
 | OQ-E06-T11-3 | T11 | optional | Forward secrecy is bounded to in-order messages, and this screen is where the guarantee is shown (inherited from E03). Advisory: state it in GAP-005's Privacy & Security sub-screen |
-| OQ-E06-T13-1 | T13 | important | PTT has no design source and no derivable primitive. Advisory: re-home to E07, alongside the real-time transport work |
+| OQ-E06-T13-1 | T13 | important | ✅ answered 2026-08-30 — PTT parked, re-homed to E07 (`skills/change-impact`) per the advisory |
 
 Genesis-level **OQ-E00-3** is closed by **E06-T01**.
 
