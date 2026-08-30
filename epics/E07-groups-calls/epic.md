@@ -89,7 +89,7 @@ routing behaviour that is real today, with the media path held behind a
 | E07-T10 | Real-time traffic profile + call priority (FR-CALL-002) | backend | M | should | T09 |
 | E07-T11 | **Make-before-break call route migration** ⛔ | backend | M | must | T09, T10 |
 | E07-T12 | E07 design gap pass — derived contracts (group create/manage, call) | docs | M | must | — |
-| E07-T13 | **PTT — resolve `OQ-E07-2` and produce its disposition** ⛔ | docs | S | could | T12 |
+| E07-T13 | **PTT — resolve `OQ-E07-2` and produce its disposition** ✅ *(2026-08-31: outcome (b), `GAP-023` — layered on GAP-014, unblocked by `OQ-E07-3`)* | docs | S | could | T12 |
 
 ⛔ = carries or is blocked by a 🧍 Open Question. See §Open Questions and
 `tracker.md` §Blocked.
@@ -106,7 +106,7 @@ prevent.
 | Group create screen | frontend | GAP-018 (🟡) + `E07-T12`'s contract |
 | Group manage screen (roles, membership, delete) | frontend | GAP-019 (🟡) + `E07-T12`'s contract |
 | Call screens (outgoing/incoming/in-call/failed) | frontend | GAP-021/022 (🟡) + `E07-T12`'s contract |
-| PTT build | ? | `E07-T13`'s disposition, which is itself blocked by `OQ-E07-3` |
+| **PTT build (1:1 and group)** — hold-to-transmit on the existing `mic` button, Opus clip, delivered as a voice bubble | frontend + backend | **`OQ-E07-3` ✅ and `E07-T13`'s disposition ✅ (2026-08-31, outcome (b), `GAP-023`).** Now blocked only by **`GAP-023`'s own 🧍 design approval** — on which the delta is folded into `design/screens/chat-voice.md` as a `ptt-transmitting` state, and this becomes shardable. Depends on GAP-014's voice-message build landing first (it is the artifact); the group half additionally inherits GAP-020's `OQ-E07-13`, like every other group-thread bubble |
 | Group voice calls (conferencing) | backend | `OQ-E07-11` — FR-COMM-002 names them; the shape depends entirely on `OQ-E07-3` |
 | One-time-prekey reclaim policy | backend | `OQ-E07-9` — inherited from E03, trigger now real |
 
@@ -127,7 +127,7 @@ a session that stays `active` across every failure mode.
 |------|-----------|
 | Group key rotation is genuinely hard on top of a 1:1-first crypto layer (E03) | **Discharged at this sharding pass, before slicing** — ADR-0003's deferred layering is specified concretely in `E07-T04` §2 (libsignal's own `GroupCipher`/`SenderKeyStore`, epoch folded into the group half of `SenderKeyName`, distribution over pairwise sessions) and recorded as `OQ-E07-8` for cheap rejection. The one part that is genuinely the human's — the schema it persists into — is `OQ-E07-4` and blocks `E07-T01` |
 | **Voice calls have no transport.** E04's mesh/relay is store-and-forward over a Pigeon `send(deviceId, bytes) -> Future<bool>`; nothing in E01–E06 targets live audio, and no ADR covers it | **`OQ-E07-3`, 🧍 blocking, raised rather than guessed.** The epic is sliced so that everything *not* downstream of it — signaling, priority, migration control — is built and tested now, and the media path is a named prospective task behind an abstract seam (`CallMediaTransport`) that all three candidate answers plug into unchanged |
-| PTT gets dropped for a third time | **`E07-T13` is a named task whose entire purpose is `OQ-E07-2`'s discharge**, with three acceptable outcomes and "revisit later" explicitly not among them. This is `IMP-001` §Effort/risk's stated failure mode, given an owner |
+| PTT gets dropped for a third time | **`E07-T13` is a named task whose entire purpose is `OQ-E07-2`'s discharge**, with three acceptable outcomes and "revisit later" explicitly not among them. This is `IMP-001` §Effort/risk's stated failure mode, given an owner. **Closed 2026-08-31: outcome (b) — `GAP-023`, PTT layered on GAP-014's approved voice-message contract, 1:1 and group both in v1, nothing re-homed.** The risk did not materialise |
 | E06-B04's unauthenticated `frame.source` is inherited by three new control protocols | Every new control frame in this epic is authenticated by the **decrypting Signal session's address**, never by `frame.source` (`E07-T03` §2, `E07-T04` §2, `E07-T09` §2), each with a forged-actor test. E11 still owns the underlying fix |
 | Widening `ConversationSummary` breaks every 1:1 call site | Deliberate — nullable `peerDeviceId` turns each assumption into a compile error rather than a silent wrong render (`E07-T07` §6). Fence amendments, not quiet widening |
 
@@ -148,14 +148,70 @@ a session that stays `active` across every failure mode.
   contract exists yet; this epic's own task-sharding pass must carry it as
   a named obligation, not rediscover it — same failure shape as E05-B02's
   relay-queue handoff.
-  - **Status:** 🟢 unblocked — **discharged at this sharding pass by giving it a
-    named owner: `E07-T13`**, a task whose §8 criterion is that PTT ends
-    this epic contracted, layered, or formally re-homed by an impact
-    report — and explicitly *not* as a fourth undated deferral. `E07-T13`'s
-    parking condition, `OQ-E07-3`, is now resolved (2026-08-31,
-    datagram-audio-over-mesh) — `E07-T13` is dispatchable.
-  - **Answered by:** human
-  - **Date:** 2026-08-30
+  - **Status:** 🟢 **resolved 2026-08-31 by `E07-T13`, outcome (b) — PTT
+    layers on `GAP-014`'s approved voice-message contract with a small
+    delta, recorded as `GAP-023`**, which supersedes `GAP-017` by reference
+    (GAP-017 itself is unedited). Not contracted-from-scratch, not re-homed,
+    and explicitly not a fourth undated deferral. The *disposition* is
+    closed; the delta's **design approval is open** at the existing
+    `design_contract_approval` gate on `design/gaps.md` (GAP-023 is 🟡 with a
+    bare `approved by:` line and four named forks).
+  - **Answer (verbatim, `GAP-023`):**
+    - **Q1 — live half-duplex stream, or a fast voice-message loop layered
+      on GAP-014?** *"A fast voice-message loop, in v1."* The datagram-mesh
+      answer to `OQ-E07-3` does make a live PTT stream cheap **in
+      principle** — but only downstream of the media-path prospective task,
+      which is itself unsharded and which `OQ-E07-3`'s own answer says
+      should follow `OQ-E06-T04-2`'s real-hardware latency numbers; making
+      PTT depend on that chain would be *"a fourth deferral wearing a
+      contract"*. And the spec describes an artifact rather than a channel:
+      **FR-STORE-002** stores PTT recordings, **FR-NOTIFY-001** gives PTT
+      its own notification class, PTT sits in FR-COMM-001/002's list of
+      *message types*, and **FR-CALL-001/002/003 never mention it**. What
+      `OQ-E07-3` genuinely buys PTT is *"the codec, not the channel"* —
+      Opus is now authorized, so the delta needs **no new dependency**.
+    - **Q2 — does a transmission leave a message, or is it ephemeral?**
+      *"It leaves a message. This is decided by the spec, not by this
+      entry."* **FR-STORE-002** says the system *shall* store PTT
+      recordings on-device; ephemeral PTT would contradict a "shall"
+      (rule 1). The artifact is GAP-014's already-approved voice bubble
+      (`chat-voice.md` V10-V16) **unchanged** — a second near-identical
+      bubble type would be a competing visual language for one object
+      (FR-UI-001).
+    - **Q3 — per-conversation, or its own surface?** *"Per-conversation.
+      No new route, no new screen, no PTT channel list."* Every spec id
+      naming PTT places it inside a conversation (FR-COMM-001 personal,
+      FR-COMM-002 group, `feature-list.md` "with a contact"); a dedicated
+      PTT surface would be an invented destination with no id behind it.
+    - **Group PTT (FR-COMM-002) — in v1 scope, and needs no floor
+      control.** Under the live-channel reading a group channel is a floor
+      arbitration problem with no spec text, no ADR and no derivable
+      primitive. Under the message reading *"there is no floor"* — two
+      members holding the button at once produce two clips, exactly as two
+      members typing at once produce two messages. Group PTT is the
+      existing group fan-out (`T04`/`T05`/`T06`) carrying a voice bubble
+      with GAP-020's approved sender attribution: zero new mechanism.
+      Neither deferred nor re-homed; it inherits GAP-020's existing
+      `OQ-E07-13` build precondition, not a new one.
+    - **The one fork that matters, put to the human:** if PTT is meant to
+      be a genuinely live half-duplex channel, then FR-STORE-002 needs an
+      amendment (it says the opposite), PTT becomes downstream of the
+      media path and `OQ-E06-T04-2`, and group floor control needs a design
+      that does not exist — that route goes through `skills/change-impact`.
+      *Advisory: ship this reading now;* the two are a subset relation, not
+      an exclusive choice, and the **named revisit trigger** is the
+      media-path task shipping *and* `OQ-E06-T04-2` producing real
+      multi-hop-BLE latency numbers.
+  - **Answered by:** `E07-T13` (planner) for the disposition and the
+    delta; **human** for the 2026-08-30 parking decision (`GAP-017` /
+    `IMP-001`) and for the 2026-08-31 `OQ-E07-3` answer this was waiting on.
+    The delta's own design sign-off is **not** claimed here.
+  - **Date:** 2026-08-31 (parked 2026-08-30; unblocked and resolved
+    2026-08-31)
+  - **No `IMP-002` was written**, deliberately: outcome (b) keeps
+    FR-COMM-001/002's PTT clause **in v1 in full** for both 1:1 and groups.
+    Nothing is dropped or re-homed, so there is no `dropped scope` change
+    to walk. `IMP-002` was reserved for outcome (c), which was not taken.
 
 - **OQ-E07-3 — what carries live call audio? 🔴 BLOCKING, and a rule-3
   human decision (architecture + a new dependency).** *Raised at sharding
