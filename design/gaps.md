@@ -13,6 +13,17 @@ the already-approved, already-measured `conversations.md` contract and
 closes GAP-006, which was approved on 2026-08-29 with "rows deferred to
 E07" written into it.)
 
+> **`E07-T12` follow-up, 2026-08-31.** The three contracts named in that
+> clearance now exist (`group-create.md`, `group-manage.md`, `call.md`) and
+> each records what it derived and from where. The gate line above is left
+> **as the human set it** — it is not re-opened by an agent and it is not
+> re-cleared by one. Four things remain genuinely undecided and are listed in
+> their own entries rather than assumed: GAP-018's **entry point** (which
+> GAP-018 itself deferred into the contract), and GAP-021's **destructive
+> treatment**, **three glyph names** and **two copy strings**. None of them is
+> approved below; every `approved by:` line written by `E07-T12` is
+> deliberately absent (`L-process-002`).
+
 **Clearance history**
 - ✅ cleared by human on 2026-08-26 — the original 7-screen contract
   extraction + gap pass, per Q-DESIGN-001 in `spec/questions.md`.
@@ -579,8 +590,19 @@ is how a product acquires seven different empty states.
   measured screen; `E07-T12` proposes it as part of the contract and the
   human approves it there, or it waits.
 - **approved by:** ✅ human, 2026-08-31 — approved as proposed
-- **built:** _(not yet — `E07-T12` writes the contract; the build task is
-  prospective)_
+- **built:** contract written — `design/screens/group-create.md` (`E07-T12`,
+  2026-08-31). Not built in code; the build task is prospective. Golden is
+  extracted **after** the build, per `design-fidelity` §3.
+- **still open after this entry's approval (`E07-T12`, 2026-08-31):** the
+  **entry point**, which this entry deliberately deferred into the contract
+  ("`E07-T12` proposes it as part of the contract and the human approves it
+  there, or it waits"). The proposal now exists — `group-create.md` §Open —
+  and is an `add` icon-button in `conversations.md`'s header, in that
+  screen's own 48×48 `r9999px` / `24px` `rgb(195, 192, 255)` vocabulary.
+  It is **not** covered by the 2026-08-31 clearance above and is **not**
+  approved by an agent (`L-process-002`). Until the human says so, no build
+  task adds any affordance to `conversations.md`; `/groups/new` is reachable
+  only by direct navigation, which blocks nothing else in this contract.
 
 ## GAP-019 — group management (roles, membership, deletion) has no design source
 - **status:** 🟡 proposed
@@ -612,8 +634,25 @@ is how a product acquires seven different empty states.
 - **approved by:** ✅ human, 2026-08-31 — both advisories accepted: (1) a
   full-screen confirm step for leave/delete, no new modal primitive;
   (2) a text label per row for roles, not an icon
-- **built:** _(not yet — `E07-T12` writes the contract; the build task is
-  prospective)_
+- **built:** contract written — `design/screens/group-manage.md` (`E07-T12`,
+  2026-08-31), with both fork decisions honoured literally: a full-screen
+  confirm step (no scrim, no elevation, no modal primitive) and a plain
+  `12px` `w500` text label per row for the role. Not built in code; the
+  build task is prospective.
+- **clarified by `E07-T12` (2026-08-31), not re-decided:** this entry's
+  "a Member … sees the roster and no actions at all" is one row stronger
+  than `E07-T02`'s matrix, which this entry itself names as the source of
+  truth: `allows(member, leave)` is **`true`** — every role may leave. The
+  contract therefore renders **no management action** for a Member and keeps
+  `Leave group`. Correspondingly, an **Owner** sees no `Leave group` at all
+  (`allows(owner, leave)` is `false` until ownership is transferred). If the
+  human prefers the literal reading of this entry over the matrix, say so
+  here and the contract changes; the matrix is not edited from the UI side.
+- **`more_vert` deliberately unused (`E07-T12`):** `devices.md` draws it, but
+  it implies a menu surface no contract in `design/screens/` measures.
+  Per-row actions are inline chips in devices element 31's own treatment
+  instead. Recorded so the difference from `devices.md` reads as a decision,
+  not drift.
 
 ## GAP-020 — the chat thread draws only 1:1 bubbles; a group thread needs sender attribution and event lines
 - **status:** 🟡 proposed
@@ -641,6 +680,17 @@ is how a product acquires seven different empty states.
 - **approved by:** ✅ human, 2026-08-31 — approved as proposed (build still
   waits on `OQ-E07-13`, unresolved by this approval)
 - **built:** _(not yet — blocked on `OQ-E07-13` as well as this gate)_
+- **no contract written by `E07-T12` (2026-08-31), deliberately:** this gap is
+  a **state on `chat.md`**, not a new screen, and `E07-T12` §4 forbids
+  designing group-thread rendering beyond naming the gap while `OQ-E07-13`
+  (a blocked member's messages inside a group thread — a product decision) is
+  unanswered. `chat.md` is a generated contract and is not hand-edited
+  (`design-fidelity` rule 1). The approved derivation stands as written here:
+  the sender-attribution line takes `conversations.md` element 26's treatment
+  (`14px` `w500` `rgb(11, 28, 48)`) on **incoming** bubbles only, and event
+  lines are centred, surface-less, in `chat.md`'s `14px` `rgb(70, 69, 85)`,
+  one per `group_events` row. Whoever writes that contract inherits this
+  paragraph and answers `OQ-E07-13` first.
 
 ## GAP-021 — voice calls have no design source: no outgoing, incoming, in-call or failed state
 - **status:** 🟡 proposed
@@ -673,8 +723,26 @@ is how a product acquires seven different empty states.
   it quietly.*
 - **approved by:** ✅ human, 2026-08-31 — approved as proposed, including
   adding a call-entry icon-button to `chat.md`'s header
-- **built:** _(not yet — `E07-T12` writes the contract; the build task is
-  prospective)_
+- **built:** contract written — `design/screens/call.md` (`E07-T12`,
+  2026-08-31), four states plus the approved `chat.md` header entry point
+  (elements C24/C25, in chat's own 40×46 `r9999px` / `24px`
+  `rgb(70, 69, 85)` header vocabulary). No speaker toggle, no video, no
+  add-participant, and **no element for FR-CALL-002** — priority is a routing
+  weight with no user-facing state. Not built in code; the build task is
+  prospective.
+- **three items `E07-T12` left open rather than decide (`L-process-002`):**
+  (a) the **destructive treatment** for decline/hang up — neither parent
+  contract measures a red; advisory is to tint the `call_end` glyph
+  `rgb(186, 26, 26)` (devices' measured destructive *text* colour) as a
+  cross-screen borrow in GAP-009's pattern, with the fallback until answered
+  being the ordinary `rgb(53, 37, 205)` glyph and **no** new colour;
+  (b) three **glyph identities** — `call`, `call_end`, `mic_off` (family,
+  size and colour are measured; only the names are proposed), in
+  `chat-voice.md`'s established pattern; (c) two **copy strings** —
+  `Connection degraded` and the media-unavailable line.
+- **note for the reviewer:** `make design-verify SCREEN=chat` will report the
+  header call button as an **extra element**. That finding traces here, per
+  `design-fidelity` §6. `chat.md` was **not** hand-edited (rule 1).
 
 ## GAP-022 — mid-call route migration is invisible to the user, and it may need to stay that way
 - **status:** 🟡 proposed
@@ -701,7 +769,12 @@ is how a product acquires seven different empty states.
   treatment on degradation.*
 - **approved by:** ✅ human, 2026-08-31 — approved as proposed: silent on a
   successful migration, GAP-013's degraded-card treatment on an abandoned one
-- **built:** _(not yet)_
+- **built:** contract written — the `in-call` / `in-call-degraded` state pair
+  in `design/screens/call.md` (`E07-T12`, 2026-08-31). The two states differ
+  in exactly two cells (the status dot's colour and the status word); nothing
+  moves, appears or is added, because a mid-call layout shift would defeat the
+  quietness this entry chose. `attempted`, `validated` and `completed`
+  migration events render nothing at all. Not built in code.
 
 ## The usual suspects
 
