@@ -1,13 +1,16 @@
 # Design gaps — what the design doesn't cover, and what we'll do about it
 
-**Gate:** 🧍 `design_contract_approval` — ✅ CLEARED BY HUMAN, 2026-08-30
-(reopened by **E06-T13**, 2026-08-30, for **GAP-014 · GAP-015 · GAP-016 ·
-GAP-017** — the rich-message-type gap pass — and for the three derived
-contracts they propose: `design/screens/chat-voice.md`,
-`design/screens/chat-attachment.md`, `design/screens/chat-location.md`.
-GAP-014/015/016 approved with the fork decisions below; GAP-017 decided
-(parked to E07, not approved as a contract — none exists). Voice/attachment/
-location tasks are now shardable.)
+**Gate:** 🧍 `design_contract_approval` — ⏳ AWAITING HUMAN
+(reopened by the **E07 sharding pass**, 2026-08-31, for **GAP-018 ·
+GAP-019 · GAP-020 · GAP-021 · GAP-022** — the groups-and-calls gap pass —
+and for the three derived contracts `E07-T12` will write against them:
+`design/screens/group-create.md`, `design/screens/group-manage.md`,
+`design/screens/call.md`. **Nothing derived from GAP-018…GAP-022 is
+shardable as a frontend task until this line reads cleared.** `E07-T08`
+— the Conversations *Groups* section — is **not** gated by this reopening:
+it builds elements 21-33 of the already-approved, already-measured
+`conversations.md` contract and closes GAP-006, which was approved on
+2026-08-29 with "rows deferred to E07" written into it.)
 
 **Clearance history**
 - ✅ cleared by human on 2026-08-26 — the original 7-screen contract
@@ -539,6 +542,157 @@ is how a product acquires seven different empty states.
   as still-open.
 - **built:** not built and not shardable — no contract exists; PTT is out of
   E06's scope, owned by E07 going forward
+- **superseded by:** _(pending — `E07-T13` is GAP-017's named owner and will
+  supersede this entry by reference once `OQ-E07-3` is answered. This entry
+  is never edited; see `E07-T13` §4.)_
+
+<!-- ── E07 (Groups & Voice Calls) gap pass — added at E07 task-sharding, 2026-08-31 ── -->
+
+## GAP-018 — group creation has no design source at all
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/group-create.md`
+- **spec:** FR-GROUP-001, FR-GROUP-002 ("the Owner shall be able to …"
+  presupposes a group exists and someone made it); `spec/feature-list.md`
+  §Personal & Group Communication → "UC: Owner creates and manages a group"
+- **design shows:** nothing. None of the seven measured screens contains a
+  create-group entry point, a member picker, or a group-name field. The
+  Conversations screen draws a `Groups` heading and three populated rows
+  (elements 21-33) and no way to have made any of them.
+- **derived from:** `conversations.md`'s own list vocabulary — the search
+  field, the `heading:2` section heading at 22px w500 `rgb(234, 241, 255)`,
+  and the row treatment (leading 24px icon, title w500 `rgb(11, 28, 48)`,
+  secondary line 14px `rgb(70, 69, 85)`) — plus `devices.md`'s per-peer row
+  with a trailing action, which is this design's only existing "act on one
+  item in a list of peers" shape.
+- **proposal:** one screen: a group-name text field in the search field's
+  measured treatment, then a selectable list of trusted contacts using the
+  Conversations row shape with a trailing selection affordance borrowed
+  from `devices.md`, then a primary action. States: empty (no trusted
+  contacts yet — reuse GAP-002's centred-subtitle pattern), loading, error,
+  and a disabled primary action until a name and ≥1 member exist. **Entry
+  point is deliberately not proposed here** — the design draws no
+  affordance on Conversations and adding one is itself a change to a
+  measured screen; `E07-T12` proposes it as part of the contract and the
+  human approves it there, or it waits.
+- **approved by:** _<empty — 🧍 human>_
+- **built:** _(not yet — `E07-T12` writes the contract; the build task is
+  prospective)_
+
+## GAP-019 — group management (roles, membership, deletion) has no design source
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/group-manage.md`
+- **spec:** FR-GROUP-001 (Owner/Admin/Member), FR-GROUP-002 (rename, add,
+  remove, assign admins, transfer ownership, delete), FR-GROUP-003 (Admins
+  perform permitted actions; Members participate)
+- **design shows:** nothing. There is no group detail screen, no member
+  list, no role label, and no destructive-action treatment anywhere in the
+  seven contracts.
+- **derived from:** `devices.md`'s per-device row (the closest existing
+  "list of peers with a per-row action and a state label") and
+  `conversations.md`'s section headings; the destructive action reuses no
+  existing primitive because none exists — see the fork below.
+- **proposal:** an editable group name (Owner/Admin only), a member list
+  with a role label per row, per-row actions rendered **only when
+  `GroupPermissions.allows` says so** (`E07-T02`'s matrix is the source of
+  truth, not a second UI-side rule), and leave/delete at the bottom. **The
+  role-forbidden state is a required state, not an edge case**: a Member
+  opening this screen sees the roster and no actions at all.
+  **Two forks for the human:**
+  (1) *Destructive confirmation* — the design has no dialog primitive
+  anywhere. Options: (a) a full-screen confirm step reusing this screen's
+  own typography; (b) introduce a modal primitive (new visual language,
+  which rule 2 says not to invent silently). *Advisory: (a).*
+  (2) *Where roles are shown* — a text label per row versus an icon.
+  *Advisory: a text label*, because the design's icon set carries no role
+  semantics and inventing one is inventing language.
+- **approved by:** _<empty — 🧍 human>_
+- **built:** _(not yet — `E07-T12` writes the contract; the build task is
+  prospective)_
+
+## GAP-020 — the chat thread draws only 1:1 bubbles; a group thread needs sender attribution and event lines
+- **status:** 🟡 proposed
+- **screen:** chat (`design/screens/chat.md`) — a state, not a new screen
+- **spec:** FR-COMM-002 ("group communication via text, PTT, voice calls,
+  attachments, and **group events**"), FR-GROUP-002/003
+- **design shows:** a 1:1 thread only — incoming and outgoing bubbles with
+  no sender name, and no system/event line of any kind. The Conversations
+  screen *does* draw a sender prefix for a group row (`David Chen:`,
+  element 26, 14px w500 `rgb(11, 28, 48)`), which is the only place the
+  design acknowledges that a group message has an author.
+- **derived from:** element 26's exact sender-name treatment, lifted from
+  the list row into the thread as a per-bubble attribution line; the event
+  line derives from `chat.md`'s own secondary-text treatment (14px
+  `rgb(70, 69, 85)`), centred, with no bubble surface.
+- **proposal:** in a group thread, an incoming bubble carries a sender
+  attribution line in element 26's treatment; outgoing bubbles do not
+  (the design never labels the user to themselves). Membership changes
+  render as centred, surface-less event lines — "Ahmed added David",
+  "Group renamed to Work" — one per `group_events` row (`E07-T01`).
+  **Open, and deliberately not decided here:** whether a *blocked* member's
+  messages are dropped, hidden or placeholdered inside a group thread —
+  that is `OQ-E07-13` on `E07-T07`, and it is a product decision, not a
+  layout one. This entry does not answer it.
+- **approved by:** _<empty — 🧍 human>_
+- **built:** _(not yet — blocked on `OQ-E07-13` as well as this gate)_
+
+## GAP-021 — voice calls have no design source: no outgoing, incoming, in-call or failed state
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/call.md`
+- **spec:** FR-CALL-001 (secure voice calls over the same routing
+  architecture), FR-CALL-002 (priority), FR-CALL-003 (mid-call migration);
+  `spec/feature-list.md` §Voice Calls → "UC: User places a secure voice
+  call"
+- **design shows:** nothing. No call screen, no ringing state, no call
+  controls, and no call affordance on any of the seven contracts —
+  including `chat.md`, whose header has no call button.
+- **derived from:** `chat.md`'s header treatment (peer identity, the 24px
+  icon-button vocabulary) for identity and controls, and `dashboard.md`'s
+  status-card treatment for connection quality — the same card `GAP-014`
+  already borrowed once, so this is an established borrowing, not a new
+  one.
+- **proposal:** one surface with four states — outgoing/ringing, incoming
+  (accept + decline), in-call (elapsed duration, mute, hang up, a
+  connection-quality readout in the dashboard card's treatment), and
+  **failed**, which today is the state `NullCallMediaTransport` produces
+  (`E07-T09` §2) and which must say honestly that audio cannot be carried
+  rather than showing a connected call. **Constraint on the contract:**
+  every control must trace to FR-CALL-001/002/003 or to a state
+  `CallSession` can actually be in — no speaker toggle, no video, no
+  add-participant, because nothing in the spec requires them and a drawn
+  button is a promise. **Fork for the human:** the *entry point* — a call
+  button in `chat.md`'s header is the obvious place and the design draws
+  none, so adding it modifies a measured screen. *Advisory: propose it in
+  the contract and let this gate decide it, rather than a build task adding
+  it quietly.*
+- **approved by:** _<empty — 🧍 human>_
+- **built:** _(not yet — `E07-T12` writes the contract; the build task is
+  prospective)_
+
+## GAP-022 — mid-call route migration is invisible to the user, and it may need to stay that way
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/call.md` — a state within it
+- **spec:** FR-CALL-003 ("evaluate it, establish and validate it, migrate
+  the call, and then terminate the old route — minimizing call
+  interruption")
+- **design shows:** nothing — there is no call screen at all, let alone a
+  transition indicator.
+- **derived from:** `dashboard.md`'s network-status card, whose degraded
+  and disconnected variants `GAP-013` already covers, is the only existing
+  treatment for "the connection changed underneath you".
+- **proposal:** **show nothing during a successful migration.** FR-CALL-003's
+  own words are "minimizing call interruption"; a migration that succeeds
+  is a non-event, and surfacing it invites the user to worry about
+  something the system just handled. Surface only the *degraded* case — a
+  migration abandoned with the route quality already poor — reusing
+  GAP-013's degraded card treatment inside the in-call state. Recorded as a
+  gap rather than assumed, because "show nothing" is a design decision that
+  looks like an omission, and the next person to read the call contract
+  should find it written down. **Fork:** if you would rather see a
+  transient "switching connection" indicator, that is cheap to add and this
+  entry is where to say so. *Advisory: silent on success, GAP-013's
+  treatment on degradation.*
+- **approved by:** _<empty — 🧍 human>_
+- **built:** _(not yet)_
 
 ## The usual suspects
 
