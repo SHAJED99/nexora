@@ -148,12 +148,12 @@ a session that stays `active` across every failure mode.
   contract exists yet; this epic's own task-sharding pass must carry it as
   a named obligation, not rediscover it — same failure shape as E05-B02's
   relay-queue handoff.
-  - **Status:** 🟡 open — **discharged at this sharding pass by giving it a
+  - **Status:** 🟢 unblocked — **discharged at this sharding pass by giving it a
     named owner: `E07-T13`**, a task whose §8 criterion is that PTT ends
     this epic contracted, layered, or formally re-homed by an impact
-    report — and explicitly *not* as a fourth undated deferral. `E07-T13`
-    is itself blocked by `OQ-E07-3`, which is the parking condition the
-    human set.
+    report — and explicitly *not* as a fourth undated deferral. `E07-T13`'s
+    parking condition, `OQ-E07-3`, is now resolved (2026-08-31,
+    datagram-audio-over-mesh) — `E07-T13` is dispatchable.
   - **Answered by:** human
   - **Date:** 2026-08-30
 
@@ -194,10 +194,18 @@ a session that stays `active` across every failure mode.
   real hardware, and that measurement should probably precede this
   decision rather than follow it.
 
-  - **Status:** 🟡 **blocking** — blocks the media-path prospective task,
-    `E07-T13` (PTT), and `OQ-E07-12` (the media half of make-before-break).
-    **Does not block `E07-T09`/`T10`/`T11`**, which are sliced to be
-    independent of it.
+  - **Status:** 🟢 resolved — **(a) datagram audio over the existing mesh +
+    Opus codec**, with **(c) native real-time Pigeon channel as the named
+    fallback** if measured multi-hop-BLE latency proves unworkable. The
+    latency risk is accepted knowingly, not resolved by measurement first —
+    `OQ-E06-T04-2` (real-hardware transport numbers) should still be
+    prioritized before the media-path prospective task is sharded, so the
+    fallback can be exercised cheaply if (a) doesn't hold up. This unblocks
+    the media-path prospective task, `E07-T13` (PTT), and `OQ-E07-12` (the
+    media half of make-before-break). `E07-T09`/`T10`/`T11` were never
+    blocked by this — they're sliced to be independent of it.
+  - **Answered by:** human
+  - **Date:** 2026-08-31
   - **Answer:** _<empty>_
   - **Answered by:** _<human>_
   - **Date:** _<YYYY-MM-DD>_
