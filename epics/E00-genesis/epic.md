@@ -73,10 +73,24 @@ test yet.
   - **Answered by:** _<empty>_
   - **Date:** _<empty>_
 - **OQ-E00-3 — No design-fidelity gate exists for the built Flutter app yet.** `make design-verify`'s DOM probe can't inspect a compiled Android build; welcome/login were only hand-diffed against their contracts during review (2026-08-26). A Flutter-capable design gate (e.g. golden-image widget tests, or a debug HTTP/semantics dump the existing tooling can probe) is a follow-up task for whichever epic next touches a screen.
-  - **Status:** 🟡 open
-  - **Answer:** _<empty>_
-  - **Answered by:** _<empty>_
-  - **Date:** _<empty>_
+  - **Status:** 🟢 closed
+  - **Answer:** Built as E06-T01, first task of E06, per E02's retro recommendation
+    and E06's own `epic.md` §Risks. `test/design/flutter_probe_dumper.dart`
+    walks a pumped screen's `Element` tree and emits a JSON dump in the same
+    shape `design/tools/lib/probe.mjs` produces for a DOM page;
+    `design/tools/lib/flutter_probe.mjs` normalizes it; `design/tools/verify.mjs`
+    accepts it via `IMPL=flutter` / `--impl-probe <path>`, reusing
+    `compare.mjs`, `design/screens/*.md` and `design/thresholds.yaml`
+    unchanged. All four hard checks (missing elements, copy, style deltas,
+    off-token findings) run in full; pixel comparison is explicitly skipped
+    and reported as such (no screenshot exists on this path). Proven against
+    `devices` (E02-T02) with a real, non-trivial report, and falsified via a
+    four-way drift-injection fixture (delete an element / one-character copy
+    change / one colour channel / +4px radius — each independently produces
+    a hard finding). See `docs/design-gate-flutter.md` for the run
+    instructions, the role-mapping table and the gate's honest limits.
+  - **Answered by:** builder (E06-T01)
+  - **Date:** 2026-08-29
 - **OQ-E00-1 — Q-ARCH-004/Q-FUNC-005/Q-FUNC-006 defaults.** Per human decision (2026-08-26): these fold into their respective feature epics (routing/relay, groups/encryption) at task-sharding time, using the recommended-default v1 heuristic, flagged tunable — not blocking here.
   - **Status:** ⚪ deferred (by design)
   - **Answer:** fold into feature-epic task-sharding, not genesis

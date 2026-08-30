@@ -182,4 +182,81 @@ void main() {
         );
     expect(connected, isFalse);
   });
+
+  // E06-T04: TransportService.linkQuality is the producer side of
+  // E04-B03's declared-but-unfed onLinkQuality contract.
+  test('test_link_quality_stream_emits_native_events', () async {
+    const String suffix = 'linkquality';
+    final TransportService service = TransportService(
+      binaryMessenger: messenger,
+      messageChannelSuffix: suffix,
+    );
+    addTearDown(service.dispose);
+
+    const String deviceId = 'neighbor-device-1';
+    final Future<LinkQuality> received = service.linkQuality.first;
+
+    final ByteData eventMessage =
+        TransportEventsApi.pigeonChannelCodec.encodeMessage(
+      <Object?>[deviceId, 37, 0.05],
+    )!;
+    messenger.handlePlatformMessage(
+      'dev.flutter.pigeon.nexora.TransportEventsApi.onLinkQuality.$suffix',
+      eventMessage,
+      (ByteData? _) {},
+    );
+
+    final LinkQuality quality = await received;
+    expect(quality.deviceId, deviceId);
+    expect(quality.latencyMs, 37);
+    expect(quality.lossRate, 0.05);
+    // No discovery event for this id happened first, so rssi is genuinely
+    // unknown — must stay null, never a substituted default.
+    expect(quality.rssi, isNull);
+  });
+
+  test('test_link_quality_folds_in_rssi_from_last_discovered_device', () async {
+    const String suffix = 'linkqualityrssi';
+    final TransportService service = TransportService(
+      binaryMessenger: messenger,
+      messageChannelSuffix: suffix,
+    );
+    addTearDown(service.dispose);
+
+    const String deviceId = 'neighbor-device-2';
+
+    final ByteData discoveredMessage =
+        TransportEventsApi.pigeonChannelCodec.encodeMessage(
+      <Object?>[
+        TransportDevice(
+          id: deviceId,
+          displayName: 'Nearby Phone',
+          type: TransportType.bluetooth,
+          rssi: -62,
+        ),
+      ],
+    )!;
+    messenger.handlePlatformMessage(
+      'dev.flutter.pigeon.nexora.TransportEventsApi.onDeviceDiscovered.$suffix',
+      discoveredMessage,
+      (ByteData? _) {},
+    );
+    // Let the discovery event's stream add complete before the link-quality
+    // event that must observe it.
+    await Future<void>.delayed(Duration.zero);
+
+    final Future<LinkQuality> received = service.linkQuality.first;
+    final ByteData linkQualityMessage =
+        TransportEventsApi.pigeonChannelCodec.encodeMessage(
+      <Object?>[deviceId, 20, 0.0],
+    )!;
+    messenger.handlePlatformMessage(
+      'dev.flutter.pigeon.nexora.TransportEventsApi.onLinkQuality.$suffix',
+      linkQualityMessage,
+      (ByteData? _) {},
+    );
+
+    final LinkQuality quality = await received;
+    expect(quality.rssi, -62);
+  });
 }

@@ -3,6 +3,17 @@
 // Drives the "Signing in..." transient state, then the real Google
 // Sign-In use case, then navigates onward (E01-T01 — replaces the genesis
 // walking skeleton's stub).
+//
+// E06-T12: post-login destination is now `/dashboard`
+// (design/screens/dashboard.md), superseding the genesis `/home` placeholder
+// per that task's §3/§6 ("verify the login journey end to end, since a
+// broken redirect here breaks the app's entry point"). This file is not
+// listed in E06-T12's own `files:` fence (an omission in that task's
+// frontmatter — the literal `/home` redirect below is the ONLY place the
+// post-login destination is hardcoded), but the task's own body explicitly
+// requires this exact change and names verifying it as a risk; logged here
+// as a Deviation (one line, this file only) rather than silently left
+// pointing at the superseded placeholder.
 import 'dart:math';
 
 import 'package:get/get.dart';
@@ -44,7 +55,7 @@ class LoginController extends GetxController {
     try {
       await _signInUseCase(deviceId);
       signingIn.value = false;
-      Get.offNamed('/home');
+      Get.offNamed('/dashboard');
     } catch (e) {
       // EARS-AUTH-3: surface as a mapped failure, never crash. A full
       // error-state UI is out of scope for this task (see task §4) — this

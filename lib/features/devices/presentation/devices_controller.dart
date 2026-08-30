@@ -16,12 +16,27 @@ import 'package:nexora/features/trust/domain/relationship.dart';
 
 class DevicesController extends GetxController {
   /// [transportService] and [evaluateConnectionRequestUseCase] are optional
-  /// named parameters — defaulting to real production instances — so that
-  /// `DevicesBinding`'s existing two-positional-argument call site (this
-  /// task's `files:` scope does not include that binding) keeps compiling
-  /// unchanged, while tests can inject a `TransportService` wired to a mock
-  /// platform channel (same pattern as `test/core/transport/
-  /// transport_service_test.dart`).
+  /// named parameters, defaulting to real production instances, so tests can
+  /// inject a `TransportService` wired to a mock platform channel (same
+  /// pattern as `test/core/transport/transport_service_test.dart`) or a
+  /// stub `EvaluateConnectionRequestUseCase` without needing a full DI
+  /// container.
+  ///
+  /// E06-B02: the `transportService ?? TransportService()` fallback below
+  /// must never actually construct a second instance in the running app --
+  /// `TransportService`'s constructor claims the app's native Pigeon
+  /// transport-event channels (`TransportEventsApi.setUp`), and a platform
+  /// channel has exactly one Dart-side handler per channel name, so a
+  /// second live instance silently replaces `MessagingStack`'s handler
+  /// registration instead of adding to it, detaching the entire messaging
+  /// stack from native transport events with no error. `DevicesBinding`
+  /// (`devices_binding.dart`) always supplies the app-wide shared instance
+  /// (`Get.find<TransportService>()`, registered permanently in
+  /// `app/bindings.dart` from `messagingStack.transport`), so this fallback
+  /// only ever fires for a `DevicesController` built directly in a test,
+  /// never through the app's real navigation/binding path. See
+  /// `test/features/devices/presentation/devices_controller_transport_singleton_test.dart`
+  /// for the regression proof.
   DevicesController(
     RelationshipRepository repository,
     this._blockUseCase, {

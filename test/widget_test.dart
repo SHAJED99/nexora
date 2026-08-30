@@ -1,17 +1,27 @@
-// Walking-skeleton widget test (E00-T05, updated E01-T01): proves
+// Walking-skeleton widget test (E00-T05, updated E01-T01, E06-T12): proves
 // welcome -> login navigates on "Continue with Google", the sign-in use
 // case performs one real Drift write (through a test-doubled
 // GoogleAuthService — no real Google/Firebase network calls in this
-// suite), and the app lands on the placeholder home screen able to read
-// that row back.
+// suite), and the app lands on the post-login destination able to read that
+// row back.
+//
+// E06-T12: `LoginController` now navigates to `/dashboard`
+// (design/screens/dashboard.md), superseding this walking skeleton's
+// `/home` placeholder (see that task's own Deviations for why this file —
+// outside its `files:` fence — needed this one-line, disclosed update to
+// stay green: `/dashboard` requires a full `MessagingStack`/`AppBinding`
+// this genesis test deliberately never constructs, so the destination page
+// registered here is a minimal stub, not the real `DashboardView` — this
+// test's actual assertions are about the login->navigation seam and the
+// real Drift write/read-back, both unaffected by which widget the
+// destination route renders).
 //
 // Uses an in-memory Drift database — no real filesystem I/O.
 import 'package:drift/native.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/persistence/database.dart';
-import 'package:nexora/features/home/presentation/home_controller.dart';
-import 'package:nexora/features/home/presentation/home_view.dart';
 import 'package:nexora/features/login/data/device_identity_repository.dart';
 import 'package:nexora/features/login/domain/sign_in_use_case.dart';
 import 'package:nexora/features/login/presentation/login_controller.dart';
@@ -26,7 +36,7 @@ void main() {
   tearDown(Get.reset);
 
   testWidgets(
-    'welcome -> Continue with Google -> login -> Drift write -> home',
+    'welcome -> Continue with Google -> login -> Drift write -> dashboard',
     (WidgetTester tester) async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       final repository = DeviceIdentityRepository(db);
@@ -37,7 +47,6 @@ void main() {
 
       Get.lazyPut(WelcomeController.new);
       Get.lazyPut(() => LoginController(signInUseCase));
-      Get.lazyPut(() => HomeController(repository));
 
       await tester.pumpWidget(
         GetMaterialApp(
@@ -45,7 +54,14 @@ void main() {
           getPages: [
             GetPage<dynamic>(name: '/welcome', page: () => const WelcomeView()),
             GetPage<dynamic>(name: '/login', page: () => const LoginView()),
-            GetPage<dynamic>(name: '/home', page: () => const HomeView()),
+            // A minimal stub, not the real DashboardView (E06-T12) — this
+            // test proves the login->navigation seam and the real Drift
+            // write/read-back, not the Dashboard screen's own content
+            // (covered by test/features/dashboard/).
+            GetPage<dynamic>(
+              name: '/dashboard',
+              page: () => const Text('dashboard placeholder'),
+            ),
           ],
         ),
       );
@@ -69,12 +85,9 @@ void main() {
       expect(identity, isNotNull);
       expect(identity!.signedIn, isTrue);
 
-      // ... and it navigated onward to the placeholder home screen.
+      // ... and it navigated onward to /dashboard (E06-T12), not /home.
       expect(find.text('Signing in with Google...'), findsNothing);
-      expect(
-        find.textContaining('Signed in'),
-        findsOneWidget,
-      );
+      expect(find.text('dashboard placeholder'), findsOneWidget);
 
       await db.close();
     },

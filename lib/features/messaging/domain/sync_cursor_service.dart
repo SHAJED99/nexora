@@ -111,7 +111,14 @@ class SyncCursorService {
 
   /// Advances this device's high-water mark for [conversationId] against
   /// whichever device produced the message ([senderDeviceId]) -- called
-  /// whenever a message is stored (T02 on send, T03 on receive).
+  /// whenever a message is durably stored, by `MessagingCoordinator`
+  /// (E06-T06): `MessagingCoordinator.recordStored` for an outbound send's
+  /// result, and automatically on every `InboundPipeline.delivered` event
+  /// for a receive. Neither `SendMessageUseCase` (T02) nor
+  /// `ReceiveMessageUseCase` (T03) imports this service or calls this method
+  /// themselves -- this comment used to claim otherwise (E05-B02's finding:
+  /// the same false-wiring-claim shape as E05-B01's root cause), which was
+  /// never true from the day this method was written.
   ///
   /// Monotonic only (EARS-MSG-5/FR-MSG-006): never regresses the stored
   /// `last_confirmed_sequence_number`, even if called with an older

@@ -13,6 +13,7 @@ import 'dart:typed_data';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
+import 'package:nexora/core/crypto/crypto_failures.dart';
 import 'package:nexora/core/crypto/crypto_stub.dart';
 import 'package:nexora/core/crypto/drift_signal_store.dart';
 import 'package:nexora/core/crypto/identity_service.dart';
@@ -71,7 +72,7 @@ Future<DriftSignalProtocolStore> _compromisedSnapshot(
   return snapshotStore;
 }
 
-/// Matches the library's `InvalidMessageException` — the failure raised
+/// Matches the library's raw `InvalidMessageException` — the failure raised
 /// when the ratchet produced a message key that failed MAC verification,
 /// i.e. "reached the crypto and got the wrong key", as distinct from a
 /// precondition failure (`NoSessionException`) or a consumed-key failure
@@ -81,11 +82,27 @@ Future<DriftSignalProtocolStore> _compromisedSnapshot(
 /// because `libsignal_protocol_dart` v0.8.2 does **not** export
 /// `invalid_message_exception.dart` from its public barrel file, so the type
 /// is unnameable here without an `implementation_imports` lint violation.
-/// (Reviewer note, E03-T03 review — worth revisiting in E05/E06, where
-/// callers will need a catchable decrypt-failure taxonomy.)
+/// (Reviewer note, E03-T03 review.) Only used below at call sites that go
+/// straight through the library's own `SessionCipher`, bypassing
+/// `CryptoService` entirely — those still see the library's raw exception.
+/// Call sites that go through `CryptoService.decrypt()` see
+/// [_isInvalidMessageFailure] instead (E06-T02: that seam now translates
+/// this into a catchable [CryptoDecryptFailure] — see `crypto_failures.dart`).
 final Matcher _isInvalidMessageException = predicate<Object>(
   (e) => e.runtimeType.toString() == 'InvalidMessageException',
   'is an InvalidMessageException (MAC/key-derivation failure)',
+);
+
+/// Matches [CryptoDecryptFailure] with reason
+/// [CryptoDecryptFailureReason.invalidMessage] — the same failure
+/// [_isInvalidMessageException] names, but as seen through
+/// `CryptoService.decrypt()`, which (E06-T02) catches the library's raw
+/// `InvalidMessageException` and translates it via `mapSignalException`
+/// rather than letting it escape unchanged.
+final Matcher _isInvalidMessageFailure = isA<CryptoDecryptFailure>().having(
+  (f) => f.reason,
+  'reason',
+  CryptoDecryptFailureReason.invalidMessage,
 );
 
 Uint8List _plaintext(String s) => Uint8List.fromList(s.codeUnits);
@@ -168,9 +185,18 @@ void main() {
     final relayDb = AppDatabase.forTesting(NativeDatabase.memory());
     final relayStore = DriftSignalProtocolStore(relayDb);
     final relayCrypto = CryptoService.withStore(relayStore);
+    // E06-T02: `CryptoService.decrypt()` now translates the library's raw
+    // `NoSessionException` into a `CryptoDecryptFailure` (reason
+    // `noSession`) rather than letting it escape unchanged.
     await expectLater(
       relayCrypto.decrypt(aliceAddress, msg2),
-      throwsA(isA<NoSessionException>()),
+      throwsA(
+        isA<CryptoDecryptFailure>().having(
+          (f) => f.reason,
+          'reason',
+          CryptoDecryptFailureReason.noSession,
+        ),
+      ),
     );
     await relayDb.close();
 
@@ -203,7 +229,7 @@ void main() {
         aliceAddress,
         PreKeySignalMessage(msg1.serialize()),
       ),
-      throwsA(_isInvalidMessageException),
+      throwsA(_isInvalidMessageFailure),
     );
 
     // (b) Now give Carol a real, live Double Ratchet session with Alice —
@@ -229,7 +255,7 @@ void main() {
         aliceAddress,
         SignalMessage.fromSerialized(msg2.serialize()),
       ),
-      throwsA(_isInvalidMessageException),
+      throwsA(_isInvalidMessageFailure),
     );
 
     // Bob — the one legitimate recipient — is unaffected by any of it.
@@ -411,12 +437,21 @@ void main() {
     // without any real replay protection. (Reviewer tightening, E03-T03.)
     final replayedBytes = Uint8List.fromList(msg1.serialize());
     expect(replayedBytes, equals(msg1.serialize()));
+    // E06-T02: `CryptoService.decrypt()` now translates the library's raw
+    // `DuplicateMessageException` into a `CryptoDecryptFailure` (reason
+    // `duplicateMessage`) rather than letting it escape unchanged.
     await expectLater(
       bob.crypto.decrypt(
         aliceAddress,
         PreKeySignalMessage(replayedBytes),
       ),
-      throwsA(isA<DuplicateMessageException>()),
+      throwsA(
+        isA<CryptoDecryptFailure>().having(
+          (f) => f.reason,
+          'reason',
+          CryptoDecryptFailureReason.duplicateMessage,
+        ),
+      ),
     );
   });
 }

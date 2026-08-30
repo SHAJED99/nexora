@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/design/tokens.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/devices/presentation/devices_binding.dart';
 import 'package:nexora/features/devices/presentation/devices_controller.dart';
 import 'package:nexora/features/devices/presentation/devices_view.dart';
@@ -16,7 +17,27 @@ import 'package:nexora/features/trust/domain/block_use_case.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late AppDatabase db;
+
+  final TestDefaultBinaryMessenger messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  var suffixCounter = 0;
+
+  // E06-B02: `DevicesBinding` now resolves its `TransportService` via
+  // `Get.find` (the same shared-instance registration `app/bindings.dart`
+  // does in production) instead of letting `DevicesController`'s
+  // constructor fall back to building its own — so this test double must be
+  // registered before `DevicesBinding().dependencies()` runs, same pattern
+  // as `devices_controller_test.dart`'s `buildDiscoveringController`. A
+  // distinct `messageChannelSuffix` per test keeps each test's platform
+  // channel registration from clobbering another's, same as
+  // `messaging_stack_test.dart`.
+  TransportService newTransportService() => TransportService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: 'devices-view-test-${suffixCounter++}',
+      );
 
   setUp(() async {
     Get.testMode = true;
@@ -29,6 +50,7 @@ void main() {
 
     Get.put<RelationshipRepository>(repository, permanent: true);
     Get.put<BlockUseCase>(BlockUseCase(repository), permanent: true);
+    Get.put<TransportService>(newTransportService(), permanent: true);
     DevicesBinding().dependencies();
   });
 
@@ -87,6 +109,7 @@ void main() {
     final repository = RelationshipRepository(emptyDb);
     Get.put<RelationshipRepository>(repository, permanent: true);
     Get.put<BlockUseCase>(BlockUseCase(repository), permanent: true);
+    Get.put<TransportService>(newTransportService(), permanent: true);
     DevicesBinding().dependencies();
 
     await tester.pumpWidget(GetMaterialApp(home: const DevicesView()));
@@ -94,6 +117,32 @@ void main() {
 
     expect(find.text('No devices yet'), findsOneWidget);
     await emptyDb.close();
+  });
+
+  testWidgets(
+      'test_devices_view_renders_all_four_states_with_no_overflow',
+      (tester) async {
+    // Regression test for E06-B01: two RenderFlex overflows (badge row
+    // trailing content, and _BottomNav's four unflexed _NavItems) hung the
+    // Flutter test harness itself for its full 10-minute default timeout
+    // when pumped at the design contract's 390x844 viewport. This must
+    // complete quickly on its own — an unbounded pumpAndSettle() (no
+    // timeout argument) IS the proof; bounding it would only hide a hang.
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(GetMaterialApp(home: const DevicesView()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Trusted Node'), findsOneWidget);
+    expect(find.text('Allowed'), findsOneWidget);
+    expect(find.text('Unknown'), findsOneWidget);
+    expect(find.text('Blocked'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('kebab menu Block action calls BlockUseCase and updates row',

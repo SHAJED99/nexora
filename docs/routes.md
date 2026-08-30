@@ -15,34 +15,26 @@
 `/home` is not one of the 7 design-contracted screens in
 `design/sources.yaml`. It exists only so the walking skeleton has
 somewhere to land after the stubbed sign-in completes and to prove the
-Drift write is readable back — it is superseded by `/dashboard` once a
-feature epic builds the real post-auth destination.
+Drift write is readable back — it is now superseded by `/dashboard`
+(E06-T12) as the actual post-login destination; the `/home` route itself
+stays registered (its file is untouched) but `LoginController` no longer
+navigates to it.
 
 ## Wired by feature epics
 
 | Route | Screen id | Design contract | Feature module |
 |---|---|---|---|
+| `/dashboard` | `dashboard` | `design/screens/dashboard.md` | `lib/features/dashboard/` (E06-T12) — the post-login destination, superseding `/home` |
 | `/devices` | `devices` | `design/screens/devices.md` | `lib/features/devices/` (E02-T02) |
 | `/settings` | `settings` | `design/screens/settings.md` | `lib/features/settings/` (E02-T03) |
+| `/conversations` | `conversations` | `design/screens/conversations.md` | `lib/features/conversations/` (E06-T10) |
+| `/chat/:id` | `chat` | `design/screens/chat.md` | `lib/features/chat/` (E06-T11) |
 
-## Contracted, not yet wired (owned by their feature epics)
-
-These have a design contract in `design/screens/` but no route/screen
-implementation yet.
-
-| Route | Screen id | Design contract |
-|---|---|---|
-| `/dashboard` | `dashboard` | `design/screens/dashboard.md` *(not yet generated — see design/sources.yaml)* |
-| `/conversations` | `conversations` | `design/screens/conversations.md` *(not yet generated)* |
-| `/chat/:id` | `chat` | `design/screens/chat.md` *(not yet generated)* |
-
-`welcome`, `login`, `devices` and `settings` have generated contracts as of
-E02-T03; `dashboard`, `conversations` and `chat` remain listed in
-`design/sources.yaml`'s `screens:` table but their `design/screens/<id>.md`
-files are produced by `make design-contract SCREEN=<id>` when their owning
-feature epic starts. `settings`'s eight rows are a pure navigation menu —
-none of their sub-screens (Account, Privacy & Security, etc.) have a
-design source yet; see `design/gaps.md` GAP-005.
+`welcome`, `login`, `devices`, `settings`, `conversations`, `chat` and
+`dashboard` all have generated contracts and are wired.
+`settings`'s eight rows are a pure navigation menu — none of their
+sub-screens (Account, Privacy & Security, etc.) have a design source yet;
+see `design/gaps.md` GAP-005.
 
 ## Route wiring
 

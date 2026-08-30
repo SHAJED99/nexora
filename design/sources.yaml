@@ -51,6 +51,16 @@ impl:
   # ready_url: http://localhost:3000
   # timeout_s: 120
 
+# The Flutter-capable path (E06-T01, closes OQ-E00-3): `make design-verify
+# IMPL=flutter` (or `--impl-probe <path>` for a one-off file) skips the
+# browser/DOM capture above entirely and reads a pre-built probe JSON per
+# screen instead — see design/tools/lib/flutter_probe.mjs and
+# docs/design-gate-flutter.md. Dumps land here via `make design-probe`
+# (test/design/design_probe_test.dart).
+impl_flutter:
+  kind: flutter-probe
+  dir: build/design-probe
+
 screens:
   # Six unique screens from the Stitch export. A seventh export folder,
   # nexora_secure_network_dashboard/, is a byte-identical duplicate of

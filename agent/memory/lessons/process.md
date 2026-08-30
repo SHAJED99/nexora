@@ -217,3 +217,115 @@ automatically for matching tasks (see `index.yaml`).
   naming it, unless that epic's files cite the source. The parsing is
   heuristic (English in a retro), so it belongs to a human's judgement about
   false-positive tolerance before it becomes a blocking check.
+
+## L-process-008 — a carried-forward observation raised by a task's own reviewer, recorded correctly in the epic tracker, still has no reader until the end-of-epic sweep — same family as L-process-006/007, but *within* one epic, not across two
+- date: 2026-08-30 | source: E06 bug sweep (`E06-B02`, `E06-B04`), independently in the same sweep (`E06-B03`)
+- situation: two observations were written into `epics/E06-personal-chat/tracker.md`'s
+  §Carried-forward observations, in exactly the place the harness tells a
+  reviewer to put an out-of-fence finding:
+  1. E06-T03's reviewer flagged `devices_controller.dart:31`'s fallback
+     `TransportService()` on 2026-08-29, with an explicit recommendation
+     ("T04 should either wire the shared instance or confirm the fallback
+     is dead code"). **Eight tasks** (T04-T12) touched the messaging stack
+     or `bindings.dart` between that flag and the sweep that finally closed
+     it as `E06-B02` — an **S1**, the epic's highest-severity bug: the
+     fallback silently hijacked every native transport event the moment a
+     user opened a normal nav destination, with zero error surfaced.
+  2. Independently, T12's reviewer named the same *shape* of risk mid-epic
+     ("the delivery-tick glyph mapping is now duplicated in three places
+     ... flagged as a latent drift risk") without checking whether it had
+     already drifted — checking all three screens side by side was out of
+     T12's own fence. The sweep found it had (`E06-B03`, S3).
+  Both observations were correct, dated, attributed, and sitting in the
+  right file. Neither was read again until the sweep — the single most
+  expensive and latest point this project checks anything.
+- root cause: `skills/task-sharding`'s "Inherited obligations" check (the
+  L-process-007 promotion) reads a **previous epic's** `retro.md` and bug
+  advisories, once, at sharding time, before any task in the current epic
+  dispatches. Nothing re-reads the **current** epic's own accumulating
+  §Carried-forward observations between dispatches — the exact artifact a
+  mid-epic reviewer is told to write to has a reader only at the sweep, by
+  design. An 8-task gap between "flagged" and "read" is not a coincidence
+  of this epic; it is what an unread carrier does every time nothing forces
+  it to be read sooner.
+- fix applied: both closed as their own bug tasks (`E06-B02` P1, `E06-B03`
+  P2) after the sweep found them. Systemic fix proposed in this retro: when
+  dispatching each task within an epic (not just at the epic's own
+  sharding), the dispatcher checks the epic tracker's own §Carried-forward
+  observations for anything unresolved and, if the next task's `files:`
+  fence touches the same file/area, either folds in the fix or explicitly
+  notes why it's staying out of scope — so an observation's silence stops
+  being the default and starts requiring a reason.
+- recurrence: 2 (two independent carry-forwards raised mid-epic, both
+  unread until the sweep, in the same epic's own evidence)
+- status: promoted-to-rule — `agent/skills/bug-sweep/SKILL.md` (a new "read
+  the epic's own carried-forward observations before dispatching the next
+  task" step) and a cross-reference from `agent/skills/task-sharding/SKILL.md`'s
+  existing Inherited-obligations row (which currently only reads *other*
+  epics), 2026-08-30 via `skills/retro`, 🧍 `retro_promotions` ✅ approved
+  by the human, 2026-08-30.
+
+## L-process-009 — a bug task file has no required §4 scope-fence, unlike a feature task file, and an agent fixing a bug fills that gap with its own judgement
+- date: 2026-08-30 | source: `make health` H4, this retro — `E06-B02`,
+  `E06-B03`, `E06-B04` (and the pre-existing `E05-B02`) all fail the check
+- situation: `make health`'s H4 ("tasks have a real scope fence") failed on
+  every bug task file written or open in this project's history so far —
+  not a missing-but-empty §4, an **absent** one. Feature task files in this
+  project reliably carry a "What this task does NOT do" section (every
+  `E06-T*.md` has one); the bug task template this session used to write
+  `E06-B02`/`B03`/`B04` (following `E06-B01`'s own shape, which itself set
+  the pattern) never asks for one.
+- root cause: the bug-task template (`skills/bug-sweep`'s own file-writing
+  guidance) inherited the feature-task file's other sections (Repro,
+  Severity, Proposed fix direction, Implementation checklist) but not its
+  scope fence. A fix built from a bug report with no stated "do NOT do X"
+  list is exactly the shape `make health`'s own fix message warns about:
+  "an agent with an empty fence fills the space with its own judgement,
+  and its judgement is not the plan" — for a bug this is doubly risky,
+  since a bug fix is inherently a smaller, more surgical diff where scope
+  creep is both easier to justify in the moment ("while I'm in here...")
+  and easier to miss in review (the diff already looks small).
+- fix applied: none yet on the already-merged `E06-B02`/`B03` (both
+  reviewed and closed without a scope fence, and neither review found
+  scope creep — the control held by luck, not by design, in both cases).
+  Systemic fix proposed in this retro: add a required §4-equivalent
+  ("What this fix does NOT do") to the bug-task file shape
+  `skills/bug-sweep`'s "Writing a bug task that gets fixed once" section
+  describes, alongside Repro/Expected/Actual/Severity.
+- recurrence: 4 (`E05-B02`, `E06-B02`, `E06-B03`, `E06-B04` — every bug
+  task file in the project so far)
+- status: promoted-to-rule — `agent/skills/bug-sweep/SKILL.md` ("Writing a
+  bug task that gets fixed once" section, new required scope-fence bullet),
+  2026-08-30 via `skills/retro`, 🧍 `retro_promotions` ✅ approved by the
+  human, 2026-08-30.
+
+## L-process-010 — a rate-limit-deviation review's `reviewed_by` free text documents the deviation honestly but isn't machine-parseable against `harness.yaml`'s model list, so rule 5 becomes unverifiable by anything except reading the prose
+- date: 2026-08-30 | source: `make health` H5 — `E06-B01`, `E06-T07`
+- situation: during a weekly account-wide rate-limit freeze, the
+  orchestrator reviewed `E06-B01` and `E06-T07` directly rather than
+  waiting, and disclosed this thoroughly in each task file's own DoD/Run
+  log prose (falsification re-run, full-suite re-run, explicit "this is a
+  rate-limit deviation" note). `make health`'s H5 check still flags both:
+  the `reviewed_by` field's free text ("orchestrator (independent
+  re-verification, direct — not a dispatched reviewer subagent, due to a
+  weekly rate-limit freeze...)") names no model string from
+  `harness.yaml`'s `review_routing.models` list, so the health check
+  cannot confirm rule 5 (`reviewed_by` ≠ `executed_by`, different model)
+  held — even though, in both cases, it genuinely did (a different model
+  tier did the reviewing, and the prose says so).
+- root cause: the deviation was disclosed for a human reader, not for the
+  mechanical check. `harness.yaml`'s model list is the only thing H5 can
+  compare against, and prose explaining *why* a deviation happened doesn't
+  satisfy a check looking for *which model* reviewed. The two goals
+  (honest human-readable disclosure, machine-verifiable rule-5 compliance)
+  were treated as one problem when they need two answers in the same field.
+- fix applied: none yet on the already-merged `E06-B01`/`E06-T07` (cosmetic
+  doc fix, not worth reopening a closed, correctly-reviewed task). Going
+  forward: when a rate-limit (or other) deviation puts the orchestrator in
+  the reviewer seat, `reviewed_by` should still lead with the actual model
+  identifier from `harness.yaml`'s list (e.g. `claude-sonnet-5 (direct,
+  rate-limit deviation — see Run log for full disclosure)`), so H5 can
+  parse compliance mechanically and the full explanation still lives in the
+  Run log where a human reads it.
+- recurrence: 2
+- status: lesson

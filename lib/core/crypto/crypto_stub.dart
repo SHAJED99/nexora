@@ -20,6 +20,7 @@ import 'dart:typed_data';
 
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 
+import 'crypto_failures.dart';
 import 'drift_signal_store.dart';
 
 class CryptoService {
@@ -61,9 +62,14 @@ class CryptoService {
   /// `SessionBuilder.processPreKeyBundle`. On return, a session exists in
   /// the store for [remoteAddress].
   ///
-  /// Throws [UntrustedIdentityException] if [remoteBundle]'s identity key
-  /// contradicts a previously-trusted one for this address (T01b's durable
-  /// `isTrustedIdentity`).
+  /// Throws [CryptoDecryptFailure] (reason
+  /// [CryptoDecryptFailureReason.untrustedIdentity]) if [remoteBundle]'s
+  /// identity key contradicts a previously-trusted one for this address
+  /// (T01b's durable `isTrustedIdentity`) — the library's own
+  /// `UntrustedIdentityException` is caught and translated by
+  /// [mapSignalException] (E03-B03/E06-T02) rather than escaping unchanged,
+  /// so every caller catches one app-owned type instead of matching on the
+  /// library's exception surface directly.
   Future<void> establishSession(
     SignalProtocolAddress remoteAddress,
     PreKeyBundle remoteBundle,
@@ -72,7 +78,11 @@ class CryptoService {
       _requireStore,
       remoteAddress,
     );
-    await builder.processPreKeyBundle(remoteBundle);
+    try {
+      await builder.processPreKeyBundle(remoteBundle);
+    } catch (e) {
+      throw mapSignalException(e);
+    }
   }
 
   /// Double Ratchet encrypt step. Wraps `SessionCipher.encrypt`.
@@ -107,20 +117,32 @@ class CryptoService {
   /// installed v0.8.2 API — the task file's `decryptPreKeyMessage` sketch
   /// was directionally correct but not the real method name).
   ///
-  /// Throws on an invalid, replayed, or otherwise undecryptable message
-  /// rather than returning garbage — e.g. [NoSessionException] with no
-  /// session yet, [DuplicateMessageException] on a replayed counter.
+  /// Throws [CryptoDecryptFailure] on an invalid, replayed, or otherwise
+  /// undecryptable message rather than returning garbage — e.g. reason
+  /// [CryptoDecryptFailureReason.noSession] with no session yet, reason
+  /// [CryptoDecryptFailureReason.duplicateMessage] on a replayed counter,
+  /// reason [CryptoDecryptFailureReason.invalidMessage] on a MAC/key-
+  /// derivation failure. The library's own exceptions
+  /// (`NoSessionException`, `DuplicateMessageException`, the unexported
+  /// `InvalidMessageException`, ...) are caught here and translated by
+  /// [mapSignalException] (E03-B03/E06-T02) — this is the one seam where
+  /// this codebase matches the library's exception surface; every other
+  /// caller catches [CryptoDecryptFailure] by type instead.
   Future<Uint8List> decrypt(
     SignalProtocolAddress remoteAddress,
     CiphertextMessage ciphertext,
   ) async {
     final store = _requireStore;
     final cipher = SessionCipher.fromStore(store, remoteAddress);
-    if (ciphertext is PreKeySignalMessage) {
-      return cipher.decrypt(ciphertext);
-    }
-    if (ciphertext is SignalMessage) {
-      return cipher.decryptFromSignal(ciphertext);
+    try {
+      if (ciphertext is PreKeySignalMessage) {
+        return await cipher.decrypt(ciphertext);
+      }
+      if (ciphertext is SignalMessage) {
+        return await cipher.decryptFromSignal(ciphertext);
+      }
+    } catch (e) {
+      throw mapSignalException(e);
     }
     throw ArgumentError(
       'Unsupported ciphertext message type: ${ciphertext.runtimeType}',
