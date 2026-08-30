@@ -1,22 +1,26 @@
 # Design gaps — what the design doesn't cover, and what we'll do about it
 
-**Gate:** 🧍 `design_contract_approval` — ⏳ AWAITING HUMAN
+**Gate:** 🧍 `design_contract_approval` — ✅ CLEARED BY HUMAN, 2026-08-31
 (reopened by the **E07 sharding pass**, 2026-08-31, for **GAP-018 ·
 GAP-019 · GAP-020 · GAP-021 · GAP-022** — the groups-and-calls gap pass —
 and for the three derived contracts `E07-T12` will write against them:
 `design/screens/group-create.md`, `design/screens/group-manage.md`,
-`design/screens/call.md`. **Nothing derived from GAP-018…GAP-022 is
-shardable as a frontend task until this line reads cleared.** `E07-T08`
-— the Conversations *Groups* section — is **not** gated by this reopening:
-it builds elements 21-33 of the already-approved, already-measured
-`conversations.md` contract and closes GAP-006, which was approved on
-2026-08-29 with "rows deferred to E07" written into it.)
+`design/screens/call.md`. All five approved with the fork decisions below
+(GAP-020's *build* still separately waits on `OQ-E07-13`, a product
+decision, not a design one). `E07-T08` — the Conversations *Groups*
+section — was never gated by this reopening: it builds elements 21-33 of
+the already-approved, already-measured `conversations.md` contract and
+closes GAP-006, which was approved on 2026-08-29 with "rows deferred to
+E07" written into it.)
 
 **Clearance history**
 - ✅ cleared by human on 2026-08-26 — the original 7-screen contract
   extraction + gap pass, per Q-DESIGN-001 in `spec/questions.md`.
 - ✅ cleared by human on 2026-08-30 — GAP-014/015/016 approved, GAP-017
   decided. See each entry below for the fork decisions.
+- ✅ cleared by human on 2026-08-31 — GAP-018/019/020/021/022 approved
+  (E07 groups-and-calls gap pass). See each entry below for the fork
+  decisions.
 - Gaps added later by feature epics (GAP-001…GAP-013) each carry their own
   `approved by:` line below and are tracked independently; several are still
   pending the human's actual sign-off.
@@ -574,7 +578,7 @@ is how a product acquires seven different empty states.
   affordance on Conversations and adding one is itself a change to a
   measured screen; `E07-T12` proposes it as part of the contract and the
   human approves it there, or it waits.
-- **approved by:** _<empty — 🧍 human>_
+- **approved by:** ✅ human, 2026-08-31 — approved as proposed
 - **built:** _(not yet — `E07-T12` writes the contract; the build task is
   prospective)_
 
@@ -605,7 +609,9 @@ is how a product acquires seven different empty states.
   (2) *Where roles are shown* — a text label per row versus an icon.
   *Advisory: a text label*, because the design's icon set carries no role
   semantics and inventing one is inventing language.
-- **approved by:** _<empty — 🧍 human>_
+- **approved by:** ✅ human, 2026-08-31 — both advisories accepted: (1) a
+  full-screen confirm step for leave/delete, no new modal primitive;
+  (2) a text label per row for roles, not an icon
 - **built:** _(not yet — `E07-T12` writes the contract; the build task is
   prospective)_
 
@@ -632,7 +638,8 @@ is how a product acquires seven different empty states.
   messages are dropped, hidden or placeholdered inside a group thread —
   that is `OQ-E07-13` on `E07-T07`, and it is a product decision, not a
   layout one. This entry does not answer it.
-- **approved by:** _<empty — 🧍 human>_
+- **approved by:** ✅ human, 2026-08-31 — approved as proposed (build still
+  waits on `OQ-E07-13`, unresolved by this approval)
 - **built:** _(not yet — blocked on `OQ-E07-13` as well as this gate)_
 
 ## GAP-021 — voice calls have no design source: no outgoing, incoming, in-call or failed state
@@ -664,7 +671,8 @@ is how a product acquires seven different empty states.
   none, so adding it modifies a measured screen. *Advisory: propose it in
   the contract and let this gate decide it, rather than a build task adding
   it quietly.*
-- **approved by:** _<empty — 🧍 human>_
+- **approved by:** ✅ human, 2026-08-31 — approved as proposed, including
+  adding a call-entry icon-button to `chat.md`'s header
 - **built:** _(not yet — `E07-T12` writes the contract; the build task is
   prospective)_
 
@@ -691,7 +699,8 @@ is how a product acquires seven different empty states.
   transient "switching connection" indicator, that is cheap to add and this
   entry is where to say so. *Advisory: silent on success, GAP-013's
   treatment on degradation.*
-- **approved by:** _<empty — 🧍 human>_
+- **approved by:** ✅ human, 2026-08-31 — approved as proposed: silent on a
+  successful migration, GAP-013's degraded-card treatment on an abandoned one
 - **built:** _(not yet)_
 
 ## The usual suspects
