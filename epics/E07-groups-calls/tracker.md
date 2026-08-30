@@ -9,7 +9,7 @@
 | Task | Title | Layer | Size | MoSCoW | depends_on | Status |
 |---|---|---|---|---|---|---|
 | E07-T01 | Group data model + schema migration | backend | M | must | — | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `6d5a861` (PR #1) |
-| E07-T02 | Group role permission matrix | backend | S | must | T01 | in-progress · builder (sonnet) → reviewer (opus) |
+| E07-T02 | Group role permission matrix | backend | S | must | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE round 1 · PR #2 awaiting merge |
 | E07-T03 | Group membership control protocol | backend | M | must | T02 | todo |
 | E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | todo |
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | todo |
@@ -150,6 +150,35 @@ exact section for eight tasks with no reader.)_
   whichever later E07 task edits the `from < 13` step or adds a `from < 14`
   step** (`E07-T02`/`T03`/`T04` all depend on T01 and may touch
   `database.dart`), or explicitly note why it stays out of scope.
+  - **2026-08-31 · checked at E07-T02 dispatch:** T02's `files:` fence creates
+    two new files only and does not touch `database.dart` — correctly stays
+    out of scope. Re-check at T03/T04.
+
+- **2026-08-31 · E07-T02 · `allows` throws where §5 says it never does
+  (advisory, S3 — a spec-text defect, not a code defect).** `E07-T02.md:107`
+  ("Total — never throws, never returns null") contradicts `E07-T02.md:136`
+  ("Assert loudly rather than defaulting to `false`"). The implementation
+  correctly follows §6 and throws `ArgumentError` when `removeMember`/
+  `removeAdmin` get a `null` subject (`group_permissions.dart:63-69, 78-84`).
+  **Risk lands on E07-T03/T06:** a caller reading only §5 writes
+  `if (!GroupPermissions.allows(...)) deny;` and gets an uncaught
+  `ArgumentError` — at a network-frame boundary — where it expected a denial.
+  **Fold into E07-T03** (the first caller): either wrap the call or assert the
+  subject non-null before it, and have the planner correct §5's wording.
+
+- **2026-08-31 · E07-T02 · removed members are not expressible in
+  `GroupRole` (advisory, S2 if it reaches a caller unhandled).** §2
+  (`E07-T02.md:64-66`) makes `removed_at_epoch IS NOT NULL` a hard `false` for
+  every action, but `GroupPermissions` is pure and takes only a `GroupRole`,
+  which has no "removed" value — `sendMessage` returns `true` unconditionally
+  (`group_permissions.dart:110-111`). This is correct per §4 (the caller loads
+  the roles) and unfixable inside T02's fence, but it means **any T03/T06 query
+  that loads a `GroupMembers` row without `WHERE removed_at_epoch IS NULL`
+  silently grants a removed member full member rights.** T01 deliberately
+  retains removed rows rather than deleting them (`group_tables.dart:118-121`),
+  so the stale row is always there to be loaded. **Fold into E07-T03 and
+  E07-T06** — the enforcing layers — as an explicit precondition on every role
+  load.
 
 ## Review log
 
@@ -268,6 +297,114 @@ optional and remains unimplemented; the current test verifies the 7 expected
 entities exist but would not notice an 8th. The property holds today (confirmed
 by the round-1 probe). Recorded in §Carried-forward observations for whichever
 later E07 task touches this migration — not grounds to hold this PR.
+
+### E07-T02 — 2026-08-31 — 📋 **APPROVE** (reviewer: opus; `executed_by`: builder-sonnet ✅ rule 5)
+
+- **scope: in-contract.** `git diff --stat origin/epic_07...origin/epic_07_task_02`
+  = exactly the 2 files in `files:` (`lib/features/groups/domain/group_permissions.dart`,
+  `test/features/groups/domain/group_permissions_test.dart`) + the task file.
+  §4 respected: the source imports only `GroupRole` (an enum) and `AppFailure`,
+  both `show`-scoped — no `drift`, no `dart:io`, no `DateTime.now()`, no
+  `GroupRepository`, no controller, no UI, no 4th role, no trust/blocking.
+- **§5 matrix: 11/11 rows verified cell-by-cell, independently.** I did not
+  read the builder's expectation table as evidence — I re-encoded §5 myself as
+  a literal string table (`'leave|*': 'FTT'` etc.) in a throwaway probe and ran
+  it against the shipped code: **105/105 pass**. Probe deleted; `git status`
+  clean.
+- **No owner shortcut (the §6 risk).** `group_permissions.dart:108` is
+  `return actorRole != GroupRole.owner` for `leave`, and there is no
+  `if (role == owner) return true` anywhere. **Falsified, not assumed:** I
+  injected exactly that line at the top of `allows` → my probe failed on
+  `§5 leave|* actor=owner` (*Expected: false / Actual: true*) and the builder's
+  suite failed **14** tests. Reverted; `git diff` empty.
+- **Second falsification** — inverted the owner-protection guard at
+  `group_permissions.dart:70` (`subjectRole != GroupRole.member` →
+  `== GroupRole.admin`) → my probe failed on `§5 removeMember|owner` for both
+  owner and admin actors, and `test_nobody_can_remove_the_owner` failed.
+  Reverted; suite back to green. Both probes failed for the *right* reason.
+- **Exhaustiveness: genuinely 120, verified by count not by claim.** Ran the
+  matrix group alone with `--plain-name` → `+120: All tests passed!`; whole
+  file → `+128`. That is `GroupAction.values (10) × subjects (3 roles + null)
+  × GroupRole.values (3)`, a real triple-nested Cartesian loop
+  (`group_permissions_test.dart:106-137`), not spot checks.
+- **EARS: 2/2 verified.**
+  - EARS-GROUP-6 → `test_EARS_GROUP_6_owner_may_perform_every_fr_group_002_action`,
+    which asserts all six actions `spec/srs.md:121` names, by name.
+  - EARS-GROUP-7 → `test_EARS_GROUP_7_admin_cannot_grant_admin_or_transfer_or_delete`,
+    `..._member_cannot_perform_any_management_action`, and
+    `..._denial_returns_group_forbidden_failure` (asserts `failure!.code ==
+    'group.forbidden'` **and** `null` on the allowed path).
+- **suite: ✅ ran myself** on `733ee60` — `flutter analyze` → *No issues found!*;
+  `flutter test` → **519/519** (391 prior + 128 new). Builder's numbers confirmed.
+- **`AppFailure('group.forbidden')` is the existing convention, not a new
+  shape.** Repo-wide survey of `AppFailure('…')` literals returns
+  `auth.google_sign_in_failed`, `messaging.bundle_unavailable`,
+  `messaging.no_session`, `messaging.peer_blocked` — `<domain>.<snake_case>`,
+  and `messaging.peer_blocked` is the direct denial analogue. The import path
+  (`core/auth/google_auth_service.dart`) matches
+  `lib/features/messaging/domain/send_message_use_case.dart` and three others.
+  (`docs/conventions.md:52` still describes an aspirational `sealed class
+  AppFailure` with a `message` field that the concrete E06-T02 class does not
+  have — a pre-existing repo-wide divergence, not this task's to fix.)
+- **OQ-E07-5 correctly left open** — still 🟡 important, `Answer: _<empty>_`,
+  `E07-T02.md:266-280`. The narrow reading shipped; the widening decision was
+  not silently taken.
+- **design gate: n/a** (`design_contract: n/a`, pure function).
+- **security lens (RBAC — run, not skipped):**
+  - #6 default-deny → **PASS**. The `switch` at `group_permissions.dart:60-110`
+    has no `default:` and no trailing `return`; a future `GroupAction` value is
+    a *compile error*, not a silent allow. Fail-closed at compile time.
+  - #7 not-only-in-the-UI → **PASS** by construction; §4 forbids a second
+    UI-side rule and GAP-019 defers the group-manage rows to this matrix.
+  - #9 no privilege-escalation path → **PASS**, probed above. Admin is denied
+    `grantAdmin`/`revokeAdmin`/`transferOwnership`/`deleteGroup`/`removeAdmin`,
+    and the *wrong-action* escalation (an Admin removing another Admin via
+    `removeMember`) is closed at `group_permissions.dart:70-76`.
+  - 🧍 `auth_or_payment_code` gate **not triggered**: no file under an auth or
+    payment path changed — `lib/core/auth/` is imported for a type only, and is
+    byte-identical on this branch.
+- **`L-process-008` check.** T01's carried-forward migration-test item names
+  `E07-T02` as a candidate. T02's `files:` fence creates two new files and does
+  not touch `database.dart` or the `from < 13` step, so it correctly **stays out
+  of scope** here — re-check at T03/T04.
+- **The three self-resolved cells (§Deviations) — judged, not rubber-stamped.
+  All three are sound and correctly kept inside the contract:**
+  1. `removeMember` with `subjectRole == admin` → `false`. **Forced, not
+     chosen.** Had it returned `owner||admin`, an Admin could remove another
+     Admin through the wrong action — precisely the power §5's
+     `removeAdmin (subject = admin)` row reserves for the Owner. Denial is the
+     only reading under which the two actions are not redundant. Escalating
+     this would have been over-caution.
+  2. `removeAdmin` with `subjectRole` = `owner`/`member` → `false`. Correct;
+     `owner` is mandated by the never-remove-the-owner invariant and `member`
+     simply isn't this action's subject. A `throw` was equally defensible here,
+     but denial is the conservative, reversible choice.
+  3. `null` subject → `ArgumentError`. §6 (`E07-T02.md:135-138`) instructs this
+     literally for `removeMember`; generalizing it to `removeAdmin` — the only
+     other subject-conditioned action, identical failure mode — is the only
+     consistent reading. Correct.
+  **My one dissent is procedural, not substantive** — see §Carried-forward.
+
+**Carried forward (advisory, NOT blockers — neither is fixable inside this
+task's fence):**
+1. **§5/§6 contradict each other on throwing.** `E07-T02.md:107` says `allows`
+   is "Total — never throws"; `E07-T02.md:136` says to assert loudly on a null
+   subject. The builder resolved toward §6 (the specific risk note over the
+   generic prose) and documented it in the dartdoc — the right call — but
+   resolved it *in code* rather than naming it as a contract defect. It matters
+   for **E07-T03**: an implementer reading only §5 will write
+   `if (!allows(...)) deny;` and get an uncaught `ArgumentError` where they
+   expected a denial, at a network-frame boundary. Planner should fix §5's
+   wording; T03's brief should carry the null-subject precondition explicitly.
+2. **The removed-member seam.** §2 (`E07-T02.md:64-66`) makes
+   `removed_at_epoch IS NOT NULL` a hard `false` for *every* action, but
+   `GroupRole` has no "removed" value and this pure function cannot express it —
+   `sendMessage` returns `true` unconditionally
+   (`group_permissions.dart:110-111`). Correct per §4 (the caller loads the
+   roles), but a **T03/T06 caller that loads a `GroupMembers` row without
+   filtering `removed_at_epoch IS NULL` will permit a removed member to send.**
+   The source header names the caller's duty to load roles but not this
+   precondition. Fold into E07-T03/T06 — the enforcing layers.
 
 ## Bug sweep
 _(after all 13 tasks land — `skills/bug-sweep`. Note `L-process-009`: every
