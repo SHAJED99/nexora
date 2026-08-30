@@ -1,15 +1,15 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** in-progress (OQ-E07-3/4 resolved, GAP-018..022 approved 2026-08-31,
-T01+T12 dispatched) · **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 0/13
+**Status:** in-progress (T01+T12 merged to `epic_07`, T02+T13 dispatched) ·
+**Started:** 2026-08-31 ·
+**Completed:** — · **Progress:** 2/13
 
 ## Tasks
 
 | Task | Title | Layer | Size | MoSCoW | depends_on | Status |
 |---|---|---|---|---|---|---|
-| E07-T01 | Group data model + schema migration | backend | M | must | — | done · builder (sonnet) → reviewer (opus) · ✅ APPROVE round 2, round-1 finding closed (see §Review log); awaiting orchestrator squash-merge |
-| E07-T02 | Group role permission matrix | backend | S | must | T01 | todo |
+| E07-T01 | Group data model + schema migration | backend | M | must | — | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `6d5a861` (PR #1) |
+| E07-T02 | Group role permission matrix | backend | S | must | T01 | in-progress · builder (sonnet) → reviewer (opus) |
 | E07-T03 | Group membership control protocol | backend | M | must | T02 | todo |
 | E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | todo |
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | todo |
@@ -19,8 +19,8 @@ T01+T12 dispatched) · **Started:** 2026-08-31 ·
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | todo |
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | todo |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
-| E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE |
-| E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | todo |
+| E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
+| E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | in-progress · planner (opus) → reviewer (sonnet) |
 
 ⛔ = carries or is blocked by a 🧍 Open Question — see §Blocked.
 
