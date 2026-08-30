@@ -1,17 +1,19 @@
 # Design gaps — what the design doesn't cover, and what we'll do about it
 
-**Gate:** 🧍 `design_contract_approval` — ⏳ AWAITING HUMAN
+**Gate:** 🧍 `design_contract_approval` — ✅ CLEARED BY HUMAN, 2026-08-30
 (reopened by **E06-T13**, 2026-08-30, for **GAP-014 · GAP-015 · GAP-016 ·
 GAP-017** — the rich-message-type gap pass — and for the three derived
 contracts they propose: `design/screens/chat-voice.md`,
 `design/screens/chat-attachment.md`, `design/screens/chat-location.md`.
-None of those four entries is approved; each carries an empty `approved by:`
-line, and **no voice / attachment / location task may be sharded or built
-until this line reads cleared**.)
+GAP-014/015/016 approved with the fork decisions below; GAP-017 decided
+(parked to E07, not approved as a contract — none exists). Voice/attachment/
+location tasks are now shardable.)
 
 **Clearance history**
 - ✅ cleared by human on 2026-08-26 — the original 7-screen contract
   extraction + gap pass, per Q-DESIGN-001 in `spec/questions.md`.
+- ✅ cleared by human on 2026-08-30 — GAP-014/015/016 approved, GAP-017
+  decided. See each entry below for the fork decisions.
 - Gaps added later by feature epics (GAP-001…GAP-013) each carry their own
   `approved by:` line below and are tracked independently; several are still
   pending the human's actual sign-off.
@@ -356,7 +358,7 @@ is how a product acquires seven different empty states.
      ⏳ AWAITING HUMAN for exactly these entries. ── -->
 
 ## GAP-014 — chat, voice messages: no recording UI and no playback bubble
-- **status:** 🟡 proposed
+- **status:** 🟢 approved
 - **screen:** chat (`design/screens/chat.md`) → new derived contract
   `design/screens/chat-voice.md`
 - **spec:** FR-COMM-001 — "personal communication via text, **voice
@@ -400,12 +402,19 @@ is how a product acquires seven different empty states.
   `[glyph — pending human confirmation]` in the contract.
   Codec, bit rate, max length and storage are explicitly **not** proposed
   here — engineering, and partly E08's.
-- **approved by:**
-- **built:** not built — contract only; the voice-message frontend task is
-  not shardable until this entry is cleared
+- **approved by:** human, 2026-08-30 — **tap-to-toggle** (not press-and-hold):
+  an explicit stop button is easier to get right on a phone and doesn't risk
+  losing a long recording to an early-lifted finger; the V2/V7 "toggle"
+  rows stand, the press-and-hold/slide-to-cancel rows (V8's cancel-gesture
+  use) are struck. Glyph names (`stop_circle`, `close`, `play_arrow`,
+  `pause`) approved as proposed — no change needed. Plain progress track
+  (not waveform) approved as proposed, since a waveform would invent a new
+  design primitive the source doesn't have.
+- **built:** not built — contract approved; the voice-message frontend task
+  is now shardable
 
 ## GAP-015 — chat, attachments: the picker has no destination and the transfer card has no terminal states
-- **status:** 🟡 proposed
+- **status:** 🟢 approved
 - **screen:** chat (`design/screens/chat.md`) → new derived contract
   `design/screens/chat-attachment.md`
 - **spec:** FR-COMM-001 — "…**attachments**…"; FR-UI-001
@@ -440,12 +449,14 @@ is how a product acquires seven different empty states.
   recommendation, not a decision. Also flagged: the three source glyphs.
   File size limits, chunking, MIME allow-lists and retention are **not**
   proposed here — E08 owns storage.
-- **approved by:**
-- **built:** not built — contract only; the attachment frontend task is not
-  shardable until this entry is cleared
+- **approved by:** human, 2026-08-30 — **bottom sheet** (not anchored menu),
+  per the contract's own advisory. Source glyphs (`image`, `photo_camera`,
+  `attach_file`) approved as proposed.
+- **built:** not built — contract approved; the attachment frontend task is
+  now shardable
 
 ## GAP-016 — chat, location-in-chat: no share entry point and no received bubble
-- **status:** 🟡 proposed
+- **status:** 🟢 approved
 - **screen:** chat (`design/screens/chat.md`) → new derived contract
   `design/screens/chat-location.md`
 - **spec:** FR-COMM-001 — "…and **location sharing**"; FR-LOC-005 (never
@@ -481,13 +492,16 @@ is how a product acquires seven different empty states.
   in-thread **map preview** is wanted at all (it would be a new design
   element and a new dependency, so it is a design pass plus rule 3, not a
   derivation), and the `place` / `location_off` glyph names.
-- **approved by:**
-- **built:** not built — contract only; the location-in-chat frontend task is
-  not shardable until this entry is cleared, and it additionally depends on
-  E09's permission model existing
+- **approved by:** human, 2026-08-30 — **card-only, no map preview**. A map
+  is a separate design pass and rule-3 decision, not a blocker for
+  text-first location sharing; ship the card now. `place` / `location_off`
+  glyphs approved as proposed.
+- **built:** not built — contract approved; the location-in-chat frontend
+  task is now shardable, and still additionally depends on E09's permission
+  model existing
 
 ## GAP-017 — chat, PTT: no design source, no derivable primitive, and no contract proposed
-- **status:** 🟡 proposed — **as a question, not as a proposal.** Tracked as
+- **status:** ⚪ deferred — decided, not a design proposal. Tracked as
   **`OQ-E06-T13-1`** in `epics/E06-personal-chat/tasks/E06-T13.md`
   §Open Questions and in `epic.md` §Open Questions. Owner: **human**.
 - **screen:** chat (`design/screens/chat.md`) — **no derived contract
@@ -518,9 +532,13 @@ is how a product acquires seven different empty states.
   owner so it is not silently dropped from FR-COMM-001's scope; a
   re-home to E07 is itself a scope decision and would go through
   `skills/change-impact`.
-- **approved by:**
-- **built:** not built and not shardable — no contract exists, and rule 2
-  forbids a frontend task without one
+- **decided by:** human, 2026-08-30 — agree with the advisory. **Park PTT
+  until E07's voice-call work settles the real-time transport question**;
+  re-home the FR-COMM-001 PTT obligation to E07 via `skills/change-impact`
+  rather than attempting it in E06. `OQ-E06-T13-1` closes as answered, not
+  as still-open.
+- **built:** not built and not shardable — no contract exists; PTT is out of
+  E06's scope, owned by E07 going forward
 
 ## The usual suspects
 

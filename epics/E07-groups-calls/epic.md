@@ -5,7 +5,7 @@ status: todo
 type: feature
 priority: { moscow: should, wsjf: 2.1 }
 depends_on: [E06]
-traces_to: [FR-COMM-002, FR-GROUP-001, FR-GROUP-002, FR-GROUP-003, FR-GROUP-004, FR-GROUP-005, FR-GROUP-006, FR-CALL-001, FR-CALL-002, FR-CALL-003]
+traces_to: [FR-COMM-001, FR-COMM-002, FR-GROUP-001, FR-GROUP-002, FR-GROUP-003, FR-GROUP-004, FR-GROUP-005, FR-GROUP-006, FR-CALL-001, FR-CALL-002, FR-CALL-003]
 external_services: []
 ui_surface: [mobile]
 design_screens: [conversations, chat]
@@ -25,7 +25,11 @@ voice call that survives a route change without dropping.
 **In scope:** group roles/management, group key rotation (Sender-Keys layer
 on E03's protocol), the group-chat UI (Conversations "Groups" tab, per E06's
 deferred gap), voice calls with routing priority and make-before-break
-mid-call migration.
+mid-call migration, **push-to-talk (PTT)** — re-homed here from E06 by human
+decision on 2026-08-30 (`IMP-001`; see Open Questions) because PTT is a
+half-duplex live-transport mode that shares this epic's real-time transport
+problems and almost none of E06's async-messaging ones. Design it once
+E07's voice-call transport question is settled, not before.
 **Out of scope:** anything E06 already delivers for 1:1.
 
 ## Data model / API surface / Screens
@@ -51,6 +55,17 @@ Communication module for full detail.
   - **Status:** ⚪ deferred (decided)
   - **Answered by:** human (via Q&A during genesis)
   - **Date:** 2026-08-26
+- **OQ-E07-2 — PTT (push-to-talk) re-homed here from E06.** E06-T13's design
+  gap pass found PTT has no design source and no derivable primitive
+  (`GAP-017` / `OQ-E06-T13-1` in E06). The human decided to park it until
+  this epic's voice-call work settles the real-time transport question,
+  then design PTT once against a transport that exists, via `IMP-001`. No
+  contract exists yet; this epic's own task-sharding pass must carry it as
+  a named obligation, not rediscover it — same failure shape as E05-B02's
+  relay-queue handoff.
+  - **Status:** 🟡 open (owner: this epic's sharding pass)
+  - **Answered by:** human
+  - **Date:** 2026-08-30
 
 ## Analyze report / Retro
 <pending>
