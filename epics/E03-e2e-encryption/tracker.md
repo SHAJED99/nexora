@@ -1,6 +1,6 @@
 # E03 · E2E Encryption & Threat Protection · Progress
 
-**Status:** done · **Started:** 2026-08-27 · **Completed:** 2026-08-27 · **Progress:** 6/7 (B03 deferred to backlog by design)
+**Status:** done · **Started:** 2026-08-27 · **Completed:** 2026-08-27 · **Progress:** 7/7 (B03 closed 2026-08-30 by reference — fixed under E06-T02)
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -11,7 +11,7 @@
 - [x] E03-B01 · One-time prekey ids restart at 1 after pool drains (S2 bug) · done · builder (sonnet) → reviewer (opus)
 - [x] E03-T03 · Real core/crypto API — X3DH session + Double Ratchet encrypt/decrypt · done · builder (sonnet) → reviewer (opus)
 - [x] E03-B02 · Same one-time prekey issued to every peer (S2, P1) · done · builder (sonnet) → reviewer (opus)
-- [ ] E03-B03 · InvalidMessageException not catchable by type (S3, P3 — deferred to E05/E06) · backlog · —
+- [x] E03-B03 · InvalidMessageException not catchable by type (S3, P3 — fixed under E06-T02, closed by reference) · done · builder (sonnet) → reviewer (opus)
 
 ## Dependency graph
 ```mermaid
@@ -56,6 +56,61 @@ schema change (`crypto_counters` table) and must land before T03.
   messages — should be documented wherever users see that guarantee), and
   `InvalidMessageException` isn't exported from the library barrel (E05/E06
   can't catch the common decrypt-failure case by type).
+
+- 2026-08-30 · E03-B03 · Opus · **APPROVE** (closure-by-reference — the fix
+  landed under E06-T02, not in this branch; this review verified that claim
+  independently rather than accepting it). Scope: 1 file,
+  `tasks/E03-B03.md` only — no product code in the diff, so §4's "does NOT
+  do" list cannot have been violated. Verified on `development`: the
+  app-owned taxonomy genuinely exists and is correct
+  (`crypto_failures.dart:139-145` — every `mapSignalException` branch,
+  including `default`→`unknown`, preserves the original as `cause`, so
+  nothing is swallowed; `crypto_stub.dart:144-146`/`:84` — the single catch
+  site in `decrypt()`/`establishSession()`; success path and return type
+  untouched). The `_isInvalidMessageException` runtime-type-name workaround
+  — this bug's own repro evidence — survives at exactly one call site,
+  `crypto_service_test.dart:417`, a probe calling `SessionCipher` directly
+  and bypassing `CryptoService`, where asserting the library's raw exception
+  is correct; every assertion crossing the seam uses real `isA<...>()`
+  matchers. **Falsified twice**: re-ran the builder's mutation (wrong library
+  call on `decrypt()`'s PreKey branch → all 5 E03-T03 proof tests failed,
+  each surfacing `CryptoDecryptFailure(invalidMessage)`, so the wrapper
+  propagates rather than masks a broken implementation), and ran an
+  independent probe the builder never saw (collapsed the
+  `DuplicateMessageException` branch to `invalidMessage` → only
+  `test_EARS_SEC_3_replay_rejected` failed), which is the direct proof that
+  §7's "MAC-failure vs replay distinguishable by type from one catch site"
+  is genuinely asserted by a test rather than merely claimed. Both mutations
+  reverted byte-identical (`md5sum` + empty `git diff`/`git status`).
+  Reviewer-run `flutter analyze` → 0 issues; `flutter test` → **384/384**,
+  independently confirming the builder's reported figure. Provenance: `e66e114`
+  is real (the E06-T02 APPROVE stamp by claude-opus-5); it is not an ancestor
+  of `development` only because E06 was **squash**-merged (`a0e4031` →
+  `1cde254`), and the reviewed content is on `development` regardless. Design
+  gate n/a (no UI). Security lens: this is crypto-adjacent but not auth/payment
+  code and the diff contains no product code.
+- **Carried-forward observations from the E03-B03 review** (neither blocking,
+  neither this task's to fix — both are already-merged E06-T02 code):
+  1. `mapSignalException` (`lib/core/crypto/crypto_failures.dart:127-152`)
+     matches every library exception by `error.runtimeType.toString()`,
+     including `NoSessionException`/`DuplicateMessageException`/
+     `UntrustedIdentityException`, which the barrel **does** export and which
+     `is` checks could match structurally (only `InvalidMessageException`
+     genuinely requires the name compare). Documented as a deliberate
+     single-seam choice, and a strict improvement on the per-call-site string
+     compares this bug was filed against. Residual risk: under
+     `flutter build --obfuscate`, runtime type names are minified, every branch
+     collapses to `unknown`, and the `untrustedIdentity` safety-number warning
+     at `lib/features/chat/presentation/chat_controller.dart:319` would
+     silently never fire. Verified **latent, not active** — no `--obfuscate`
+     or `--split-debug-info` anywhere in the build config today. Worth an
+     `is`-check for the four exported types, or an obfuscation-guard test,
+     whenever a release-hardening task next touches this area.
+  2. Doc drift in `E03-B03.md` §7: the checklist claims "the 2 remaining uses
+     of `_isInvalidMessageException`, lines ~331/335/417". `:331`/`:335`
+     actually assert `isA<DuplicateMessageException>()`, a real exported type,
+     not the predicate; only `:417` uses it. Code and tests are correct — the
+     prose is not.
 
 ## Blocked / Frozen
 (none)
