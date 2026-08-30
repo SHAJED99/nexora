@@ -19,7 +19,7 @@ T01+T12 dispatched) · **Started:** 2026-08-31 ·
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | todo |
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | todo |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
-| E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | in-progress · planner (opus) → reviewer (sonnet) |
+| E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | todo |
 
 ⛔ = carries or is blocked by a 🧍 Open Question — see §Blocked.
@@ -99,6 +99,40 @@ transport, with `NullCallMediaTransport` as the honest v1 seam.
 | 🧍 `OQ-E07-4` — schema migration | ✅ resolved 2026-08-31 — all 3 advisories accepted; unblocks T01→T08 |
 | 🟢 `OQ-E07-3` — real-time media transport | ✅ resolved 2026-08-31 — (a) datagram audio over mesh, (c) named fallback; unblocks T13 + prospective media path |
 | 🧍 `design_contract_approval` | ✅ cleared by human, 2026-08-31 — GAP-018…GAP-022 (`design/gaps.md`) |
+
+## Review log
+(date · task · reviewer model · outcome · design gate %)
+- 2026-08-31 · E07-T12 · independent reviewer (sonnet-5, ≠ executed_by
+  claude-opus-5/planner, rule 5) · APPROVE · n/a (docs task, no
+  `design_contract` — the three new contracts are `source: derived`
+  screens with no golden yet, so `make design-verify` does not apply at
+  this stage per `design-fidelity` §3; confirmed with `node design/tools/
+  verify.mjs --screen group-create` → "no screen matched", the expected
+  result). Scope confined to `files:` (3 new contracts + `design/gaps.md`
+  `built:`/clarification lines only) — independently confirmed empty
+  `git diff` on `chat.md`/`conversations.md`/`devices.md`/`dashboard.md`/
+  `chat-voice.md`/`design/thresholds.yaml`/`docs/impact/
+  IMP-001-ptt-rehome-to-e07.md`. GAP-019's two fork resolutions (full-screen
+  confirm, no modal primitive; plain text role label, no icon) honoured
+  literally in `group-manage.md`. `call.md`'s 4+1 states complete and
+  honest — `failed` states plainly that audio can't be carried
+  (`NullCallMediaTransport`), never renders as connected; no speaker/video/
+  add-participant/keypad/hold/record anywhere. GAP-022's migration UI is a
+  real distinct `in-call-degraded` state, not conflated with `failed` or
+  `in-call`. Independently spot-checked ≥5 token values per new contract
+  against the parent contracts' own element/token rows — all traced, no
+  invented value. All 5 `approved by:` lines on GAP-018..022 confirmed
+  pre-existing on `epic_07` (commit `88a4d5c`, authored by the human,
+  predating this task's branch point) — `E07-T12` only cites them, never
+  authors one (`L-process-002` clean). GAP-017 byte-identical, `IMP-001`
+  untouched. Both flagged deviations judged sound: `docs/routes.md`
+  correctly withheld as genuinely outside the `files:` fence (rule 6 over
+  a conflicting §3/§7 instruction, route info preserved in each contract's
+  `impl_path`); the top `design_contract_approval` gate line correctly left
+  untouched since it was cleared by the human in `88a4d5c`, already on
+  `epic_07` before this task branched — reverting it would have erased a
+  real human decision, not corrected a stale checklist item. See
+  `epics/E07-groups-calls/tasks/E07-T12.md` Run log for full evidence.
 
 ## Carried-forward observations (not yet a task)
 _(empty at sharding — created deliberately so it has a reader from day one.
