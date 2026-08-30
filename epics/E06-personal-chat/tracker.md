@@ -1,6 +1,6 @@
 # E06 · Personal Chat ★ · Progress
 
-**Status:** P1/P2 = 0 — epic→`development` PR gate clear · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 13/13 tasks + B01/B02/B03 fixed (B04 deferred to E11)
+**Status:** retro complete, 🧍 awaiting human on `retro_promotions` and the `epic_06`→`development` merge · **Started:** 2026-08-29 · **Completed:** — · **Progress:** 13/13 tasks + B01/B02/B03 fixed (B04 deferred to E11)
 
 > Only the ORCHESTRATOR edits this file.
 
