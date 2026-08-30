@@ -342,11 +342,9 @@ class _ConversationRow extends StatelessWidget {
                       children: [
                         if (tile.lastMessageIsMine) ...[
                           Icon(
-                            Icons.check,
+                            _tickIconFor(tile.lastMessageState),
                             size: 16,
-                            color: tile.lastMessageState == DeliveryState.read
-                                ? NexoraColors.devicesTrustedGreen
-                                : NexoraColors.devicesMuted,
+                            color: _tickColorFor(tile.lastMessageState),
                           ),
                           const SizedBox(width: 4),
                         ],
@@ -375,6 +373,28 @@ class _ConversationRow extends StatelessWidget {
     );
   }
 }
+
+/// GAP-009's approved glyph mapping, read from the SAME `DeliveryState`
+/// `ConversationTile.lastMessageState` already carries — the exact function
+/// `chat_view.dart`'s/`dashboard_view.dart`'s `_tickIconFor`/`_tickColorFor`
+/// implement, duplicated here per Dart's privacy model (this file's header,
+/// and dashboard_view.dart's own precedent for duplicating from chat_view)
+/// rather than defined a second, potentially-diverging way. Fixes E06-B03:
+/// this file previously rendered a literal `Icons.check` for every state
+/// except `read`, so `queued`/`delivered`/`failed` were all indistinguishable
+/// from an ordinary sent check on this screen.
+IconData _tickIconFor(DeliveryState state) => switch (state) {
+      DeliveryState.queued => Icons.radio_button_unchecked,
+      DeliveryState.sent || DeliveryState.accepted || DeliveryState.stored =>
+        Icons.check,
+      DeliveryState.delivered => Icons.done_all,
+      DeliveryState.read => Icons.done_all,
+      DeliveryState.failed => Icons.error_outline,
+    };
+
+Color _tickColorFor(DeliveryState state) => state == DeliveryState.read
+    ? NexoraColors.devicesTrustedGreen
+    : NexoraColors.devicesMuted;
 
 /// Elements 34-45: Dashboard/Conversations/Devices/Settings. Conversations
 /// is the active tab (element 37's filled pill); Dashboard's own route

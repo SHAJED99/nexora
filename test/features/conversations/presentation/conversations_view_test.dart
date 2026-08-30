@@ -252,6 +252,90 @@ void main() {
     expect(navigated, isEmpty);
   });
 
+  testWidgets(
+      'test_E06_B03_conversation_row_ticks_match_GAP_009_mapping_per_state',
+      (tester) async {
+    // Regression for E06-B03: this screen's `_ConversationRow` used to
+    // render a literal `Icons.check` for every `DeliveryState` except
+    // `read` (green vs grey, same shape), so `queued`, `delivered` and
+    // `failed` outbound messages were all visually the same plain check as
+    // a plain sent message on the Conversations list — the exact glyph
+    // mapping GAP-009 approves, and `chat_view.dart`/`dashboard_view.dart`
+    // already implement correctly, silently dropped on this third screen.
+    // One conversation per `DeliveryState` value, each with its own peer id
+    // so each row's tick can be located unambiguously.
+    final repo = ConversationRepository(db, selfDeviceId: 'self-device');
+    final relationships = RelationshipRepository(db);
+
+    const expectedIcons = <DeliveryState, IconData>{
+      DeliveryState.queued: Icons.radio_button_unchecked,
+      DeliveryState.sent: Icons.check,
+      DeliveryState.accepted: Icons.check,
+      DeliveryState.stored: Icons.check,
+      DeliveryState.delivered: Icons.done_all,
+      DeliveryState.read: Icons.done_all,
+      DeliveryState.failed: Icons.error_outline,
+    };
+
+    var seq = 0;
+    for (final state in expectedIcons.keys) {
+      final peerId = 'peer-${state.name}';
+      await relationships.upsert(peerId, RelationshipState.trusted);
+      await db
+          .into(db.messages)
+          .insert(
+            MessagesCompanion.insert(
+              id: 'm-${state.name}',
+              conversationId: peerId,
+              // Sent BY this device, so `lastMessageIsMine` is true and the
+              // tick renders at all (the view only shows a tick on outbound
+              // messages).
+              senderDeviceId: 'self-device',
+              sequenceNumber: 1,
+              ciphertext: Uint8List.fromList(List<int>.filled(16, seq++)),
+              createdAt: 1000 + seq,
+              deliveryState: state.name,
+            ),
+          );
+    }
+
+    final controller = ConversationsController(
+      repo: repo,
+      crypto: stack.cryptoService,
+      stack: stack,
+    );
+    Get.put<ConversationsController>(controller);
+
+    await tester.pumpWidget(const GetMaterialApp(home: ConversationsView()));
+    await tester.pumpAndSettle();
+
+    for (final entry in expectedIcons.entries) {
+      final peerId = 'peer-${entry.key.name}';
+      final rowFinder = find
+          .ancestor(of: find.text(peerId), matching: find.byType(InkWell))
+          .first;
+      // The row's tick is the one `Icon` in this row that is not the
+      // trailing `Icons.lock` glyph (element 14/20, always present).
+      final icons = tester
+          .widgetList<Icon>(
+            find.descendant(of: rowFinder, matching: find.byType(Icon)),
+          )
+          .where((icon) => icon.icon != Icons.lock)
+          .toList();
+      expect(
+        icons,
+        hasLength(1),
+        reason: 'expected exactly one delivery tick on the ${entry.key.name} row',
+      );
+      expect(
+        icons.single.icon,
+        entry.value,
+        reason:
+            'DeliveryState.${entry.key.name} should render ${entry.value} per GAP-009',
+      );
+    }
+  });
+
   testWidgets('test_conversation_row_and_nav_item_expose_semantics', (
     tester,
   ) async {
