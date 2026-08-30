@@ -1,13 +1,14 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** todo (sharded, awaiting 🧍 `analyze_report`) · **Started:** — ·
+**Status:** in-progress (OQ-E07-3/4 resolved, GAP-018..022 approved 2026-08-31,
+T01+T12 dispatched) · **Started:** 2026-08-31 ·
 **Completed:** — · **Progress:** 0/13
 
 ## Tasks
 
 | Task | Title | Layer | Size | MoSCoW | depends_on | Status |
 |---|---|---|---|---|---|---|
-| E07-T01 | Group data model + schema migration ⛔🧍 | backend | M | must | — | todo (blocked: `OQ-E07-4`) |
+| E07-T01 | Group data model + schema migration | backend | M | must | — | in-progress · builder (sonnet) → reviewer (opus) |
 | E07-T02 | Group role permission matrix | backend | S | must | T01 | todo |
 | E07-T03 | Group membership control protocol | backend | M | must | T02 | todo |
 | E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | todo |
@@ -17,8 +18,8 @@
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | todo |
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | todo |
-| E07-T11 | Make-before-break call route migration ⛔ | backend | M | must | T09, T10 | todo |
-| E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | todo |
+| E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
+| E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | in-progress · planner (opus) → reviewer (sonnet) |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | todo |
 
 ⛔ = carries or is blocked by a 🧍 Open Question — see §Blocked.
@@ -94,10 +95,10 @@ transport, with `NullCallMediaTransport` as the honest v1 seam.
 
 | Gate | State |
 |---|---|
-| 🧍 `analyze_report` | ⏳ AWAITING HUMAN (`epic.md` §Analyze report) |
-| 🧍 `OQ-E07-4` — schema migration | ⏳ AWAITING HUMAN (blocks T01→T08) |
-| 🔴 `OQ-E07-3` — real-time media transport | ⏳ AWAITING HUMAN (blocks T13 + prospective media path) |
-| 🧍 `design_contract_approval` | ⏳ REOPENED for GAP-018…GAP-022 (`design/gaps.md`) |
+| 🧍 `analyze_report` | ⏳ AWAITING HUMAN acceptance of the disclosed MoSCoW exception (`epic.md` §Analyze report) — not blocking dispatch |
+| 🧍 `OQ-E07-4` — schema migration | ✅ resolved 2026-08-31 — all 3 advisories accepted; unblocks T01→T08 |
+| 🟢 `OQ-E07-3` — real-time media transport | ✅ resolved 2026-08-31 — (a) datagram audio over mesh, (c) named fallback; unblocks T13 + prospective media path |
+| 🧍 `design_contract_approval` | ✅ cleared by human, 2026-08-31 — GAP-018…GAP-022 (`design/gaps.md`) |
 
 ## Carried-forward observations (not yet a task)
 _(empty at sharding — created deliberately so it has a reader from day one.
