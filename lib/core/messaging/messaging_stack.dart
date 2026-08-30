@@ -129,9 +129,12 @@ import '../persistence/database.dart';
 import '../routing_engine/relay_engine.dart';
 import '../routing_engine/routing_engine.dart';
 import '../transport/transport_service.dart';
+import '../../features/trust/data/relationship_repository.dart';
+import '../../features/trust/domain/evaluate_connection_request_use_case.dart';
 import 'ciphertext_codec.dart';
 import 'inbound_pipeline.dart';
 import 'messaging_coordinator.dart';
+import 'prekey_exchange.dart';
 import 'relay_packet_frame.dart';
 
 // `MessageEnvelope` is re-exported by `receive_message_use_case.dart`
@@ -220,6 +223,7 @@ final class MessagingStackStatusUnavailable extends MessagingStackStatus {
 class MessagingStack {
   MessagingStack._({
     required this.db,
+    required this.signalStore,
     required this.identityService,
     required this.cryptoService,
     required this.transport,
@@ -244,12 +248,34 @@ class MessagingStack {
       inbound: inbound,
       tickInterval: coordinatorTickInterval,
     );
+
+    // E06-T07: same "needs a fully-constructed `this`" reasoning --
+    // `PrekeyExchange` is bound to this exact stack. Registered onto
+    // `inbound`'s single control-handler slot (E06-T05's declared
+    // extension point) here, in construction, rather than left for a
+    // caller to remember -- `create()` is still the ONLY place this ever
+    // happens (task file §3: "registered as a control handler in
+    // messaging_stack.dart").
+    prekeyExchange = PrekeyExchange(
+      stack: this,
+      evaluateConnectionRequest:
+          EvaluateConnectionRequestUseCase(RelationshipRepository(db)),
+    );
+    inbound.registerControlHandler(prekeyExchange.handleControlFrame);
   }
 
   /// The single app-wide `AppDatabase` — passed in, never constructed here
   /// (task file §5: "the single app-wide AppDatabase already registered in
   /// bindings.dart").
   final AppDatabase db;
+
+  /// The same `DriftSignalProtocolStore` instance wired into
+  /// [cryptoService]/[identityService] (E06-T07) -- exposed here so
+  /// [PrekeyExchange.ensureSession] can check `containsSession` without a
+  /// new accessor on `CryptoService` itself (this task's files: fence
+  /// forbids modifying that class). Read-only in spirit: nothing outside
+  /// this stack's own construction writes through this reference.
+  final DriftSignalProtocolStore signalStore;
 
   final IdentityService identityService;
   final CryptoService cryptoService;
@@ -271,6 +297,12 @@ class MessagingStack {
   /// not wired in this file.
   late final MessagingCoordinator coordinator;
 
+  /// E06-T07: prekey-bundle exchange and first-contact session
+  /// establishment (closes OQ-E05-T02-1). Constructed here and already
+  /// registered as `inbound`'s one control handler by the time [create]
+  /// returns -- no separate wiring call needed at any call site.
+  late final PrekeyExchange prekeyExchange;
+
   /// This device's own local identity (ADR-0005: local, not Firebase-
   /// derived) — from `DeviceIdentityRepository`. May be `''` if no local
   /// device identity has been created yet (see this file's header, judgment
@@ -289,16 +321,33 @@ class MessagingStack {
     TransportService? transport,
     DateTime Function() clock = DateTime.now,
     DriftSignalProtocolStore? store,
+    // E06-T07: defaults to the process-wide singleton, unchanged for every
+    // existing caller. `CryptoService.instance` is correct in production
+    // (task file's own ADR-0005 premise: exactly one Signal identity per
+    // process) but a real correctness hazard for a test that constructs
+    // TWO `MessagingStack`s in one process to simulate two devices --
+    // `crypto_stub.dart`'s own `CryptoService.withStore` factory exists
+    // precisely for that case (its own dartdoc), and
+    // `messaging_stack_test.dart`'s `_RemoteParty` helper already uses it
+    // rather than a second `create()` call. This override lets a
+    // two-stacks-in-one-process test (this task's own
+    // `prekey_exchange_test.dart`) give each simulated device its own
+    // `CryptoService.withStore(store)` bound to that SAME [store], so
+    // `PrekeyExchange`'s `signalStore.containsSession` precondition check
+    // and `CryptoService.establishSession`'s actual write always agree —
+    // both true in production (there is only one instance either way) and
+    // in a test that opts in to isolation.
+    CryptoService? cryptoService,
     Duration coordinatorTickInterval = _defaultCoordinatorTickInterval,
   }) async {
     final resolvedTransport = transport ?? TransportService();
     final resolvedStore = store ?? DriftSignalProtocolStore(db);
     final identityService = IdentityService(db, resolvedStore);
-    final cryptoService = CryptoService.instance;
+    final resolvedCryptoService = cryptoService ?? CryptoService.instance;
 
     MessagingStackStatus status = const MessagingStackStatus.ready();
     try {
-      await cryptoService.init(resolvedStore);
+      await resolvedCryptoService.init(resolvedStore);
       await identityService.ensureLocalIdentity();
       await identityService.ensureSignedPreKey();
       await identityService.replenishOneTimePreKeys();
@@ -340,7 +389,7 @@ class MessagingStack {
       // `StateError` when no session exists yet — unchanged, so
       // `SendMessageUseCase`'s own `on StateError` mapping to
       // `AppFailure('messaging.no_session')` still applies untouched.
-      final ciphertextMessage = await cryptoService.encrypt(
+      final ciphertextMessage = await resolvedCryptoService.encrypt(
         SignalProtocolAddress(recipientDeviceId, _localSignalDeviceId),
         envelopeBytes,
       );
@@ -387,8 +436,9 @@ class MessagingStack {
 
     return MessagingStack._(
       db: db,
+      signalStore: resolvedStore,
       identityService: identityService,
-      cryptoService: cryptoService,
+      cryptoService: resolvedCryptoService,
       transport: resolvedTransport,
       routingEngine: routingEngine,
       relayEngine: relayEngine,
