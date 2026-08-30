@@ -30,6 +30,9 @@ import 'package:nexora/features/chat/presentation/chat_controller.dart';
 import 'package:nexora/features/chat/presentation/chat_view.dart';
 import 'package:nexora/features/conversations/presentation/conversations_binding.dart';
 import 'package:nexora/features/conversations/presentation/conversations_view.dart';
+import 'package:nexora/features/dashboard/presentation/dashboard_binding.dart';
+import 'package:nexora/features/dashboard/presentation/dashboard_view.dart';
+import 'package:nexora/core/routing_engine/link_quality_feed.dart';
 import 'package:nexora/features/devices/presentation/devices_binding.dart';
 import 'package:nexora/features/devices/presentation/devices_view.dart';
 import 'package:nexora/features/messaging/data/conversation_repository.dart';
@@ -240,6 +243,96 @@ void main() {
         tester,
         screenId: 'chat',
         screen: GetMaterialApp(home: const ChatView()),
+      );
+    });
+  });
+
+  // ── E06-T12: `dashboard` ─────────────────────────────────────────────────
+  group('screen probes — dashboard (make design-probe)', () {
+    late AppDatabase db;
+    late MessagingStack stack;
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+
+    setUp(() async {
+      Get.testMode = true;
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      final repository = RelationshipRepository(db);
+      // Three trusted peers, mirroring design/screens/dashboard.md's three
+      // Recent Conversations example rows (elements 20-34) — one read
+      // (green tick), one delivered (grey tick), one still queued (this
+      // device's own, unsent message — element 33-34's real state, per this
+      // task's own §2). Real device ids/timestamps and an undecryptable
+      // preview (no session established here) won't literally match the
+      // design's copy ("Family"/"See you at 7pm!") — a real, expected
+      // finding (design/gaps.md GAP-003), same precedent T10/T11 already
+      // established, not something faked here to dodge it.
+      await repository.upsert('device-read', RelationshipState.trusted);
+      await db.into(db.messages).insert(
+            MessagesCompanion.insert(
+              id: 'probe-dash-message-read',
+              conversationId: 'device-read',
+              senderDeviceId: 'device-read',
+              sequenceNumber: 1,
+              ciphertext: Uint8List.fromList(List<int>.filled(32, 3)),
+              createdAt: DateTime.now().millisecondsSinceEpoch,
+              deliveryState: DeliveryState.read.name,
+            ),
+          );
+      await repository.upsert('device-delivered', RelationshipState.allowed);
+      await db.into(db.messages).insert(
+            MessagesCompanion.insert(
+              id: 'probe-dash-message-delivered',
+              conversationId: 'device-delivered',
+              senderDeviceId: 'self-probe-device',
+              sequenceNumber: 1,
+              ciphertext: Uint8List.fromList(List<int>.filled(32, 5)),
+              createdAt: DateTime.now()
+                  .subtract(const Duration(days: 1))
+                  .millisecondsSinceEpoch,
+              deliveryState: DeliveryState.delivered.name,
+            ),
+          );
+      await repository.upsert('device-queued', RelationshipState.trusted);
+      await db.into(db.messages).insert(
+            MessagesCompanion.insert(
+              id: 'probe-dash-message-queued',
+              conversationId: 'device-queued',
+              senderDeviceId: 'self-probe-device',
+              sequenceNumber: 1,
+              ciphertext: Uint8List.fromList(List<int>.filled(32, 7)),
+              createdAt: DateTime.now()
+                  .subtract(const Duration(days: 3))
+                  .millisecondsSinceEpoch,
+              deliveryState: DeliveryState.queued.name,
+            ),
+          );
+
+      stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'self-probe-device',
+        transport: TransportService(
+          binaryMessenger: messenger,
+          messageChannelSuffix: 'dashboard-probe',
+        ),
+      );
+      Get.put<MessagingStack>(stack, permanent: true);
+      Get.put<LinkQualityFeed>(
+        LinkQualityFeed(transport: stack.transport, routing: stack.routingEngine),
+        permanent: true,
+      );
+      DashboardBinding().dependencies();
+    });
+
+    tearDown(() async {
+      await stack.dispose();
+      Get.reset();
+    });
+
+    testWidgets('dashboard', (tester) async {
+      await dumpScreenProbe(
+        tester,
+        screenId: 'dashboard',
+        screen: GetMaterialApp(home: const DashboardView()),
       );
     });
   });

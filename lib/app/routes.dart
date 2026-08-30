@@ -6,6 +6,8 @@ import 'package:nexora/features/chat/presentation/chat_binding.dart';
 import 'package:nexora/features/chat/presentation/chat_view.dart';
 import 'package:nexora/features/conversations/presentation/conversations_binding.dart';
 import 'package:nexora/features/conversations/presentation/conversations_view.dart';
+import 'package:nexora/features/dashboard/presentation/dashboard_binding.dart';
+import 'package:nexora/features/dashboard/presentation/dashboard_view.dart';
 import 'package:nexora/features/devices/presentation/devices_binding.dart';
 import 'package:nexora/features/devices/presentation/devices_view.dart';
 import 'package:nexora/features/home/presentation/home_view.dart';
@@ -19,8 +21,14 @@ abstract final class Routes {
   static const login = '/login';
 
   /// Genesis placeholder only — not a design-contracted screen. Superseded
-  /// by `/dashboard` (design/screens/dashboard.md) in a feature epic.
+  /// by `/dashboard` (design/screens/dashboard.md, E06-T12) as the post-login
+  /// destination; the route itself stays registered (its own file is not in
+  /// this task's `files:` fence to remove).
   static const home = '/home';
+
+  /// design/screens/dashboard.md (E06-T12). The post-login destination,
+  /// superseding [home].
+  static const dashboard = '/dashboard';
 
   /// design/screens/devices.md (E02-T02).
   static const devices = '/devices';
@@ -40,6 +48,11 @@ final appPages = <GetPage<dynamic>>[
   GetPage<dynamic>(name: Routes.welcome, page: () => const WelcomeView()),
   GetPage<dynamic>(name: Routes.login, page: () => const LoginView()),
   GetPage<dynamic>(name: Routes.home, page: () => const HomeView()),
+  GetPage<dynamic>(
+    name: Routes.dashboard,
+    page: () => const DashboardView(),
+    binding: DashboardBinding(),
+  ),
   GetPage<dynamic>(
     name: Routes.devices,
     page: () => const DevicesView(),
