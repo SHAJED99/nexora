@@ -11,6 +11,19 @@ Every task passed its own review. The bugs live in the **seams between tasks** �
 the places no task owned, which is precisely why no task's tests covered them.
 Task-level tests prove tasks. Only the sweep proves the epic.
 
+## Mid-epic: read the tracker's own carried-forward observations before every new dispatch
+**Rule, added 2026-08-30 (L-process-008):** a task's reviewer sometimes flags
+a real, out-of-fence risk and records it in the epic tracker's §Carried-forward
+observations — correctly, per this skill. That entry has no reader until the
+end-of-epic sweep unless something forces one sooner. In E06 this let an S1
+defect (a fallback that silently hijacked the app's only transport-event
+handler) sit unaddressed across eight subsequent tasks before the sweep
+finally caught it. Before dispatching each next task in a still-running epic,
+check the tracker's own §Carried-forward observations: if the next task's
+`files:` fence touches the same file or area as an open entry, fold in the
+fix or note explicitly why it stays out of scope. An unread carry-forward
+should require a reason to stay unread, not just silence until the sweep.
+
 ## The sweep (reviewer, when all epic tasks are `done`)
 
 1. **End-to-end against the epic's EARS set:**
@@ -64,6 +77,14 @@ has no information for** — that's the human's call, and it's rule 3.
   it passes after. Bugs without regression tests come back; that's what "bugs
   come back" means mechanically.
 - **Severity, not adjectives.**
+- **A scope fence, same as a feature task.** (Rule, added 2026-08-30,
+  L-process-009: every bug task file checked so far — `E05-B02`, `E06-B02`,
+  `E06-B03`, `E06-B04` — shipped with no "What this fix does NOT do"
+  section at all, not even an empty one; `make health`'s H4 check flags an
+  absent fence as worse than an empty one.) Write one. A bug fix's diff
+  looks small, which makes scope creep both easier to justify in the
+  moment and easier to miss in review — state plainly what the fix does
+  NOT touch, alongside Repro/Expected/Actual/Severity.
 
 ## Re-verification
 Every fix is re-verified by the reviewer before close — against the original

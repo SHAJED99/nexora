@@ -116,6 +116,18 @@ markup scores 100%.
 3. **Never delete a design element to satisfy the API.** Keep it, wire it to
    local state, log the gap.
 4. **A red gate is never "close enough".** The number is right there.
+5. **Never reshape the widget tree to score better against the gate's own
+   measurement limits.** (Added 2026-08-30, L-frontend-001: E06-T10 swapped
+   `InkWell` tap targets for raw `Listener`s specifically because the probe
+   dumper's `_isInteractive` classifier swallows an `InkWell`'s children —
+   score went up, and the app lost gesture-arena scroll-vs-tap behavior and
+   all accessibility semantics on those elements. Reverting fixed both; the
+   honest score dropped back down, which was correct.) A probe/gate
+   capability gap is the tool's problem — fix it in the probe, or record the
+   finding as a known cause (exactly what T01/T10/T11/T12 did once this was
+   understood) — never the shipped UI's problem to route around. If a
+   correct, accessible widget choice costs gate score, that is the gate
+   telling the truth about its own limits, not a defect to engineer past.
 
 ## Recording the gate
 When you write the derived-gap list, put the gate line at the top of
