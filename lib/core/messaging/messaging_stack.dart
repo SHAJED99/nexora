@@ -125,6 +125,7 @@ import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 
 import '../crypto/crypto_stub.dart';
 import '../crypto/drift_signal_store.dart';
+import '../crypto/group_crypto_service.dart';
 import '../crypto/identity_service.dart';
 import '../persistence/database.dart';
 import '../routing_engine/relay_engine.dart';
@@ -309,6 +310,18 @@ class MessagingStack {
       kControlKindGroupControl,
       groupMembershipService.handleWireFrame,
     );
+
+    // E07-T04: same "needs a fully-constructed `this`" reasoning as
+    // `prekeyExchange`/`groupMembershipService` above. Registered onto its
+    // own `controlKind` slot (`kControlKindGroupKeyDistribution == 4`, the
+    // next unused value after T07's `1`, T08's `2` and T03's `3`) -- see
+    // `group_crypto_service.dart`'s header for why a group chain key
+    // travels the same pairwise-session route T03's membership frames do.
+    groupCryptoService = GroupCryptoService(stack: this);
+    inbound.registerControlHandler(
+      kControlKindGroupKeyDistribution,
+      groupCryptoService.handleWireFrame,
+    );
   }
 
   /// The single app-wide `AppDatabase` — passed in, never constructed here
@@ -361,6 +374,10 @@ class MessagingStack {
   /// promote/transfer/delete). Constructed here, registered on
   /// `inbound`'s `controlKind == 3` slot.
   late final GroupMembershipService groupMembershipService;
+
+  /// E07-T04: group sender-key store + distribution over pairwise sessions.
+  /// Constructed here, registered on `inbound`'s `controlKind == 4` slot.
+  late final GroupCryptoService groupCryptoService;
 
   /// This device's own local identity (ADR-0005: local, not Firebase-
   /// derived) — from `DeviceIdentityRepository`. May be `''` if no local
