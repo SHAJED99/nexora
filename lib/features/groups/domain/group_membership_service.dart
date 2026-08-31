@@ -75,6 +75,7 @@ import '../../../core/messaging/relay_packet_frame.dart';
 import '../../../core/persistence/group_tables.dart';
 import '../../trust/data/relationship_repository.dart';
 import '../data/group_repository.dart';
+import 'group_key_rotation_service.dart';
 import 'group_permissions.dart';
 
 /// Matches `messaging_stack.dart`/`prekey_exchange.dart`'s own
@@ -148,6 +149,34 @@ class GroupMembershipService {
   int _packetIdCounter = 0;
   String _nextPacketId() =>
       'gc:${_stack.selfDeviceId}-${_clock().microsecondsSinceEpoch}-${_packetIdCounter++}';
+
+  /// `GroupKeyRotationService` (E07-T05), built lazily on first use rather
+  /// than in this constructor. `MessagingStack`'s own constructor builds
+  /// `groupMembershipService` (this class) BEFORE `groupCryptoService`
+  /// (see `messaging_stack.dart`'s constructor body) -- reading
+  /// `_stack.groupCryptoService` eagerly here would throw a
+  /// `LateInitializationError` on every real app boot. By the time either
+  /// [_perform] or [handleControlFrame] actually runs, `MessagingStack`'s
+  /// constructor has long since finished and `groupCryptoService` is a
+  /// real, fully-constructed instance -- so a lazy getter is sufficient and
+  /// requires no change to `messaging_stack.dart` (out of this task's
+  /// `files:` fence).
+  GroupKeyRotationService? _rotationOrNull;
+  GroupKeyRotationService get _rotation => _rotationOrNull ??=
+      GroupKeyRotationService(
+        groups: _repository,
+        crypto: _stack.groupCryptoService,
+        selfDeviceId: _stack.selfDeviceId,
+      );
+
+  /// The most recently fired (never awaited by production code — see the
+  /// call sites) rotation `Future`, so this file's own test suite can await
+  /// it deterministically instead of sleeping a fixed duration. Not part of
+  /// this task's §5 contract, not annotated `@visibleForTesting` (that
+  /// would need `package:meta` added as a direct dependency — a 🧍
+  /// `new_dependency` gate this one testing seam does not justify); never
+  /// read outside tests.
+  Future<Map<String, AppFailure?>>? lastRotationForTest;
 
   // --- Founding write -------------------------------------------------
 
@@ -318,6 +347,37 @@ class GroupMembershipService {
     final applyFailure = await _repository.applyEvent(frame);
     if (applyFailure != null) return applyFailure;
 
+    // E07-T05: every epoch bump rotates, with no per-action list to keep
+    // in sync (task file §2) -- fired immediately after the commit above
+    // succeeds, before the membership-frame fan-out below, and inside
+    // neither the write transaction nor that fan-out loop.
+    //
+    // Deliberately NOT awaited (task file §2: "rotation is best-effort per
+    // recipient and never blocks the local change"). Unlike this file's own
+    // membership-frame fan-out below, whose per-recipient bound
+    // (`_fanOutSessionTimeout`) is test-overridable,
+    // `GroupCryptoService.distributeTo`'s own `ensureSession` call
+    // (E07-T04) uses a hardcoded, non-configurable ~20s timeout per
+    // recipient -- awaiting it here would make `rename`/`removeMember`/etc.
+    // ride behind an unreachable member's own network attempt for up to
+    // 20s, exactly the regression
+    // `test_EARS_GROUP_8_local_write_is_not_blocked_by_a_failing_member_send`
+    // (E07-T03) exists to catch, and did catch during this task's own
+    // development (see Run log). `onEpochApplied` itself never throws for a
+    // per-recipient distribution failure (E07-T04's own contract), so the
+    // `catchError` below only guards against a genuine bug in the mint/
+    // discard steps becoming an unhandled Future rejection.
+    // `lastRotationForTest` exists purely so this file's own test suite can
+    // await the fired-off rotation deterministically rather than sleeping a
+    // fixed duration -- never read by production code.
+    final rotationFuture = _rotation.onEpochApplied(
+      groupId: groupId,
+      newEpoch: newEpoch,
+      kind: frame.kind,
+    );
+    lastRotationForTest = rotationFuture;
+    unawaited(rotationFuture.catchError((_) => <String, AppFailure?>{}));
+
     final members = await _repository.currentMembers(groupId);
     final bytes = frame.serialize();
     await Future.wait(
@@ -481,7 +541,24 @@ class GroupMembershipService {
     }
 
     final result = await _repository.applyEvent(frame);
-    if (result == null) return;
+    if (result == null) {
+      // E07-T05: this device just applied someone else's membership
+      // frame -- it rotates its own outbound chain too. Every device
+      // rotates on an epoch change; rotation is not the acting device's
+      // job alone (task file §3). Fired, not awaited -- same reasoning as
+      // the local-action path above: awaiting `distributeTo`'s
+      // non-configurable ~20s-per-recipient timeout here would stall
+      // `InboundPipeline`'s dispatch of every subsequent frame from this
+      // peer behind an unreachable co-member's own network attempt.
+      final rotationFuture = _rotation.onRemoteEpochApplied(
+        groupId: frame.groupId,
+        newEpoch: frame.epoch,
+        kind: frame.kind,
+      );
+      lastRotationForTest = rotationFuture;
+      unawaited(rotationFuture.catchError((_) => <String, AppFailure?>{}));
+      return;
+    }
     switch (result.code) {
       case 'group.forbidden':
         counters.groupForbidden++;

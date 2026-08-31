@@ -240,6 +240,115 @@ void main() {
     );
   });
 
+  group(
+    'rotation wiring is real, not merely present (E07-T05 review F1)',
+    () {
+      // The review's F1 finding: deleting the two rotation-fire call sites
+      // in `_perform`/`handleControlFrame` still left the full suite green,
+      // because every existing rotation test drove
+      // `GroupKeyRotationService.onEpochApplied`/`onRemoteEpochApplied`
+      // directly and none went through `GroupMembershipService` itself.
+      // These two tests drive a REAL action/frame through the production
+      // wiring and await the fire-and-forget rotation via
+      // `lastRotationForTest` (the seam `group_membership_service.dart`
+      // already exposes for exactly this purpose, §9 Deviation 1) so the
+      // effect on `group_sender_keys` can be asserted deterministically.
+      test(
+        'test_EARS_GROUP_1_removeMember_wiring_fires_a_real_rotation',
+        () async {
+          final suffix = nextSuffix();
+          final a = await newStack('device-owner', suffix);
+          addTearDown(a.dispose);
+          mockSendAlwaysSucceeds(suffix);
+
+          final repo = GroupRepository(a.db);
+          final groupId = await repo.createGroup(
+            name: 'G',
+            ownerDeviceId: 'device-owner',
+            memberDeviceIds: ['member-a'],
+          );
+          final service = serviceFor(a);
+
+          final failure = await service.removeMember(groupId, 'member-a');
+          expect(failure, isNull);
+
+          // Production code fires this without awaiting it (§9 Deviation
+          // 1) -- await the same Future here via the test-only seam rather
+          // than sleeping a fixed duration.
+          await service.lastRotationForTest;
+
+          final rows =
+              await (a.db.select(a.db.groupSenderKeys)
+                    ..where((t) => t.groupId.equals(groupId)))
+                  .get();
+          expect(
+            rows,
+            hasLength(1),
+            reason: 'removeMember must have driven a real rotation through '
+                'GroupMembershipService, minting exactly one chain at the '
+                'new epoch',
+          );
+          expect(rows.single.membershipEpoch, 1);
+
+          final group = await repo.groupRow(groupId);
+          expect(group!.membershipEpoch, 1);
+        },
+      );
+
+      test(
+        'test_EARS_GROUP_1_remote_membership_frame_fires_a_real_rotation',
+        () async {
+          final a = await newStack('device-owner', nextSuffix());
+          addTearDown(a.dispose);
+
+          final repo = GroupRepository(a.db);
+          final service = GroupMembershipService(
+            stack: a,
+            repository: repo,
+            relationshipRepository: RelationshipRepository(a.db),
+          );
+          final groupId = await repo.createGroup(
+            name: 'G',
+            ownerDeviceId: 'device-owner',
+            memberDeviceIds: [],
+          );
+
+          final bytes = GroupControlFrame(
+            kind: GroupEventKind.renamed,
+            groupId: groupId,
+            epoch: 1,
+            actorDeviceId: 'device-owner',
+            name: 'Renamed Remotely',
+            createdAtMs: 1,
+          ).serialize();
+
+          // Mirrors how a genuinely-received, already-decrypted control
+          // frame reaches this method (`handleWireFrame` -> here) -- the
+          // remote-apply path `onRemoteEpochApplied` is wired into.
+          await service.handleControlFrame('device-owner', bytes);
+
+          // `handleControlFrame`'s success branch fires
+          // `onRemoteEpochApplied` without awaiting it -- same seam, same
+          // reasoning as the local-action path above.
+          await service.lastRotationForTest;
+
+          final rows =
+              await (a.db.select(a.db.groupSenderKeys)
+                    ..where((t) => t.groupId.equals(groupId)))
+                  .get();
+          expect(
+            rows,
+            hasLength(1),
+            reason: 'a remote membership frame applied via '
+                'handleControlFrame must have driven a real rotation too '
+                '-- every device rotates, not just the actor',
+          );
+          expect(rows.single.membershipEpoch, 1);
+        },
+      );
+    },
+  );
+
   group('fan-out never blocks the local write (EARS-GROUP-8)', () {
     test(
       'test_EARS_GROUP_8_local_write_is_not_blocked_by_a_failing_member_send',
