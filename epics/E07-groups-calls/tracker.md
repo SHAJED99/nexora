@@ -551,6 +551,74 @@ https://github.com/SHAJED99/nexora/pull/4#issuecomment-5476821197
 
 Round 1 → back to the same implementer (`claude-sonnet-5`).
 
+### E07-T03 — 2026-08-31 — 📋 **APPROVE** (round 2; reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+PR #4 → `epic_07`. Fix commits `b2bb3e7` (fix) + `fb862eb` (bookkeeping).
+Re-review scoped to F1 and to proving nothing else moved.
+
+- **scope: in-contract.** `git diff --stat 6a2a064 fb862eb` (round-1 review
+  point → fix tip) is **exactly three files**: `E07-T03.md` (+52/-1 doc),
+  `group_membership_service.dart` (+17/-1), and
+  `group_membership_service_test.dart` (+30). Nothing else. The two
+  round-1 CLOSED findings are provably untouched: `git diff 6a2a064
+  fb862eb -- lib/core/messaging/group_control.dart
+  lib/features/groups/data/group_repository.dart
+  lib/core/messaging/messaging_stack.dart` → **empty output**.
+- ✅ **F1 (S3) CLOSED.** `group_membership_service.dart:268,278-280`: a
+  local `var effectiveAction = action;` is set to `GroupAction.leave` when
+  `subjectDeviceId == _stack.selfDeviceId && action ==
+  GroupAction.removeMember`, and `:299` now passes `action:
+  effectiveAction` to `GroupPermissions.check`. The null-subject hazard is
+  gone because `GroupPermissions.allows`'s `leave` row
+  (`group_permissions.dart:104`) never reads `subjectRole`.
+- **Sender/receiver parity verified by reading both, not by claim.**
+  Receiver `group_repository.dart:324-333` branches on `subject ==
+  frame.actorDeviceId` → `GroupAction.leave`. Sender branches on
+  `subjectDeviceId == _stack.selfDeviceId`, and the sender stamps
+  `actorDeviceId: _stack.selfDeviceId` on the frame it builds
+  (`group_membership_service.dart:305`), so the two predicates are the
+  same predicate. Both therefore deny an Owner's self-removal (leave
+  denies Owner) and permit a Member's — they agree in both directions,
+  which is the property that was broken.
+- **`_kindFor` still keyed on the ORIGINAL action** — `kind: _kindFor(action)`
+  at `group_membership_service.dart:302`, not `effectiveAction`. Verified
+  empirically, not just by reading: the reviewer's own probe asserts the
+  persisted `group_events` row at epoch 1 has `kind == 'memberRemoved'`
+  with `actorDeviceId == subjectDeviceId == 'me'`. The permission-check
+  substitution is local and does not leak onto the wire.
+- **Falsification of the builder's regression test — passes.** Deleting the
+  three-line `effectiveAction = GroupAction.leave` assignment makes
+  `test_EARS_GROUP_9_self_targeted_removeMember_reroutes_to_leave_not_ArgumentError`
+  fail **for exactly the right reason**: `Invalid argument (subjectRole):
+  GroupAction.removeMember requires a subjectRole` at
+  `group_permissions.dart:66` → `:125` →
+  `group_membership_service.dart:295 _perform` — the literal F1 stack.
+  Restored verbatim (`git diff --stat` → empty), green again.
+- **Reviewer's own independent probe (stronger than the builder's).** The
+  builder's test only covers the Owner case, where "re-routed to leave" and
+  "blanket denied" are indistinguishable. The reviewer bootstrapped a group
+  where the local device is a plain **Member** and called
+  `removeMember(groupId, <self>)`: it returns `null` (permitted), the
+  `GroupMembers` row is actually removed, and the event is `memberRemoved`.
+  So the re-route is a genuine `leave` decision, not a deny-everything
+  patch. Probe deleted after the run; working tree clean.
+- **suite: pass, run by the reviewer.** `flutter analyze` → *No issues
+  found!* (2.6s). `flutter test` → **547/547 passed, 0 failed** — the exact
+  claimed count, 546 + exactly one new test.
+- **design gate: n/a** (backend task, `design_contract: n/a`).
+- **security lens: unchanged from round 1 — PASS.** The E06-B04 inheritance
+  analysis and the `removed_at_epoch` finding both rest on files with an
+  empty diff this round, so round 1's evidence stands unmodified.
+- **Residual, non-blocking (recorded, not a finding):** self-targeted
+  `GroupAction.removeAdmin` still leaves `subjectRole == null` and would
+  throw, but it is unreachable — no `GroupMembershipService` entry point
+  emits `removeAdmin`, and `_kindFor` itself throws `UnsupportedError` for
+  it (`group_membership_service.dart:337-345`). Documented in-source. If
+  E07-T04/T06 ever add a `removeAdmin` entry point, the same re-route
+  question must be answered there.
+
+No second rejection; no planner escalation needed. Ready for the
+orchestrator to squash-merge to `epic_07`.
+
 ## Bug sweep
 _(after all 13 tasks land — `skills/bug-sweep`. Note `L-process-009`: every
 E07 bug task file must carry a §4 scope fence; every bug file in the
