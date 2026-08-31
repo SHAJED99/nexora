@@ -262,9 +262,6 @@ a session that stays `active` across every failure mode.
     blocked by this — they're sliced to be independent of it.
   - **Answered by:** human
   - **Date:** 2026-08-31
-  - **Answer:** _<empty>_
-  - **Answered by:** _<human>_
-  - **Date:** _<YYYY-MM-DD>_
 
 **Raised on individual tasks** (full text, options and advisories live on
 the task files — this table is the index):

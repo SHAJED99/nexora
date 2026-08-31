@@ -788,7 +788,7 @@ is how a product acquires seven different empty states.
 
 ## GAP-023 — PTT, answered: a hold-to-transmit delta on GAP-014's approved voice-message contract
 
-- **status:** 🟡 proposed — **supersedes `GAP-017` by reference.** GAP-017
+- **status:** 🟢 approved — **supersedes `GAP-017` by reference.** GAP-017
   is not edited: it records the human's 2026-08-30 decision to park PTT
   until the real-time transport question settled, and it stays exactly as
   written. This entry is what that parking condition was waiting for.
@@ -996,7 +996,13 @@ and that is the strongest single argument for this disposition.**
   2026-08-31) for group sender attribution; GAP-009's approved delivery-tick
   mapping. **No new token, no new geometry, no new glyph** — the only new
   string is `Transmitting…`.
-- **approved by:** _<human>_ on _<date>_
+- **approved by:** ✅ human, 2026-08-31 — all four forks accepted as
+  advised: (1) the stored-clip reading, shipped now, not the live
+  half-duplex channel; (2) press-and-hold on the existing `mic` button, no
+  new composer element; (3) a minimum-duration threshold discards a
+  slip-of-the-finger sub-second press-and-release rather than sending it
+  (exact threshold left to the builder as an engineering choice); (4)
+  auto-play on receipt when the clip's conversation thread is already open
 - **built:** not built — this entry is the disposition, not the build. On
   approval: one docs task folds the delta into
   `design/screens/chat-voice.md` as a `ptt-transmitting` state, then the
