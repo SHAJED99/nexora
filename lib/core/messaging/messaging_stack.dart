@@ -130,10 +130,13 @@ import '../persistence/database.dart';
 import '../routing_engine/relay_engine.dart';
 import '../routing_engine/routing_engine.dart';
 import '../transport/transport_service.dart';
+import '../../features/groups/data/group_repository.dart';
+import '../../features/groups/domain/group_membership_service.dart';
 import '../../features/trust/data/relationship_repository.dart';
 import '../../features/trust/domain/evaluate_connection_request_use_case.dart';
 import 'ciphertext_codec.dart';
 import 'delivery_ack.dart';
+import 'group_control.dart';
 import 'inbound_pipeline.dart';
 import 'messaging_coordinator.dart';
 import 'prekey_exchange.dart';
@@ -290,6 +293,22 @@ class MessagingStack {
         deliveryAckService.onMessageStored(message, message.senderDeviceId),
       );
     });
+
+    // E07-T03: same "needs a fully-constructed `this`" reasoning as
+    // `prekeyExchange`/`deliveryAckService` above. Registered onto its own
+    // `controlKind` slot (`kControlKindGroupControl == 3`, the next unused
+    // value after T07's `1` and T08's `2`) -- see `group_control.dart`'s
+    // header for why this sub-protocol's payload is ciphertext, not the
+    // cleartext body T07/T08 send.
+    groupMembershipService = GroupMembershipService(
+      stack: this,
+      repository: GroupRepository(db),
+      relationshipRepository: RelationshipRepository(db),
+    );
+    inbound.registerControlHandler(
+      kControlKindGroupControl,
+      groupMembershipService.handleWireFrame,
+    );
   }
 
   /// The single app-wide `AppDatabase` — passed in, never constructed here
@@ -337,6 +356,11 @@ class MessagingStack {
   /// body's own comment for why that subscription starts nothing by
   /// itself.
   late final DeliveryAckService deliveryAckService;
+
+  /// E07-T03: group membership control protocol (create/rename/add/remove/
+  /// promote/transfer/delete). Constructed here, registered on
+  /// `inbound`'s `controlKind == 3` slot.
+  late final GroupMembershipService groupMembershipService;
 
   /// This device's own local identity (ADR-0005: local, not Firebase-
   /// derived) — from `DeviceIdentityRepository`. May be `''` if no local
