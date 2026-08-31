@@ -1,9 +1,9 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** in-progress (T01/T02/T03/T12/T13 merged to `epic_07`, GAP-023
-approved, T04 dispatched) ·
+**Status:** in-progress (T01/T02/T03/T04/T05/T12/T13 merged to `epic_07`,
+GAP-023 approved, T09 dispatched) ·
 **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 5/13
+**Completed:** — · **Progress:** 7/13
 
 ## Tasks
 
@@ -12,12 +12,12 @@ approved, T04 dispatched) ·
 | E07-T01 | Group data model + schema migration | backend | M | must | — | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `6d5a861` (PR #1) |
 | E07-T02 | Group role permission matrix | backend | S | must | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `e0ec39b` (PR #2) |
 | E07-T03 | Group membership control protocol | backend | M | must | T02 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `d6c0a2b` (PR #4) |
-| E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · awaiting squash-merge (PR #5) |
-| E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | todo |
+| E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `82d6f20` (PR #5) |
+| E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `dfec62f` (PR #6) |
 | E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | todo |
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
-| E07-T09 | Call session state machine + signaling | backend | M | should | T04 | todo |
+| E07-T09 | Call session state machine + signaling | backend | M | should | T04 | dispatched · builder (sonnet), branch `epic_07_task_09` |
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | todo |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
@@ -939,3 +939,152 @@ replay idempotency S3, the `discardChains`/TTL grace window S4, and the
 near-vacuous `OQ-E07-9` prekey assertion S4) remain **open and correctly
 outside this PR's fence** — they stay in §Carried-forward observations for
 E07-T05/T06 and the epic sweep. None is a merge blocker for T04.
+
+### E07-T05 — 2026-08-31 — 📋 **CHANGES** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+PR #6 → `epic_07`.
+
+- **scope: in-contract.** Exactly the 3 `files:` entries + the task file.
+  `git diff --stat epic_07...HEAD`: `group_key_rotation_service.dart` (new,
+  189), `group_membership_service.dart` (+79/-23),
+  `group_key_rotation_service_test.dart` (new, 805). No crypto/persistence/
+  messages/relay/inbound touched, no table/migration, no re-key-on-send/
+  reconnect/timer, no OQ-E07-7 catch-up.
+- **suite: pass, run by reviewer.** `flutter analyze` → *No issues found!*;
+  `flutter test` → **582/582**, matches builder's report.
+- **security lens: verdict is "missing test evidence," not "wrong
+  behavior."** The rotation logic itself, the mint→distribute→discard
+  ordering, removed-member exclusion (FR-GROUP-005), and the no-history-hook
+  (OQ-E07-1/FR-GROUP-006) were all independently re-derived by the reviewer
+  and judged **sound** — see full findings below. The disclosed fire-and-
+  forget deviation (avoiding E07-T04's ~20s non-configurable `ensureSession`
+  timeout blocking local writes, per E07-T03's
+  `test_EARS_GROUP_8_local_write_is_not_blocked_by_a_failing_member_send`) is
+  endorsed as the right call.
+- **EARS: 3/4 verified**, EARS-GROUP-1's production trigger and half of
+  EARS-GROUP-16 unproven (see F1/F2).
+
+**❌ F1 — S1 BLOCKER. Production wiring has zero test coverage; reviewer
+deleted it entirely and the suite stayed green.**
+`group_membership_service.dart:373-379` (`_perform`) and `:551-558`
+(`handleControlFrame`) — reviewer replaced both rotation-fire blocks with a
+no-op comment and reran the full suite: **582/582 still passed.** Every
+rotation test drives `GroupKeyRotationService.onEpochApplied` by hand;
+nothing connects an actual `removeMember`/`leave`/`deleteGroup`/`rename`
+call on `GroupMembershipService` to a `group_sender_keys` change
+(`grep -n "otation\|SenderKey" test/features/groups/domain/
+group_membership_service_test.dart` → nothing). A public mutable field,
+`lastRotationForTest` (`:179`, not in the task's §5 contract — rule 6),
+was added specifically to make the fire-and-forget path awaitable in tests
+and is written on every membership action but **read by no test anywhere**.
+Why it matters: FR-GROUP-005/006 hold only if rotation actually fires; a
+future refactor could silently drop the wiring under a fully green suite —
+exactly the failure mode the task's own DoD line names. **Fix:** a test
+that drives a real action, awaits `lastRotationForTest`, and asserts
+`group_sender_keys` state — plus the mirror case through
+`handleControlFrame`/`onRemoteEpochApplied`. Either the field earns a
+consumer or gets removed.
+
+**❌ F2 — S1 BLOCKER (small). Half of EARS-GROUP-16 untested.**
+`group_key_rotation_service.dart:180-185`'s `memberRemoved && !stillAMember`
+branch (this device leaving, or being removed) has no test — only the
+`deleted` branch is covered. `leave` (`group_membership_service.dart:279`)
+and `removeMember` (`:244`) both route through this branch in production.
+The logic reads correct (`roleOf` returns null for a removed member,
+`group_repository.dart:150-161`) but is unproven; a regression here is a
+direct FR-SEC-002 violation with nothing to catch it. **Fix:** one test —
+self-removal/leave, rotate, assert `group_sender_keys` for that group is
+empty.
+
+**Verified clean, with independent falsification (not re-stated from the
+builder):** mint→distribute→discard ordering (exact call-tag sequence
+asserted, not just final state); removed-member exclusion incl. the
+retains-old-chain-still-fails case (real two-stack wire test, fails with
+`group.no_chain`); no history-sharing hook (mechanical grep, zero
+parameter/flag surface, `test_EARS_GROUP_2_no_api_exists_to_grant_
+historical_access`); `discardAllFor` discards every epoch including the
+one just minted; empty-recipient no-op is load-bearing (probe-confirmed).
+
+**Non-blocking, carried forward (not fixes for this task):**
+- **O1 (S3)** — the per-recipient `Map<String, AppFailure?>` from
+  `distributeTo` is unconditionally discarded at both call sites (success
+  *and* failure paths) — E07-T06's UI has nothing to read for a degraded
+  distribution, and a genuine mint/discard bug is now swallowed with no log
+  line or counter despite `GroupMembershipCounters` already existing as an
+  idiom. Revisit at E07-T06.
+- **O2 (S4)** — no regression test for "no coalescing across rapid epoch
+  bumps" (task §6 names this explicitly). Related and newly introduced by
+  the fire-and-forget change: two rapid bumps produce overlapping in-flight
+  rotations, and a slow rotation N's `ensureOwnChain` could in principle
+  land after rotation N+1's `discardChains`, resurrecting a stale row
+  (§3 ledger invariant). Not a confidentiality hole (epoch-N was already
+  distributed to the old member set; sends use the current epoch) — S4, but
+  worth a guard before E07-T06 relies on rotation timing.
+- **O3 (S4)** — `test_EARS_GROUP_15_removed_member_is_not_a_distribution_
+  recipient` is negative-only (one other member, who is removed); it passes
+  even when distribution is broken and sends to nobody. Add a retained
+  member as a positive control.
+
+Round 1 → back to the same implementer (`claude-sonnet-5`), per rule 5's
+first-rejection routing. F1/F2 are both missing-test findings against
+already-sound logic, estimated under 60 lines; `lastRotationForTest`
+already exists to make F1 easy.
+
+### E07-T05 — round 2 — 2026-08-31 — ✅ **APPROVE** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+PR #6 → `epic_07`. Fix commits `975a231` (new tests) + `c20b2df`
+(bookkeeping), re-reviewed against round 1's `6769c89` CHANGES point.
+
+- **scope: test-only, independently confirmed.** `git diff --stat
+  6769c89..c20b2df` = 264 insertions, 0 deletions, 3 files (the two test
+  files + the task file). `git diff 6769c89..c20b2df -- lib/` is
+  **byte-empty** — zero production lines changed in the fix round.
+- ✅ **F1 CLOSED, falsified independently (not the builder's repro).**
+  Reviewer deleted both production rotation-fire blocks a second time
+  (`group_membership_service.dart:373-379`, `:553-559`) and reran: this
+  time **exactly the two new tests failed** — the whole-suite delta was
+  precisely `+583 -2`, directly reversing round 1's "deleting this leaves
+  the suite green" finding. Confirmed the new tests drive the real
+  production surface (`service.removeMember(...)`,
+  `service.handleControlFrame(...)`), not a hand-called
+  `GroupKeyRotationService.onEpochApplied` — not the trap round 1 caught
+  elsewhere in this file. Restored, 585/585 again.
+- ✅ **F2 CLOSED, falsified independently.** Narrowed the
+  `memberRemoved && !stillAMember` branch to `deleted`-only a second
+  time: exactly one test failed
+  (`test_EARS_GROUP_16_self_removal_leave_discards_every_epoch`), every
+  other test — including the pre-existing `deleted`-path test — stayed
+  green, proving the two branches are independently covered rather than
+  one shadowing the other. Restored, green again.
+- **Reviewer's own additional probe (tighter than either falsification
+  above):** left the rotation firing but passed the wrong epoch
+  (`newEpoch: 0` instead of the real value) — a merely-present
+  "a row exists" test would still pass this; it **failed**
+  (`Expected: <1> / Actual: <0>` on the row's `membershipEpoch`). The new
+  tests bind the epoch, not just existence — the strongest evidence F1 is
+  genuinely closed rather than superficially patched.
+- **suite: pass, run twice by the reviewer** (baseline + post-restore) —
+  **585/585**, `flutter analyze` clean. Matches the builder's claim.
+- **no regression on round-1-verified surfaces:** `git diff
+  6769c89..HEAD -- lib/` empty, so mint→distribute→discard ordering and
+  removed-member exclusion are the identical bytes round 1 already
+  falsified — correctly not re-derived from scratch this round.
+- **O1/O2/O3 (round-1 non-blocking observations):** confirmed **not**
+  silently dropped — round 1's verdict, including all three, is recorded
+  above in this tracker (round 1 lives in this same file, immediately
+  above this entry). Carried forward, unchanged, for E07-T06/the epic
+  sweep.
+
+**F3 (S4, non-blocking, closed at merge stamp) — scope bookkeeping.**
+`test/features/groups/domain/group_membership_service_test.dart` was
+touched by the fix round but was not yet in the task file's `files:`
+block, and the task's own round-2 Run log asserted the diff was "confined
+to files already in files:" (false) and cited per-file test counts of
+"17"/"21" and "23" that were actually 9/11 and 10. **Orchestrator fix,
+applied at merge:** `E07-T05.md`'s `files.update` now lists
+`test/features/groups/domain/group_membership_service_test.dart`; the Run
+log's incorrect counts and scope claim are corrected in-place with an
+explicit round-2 correction note, not silently rewritten. Not a code
+defect, not a merge blocker — reviewer explicitly declined to gate a
+third round on it.
+
+**Ready to squash-merge — done, by the reviewer's own words.** Squash-merged
+to `epic_07` as `dfec62f` (PR #6).
