@@ -1,7 +1,7 @@
 # E07 · Groups & Voice Calls · Progress
 
 **Status:** in-progress (T01/T02/T03/T04/T05/T12/T13 merged to `epic_07`,
-GAP-023 approved, T09 dispatched) ·
+GAP-023 approved, T06 + T09 dispatched) ·
 **Started:** 2026-08-31 ·
 **Completed:** — · **Progress:** 7/13
 
@@ -14,7 +14,7 @@ GAP-023 approved, T09 dispatched) ·
 | E07-T03 | Group membership control protocol | backend | M | must | T02 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `d6c0a2b` (PR #4) |
 | E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `82d6f20` (PR #5) |
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `dfec62f` (PR #6) |
-| E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | todo |
+| E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | dispatched · builder (sonnet), branch `epic_07_task_06` |
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | dispatched · builder (sonnet), branch `epic_07_task_09` |
