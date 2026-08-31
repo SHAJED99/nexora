@@ -265,9 +265,23 @@ class GroupMembershipService {
     if (myRole == null) return const AppFailure('group.forbidden');
 
     GroupRole? subjectRole;
+    var effectiveAction = action;
     if (action == GroupAction.removeMember || action == GroupAction.removeAdmin) {
       if (subjectDeviceId == null) return const AppFailure('group.forbidden');
-      if (subjectDeviceId != _stack.selfDeviceId) {
+      if (subjectDeviceId == _stack.selfDeviceId) {
+        // A self-targeted removeMember is a `leave`, not a `removeMember` --
+        // distinct permission row, and `GroupAction.leave` never conditions
+        // on subjectRole at all, so there is no null-subject hazard for it.
+        // Mirrors `group_repository.dart`'s `_checkPermission`, which makes
+        // exactly this substitution on the receive side for a self-targeted
+        // `memberRemoved` frame; the sender-side check must agree with it,
+        // or a self-targeted `removeMember` call falls through to
+        // `GroupPermissions.check(removeMember, subjectRole: null)`, which
+        // throws `ArgumentError` instead of returning an `AppFailure`.
+        if (action == GroupAction.removeMember) {
+          effectiveAction = GroupAction.leave;
+        }
+      } else {
         subjectRole = await _repository.roleOf(groupId, subjectDeviceId);
         if (subjectRole == null) {
           // Carried-forward finding #1: never reach GroupPermissions.allows
@@ -282,7 +296,7 @@ class GroupMembershipService {
 
     final failure = GroupPermissions.check(
       actorRole: myRole,
-      action: action,
+      action: effectiveAction,
       subjectRole: subjectRole,
     );
     if (failure != null) return failure;

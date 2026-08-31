@@ -208,6 +208,36 @@ void main() {
       expect(failure?.code, 'group.blocked_member');
       expect(await repo.roleOf(groupId, 'blocked-device'), isNull);
     });
+
+    test(
+      'test_EARS_GROUP_9_self_targeted_removeMember_reroutes_to_leave_not_ArgumentError',
+      () async {
+        // Regression for the review finding on E07-T03: a self-targeted
+        // removeMember call (subjectDeviceId == the acting device's own id)
+        // skipped the subject-role lookup but did NOT re-route to
+        // GroupAction.leave, so it fell through to
+        // GroupPermissions.check(removeMember, subjectRole: null), which
+        // throws ArgumentError instead of returning an AppFailure. The fix
+        // mirrors group_repository.dart's `_checkPermission`, which already
+        // maps a self-targeted `memberRemoved` to `GroupAction.leave` on the
+        // receive side.
+        final groupId = await repo.createGroup(
+          name: 'G',
+          ownerDeviceId: 'device-owner',
+          memberDeviceIds: [],
+        );
+
+        // device-owner removing itself is a self-targeted removeMember call.
+        // It must resolve via GroupAction.leave -- which denies the Owner --
+        // and return an AppFailure, never throw ArgumentError.
+        final failure = await service.removeMember(groupId, 'device-owner');
+
+        expect(failure?.code, 'group.forbidden');
+        expect(await repo.roleOf(groupId, 'device-owner'), GroupRole.owner);
+        final group = await repo.groupRow(groupId);
+        expect(group!.membershipEpoch, 0);
+      },
+    );
   });
 
   group('fan-out never blocks the local write (EARS-GROUP-8)', () {
