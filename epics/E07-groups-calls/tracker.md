@@ -1,6 +1,7 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** in-progress (T01+T12 merged to `epic_07`, T02+T13 dispatched) ·
+**Status:** in-progress (T01/T02/T12/T13 merged to `epic_07`, GAP-023 approved,
+T03 dispatched) ·
 **Started:** 2026-08-31 ·
 **Completed:** — · **Progress:** 2/13
 
@@ -9,8 +10,8 @@
 | Task | Title | Layer | Size | MoSCoW | depends_on | Status |
 |---|---|---|---|---|---|---|
 | E07-T01 | Group data model + schema migration | backend | M | must | — | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `6d5a861` (PR #1) |
-| E07-T02 | Group role permission matrix | backend | S | must | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE round 1 · PR #2 awaiting merge |
-| E07-T03 | Group membership control protocol | backend | M | must | T02 | todo |
+| E07-T02 | Group role permission matrix | backend | S | must | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `e0ec39b` (PR #2) |
+| E07-T03 | Group membership control protocol | backend | M | must | T02 | in-progress · builder (sonnet) → reviewer (opus) |
 | E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | todo |
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | todo |
 | E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | todo |
@@ -20,7 +21,7 @@
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | todo |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
-| E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | in-progress · planner (opus) → reviewer (sonnet) |
+| E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `5f6a81e` (PR #3); GAP-023 human-approved `23c88ab` |
 
 ⛔ = carries or is blocked by a 🧍 Open Question — see §Blocked.
 
@@ -213,6 +214,10 @@ exact section for eight tasks with no reader.)_
   - **2026-08-31 · checked at E07-T02 dispatch:** T02's `files:` fence creates
     two new files only and does not touch `database.dart` — correctly stays
     out of scope. Re-check at T03/T04.
+  - **2026-08-31 · checked at E07-T03 dispatch:** T03's `files:` fence
+    updates `messaging_stack.dart` only, not `database.dart` — stays out of
+    scope. Re-check at T04 (which does touch persistence for
+    `SenderKeyStore`).
 
 - **2026-08-31 · E07-T02 · `allows` throws where §5 says it never does
   (advisory, S3 — a spec-text defect, not a code defect).** `E07-T02.md:107`
