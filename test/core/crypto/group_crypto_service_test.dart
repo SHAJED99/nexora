@@ -11,6 +11,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
@@ -133,6 +134,41 @@ void main() {
       await expectLater(
         () => service.decryptFromGroup(
           groupId: 'g:epoch',
+          epoch: 1,
+          senderDeviceId: 'device-a',
+          bytes: ciphertext,
+        ),
+        throwsA(
+          isA<Object>().having(
+            (e) => e.toString(),
+            'toString()',
+            contains('group.no_chain'),
+          ),
+        ),
+      );
+    });
+
+    test(
+        'test_EARS_GROUP_14_a_live_epoch_n_plus_1_chain_cannot_decrypt_an_'
+        'epoch_n_message_either (review round 2, F2/F3 -- unlike the test '
+        'above, BOTH chains genuinely exist here)', () async {
+      await service.ensureOwnChain(groupId: 'g:epoch-live', epoch: 0);
+      final ciphertext = await service.encryptForGroup(
+        groupId: 'g:epoch-live',
+        epoch: 0,
+        plaintext: Uint8List.fromList([4, 5, 6]),
+      );
+      // Unlike the sibling test above, epoch 1's chain is genuinely created
+      // here -- this is the real FR-GROUP-005 scenario the sibling test's
+      // own comment concedes it never exercises: a record exists for
+      // (group, epoch 1), just not the message's keyId, so libsignal raises
+      // `InvalidMessageException` rather than `NoSessionException`. Before
+      // the F2 fix this escaped `decryptFromGroup` unmapped.
+      await service.ensureOwnChain(groupId: 'g:epoch-live', epoch: 1);
+
+      await expectLater(
+        () => service.decryptFromGroup(
+          groupId: 'g:epoch-live',
           epoch: 1,
           senderDeviceId: 'device-a',
           bytes: ciphertext,
@@ -473,6 +509,139 @@ void main() {
       // No frame was ever enqueued for this refused recipient.
       final rows = await a.db.select(a.db.relayPackets).get();
       expect(rows, isEmpty);
+    });
+
+    test(
+        'test_EARS_GROUP_13_removed_member_is_refused_the_post_removal_epoch '
+        '(review round 2, F1 regression -- the reviewer\'s exact probe)',
+        () async {
+      final aSuffix = nextSuffix();
+      final bSuffix = nextSuffix();
+      mockSendAlwaysSucceeds(aSuffix);
+      mockSendAlwaysSucceeds(bSuffix);
+      final a = await newStack('device-a', aSuffix);
+      final b = await newStack('device-b', bSuffix);
+      addTearDown(a.dispose);
+      addTearDown(b.dispose);
+
+      await establishMutualSessions(a, b);
+
+      final repoA = GroupRepository(a.db);
+      final groupId = await repoA.createGroup(
+        name: 'G',
+        ownerDeviceId: 'device-a',
+        memberDeviceIds: [],
+      );
+      // device-b joined at epoch 0 but was removed at epoch 1 -- the row is
+      // retained (never deleted), exactly as `group_tables.dart` documents.
+      // Before the F1 fix, `distributeTo` only checked `joinedAtEpoch > epoch`,
+      // which a removed member always passes: this is the reviewer's exact
+      // probe (`joinedAtEpoch: 0, removedAtEpoch: 1`,
+      // `distributeTo(epoch: 2, ['device-b'])`), and it must now be REFUSED.
+      await a.db.into(a.db.groupMembers).insert(
+            GroupMembersCompanion.insert(
+              groupId: groupId,
+              deviceId: 'device-b',
+              role: GroupRole.member.name,
+              joinedAtEpoch: 0,
+              removedAtEpoch: const Value(1),
+            ),
+          );
+
+      final results = await a.groupCryptoService.distributeTo(
+        groupId: groupId,
+        epoch: 2,
+        recipientDeviceIds: ['device-b'],
+      );
+
+      expect(results['device-b']?.code, 'group.member_removed');
+      // No key-distribution frame was ever enqueued for the removed member --
+      // this is the security property F1 was about: no usable frame handing
+      // them the post-removal epoch's chain key.
+      final rows = await a.db.select(a.db.relayPackets).get();
+      expect(rows, isEmpty);
+    });
+
+    test(
+        'a member removed exactly AT the distributed epoch is refused too '
+        '(the floor is inclusive on removal, symmetric with joined_at_epoch)',
+        () async {
+      final aSuffix = nextSuffix();
+      final bSuffix = nextSuffix();
+      mockSendAlwaysSucceeds(aSuffix);
+      mockSendAlwaysSucceeds(bSuffix);
+      final a = await newStack('device-a', aSuffix);
+      final b = await newStack('device-b', bSuffix);
+      addTearDown(a.dispose);
+      addTearDown(b.dispose);
+
+      await establishMutualSessions(a, b);
+
+      final repoA = GroupRepository(a.db);
+      final groupId = await repoA.createGroup(
+        name: 'G',
+        ownerDeviceId: 'device-a',
+        memberDeviceIds: [],
+      );
+      await a.db.into(a.db.groupMembers).insert(
+            GroupMembersCompanion.insert(
+              groupId: groupId,
+              deviceId: 'device-b',
+              role: GroupRole.member.name,
+              joinedAtEpoch: 0,
+              removedAtEpoch: const Value(2),
+            ),
+          );
+
+      final results = await a.groupCryptoService.distributeTo(
+        groupId: groupId,
+        epoch: 2,
+        recipientDeviceIds: ['device-b'],
+      );
+
+      expect(results['device-b']?.code, 'group.member_removed');
+    });
+
+    test(
+        'a member removed at a LATER epoch than the one being distributed '
+        'still receives that earlier epoch\'s key (removal is not '
+        'retroactive)', () async {
+      final aSuffix = nextSuffix();
+      final bSuffix = nextSuffix();
+      mockSendAlwaysSucceeds(aSuffix);
+      mockSendAlwaysSucceeds(bSuffix);
+      final a = await newStack('device-a', aSuffix);
+      final b = await newStack('device-b', bSuffix);
+      addTearDown(a.dispose);
+      addTearDown(b.dispose);
+
+      await establishMutualSessions(a, b);
+
+      final repoA = GroupRepository(a.db);
+      final groupId = await repoA.createGroup(
+        name: 'G',
+        ownerDeviceId: 'device-a',
+        memberDeviceIds: [],
+      );
+      // device-b joined at epoch 0 and was removed at epoch 5 -- distributing
+      // epoch 2's key (while they were still a member) must still succeed.
+      await a.db.into(a.db.groupMembers).insert(
+            GroupMembersCompanion.insert(
+              groupId: groupId,
+              deviceId: 'device-b',
+              role: GroupRole.member.name,
+              joinedAtEpoch: 0,
+              removedAtEpoch: const Value(5),
+            ),
+          );
+
+      final results = await a.groupCryptoService.distributeTo(
+        groupId: groupId,
+        epoch: 2,
+        recipientDeviceIds: ['device-b'],
+      );
+
+      expect(results['device-b'], isNull);
     });
 
     test(

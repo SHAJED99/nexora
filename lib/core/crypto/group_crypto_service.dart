@@ -247,11 +247,20 @@ class GroupCryptoService {
   /// §2/§3). Refuses any recipient whose `joined_at_epoch` is greater than
   /// [epoch] with `AppFailure('group.member_joined_later')`
   /// (`FR-GROUP-006`) — including a device this table has no membership row
-  /// for at all, which cannot have a valid `joined_at_epoch` either. A
-  /// failure for one recipient never aborts the others: each recipient's
-  /// outcome is independent, mirroring `GroupMembershipService._sendOne`'s
-  /// own "one unreachable member must never abort another member's send"
-  /// discipline (task file §6).
+  /// for at all, which cannot have a valid `joined_at_epoch` either.
+  /// **Also refuses any recipient already removed as of [epoch]** —
+  /// `removed_at_epoch` non-null and `<= epoch` — with
+  /// `AppFailure('group.member_removed')` (`FR-GROUP-005`; review round 2,
+  /// F1). `group_tables.dart`'s `group_members` row is retained (never
+  /// deleted) once a member is removed (§2 there), so `joined_at_epoch`
+  /// alone is not sufficient to decide current membership — the same
+  /// `removedAtEpoch IS NULL` discipline `GroupRepository.roleOf`
+  /// (`E07-T02`'s carried-forward finding) already applies, applied here at
+  /// the one other place this table's membership state gates a real
+  /// key-distribution decision. A failure for one recipient never aborts
+  /// the others: each recipient's outcome is independent, mirroring
+  /// `GroupMembershipService._sendOne`'s own "one unreachable member must
+  /// never abort another member's send" discipline (task file §6).
   Future<Map<String, AppFailure?>> distributeTo({
     required String groupId,
     required int epoch,
@@ -267,10 +276,15 @@ class GroupCryptoService {
 
     final results = <String, AppFailure?>{};
     for (final recipientDeviceId in recipientDeviceIds) {
-      final joinedAtEpoch = await _joinedAtEpoch(groupId, recipientDeviceId);
-      if (joinedAtEpoch == null || joinedAtEpoch > epoch) {
+      final membership = await _membershipAt(groupId, recipientDeviceId);
+      if (membership == null || membership.joinedAtEpoch > epoch) {
         results[recipientDeviceId] =
             const AppFailure('group.member_joined_later');
+        continue;
+      }
+      final removedAtEpoch = membership.removedAtEpoch;
+      if (removedAtEpoch != null && removedAtEpoch <= epoch) {
+        results[recipientDeviceId] = const AppFailure('group.member_removed');
         continue;
       }
       results[recipientDeviceId] =
@@ -279,14 +293,25 @@ class GroupCryptoService {
     return results;
   }
 
-  Future<int?> _joinedAtEpoch(String groupId, String deviceId) async {
+  /// The `(joined_at_epoch, removed_at_epoch)` pair for [deviceId] in
+  /// [groupId], or `null` for a device this table has no membership row for
+  /// at all. Deliberately returns both columns rather than just
+  /// `joined_at_epoch` — [distributeTo] needs `removed_at_epoch` too
+  /// (review round 2, F1) and a removed member's row is retained, never
+  /// deleted (`group_tables.dart` §2), so a single row read answers both
+  /// questions without a second query.
+  Future<({int joinedAtEpoch, int? removedAtEpoch})?> _membershipAt(
+    String groupId,
+    String deviceId,
+  ) async {
     final db = _stack.db;
     final row = await (db.select(db.groupMembers)
           ..where(
             (t) => t.groupId.equals(groupId) & t.deviceId.equals(deviceId),
           ))
         .getSingleOrNull();
-    return row?.joinedAtEpoch;
+    if (row == null) return null;
+    return (joinedAtEpoch: row.joinedAtEpoch, removedAtEpoch: row.removedAtEpoch);
   }
 
   /// Encrypts [envelopeBytes] through the pairwise session with
@@ -448,6 +473,18 @@ class GroupCryptoService {
   /// different epoch/group than this device holds a chain for
   /// (`EARS-GROUP-14`) — and it fails LOUDLY, never silently returning
   /// empty bytes.
+  ///
+  /// Maps **both** of libsignal's "wrong chain" exceptions to
+  /// `AppFailure('group.no_chain')`: `NoSessionException` (no record at all
+  /// — `record.isEmpty`) and `InvalidMessageException` (a record for this
+  /// `(group, epoch)` exists but does not hold the message's keyId — the
+  /// cross-epoch/cross-group case, task file §6, review round 2 F2). The
+  /// latter is caught by `runtimeType` name, not `on InvalidMessageException`,
+  /// because `libsignal_protocol_dart`'s public barrel does not export that
+  /// type (the exact reason `crypto_failures.dart`'s `mapSignalException`
+  /// does the same match) — this is the one place in this file that mirrors
+  /// that seam, kept local rather than importing `mapSignalException` since
+  /// this method's contract returns `AppFailure`, not `CryptoDecryptFailure`.
   Future<Uint8List> decryptFromGroup({
     required String groupId,
     required int epoch,
@@ -464,6 +501,11 @@ class GroupCryptoService {
       return await cipher.decrypt(bytes);
     } on NoSessionException {
       throw const AppFailure('group.no_chain');
+    } catch (e) {
+      if (e.runtimeType.toString() == 'InvalidMessageException') {
+        throw const AppFailure('group.no_chain');
+      }
+      rethrow;
     }
   }
 
