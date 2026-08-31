@@ -12,7 +12,7 @@ approved, T04 dispatched) ·
 | E07-T01 | Group data model + schema migration | backend | M | must | — | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `6d5a861` (PR #1) |
 | E07-T02 | Group role permission matrix | backend | S | must | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `e0ec39b` (PR #2) |
 | E07-T03 | Group membership control protocol | backend | M | must | T02 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `d6c0a2b` (PR #4) |
-| E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | in-progress · builder (sonnet) → reviewer (opus) |
+| E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · awaiting squash-merge (PR #5) |
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | todo |
 | E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | todo |
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
@@ -825,3 +825,117 @@ project before E06's retro lacked one.)_
   `group_crypto_service_test.dart:546` asserts `expect(issuable,
   lessThan(100))`. Task §6 asked for the number to be *visible*; "fewer than
   100" does not make N−1 visible. Assert the delta.
+
+### E07-T04 — round 2 — 2026-08-31 — 📋 **APPROVE** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5) — full security lens
+
+Re-review of `04b8504` (fix) + `5ddd16a` (bookkeeping) against round 1's
+`1289eba` CHANGES verdict. Verified independently against the code and my own
+probes, not against the builder's transcript or their test names.
+
+- **scope:** ✅ in-contract. `git diff --stat 1289eba..5ddd16a` = exactly 3
+  files — `lib/core/crypto/group_crypto_service.dart` (+60/−9),
+  `test/core/crypto/group_crypto_service_test.dart` (+169),
+  `epics/E07-groups-calls/tasks/E07-T04.md` (bookkeeping). Nothing else in the
+  repo was touched by the round-2 fix.
+- **round-1-approved surfaces untouched:** ✅ `git diff 1289eba..5ddd16a --
+  lib/core/crypto/drift_sender_key_store.dart` is **empty** — the epoch-folding
+  logic and `senderKeyNameFor`/`parseSenderKeyName` are byte-identical. Within
+  `group_crypto_service.dart` the diff is confined to the membership-eligibility
+  branch, the `_joinedAtEpoch` → `_membershipAt` helper, the `decryptFromGroup`
+  catch, and doc comments; `_sendOne`'s transport half
+  (`group_crypto_service.dart:325-360`) and `discardChains` are unchanged.
+
+**F1 (S1, the round-1 blocker) — ✅ GENUINELY CLOSED.**
+
+`group_crypto_service.dart:285-289` now refuses any recipient whose
+`removedAtEpoch != null && removedAtEpoch <= epoch` with
+`AppFailure('group.member_removed')`, reading both columns in one row via
+`_membershipAt` (`:303-315`).
+
+I re-ran my **exact round-1 probe** in a freshly written, independent test file
+(two real `MessagingStack`s, real Signal sessions, deleted after the run — the
+builder never saw it, so the fix cannot have been tuned to it):
+
+| probe | `joinedAtEpoch` | `removedAtEpoch` | `distributeTo(epoch:)` | result code | **relay frames enqueued to that device** |
+|---|---|---|---|---|---|
+| F1 exact (round-1 repro) | 0 | 1 | 2 | `group.member_removed` | **0** ✅ |
+| boundary `==` | 0 | 2 | 2 | `group.member_removed` | **0** ✅ |
+| boundary later (5) | 0 | 5 | 2 | `null` (served) | **1** ✅ |
+| boundary later (3) | 0 | 3 | 2 | `null` (served) | **1** ✅ |
+| never removed (control) | 0 | `null` | 2 | `null` (served) | **1** ✅ |
+| mixed batch (removed + active in ONE call) | 0 / 0 | 1 / `null` | 2 | `member_removed` / `null` | **0 to the removed, 1 to the active** ✅ |
+
+The **side-effect** check is the decisive one and it passes: I asserted on
+actual `relay_packets` rows filtered by `destinationId`, with a "queue starts
+empty" precondition so any row observed came from that `distributeTo` call. The
+two "served" rows are a deliberate **positive control** — they prove the
+zero-frame assertions are not just a dead harness that never records anything.
+
+**The boundary is exactly right (round-2 instruction 2).** Removal is inclusive
+at the removed epoch and **not retroactive**: removed-at-2 is refused epoch 2,
+while removed-at-5 and removed-at-3 are still served epoch 2. The fix was *not*
+over-corrected into a blanket ban on anyone ever removed.
+
+**Falsified, not merely observed.** I deleted the four-line removal guard from
+`group_crypto_service.dart` and re-ran my probe: exactly the three
+removal-sensitive probes failed (`Expected: 'group.member_removed' / Actual:
+<null>`) while all three positive controls still passed — the probe
+discriminates. With the guard still out and the return-value assertion
+temporarily disabled so execution reached the side-effect assertion, the F1
+case reported **`Expected: <0> / Actual: <1>`** — i.e. pre-fix a real
+key-distribution frame *was* enqueued toward the removed member. Round 1's S1
+was real, and the fix removes the side effect, not merely the return value.
+Restored via `git checkout` and re-verified byte-identical (sha256
+`5abeb587831b2a82f8d577e2d32ae5857af953ece5e718042b801de493d9bb59`).
+
+**The old vulnerable helper is genuinely gone (instruction 3).** `git grep -n
+"_joinedAtEpoch" -- lib/` returns only `database.g.dart` Drift codegen metadata
+(`_joinedAtEpochMeta`, an unrelated generated name). `git grep -n
+"joinedAtEpoch" -- lib/` confirms `group_crypto_service.dart:280` is the
+**only** remaining eligibility read, and it goes through `_membershipAt`. No
+other call site retains the vulnerable check.
+
+**Re-add is not broken by the new guard** — checked, since a blanket removal ban
+would have been the obvious over-correction. `GroupRepository`'s `memberAdded`
+path (`group_repository.dart:401-409`) inserts with
+`InsertMode.insertOrReplace` and no `removedAtEpoch`, so a genuine re-add
+replaces the row and resets `removed_at_epoch` to NULL — a re-added member is
+served again. Not this task's code; verified as an interaction, not a finding.
+
+**F2 (S3, was non-blocking) — ✅ fixed and genuinely exercised.**
+`decryptFromGroup` (`group_crypto_service.dart:501-508`) now also maps
+`InvalidMessageException` to `AppFailure('group.no_chain')`, matched by
+`runtimeType` name because the type is not exported from
+`libsignal_protocol_dart`'s public barrel — the same seam
+`crypto_failures.dart`'s `mapSignalException` already lives with, so this
+follows an existing accepted pattern rather than inventing a new hack.
+Falsified: I removed the catch clause and ran the new
+`test_EARS_GROUP_14_a_live_epoch_n_plus_1_chain_cannot_decrypt_an_epoch_n_message_either`
+test — it failed with **`threw InvalidMessageException:<InvalidMessageException
+- No key for: 2020427141>`**. That is a real libsignal exception raised from a
+real second chain, which proves both that the strengthened test genuinely
+creates two live epoch chains (F3) and that the catch is live code, not
+decoration. Restored byte-identically.
+
+**F3 (S4) — ✅ addressed.** The new test creates epoch 0's chain, encrypts, then
+genuinely creates epoch 1's chain before attempting the cross-epoch decrypt —
+the case round 1 flagged the original test's own comment as conceding it never
+exercised. Confirmed by the falsification above: the exception raised is
+`InvalidMessageException` (a record exists, wrong keyId), not
+`NoSessionException` (no record at all).
+
+- **suite:** ✅ ran myself on `5ddd16a`. `flutter analyze` → **No issues
+  found!** `flutter test` → **573/573 passed** (exact count, not rounded; 569
+  prior + 4 new). The builder's numbers are confirmed.
+- **EARS:** GROUP-12 ✅, GROUP-13 ✅ (now including the removed-member refusal
+  and its zero-frame side effect), GROUP-14 ✅ (now with both chains live).
+- **design gate:** n/a (`design_contract: n/a`, pure crypto/persistence).
+- **security lens:** ✅ **PASS.** FR-GROUP-005 is now actually enforced at the
+  one place in the crypto layer that can enforce it: a removed member is denied
+  the post-removal epoch's chain key, and no frame carrying it is enqueued.
+
+Round 1's three carried-forward candidates (receive-side `acceptDistribution`
+replay idempotency S3, the `discardChains`/TTL grace window S4, and the
+near-vacuous `OQ-E07-9` prekey assertion S4) remain **open and correctly
+outside this PR's fence** — they stay in §Carried-forward observations for
+E07-T05/T06 and the epic sweep. None is a merge blocker for T04.
