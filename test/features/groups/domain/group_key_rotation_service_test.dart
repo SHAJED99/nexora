@@ -354,6 +354,70 @@ void main() {
     });
 
     test(
+        'test_EARS_GROUP_16_self_removal_leave_discards_every_epoch',
+        () async {
+      // Review F2: the delete test above never exercises the OTHER half of
+      // EARS-GROUP-16/§2 step 4 -- `memberRemoved && !stillAMember`, i.e.
+      // this device leaving voluntarily or being removed by someone else.
+      // A DIFFERENT group from `groupId` (this file's `setUp` makes
+      // 'device-a' the Owner there, and an Owner may not `leave` --
+      // `group_permissions.dart`: "every role may leave except the Owner")
+      // -- here 'device-a' is a plain Member, so a self-targeted
+      // `memberRemoved` frame (== `leave`) is actually permitted.
+      final leavingGroupId = await repo.createGroup(
+        name: 'About to leave',
+        ownerDeviceId: 'other-owner',
+        memberDeviceIds: ['device-a'],
+      );
+      // 'other-owner' is not a reachable stack in this test -- block it so
+      // the rotation's distribute-to-remaining-member step fails FAST
+      // rather than waiting out a real ~20s session timeout (mirrors
+      // `test_offline_member_missing_a_rotation_fails_loudly_not_silently`).
+      await RelationshipRepository(a.db)
+          .upsert('other-owner', trust.RelationshipState.blocked);
+
+      // Seed an epoch-0 chain directly, exactly like the delete test above,
+      // so there is something for the leave path's discard to actually
+      // remove -- proving it discards an existing chain, not merely skips
+      // creating one.
+      await crypto.ensureOwnChain(groupId: leavingGroupId, epoch: 0);
+      var rows =
+          await (a.db.select(a.db.groupSenderKeys)
+                ..where((t) => t.groupId.equals(leavingGroupId)))
+              .get();
+      expect(rows, hasLength(1));
+
+      await bumpEpoch(
+        a,
+        groupId: leavingGroupId,
+        kind: GroupEventKind.memberRemoved,
+        epoch: 1,
+        subjectDeviceId: 'device-a',
+      );
+      expect(await repo.roleOf(leavingGroupId, 'device-a'), isNull);
+
+      final results = await rotation.onEpochApplied(
+        groupId: leavingGroupId,
+        newEpoch: 1,
+        kind: GroupEventKind.memberRemoved,
+      );
+      expect(results.containsKey('other-owner'), isTrue);
+
+      rows =
+          await (a.db.select(a.db.groupSenderKeys)
+                ..where((t) => t.groupId.equals(leavingGroupId)))
+              .get();
+      expect(
+        rows,
+        isEmpty,
+        reason: 'this device leaving a group (memberRemoved, self-targeted) '
+            'must discard EVERY chain for it, exactly like deleteGroup -- '
+            'the EARS-GROUP-16 half the delete-only test above does not '
+            'cover',
+      );
+    });
+
+    test(
         'test_EARS_GROUP_2_no_api_exists_to_grant_historical_access',
         () async {
       // OQ-E07-1's decision (v1 has no exception path) made mechanically
