@@ -1,9 +1,9 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** in-progress (T01/T02/T12/T13 merged to `epic_07`, GAP-023 approved,
-T03 dispatched) ·
+**Status:** in-progress (T01/T02/T03/T12/T13 merged to `epic_07`, GAP-023
+approved, T04 dispatched) ·
 **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 2/13
+**Completed:** — · **Progress:** 5/13
 
 ## Tasks
 
@@ -11,8 +11,8 @@ T03 dispatched) ·
 |---|---|---|---|---|---|---|
 | E07-T01 | Group data model + schema migration | backend | M | must | — | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `6d5a861` (PR #1) |
 | E07-T02 | Group role permission matrix | backend | S | must | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `e0ec39b` (PR #2) |
-| E07-T03 | Group membership control protocol | backend | M | must | T02 | in-progress · builder (sonnet) → reviewer (opus) |
-| E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | todo |
+| E07-T03 | Group membership control protocol | backend | M | must | T02 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `d6c0a2b` (PR #4) |
+| E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | in-progress · builder (sonnet) → reviewer (opus) |
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | todo |
 | E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | todo |
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
@@ -218,6 +218,19 @@ exact section for eight tasks with no reader.)_
     updates `messaging_stack.dart` only, not `database.dart` — stays out of
     scope. Re-check at T04 (which does touch persistence for
     `SenderKeyStore`).
+  - **2026-08-31 · checked at E07-T04 dispatch:** T04's `files:` fence creates
+    `drift_sender_key_store.dart`/`group_crypto_service.dart` and updates
+    `messaging_stack.dart` only — it reads/writes the `group_sender_keys`
+    table T01 already created via the generated `AppDatabase`, but does not
+    touch `database.dart` or add a migration step. Stays out of scope. This
+    observation has now been checked at every task since T01 with no hit —
+    re-check once more at whichever task first adds a schema version beyond
+    13, then this line can be retired.
+
+- **(from E07-T03 review, 2026-08-31) `decodeCiphertextControlBody`/
+  `drift_signal_store.dart` TOFU gap does not apply to T04.** T04's `files:`
+  fence does not reach `drift_signal_store.dart` (confirmed above) — this
+  observation's owner remains E11, not this task.
 
 - **2026-08-31 · E07-T02 · `allows` throws where §5 says it never does
   (advisory, S3 — a spec-text defect, not a code defect).** `E07-T02.md:107`
