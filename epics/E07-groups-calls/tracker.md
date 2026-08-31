@@ -658,3 +658,170 @@ project before E06's retro lacked one.)_
   deliberately at this pass, as that ADR and this epic's own §Risks both
   required, and recorded as `OQ-E07-8` for cheap rejection. Analyze report
   appended to `epic.md`; 🧍 `analyze_report` gate ⏳.
+
+### E07-T04 — 2026-08-31 — 📋 **CHANGES** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5) — full security lens
+
+- **scope: in-contract.** `git diff --stat origin/epic_07...origin/epic_07_task_04`
+  = exactly the 6 files in `files:` + the task file, nothing else. Independently
+  verified **empty** `git diff` on `drift_signal_store.dart`, `crypto_stub.dart`,
+  `identity_service.dart`, `prekey_exchange.dart`, `inbound_pipeline.dart` and
+  **all of `lib/core/persistence/`** (no migration; `database.dart` untouched —
+  T04 only reads/writes T01's `group_sender_keys`). §4 respected: no rotation
+  trigger (E07-T05) and no group fan-out (E07-T06) leaked in — `grep -rn
+  discardChains lib/` returns only its own definition at
+  `group_crypto_service.dart:477` plus two doc references, i.e. **zero
+  production callers**, inert exactly as §4 requires. No new dependency.
+- **suite: green, run by me, not taken from the PR body.** `flutter analyze` →
+  `No issues found!`. `flutter test` → **569/569 pass** (547 prior + 22 new),
+  matching the builder's reported numbers.
+- **No hand-rolled crypto — PASS.** Re-ran and broadened the grep
+  (`AES|Hmac|sha256|Random(|dart:math|xor|^=|Hkdf|derive|Pbkdf|md5`,
+  case-insensitive) across both new files: the only hits are
+  `GroupCipher(_senderKeyStore, name)` at `group_crypto_service.dart:435,462` —
+  libsignal's own class. Every key/ratchet/cipher operation is a
+  `libsignal_protocol_dart` call. Confirmed at the library level too:
+  `key_helper.dart:64` seeds `final Random _random = Random.secure()`, so
+  `generateSenderKeyId`/`generateSenderKey`/`generateSenderSigningKey` are
+  CSPRNG-backed. `dart:convert` is imported only for `utf8.encode(groupId)` in
+  the envelope codec, never for key handling.
+- **Distribution rides the pairwise session — PASS.** `_sendOne`
+  (`group_crypto_service.dart:300-336`) routes `PrekeyExchange.ensureSession`
+  → `CryptoService.encrypt` (the pairwise Double Ratchet) →
+  `encodeCiphertextControlBody` → `RelayEngine.enqueue`, the exact shape
+  `GroupMembershipService._sendOne` (T03) established, on its own
+  `kControlKindGroupKeyDistribution = 4` slot. No raw/plaintext send path
+  exists. The byte-containment assertion
+  (`group_crypto_service_test.dart:380-386`) proves the raw
+  `SenderKeyDistributionMessage` bytes never appear in the enqueued frame.
+  **E06-B04 shape defended, and more cleanly than T03:** `acceptDistribution`
+  keys the `SenderKeyName` off `sourceDeviceId` (the address the ciphertext
+  actually decrypted under), and the envelope carries **no** self-claimed
+  device-id field at all — so unlike T03's `GroupControlFrame.actorDeviceId`
+  there is no forgeable identity to cross-check in the first place.
+- **EARS: 2/3 verified, 1 partial.**
+  - EARS-GROUP-12 ✅ → `test_EARS_GROUP_12_own_chain_is_created_once_and_survives_a_reopen`,
+    `..._ensure_own_chain_is_idempotent`. Idempotency confirmed at the library
+    level: `GroupSessionBuilder.create` mints only when `record.isEmpty`
+    (`group_session_builder.dart:31`), so a second call never rolls the chain.
+  - EARS-GROUP-13 ✅ → `test_EARS_GROUP_13_distribution_is_carried_inside_a_pairwise_session`
+    (real two-stack, real Signal sessions, real relay hop) +
+    `..._member_joined_later_is_refused_the_earlier_epoch`.
+  - EARS-GROUP-14 ⚠️ **partial** — see F3: the test does not exercise the
+    property its own name claims.
+- **`OQ-E07-8`'s epoch folding: independently probed, and CORRECT.** I did not
+  take this off the source. My own probe built epoch-5 and epoch-6
+  `SenderKeyName`s for the same group/sender and read libsignal's own
+  serialized storage key: `g:probe@5::device-a::1` vs `g:probe@6::device-a::1`
+  — the epoch genuinely lands in the **group** half of the two-part name, not
+  bolted on beside it where a bug could ignore it. `create()` on both produced
+  **two distinct `group_sender_keys` rows** (epochs {5,6}), **distinct chain
+  key ids**, and **distinct chain seeds**. With both chains really present, an
+  epoch-5 `GroupCipher` could not open an epoch-6 ciphertext:
+  `InvalidMessageException - No key for: 675387238` — libsignal's own
+  `getSenderKeyStateById` failing to find the epoch-6 message's random keyId in
+  the epoch-5 record. **A structural property, not a policy check**, exactly as
+  `OQ-E07-8` intended. I endorse the design without reservation.
+- **Falsification (skill §2) — the suite genuinely gates the decision.** I
+  edited `senderKeyNameFor` to emit `'$groupId@0'` (epoch dropped) and re-ran:
+  **8 tests failed, for the right reasons** — `epoch is folded into the group
+  half…`, `two different epochs of the same group produce different names`,
+  `test_sender_key_name_round_trips`,
+  `test_discard_chains_below_epoch_removes_only_the_named_group` (both files),
+  `test_EARS_GROUP_14_epoch_n_chain_cannot_decrypt_an_epoch_n_plus_1_message`,
+  and `test_EARS_GROUP_13_distribution_is_carried_inside_a_pairwise_session`.
+  Restored **byte-identically** (sha256 `e03ab79…368f5` before and after),
+  working tree clean, suite back to 569/569. The epoch-folding evidence is
+  real, not decorative.
+- **Test-harness fixes are TEST-ONLY and paper over nothing — PASS.** Both
+  claimed fixes live entirely inside `group_crypto_service_test.dart`; zero
+  production lines changed for either. `RoutingEngine.recordLinkMeasurement` is
+  a long-standing production API (`routing_engine.dart:151`), driven in
+  production by `link_quality_feed.dart:72` from the transport's own
+  linkQuality events, and already used by 4 prior test files on `epic_07`. The
+  discover+connect-before-`InboundPipeline.start()` requirement is documented
+  production behaviour and already the established pattern in 7 prior test
+  files (`prekey_exchange_test.dart`, `group_membership_service_test.dart`, …).
+  The builder's test setup was genuinely incomplete; the production path is
+  correct.
+
+#### ❌ Findings
+
+- **F1 — S1, BLOCKER. A removed member is still handed the post-removal
+  epoch's group chain key.** `group_crypto_service.dart:282-290`
+  (`_joinedAtEpoch`) selects the `group_members` row and returns
+  `row.joinedAtEpoch`, **never reading `removedAtEpoch`** — the column
+  `group_tables.dart:117-119` documents as *"NULL = current member. Set (never
+  cleared) once a member is removed — the row itself is never deleted."* The
+  guard at `group_crypto_service.dart:271` therefore tests only
+  `joinedAtEpoch > epoch`, which a removed member always passes.
+  **Reviewer probe, executed:** device-b with `joinedAtEpoch: 0,
+  removedAtEpoch: 1`, then `distributeTo(groupId, epoch: 2,
+  recipientDeviceIds: ['device-b'])` → `results['device-b'] == null`
+  (**accepted**) and **1 row enqueued in `relay_packets`** — a real, usable
+  key-distribution frame encrypted to the removed member's own pairwise
+  session.
+  **Why it matters:** FR-GROUP-005 ("a removed member shall not decrypt future
+  communication") is the requirement this whole task exists to make structural.
+  The epoch folding — verified above, and genuinely excellent — only stops a
+  removed member decrypting messages whose keys they never receive. Handing
+  them the new epoch's chain key nullifies it completely. This is the **sole**
+  membership predicate in the crypto layer, and it enforces the less
+  consequential FR (FR-GROUP-006, historical access) while silently omitting
+  the more consequential one.
+  **In scope:** yes. §2 assigns the send-site membership check to this task
+  ("This task enforces the check at the send site"); this is neither an epoch
+  listener nor a rotation decision, so §4 does not exclude it. The fix is one
+  predicate inside the query already present in `_joinedAtEpoch`, plus a
+  regression test.
+  **Aggravating:** the doc comment at `group_crypto_service.dart:248-253`
+  asserts the check is sound, "including a device this table has no membership
+  row for at all". E07-T05's author will read that and reasonably conclude the
+  crypto layer defends membership — which is how a defence-in-depth gap becomes
+  a live S1.
+- **F2 — S3, must fix. `decryptFromGroup` leaks a raw library
+  `InvalidMessageException` in exactly the case task §6 named.**
+  `group_crypto_service.dart:465` catches **only** `NoSessionException`. But
+  `GroupCipher.decryptWithCallback` (`group_cipher.dart:68-71`) raises
+  `NoSessionException` only when the record `isEmpty`; when a chain for the
+  named `(group, epoch)` **does** exist but the message belongs to another
+  epoch or group, `getSenderKeyStateById` throws `InvalidKeyIdException`, which
+  the library converts to `InvalidMessageException`. My probe confirmed the
+  leak through the service surface itself: `decryptFromGroup(epoch: 5, …)` on
+  an epoch-6 ciphertext threw `InvalidMessageException - No key for:
+  2067477436`, **not** `AppFailure('group.no_chain')`. Task §6 states this
+  verbatim: *"`decryptFromGroup` must therefore fail explicitly rather than
+  letting libsignal produce a confusing `InvalidMessageException` — E03-B03's
+  exception-taxonomy work (landed via E06-T02) is what to map onto."* Not a
+  security hole (it fails loudly; no plaintext is returned), but E07-T06
+  consumes this surface against a contract that promises `AppFailure`.
+  `mapSignalException` already exists for exactly this.
+- **F3 — S4, must fix (it is why F2 survived).**
+  `test_EARS_GROUP_14_epoch_n_chain_cannot_decrypt_an_epoch_n_plus_1_message`
+  (`group_crypto_service_test.dart:121-148`) does not test its own name. Its
+  own comment concedes it: *"No chain has EVER been created for epoch 1."* It
+  proves only "absent chain → fails", i.e. the `record.isEmpty` path — never
+  the real FR-GROUP-005 scenario where **both** epochs hold live chains. Add
+  the coexisting-chain case (my probe is the shape); it fails today on F2 and
+  passes once F2 is fixed.
+
+#### Carried-forward candidates (not blockers; do not fix in this PR)
+
+- **S3 · `acceptDistribution` re-processing is not idempotent on the receive
+  side.** `GroupSessionBuilder.process` → `SenderKeyRecord.addSenderKeyState`
+  (`sender_key_record.dart:47-54`) **prepends** a state per call, so replaying
+  a captured distribution frame re-inserts a state at the message's original
+  iteration, and `getSenderKeyStateById` then resolves to the reset one
+  (capped at `_maxStates = 5`). This is upstream libsignal's exact behaviour
+  and §4 forbids substituting a primitive, so it correctly stays out of T04 —
+  but §2's "must not advance or reset a chain" is only actually proven for the
+  **send** side. Worth a replay guard at the T06 fan-out layer.
+- **S4 · `discardChains` + `_controlFrameTtl` interaction, for E07-T05.**
+  `discardChains(belowEpoch: N)` deletes every sender's chain below N,
+  including ones still needed for legitimately-sent epoch-(N−1) messages in
+  flight — and control frames carry a 1-day TTL
+  (`group_crypto_service.dart:99`). Intended FR-GROUP-005 semantics, but T05
+  should choose the grace window deliberately rather than inherit it.
+- **S4 · the `OQ-E07-9` prekey-consumption assertion is near-vacuous.**
+  `group_crypto_service_test.dart:546` asserts `expect(issuable,
+  lessThan(100))`. Task §6 asked for the number to be *visible*; "fewer than
+  100" does not make N−1 visible. Assert the delta.
