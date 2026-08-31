@@ -123,6 +123,7 @@ import 'dart:typed_data';
 
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 
+import '../calls/call_signaling.dart';
 import '../crypto/crypto_stub.dart';
 import '../crypto/drift_signal_store.dart';
 import '../crypto/group_crypto_service.dart';
@@ -322,6 +323,22 @@ class MessagingStack {
       kControlKindGroupKeyDistribution,
       groupCryptoService.handleWireFrame,
     );
+
+    // E07-T09: same "needs a fully-constructed `this`" reasoning as
+    // `prekeyExchange`/`groupMembershipService`/`groupCryptoService` above.
+    // Registered onto its own `controlKind` slot
+    // (`kControlKindCallSignaling == 5`, the next unused value after T07's
+    // `1`, T08's `2`, T03's `3` and T04's `4`) -- see `call_signaling.dart`'s
+    // header for why this sub-protocol's payload is ciphertext through the
+    // pairwise session, not the cleartext body T07/T08 send.
+    callSignaling = CallSignaling(
+      stack: this,
+      relationshipRepository: RelationshipRepository(db),
+    );
+    inbound.registerControlHandler(
+      kControlKindCallSignaling,
+      callSignaling.handleWireFrame,
+    );
   }
 
   /// The single app-wide `AppDatabase` — passed in, never constructed here
@@ -378,6 +395,12 @@ class MessagingStack {
   /// E07-T04: group sender-key store + distribution over pairwise sessions.
   /// Constructed here, registered on `inbound`'s `controlKind == 4` slot.
   late final GroupCryptoService groupCryptoService;
+
+  /// E07-T09: 1:1 call invite/ring/accept/decline/hangup/busy/cancel
+  /// signaling. Constructed here, registered on `inbound`'s
+  /// `controlKind == 5` slot. Does NOT touch audio/media -- see
+  /// `call_signaling.dart`'s header.
+  late final CallSignaling callSignaling;
 
   /// This device's own local identity (ADR-0005: local, not Firebase-
   /// derived) — from `DeviceIdentityRepository`. May be `''` if no local
