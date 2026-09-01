@@ -1,9 +1,10 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** in-progress (T01/T02/T03/T04/T05/T06/T09/T10/T12/T13/T14
-merged to `epic_07`, GAP-023 approved, `OQ-E07-T06-2` closed) ·
+**Status:** in-progress (T01/T02/T03/T04/T05/T06/T07/T09/T10/T12/T13/T14
+merged to `epic_07`, GAP-023 approved, `OQ-E07-T06-2` and `OQ-E07-T07-1`
+closed, T11 in review) ·
 **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 11/14
+**Completed:** — · **Progress:** 12/14
 
 ## Tasks
 
@@ -15,7 +16,7 @@ merged to `epic_07`, GAP-023 approved, `OQ-E07-T06-2` closed) ·
 | E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `82d6f20` (PR #5) |
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `dfec62f` (PR #6) |
 | E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE → collision-fix APPROVE · squash-merged `6e4864d` (PR #8) |
-| E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | in-review · `OQ-E07-T07-1` resolved by planner (fence amended, 677/677) · reviewer (opus) dispatched, flagged for extra scrutiny on planner's own commit |
+| E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | done · builder (sonnet) + planner (opus, `OQ-E07-T07-1` fix) → reviewer (opus) · APPROVE · squash-merged `430fc88` (PR #11) |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 CHANGES (narrow) → round 3 APPROVE · squash-merged `93c3069` (PR #10) |
@@ -224,6 +225,17 @@ exact section for eight tasks with no reader.)_
   documented in `E07-T10.md` §9 Deviations. **Owner: the epic sweep** —
   check whether messaging's route-failure path should reset or ignore a
   stale `realtime` profile left by an unrelated call.
+
+- **2026-09-02 · E07-T07 → owner E07-T08 · three read-model seams to
+  decide on deliberately (advisory, S3-S4).** From T07's review: (1) a
+  group with zero messages never appears in Conversations — the
+  projection requires ≥1 message; (2) a group you were removed from stays
+  listed with a shrunk member count, per `GroupRepository.watchGroups()`'s
+  own "is (or was) a party to" contract; (3) no permanent test proves the
+  `watchConversations` coalescing window survives a group-membership
+  burst (proven to hold by the reviewer's scratch probe, but not
+  committed as a regression test). **Check at E07-T08 dispatch** — all
+  three surface directly in whichever screen renders the Groups section.
 
 - **2026-08-31 · E07-T01 · migration-test completeness (advisory, S4).**
   `test_EARS_GROUP_5_v12_upgrades_to_v13_additively` proves every pre-existing
@@ -1674,3 +1686,83 @@ routes to, since the profile is keyed per-destination and never reset.
 Documented now in `E07-T10.md` §9 so it has a reader; not blocking, but
 exactly the kind of seam-shaped issue `skills/bug-sweep` exists to check
 end-to-end.
+
+### E07-T07 — 2026-09-02 — ✅ **APPROVE** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` + planner fix (`claude-opus-5`) ✅ rule 5)
+PR #11 → `epic_07`. Two authors: the builder built the core widening and
+correctly stopped rather than silently widen scope when it hit two
+out-of-fence UI call sites; the planner resolved `OQ-E07-T07-1` with a
+fence amendment + fix. Reviewer explicitly applied extra skepticism to
+the planner's commit since it shares a model family with the reviewer —
+every claim there was independently re-derived and falsified, not
+trusted on the strength of shared authorship.
+
+- **single-query property: verified, with a stronger falsification than
+  the builder's own.** Builder's probe simulated one constant extra
+  query; reviewer instead injected a true N+1 (one extra round trip per
+  group row — the actual failure mode the test claims to exclude) and
+  confirmed `test_EARS_COMM_33_list_is_still_a_single_query` genuinely
+  catches it (`Expected: 1, Actual: 3`), while E06-T09's original
+  single-query test correctly stays out of this path (it seeds no
+  groups). All 9 E06-T09 tests confirmed byte-identical by extracting and
+  comparing test bodies programmatically, not by reading the diff.
+- **blocking asymmetry: genuinely implemented, not correct-by-accident.**
+  The group branch has literally no `relationships` join — it structurally
+  cannot filter on member state. Reviewer's own combined probe (one peer
+  blocked, has a 1:1 conversation, AND is a shared group's last-message
+  sender) confirmed both directions in one case: 1:1 excluded, group
+  retained.
+- **deleted-group exclusion: both halves verified**, including the subtle
+  one — the *personal* branch's de-dup guard deliberately has no
+  `is_deleted` clause, so a deleted group can't leak back in as a personal
+  row. Falsified by removing that clause: 4 tests failed for the right
+  reason.
+- **`watchConversations` widening: reacts correctly, AND the reviewer
+  closed a real coverage gap the shipped tests left open** — no test
+  proved the coalescing window survives a *group*-table burst (only a
+  message-table burst was tested by the existing mechanism, and only
+  spaced-out single group changes by the new one). Reviewer wrote and ran
+  the missing burst test (10 back-to-back membership changes → 1 query, 1
+  emission, correct final state) and confirmed the property holds — a
+  coverage gap, not a defect, carried forward below.
+- **The planner's fix, line-by-line re-derivation:** `_onSummaries`'s
+  `continue` on non-personal kind, `ConversationTile.from`'s
+  assert-then-fallback-to-conversationId (no force-unwrap anywhere), both
+  `_resolvePreview`s' null-check-then-return-null, and — the one claim
+  flagged as needing the most scrutiny — `DashboardController`'s
+  filter-before-cap ordering, all read directly and each backing
+  regression test falsified independently (revert the fix, confirm the
+  right failure, restore, confirm green).
+- **fence amendment: honestly recorded**, matches the accepted
+  `OQ-E07-T06-1` convention exactly; T08's collision (it also touches
+  `conversations_controller.dart`) independently confirmed real via
+  `depends_on`, so the DAG correctly serializes them.
+- **suite: 677/677**, `flutter analyze` clean, baseline (668) independently
+  re-run by the reviewer on the pre-task commit to confirm the delta is
+  fully accounted for (7 T07 tests + 2 fence-amendment tests).
+- **`OQ-E07-T07-1`'s resolution judged the right call**: ratifying a
+  zero-behaviour-change null-safety fix under rule 3 (no schema, no
+  dependency, ~4 lines deleted, not auth code) rather than escalating —
+  the planner chose the null option (screens show exactly what they
+  showed before), not a product decision about how groups should render,
+  which is explicitly parked to a design question rather than answered by
+  omission.
+
+**Carried forward for E07-T08 (its fence touches exactly the file these
+concern — flagged per L-process-008 so they have a reader before that
+task dispatches):**
+- No group-burst coalescing test exists in the shipped suite (only in the
+  reviewer's scratch probe) — worth a permanent
+  `test_EARS_COMM_34_membership_burst_is_coalesced`.
+- **A group with zero messages never appears in the list** — the
+  projection requires ≥1 message (`last_msg` derives from `messages`), so
+  a freshly created empty group is invisible until someone speaks. Correct
+  per T07's contract, but a real UX seam for whichever screen renders the
+  Groups section.
+- **A group you were removed from stays listed** (with a shrunk
+  `memberCount`) — consistent with `GroupRepository.watchGroups()`'s own
+  documented "is (or was) a party to" semantics, not a T07 divergence, but
+  E07-T08 should decide deliberately whether a left group belongs in
+  Conversations.
+- `watchConversations` still doesn't watch `relationships` (pre-existing
+  from E06-T09, unchanged here, out of fence) — blocking/unblocking a peer
+  doesn't re-emit the list.
