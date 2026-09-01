@@ -15,11 +15,11 @@ merged to `epic_07`, GAP-023 approved, `OQ-E07-T06-2` closed) ·
 | E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `82d6f20` (PR #5) |
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `dfec62f` (PR #6) |
 | E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE → collision-fix APPROVE · squash-merged `6e4864d` (PR #8) |
-| E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
+| E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | dispatched · builder (sonnet), branch `epic_07_task_07` |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 CHANGES (narrow) → round 3 APPROVE · squash-merged `93c3069` (PR #10) |
-| E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
+| E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | dispatched · builder (sonnet), branch `epic_07_task_11` |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `5f6a81e` (PR #3); GAP-023 human-approved `23c88ab` |
 | E07-T14 | Compose the group send path into `MessagingStack` | backend | S | must | T06 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `517a1e9` (PR #9) |
