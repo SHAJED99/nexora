@@ -134,6 +134,7 @@ import '../routing_engine/routing_engine.dart';
 import '../transport/transport_service.dart';
 import '../../features/groups/data/group_repository.dart';
 import '../../features/groups/domain/group_membership_service.dart';
+import '../../features/groups/domain/send_group_message_use_case.dart';
 import '../../features/trust/data/relationship_repository.dart';
 import '../../features/trust/domain/evaluate_connection_request_use_case.dart';
 import 'ciphertext_codec.dart';
@@ -324,6 +325,39 @@ class MessagingStack {
       groupCryptoService.handleWireFrame,
     );
 
+    // E07-T14: FR-COMM-002's send half, made production-reachable
+    // (`OQ-E07-T06-2`). Built here, in the constructor BODY, strictly AFTER
+    // `groupCryptoService` above -- `SendGroupMessageUseCase` reads
+    // `groupCryptoService`, which is itself only assigned a few lines up
+    // (also in this body, not the initializer list, for the same
+    // fully-constructed-`this` reason -- this file's header). Building this
+    // in `create()` instead is impossible for the identical reason and must
+    // not be attempted (task file §6): there is no `groupCryptoService` yet
+    // at that point in the program's life, and `create()` is called by
+    // every existing stack test, so getting this wrong throws a loud
+    // `LateInitializationError` immediately.
+    //
+    // The optional sequence-reservation seam is deliberately left UNBOUND
+    // here -- the default binding inside `SendGroupMessageUseCase` itself
+    // is `MessageSequenceReserver`, the one shared reservation transaction
+    // `SendMessageUseCase` also uses (`OQ-E07-T06-1`). Passing a second
+    // reservation function from this composition root would reintroduce the
+    // exact two-writers-of-one-counter shape L-backend-003 is about.
+    //
+    // `enqueue: relayEngine.enqueue` is a tear-off with NO adapter --
+    // `GroupMessageEnqueueFn`'s arity/order/return type
+    // (`send_group_message_use_case.dart:59-64`) already match
+    // `RelayEngine.enqueue` (`relay_engine.dart:106-111`) exactly, verified
+    // again here (task file §5); this is the same tear-off `sendMessage`
+    // above already uses for the 1:1 send path.
+    sendGroupMessage = SendGroupMessageUseCase(
+      db: db,
+      selfDeviceId: selfDeviceId,
+      groups: GroupRepository(db),
+      crypto: groupCryptoService,
+      enqueue: relayEngine.enqueue,
+    );
+
     // E07-T09: same "needs a fully-constructed `this`" reasoning as
     // `prekeyExchange`/`groupMembershipService`/`groupCryptoService` above.
     // Registered onto its own `controlKind` slot
@@ -395,6 +429,19 @@ class MessagingStack {
   /// E07-T04: group sender-key store + distribution over pairwise sessions.
   /// Constructed here, registered on `inbound`'s `controlKind == 4` slot.
   late final GroupCryptoService groupCryptoService;
+
+  /// E07-T14: FR-COMM-002's send half, the production instance of
+  /// `SendGroupMessageUseCase` (built and tested by E07-T06, but never
+  /// constructed anywhere in the app until this task). `late final`,
+  /// constructed in this constructor's body **after** [groupCryptoService]
+  /// above -- see the constructor body's own comment for why that ordering
+  /// is load-bearing, not incidental. Wired to this stack's own [db], a
+  /// fresh `GroupRepository(db)` (same pattern as
+  /// [groupMembershipService]'s own), the already-assigned
+  /// [groupCryptoService], and [relayEngine].enqueue -- with the optional
+  /// sequence-reservation seam left unbound so it defaults to the shared
+  /// `MessageSequenceReserver` (`OQ-E07-T06-1`).
+  late final SendGroupMessageUseCase sendGroupMessage;
 
   /// E07-T09: 1:1 call invite/ring/accept/decline/hangup/busy/cancel
   /// signaling. Constructed here, registered on `inbound`'s
