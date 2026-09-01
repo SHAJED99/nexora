@@ -19,7 +19,7 @@ half is now production-reachable, T10 in flight) ·
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
-| E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | in-review · builder (sonnet) → reviewer (opus) · PR #10 (661/661) · flagged deviation (hybrid direct-send/queue dispatch vs. literal "enqueues at realtime" contract) under scrutiny |
+| E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | in-review · round 1 CHANGES (2 blocking bugs: starvation guard actually starves bulk, budget under-spent) + 1 contract-vs-code gap (hybrid dispatch) routed to planner in parallel |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `5f6a81e` (PR #3); GAP-023 human-approved `23c88ab` |
@@ -1493,3 +1493,96 @@ external wiring — T14 creates the first external call site, so the
 question is now live for whoever next edits that registration; there is
 still no group-send UI consumer (blocked on GAP-020), so `bindings.dart`
 correctly gained no registration.
+
+### E07-T10 — 2026-09-01 — 📋 **CHANGES** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+PR #10 → `epic_07`. Scope, suite and most claims clean; two genuine
+functional bugs in the one mechanism this task exists to add, plus a
+contract-vs-code gap needing planner ratification rather than a builder
+fix.
+
+- **scope: clean.** Exactly the 6 `files:` entries + task file.
+  `interactive`/`bulk` weights byte-unchanged (confirmed via diff). No
+  `routing_engine.dart` route-computation change, no migration, no
+  dependency. E04/E05/E06 suites unmodified except the one authorized
+  file (`route_cost_calculator_test.dart`, in `files: update`).
+- **§6's anticipated check confirmed true, not assumed:** `processQueue`
+  already ordered `(priority DESC, created_at ASC)` before this task
+  (verified via `git log -S` against the base) — the genuinely new work
+  was the bounded budget + starvation guard, exactly as the builder
+  claimed.
+- **No literal cost assertions** — every new test asserts orderings/
+  comparisons/route choices, never a hardcoded weight number.
+- **suite: 661/661**, `flutter analyze` clean, run independently.
+
+**❌ F1 — S2 BLOCKER. The starvation guard starves the bulk band
+completely, reproduced by probe.** `relay_engine.dart:210-235`'s
+`_applyStarvationGuard` splits into only two groups — `topBand` and a
+merged `lowerBand` — so with three or more distinct priority bands
+present, `interactive` rows always consume the entire reserve before a
+single `bulk` row is reached. Reviewer's probe (live call + active chat +
+50-packet bulk backlog, 200 cycles): **zero bulk packets attempted,
+ever.** This is exactly the failure §2 names as worse than the bug being
+fixed ("a messaging queue that never drains during a 40-minute call").
+The shipped test only has two bands and can't catch this. **Fix:** a
+per-band reserve or round-robin across all present bands below top, plus
+a three-band regression test.
+
+**❌ F2 — S3 BLOCKER. The bounded budget silently under-spends.**
+`relay_engine.dart:227-235`: when `topBand` is smaller than its reserved
+share, the unused slots are discarded rather than falling through to
+`lowerBand`. Probe (1 realtime + 50 bulk, budget 10): **only 3 attempted**
+— ~70% throughput loss on every cycle under exactly the common shape
+(thin call stream, fat sync backlog). This also inflates F1's severity in
+production, though latent in the shipped tests since production call
+sites all pass `null`.
+
+**❌ F3 — the hybrid direct-send/queue dispatch. Right outcome, wrong
+process — routed to the planner, not the builder.** The task's §3/§5
+contract states `CallSignaling` "enqueues at `RelayPriority.realtime`";
+the builder implemented a hybrid (direct send for a direct/unknown route,
+queued+immediate-drain for a known multi-hop route), justified by two
+claims the reviewer verified independently: an unconditional enqueue
+would silently no-op every send in the existing, protected
+`call_signaling_test.dart` suite (confirmed — that suite never populates
+`RoutingEngine` graph state), and the 60s coordinator tick vs. 45s ring
+timeout (true as a fact, but the builder's own immediate-drain call
+already neutralizes it under either design — not actually load-bearing
+for the *hybrid* specifically). **The property itself holds**: the
+sync backlog lives only in `relay_packets`, direct sends bypass it
+entirely, so a call invite genuinely cannot queue behind a sync backlog
+on the direct path — EARS-CALL-6's user-facing guarantee is real.
+**But this was rule 1's exact trigger** ("contract genuinely can't be met
+as written → write it into Open Questions and STOP"), not a small
+ambiguity to resolve in-flight — the task file's own Open Questions
+section was already written in anticipation of exactly this shape of
+problem. Reviewer explicitly does NOT want the hybrid reverted (reverting
+would break T09's suite and make multi-hop calls miss their ring
+timeout) — wants it **ratified**: planner should amend §3/§5 so the
+contract states the hybrid dispatch rule explicitly.
+- **❌ F4 (S3, fold into F3's ratification):** `call_signaling.dart:786`
+  sets `delivered = true` unconditionally after `enqueue`, so
+  `call.unreachable` can never fire for a multi-hop peer even when the
+  underlying send provably never left the device — a semantic change to
+  E07-T09's error contract made under a task only authorized to touch
+  priority/profile. Gate `delivered` on the drain outcome, or fold into
+  the planner's ratification.
+
+**⚠️ F5 (S4, non-blocking, record as Deviation):** per-destination route
+profile is set to `realtime` on every call-signaling frame
+(`routing_engine.dart:220`'s `_lastProfile`), so a subsequent messaging
+failure to the *same peer* falls back under the `realtime` profile —
+E05/E06 traffic silently re-profiled for a peer you both call and chat
+with. Not blocking; should be named in §9 Deviations.
+
+**⚠️ F6 — test coverage gap.** The shipped tests only prove the queued
+multi-hop path; the direct-send path (the common case — the builder's own
+code comment concedes it's "what actually runs" in every pre-existing
+scenario) has no test proving it outranks a sync backlog. Cheap fix: seed
+a bulk backlog, `invite()` a direct peer, assert the transport observed it
+while the backlog is still `queued`.
+
+**Routing:** F1/F2/F4/F6 back to the same builder (`claude-sonnet-5`) —
+contained fixes inside code just written. F3 (+ F4's semantics) to the
+**planner** in parallel, to ratify the contract rather than re-litigate at
+next review. First rejection; no escalation triggered by count, but F3 is
+"a specification problem wearing a coding problem's clothes."
