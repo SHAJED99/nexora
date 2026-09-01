@@ -7,10 +7,11 @@
 // re-prove behaviour those epics' own suites already cover.
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get/get.dart';
+import 'package:get/get.dart' hide Value;
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 import 'package:nexora/core/auth/google_auth_service.dart' show AppFailure;
 import 'package:nexora/core/crypto/crypto_stub.dart';
@@ -20,9 +21,12 @@ import 'package:nexora/core/messaging/ciphertext_codec.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/messaging/relay_packet_frame.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/persistence/group_tables.dart';
 import 'package:nexora/core/routing_engine/relay_engine.dart';
 import 'package:nexora/core/routing_engine/routing_engine.dart';
+import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
+import 'package:nexora/features/groups/data/group_repository.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/messaging/domain/receive_message_use_case.dart';
 import 'package:nexora/features/messaging/domain/send_message_use_case.dart';
@@ -88,6 +92,203 @@ void main() {
 
   setUp(() => Get.testMode = true);
   tearDown(Get.reset);
+
+  // --- E07-T14: composition-only helpers for the group send path -------
+  //
+  // Mirrors `send_group_message_use_case_test.dart`'s own transport-wiring
+  // and `sendAndDeliver` helper shapes (task file §6) rather than
+  // rediscovering them -- that file's own run log records two false-alarm
+  // `group.no_chain` failures from a harness that skipped
+  // `ensureOwnChain`/`distributeTo`/`processQueue`.
+
+  void mockSendAlwaysSucceeds(String suffix) {
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.send.$suffix',
+      (ByteData? message) async {
+        return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+      },
+    );
+  }
+
+  void wireSend(String fromSuffix, String fromDeviceId, String toSuffix) {
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.send.$fromSuffix',
+      (ByteData? message) async {
+        final args = TransportApi.pigeonChannelCodec.decodeMessage(message)!
+            as List<Object?>;
+        final bytes = args[1]! as Uint8List;
+        final eventMessage = TransportEventsApi.pigeonChannelCodec
+            .encodeMessage(<Object?>[fromDeviceId, bytes])!;
+        messenger.handlePlatformMessage(
+          'dev.flutter.pigeon.nexora.TransportEventsApi.onDataReceived.$toSuffix',
+          eventMessage,
+          (ByteData? _) {},
+        );
+        return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+      },
+    );
+  }
+
+  Future<void> settle() async {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+
+  Future<void> connectPeer(String suffix, String deviceId) async {
+    final device = TransportDevice(
+      id: deviceId,
+      displayName: deviceId,
+      type: TransportType.bluetooth,
+    );
+    messenger.handlePlatformMessage(
+      'dev.flutter.pigeon.nexora.TransportEventsApi.onDeviceDiscovered.$suffix',
+      TransportEventsApi.pigeonChannelCodec.encodeMessage(<Object?>[device])!,
+      (ByteData? _) {},
+    );
+    await settle();
+    messenger.handlePlatformMessage(
+      'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$suffix',
+      TransportEventsApi.pigeonChannelCodec
+          .encodeMessage(<Object?>[deviceId, ConnectionState.connected])!,
+      (ByteData? _) {},
+    );
+    await settle();
+  }
+
+  Future<void> establishMutualSessions(
+    MessagingStack a,
+    MessagingStack b,
+  ) async {
+    await a.cryptoService.establishSession(
+      SignalProtocolAddress(b.selfDeviceId, 1),
+      await b.identityService.getLocalPreKeyBundle(),
+    );
+    final bootstrap = await a.cryptoService.encrypt(
+      SignalProtocolAddress(b.selfDeviceId, 1),
+      Uint8List.fromList([0]),
+    );
+    await b.cryptoService.decrypt(
+      SignalProtocolAddress(a.selfDeviceId, 1),
+      bootstrap,
+    );
+  }
+
+  /// Seeds a `groups`/`group_members` row pair directly on [db] with the
+  /// EXACT SAME [groupId] the sender's own `GroupRepository.createGroup`
+  /// minted — two independent devices' local views of the same real-world
+  /// group (ADR-0005: no server, each device keeps its own copy).
+  Future<void> seedGroupView(
+    AppDatabase db, {
+    required String groupId,
+    required int membershipEpoch,
+    required String ownerDeviceId,
+    required List<String> memberDeviceIds,
+  }) async {
+    await db.into(db.groups).insert(
+          GroupsCompanion.insert(
+            id: groupId,
+            name: 'G',
+            createdAt: 0,
+            createdByDeviceId: ownerDeviceId,
+            membershipEpoch: Value(membershipEpoch),
+          ),
+        );
+    for (final deviceId in memberDeviceIds) {
+      await db.into(db.groupMembers).insert(
+            GroupMembersCompanion.insert(
+              groupId: groupId,
+              deviceId: deviceId,
+              role: (deviceId == ownerDeviceId
+                      ? GroupRole.owner
+                      : GroupRole.member)
+                  .name,
+              joinedAtEpoch: 0,
+            ),
+          );
+    }
+  }
+
+  /// Two real `MessagingStack`s ("alice"/"bob"), each `MessagingStack
+  /// .create`d exactly the way the app builds one, with a real group both
+  /// devices are current members of and alice's sender-key chain already
+  /// distributed to bob — the state a real two-device group is in right
+  /// before someone sends the first message. Returns the group id and both
+  /// stacks; callers send through `alice.sendGroupMessage` — the composed
+  /// object — never a locally-constructed `SendGroupMessageUseCase`.
+  Future<({MessagingStack alice, MessagingStack bob, String groupId})>
+      twoStacksWithGroupReady() async {
+    final aSuffix = 'group-send-a-${suffixCounter++}';
+    final bSuffix = 'group-send-b-${suffixCounter++}';
+    mockSendAlwaysSucceeds(aSuffix);
+    mockSendAlwaysSucceeds(bSuffix);
+
+    final aliceDb = AppDatabase.forTesting(NativeDatabase.memory());
+    final aliceStore = DriftSignalProtocolStore(aliceDb);
+    final alice = await MessagingStack.create(
+      db: aliceDb,
+      selfDeviceId: 'alice',
+      store: aliceStore,
+      cryptoService: CryptoService.withStore(aliceStore),
+      transport: TransportService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: aSuffix,
+      ),
+    );
+    expect(alice.status, const MessagingStackStatus.ready());
+
+    final bobDb = AppDatabase.forTesting(NativeDatabase.memory());
+    final bobStore = DriftSignalProtocolStore(bobDb);
+    final bob = await MessagingStack.create(
+      db: bobDb,
+      selfDeviceId: 'bob',
+      store: bobStore,
+      cryptoService: CryptoService.withStore(bobStore),
+      transport: TransportService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: bSuffix,
+      ),
+    );
+    expect(bob.status, const MessagingStackStatus.ready());
+
+    await establishMutualSessions(alice, bob);
+
+    final groupId = await GroupRepository(alice.db).createGroup(
+      name: 'G',
+      ownerDeviceId: 'alice',
+      memberDeviceIds: ['bob'],
+    );
+    await seedGroupView(
+      bob.db,
+      groupId: groupId,
+      membershipEpoch: 0,
+      ownerDeviceId: 'alice',
+      memberDeviceIds: ['alice', 'bob'],
+    );
+
+    wireSend(aSuffix, alice.selfDeviceId, bSuffix);
+    bob.inbound.start();
+    await connectPeer(bSuffix, alice.selfDeviceId);
+    alice.routingEngine.recordLinkMeasurement(
+      bob.selfDeviceId,
+      latencyMs: 10,
+      lossRate: 0.0,
+      batteryDrain: 0.1,
+    );
+
+    // Real key distribution first (task file §6) -- otherwise bob's own
+    // `group.no_chain` rejection is the false alarm E07-T06's run log
+    // already documented, not a defect in this task's wiring.
+    await alice.groupCryptoService.ensureOwnChain(groupId: groupId, epoch: 0);
+    await alice.groupCryptoService.distributeTo(
+      groupId: groupId,
+      epoch: 0,
+      recipientDeviceIds: [bob.selfDeviceId],
+    );
+    await alice.relayEngine.processQueue();
+    await settle();
+    await settle();
+
+    return (alice: alice, bob: bob, groupId: groupId);
+  }
 
   test('test_EARS_COMM_6_stack_is_a_single_instance', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -293,6 +494,93 @@ void main() {
 
     await stack.dispose();
   });
+
+  // --- E07-T14: the group send path, composed (EARS-COMM-35) -----------
+
+  test('test_EARS_COMM_35_composed_stack_sends_a_real_group_message', () async {
+    final parties = await twoStacksWithGroupReady();
+    final alice = parties.alice;
+    final bob = parties.bob;
+    addTearDown(alice.dispose);
+    addTearDown(bob.dispose);
+
+    final deliveredFuture = bob.inbound.delivered.first;
+
+    // Reached ONLY through the composed object -- never a locally
+    // constructed SendGroupMessageUseCase (task file §6/§9).
+    final result = await alice.sendGroupMessage.send(
+      groupId: parties.groupId,
+      body: Uint8List.fromList('hi group'.codeUnits),
+    );
+    expect(result, isNull);
+
+    await alice.relayEngine.processQueue();
+    await settle();
+    await settle();
+
+    final delivered = await deliveredFuture;
+    expect(delivered.conversationId, parties.groupId);
+    expect(delivered.senderDeviceId, 'alice');
+
+    final rows = await bob.db.select(bob.db.messages).get();
+    expect(rows, hasLength(1));
+    expect(rows.single.conversationId, parties.groupId);
+  });
+
+  test(
+    'test_composed_send_group_message_uses_the_stack_database_and_identity',
+    () async {
+      final parties = await twoStacksWithGroupReady();
+      final alice = parties.alice;
+      final bob = parties.bob;
+      addTearDown(alice.dispose);
+      addTearDown(bob.dispose);
+
+      final result = await alice.sendGroupMessage.send(
+        groupId: parties.groupId,
+        body: Uint8List.fromList('second message'.codeUnits),
+      );
+      expect(result, isNull);
+
+      // The row lands in the stack's OWN db, under the stack's OWN
+      // selfDeviceId -- the composition proof, not a re-proof of the
+      // encryption/fan-out logic E07-T06 already covers.
+      final rows = await alice.db.select(alice.db.messages).get();
+      expect(rows, hasLength(1));
+      expect(rows.single.senderDeviceId, alice.selfDeviceId);
+      // A real, dense sequence number from the shared reserver -- the
+      // first message on a fresh conversationId/senderDeviceId pair is 0
+      // (same property `test_group_send_reserves_a_real_sequence_number_
+      // without_a_fake_seam` asserts in E07-T06's own suite, here proven
+      // through the composition root instead of a directly-constructed
+      // use case).
+      expect(rows.single.sequenceNumber, 0);
+
+      await alice.relayEngine.processQueue();
+      await settle();
+      await settle();
+    },
+  );
+
+  test(
+    'test_send_group_message_is_the_same_instance_on_every_read',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'device-a',
+        transport: newTransport(),
+      );
+      expect(stack.status, const MessagingStackStatus.ready());
+
+      expect(
+        identical(stack.sendGroupMessage, stack.sendGroupMessage),
+        isTrue,
+      );
+
+      await stack.dispose();
+    },
+  );
 }
 
 /// Small local helper so the decrypted-plaintext assertion above reads as a
