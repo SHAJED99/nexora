@@ -19,7 +19,7 @@ merged to `epic_07`, GAP-023 approved, `OQ-E07-T06-2` closed) ·
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 CHANGES (narrow) → round 3 APPROVE · squash-merged `93c3069` (PR #10) |
-| E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | dispatched · builder (sonnet), branch `epic_07_task_11` |
+| E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | in-review · builder (sonnet) → reviewer (opus) · PR #12 (680/680) · flagged deviation (CallMediaTransport.attach refactor touching E07-T09's contract) under scrutiny |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `5f6a81e` (PR #3); GAP-023 human-approved `23c88ab` |
 | E07-T14 | Compose the group send path into `MessagingStack` | backend | S | must | T06 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `517a1e9` (PR #9) |
