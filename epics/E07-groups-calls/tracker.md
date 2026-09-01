@@ -23,7 +23,7 @@
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `5f6a81e` (PR #3); GAP-023 human-approved `23c88ab` |
-| E07-T14 | Compose the group send path into `MessagingStack` | backend | S | must | T06 | todo · sharded 2026-09-01 discharging `OQ-E07-T06-2` (T06 §Open Questions) — nothing in `lib/` constructs `SendGroupMessageUseCase` |
+| E07-T14 | Compose the group send path into `MessagingStack` | backend | S | must | T06 | dispatched · builder (sonnet), branch `epic_07_task_14` |
 
 ⛔ = carries or is blocked by a 🧍 Open Question — see §Blocked.
 
