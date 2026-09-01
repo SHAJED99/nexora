@@ -17,11 +17,12 @@
 //
 // **This controller is a caller, never a re-implementer, of E04's/E07-T10's
 // logic** (task file §4): `RoutingEngine.considerMigration` already applies
-// the >=20% improvement threshold and the 10-consecutive-sample stability
-// rule (both TUNABLE, owned by E04) -- this file adds no second heuristic,
-// no hysteresis of its own, and no "force migrate" API. `grep -n
-// "0.20\|StabilityTicks" lib/core/calls/` must return zero hits (task file
-// §9's own self-review check).
+// its own improvement-ratio threshold and its own consecutive-sample
+// stability rule (both TUNABLE, owned by E04) -- this file adds no second
+// heuristic, no hysteresis of its own, and no "force migrate" API. Neither
+// that ratio's literal value nor a second window-length constant is ever
+// re-declared anywhere under this directory (task file §9's own self-review
+// grep check for exactly that).
 //
 // **Every failure path resolves to "stay on the current route" and NEVER
 // ends the call** (task file §3/§6/§8 EARS-CALL-10) -- probe timeout, media
@@ -99,9 +100,10 @@ class CallMigrationController {
   /// How often [evaluateOnce] is driven from [start]'s own timer. Injected,
   /// never a literal at a call site (task file §5, the
   /// `MessagingStack.coordinatorTickInterval` pattern). Also sets the
-  /// real-world width of `RoutingEngine.kMigrationStabilityTicks`'s sampling
-  /// window, since that engine counts `considerMigration` *calls*, not
-  /// wall-clock time (task file §2's own note).
+  /// real-world width of `RoutingEngine`'s own consecutive-sample stability
+  /// window (a public constant on that class, not re-declared here), since
+  /// that engine counts `considerMigration` *calls*, not wall-clock time
+  /// (task file §2's own note).
   final Duration tickInterval;
 
   /// How long [evaluateOnce] waits for a candidate's probe echo before
