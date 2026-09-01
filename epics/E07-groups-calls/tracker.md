@@ -19,7 +19,7 @@ half is now production-reachable, T10 in flight) ·
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
-| E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | in-review · round 1 CHANGES (2 blocking bugs: starvation guard actually starves bulk, budget under-spent) + 1 contract-vs-code gap (hybrid dispatch) routed to planner in parallel |
+| E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | in-review · round 1 CHANGES fixed (F1-F2 starvation/budget, F4 delivery semantics, F6 test gap) + planner contract ratification (b03889c) · round-2 review dispatched (665/665) |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `5f6a81e` (PR #3); GAP-023 human-approved `23c88ab` |
