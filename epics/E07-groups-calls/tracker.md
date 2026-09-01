@@ -17,7 +17,7 @@ GAP-023 approved, T06 + T09 dispatched) ·
 | E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | dispatched · builder (sonnet), branch `epic_07_task_06` |
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
-| E07-T09 | Call session state machine + signaling | backend | M | should | T04 | dispatched · builder (sonnet), branch `epic_07_task_09` |
+| E07-T09 | Call session state machine + signaling | backend | M | should | T04 | in-review · builder (sonnet) → reviewer (opus) · round 1 CHANGES (3 blocking, missing test evidence not wrong behavior) · PR #7 back to `claude-sonnet-5` |
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | todo |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
@@ -1088,3 +1088,98 @@ third round on it.
 
 **Ready to squash-merge — done, by the reviewer's own words.** Squash-merged
 to `epic_07` as `dfec62f` (PR #6).
+
+### E07-T09 — 2026-09-01 — 📋 **CHANGES** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+PR #7 → `epic_07` (`182c6e6`..`7a2a950`).
+
+- **Product code judged correct.** Reviewer independently falsified every
+  security/timer/glare/state-machine claim with their own probes and found
+  no defect — this is a coverage-gap CHANGES, not a behavior CHANGES.
+- **suite/lint: pass, run by reviewer.** `flutter analyze` → *No issues
+  found!*; `flutter test` → **613/613** (585 baseline + 28 new, confirmed
+  arithmetically — `epic_07` head unchanged at `182c6e6` since dispatch, so
+  the baseline had not moved).
+- **scope: in-contract.** Exactly the `files:` set + task file. Empty diffs
+  confirmed on `pubspec.yaml`/`pubspec.lock`/`lib/core/persistence/`
+  (no dependency, no call-history table) and on `InboundPipeline`/
+  `PrekeyExchange`/`DeliveryAckService`/`lib/features/groups/`.
+  `messaging_stack.dart` diff is purely additive (import + field +
+  construction + `registerControlHandler(kControlKindCallSignaling, ...)`),
+  kinds 1-4 untouched.
+- **Deviation 1 (`invite()` throws instead of a union return) — accepted.**
+  `PrekeyExchange.ensureSession` precedent confirmed real
+  (`prekey_exchange.dart:376,415`); `CallSession | AppFailure` is not
+  expressible in Dart. Noted for the epic sweep: `invite` now throws while
+  `accept`/`decline`/`hangup` return `AppFailure?` — a caller must handle
+  both shapes.
+- **Deviation 2 (`frame.source` grep satisfied by renaming to `wireFrame`)
+  — the underlying defense is real, verified by an independent falsification
+  probe** (forged wire header AND forged plaintext claim, both pointing at a
+  real third device with a real session — dropped, `callUnauthenticated`
+  incremented, paired positive control still rings). **Process concern,
+  not a blocker:** the self-review check itself is gameable by a rename and
+  happened to sit on a correct implementation by luck, not method —
+  flagged as a retro candidate (a grep-for-a-literal-string check should be
+  rewritten to assert the property, the same lesson→rule→hook path this
+  project has used before).
+- **Deviation 3 — legitimate glue.** `handleWireFrame` is structurally
+  required (`InboundPipeline`'s `ControlHandler` typedef signature cannot
+  be satisfied by `handleControlFrame(String, Uint8List)` directly);
+  `currentSession` is a read-only view needed for any callee-side
+  observation. `lastTransitionAt` is the weakest of the three — a genuinely
+  new field, unread by any test, justified on a false premise (`clock` is
+  already used elsewhere) — allowed as 3 harmless lines, but recorded so
+  the pattern isn't repeated.
+- **State machine totality, glare, blocked-peer silence, one-active-call,
+  callId integrity, `NullCallMediaTransport` honesty: all independently
+  verified PASS** with reviewer's own probes (not restated from the
+  builder), including a `fakeAsync`-based direct check that zero timers are
+  pending after six different terminal paths.
+
+**❌ F1 — checklist item ticked `[x]` with a commit hash for work that does
+not exist.** §7: "`CallSignalingFrame` round-trip + malformed rejection" is
+marked done, but `grep -n "deserialize|malformed|round|version|truncat"`
+across both test files returns **zero hits** — no test calls
+`CallSignalingFrame.deserialize` on anything but freshly-encoded bytes.
+`deserialize` is a hand-rolled length-prefixed binary decoder reading
+peer-controlled bytes post-decryption (an authenticated peer is exactly
+this mesh's threat model). Reviewer wrote the missing coverage and the
+parser survived every case (truncation at every offset, trailing garbage,
+bad version, unknown kind, oversized length prefix) — code is fine, the
+tick is false, and `mediaOffer` (placed on the wire specifically so future
+media doesn't re-version the frame) is never round-tripped by any PR test
+either.
+
+**❌ F2 — "every timer cancelled on every terminal transition, proven by
+test" falsified by mutation.** Reviewer deleted `_cancelRingTimer();` from
+`_end` (`call_session.dart:255`) and the **entire suite stayed green** — the
+cited tests only exercise the `_enter`-side cancellation and a
+defense-in-depth guard, never the `_end`-side cancellation that is §6's
+named #1 risk ("a leaked 45s timer that fires after `ended` will re-enter
+the machine"). **Dependency note:** the reviewer's own probe used
+`package:fake_async`, not currently a dependency anywhere in `test/` —
+adopting it is a new dev dependency and a 🧍 rule-3 gate. A
+`@visibleForTesting` seam on `CallSession` needs no new dependency;
+builder's/planner's call which route to take.
+
+**❌ F3 — EARS-CALL-3 only half-verified.** The criterion requires *either*
+party's termination to end *both* sessions with a matching reason; the
+named test drives one isolated `CallSession`, never through
+`handleControlFrame`. The whole remote-terminal branch of
+`_applyToCurrentOrDrop` is unexercised by the suite (reviewer confirmed by
+probe that the seam itself works — this is a coverage hole, not a defect,
+but §6/skills/bug-sweep both flag this exact seam as where bugs live).
+
+**Carried forward, non-blocking:** `CallEndReason.hangup`/the `active +
+hangup` transition are dead code today (`NullCallMediaTransport` ends every
+call the instant either side reaches `active`) — re-verify once `OQ-E07-3`
+lands and `hangup` becomes reachable; `callUnauthenticated` is bumped by
+benign glare loser-side traffic (counter doc already acknowledges the
+overload); `NullCallMediaTransport._healthController` is never closed
+(bounded leak, one per `MessagingStack`).
+
+Round 1 → back to the same implementer (`claude-sonnet-5`), per rule 5's
+first-rejection routing. All three findings are missing-test-evidence
+against product code the reviewer judged correct; reviewer left ready-made
+probe files in the scratchpad for the builder to adapt (paths in the full
+review transcript).
