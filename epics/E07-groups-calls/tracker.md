@@ -19,7 +19,7 @@ half is now production-reachable, T10 in flight) ·
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
-| E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | in-review · round 1 CHANGES fixed (F1-F2 starvation/budget, F4 delivery semantics, F6 test gap) + planner contract ratification (b03889c) · round-2 review dispatched (665/665) |
+| E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | in-review · round 2 CHANGES (narrow: F1 regression test is vacuous, F5/N2 undocumented) — fix code itself verified correct, no lib/ changes needed, round 3 dispatched |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `5f6a81e` (PR #3); GAP-023 human-approved `23c88ab` |
@@ -1586,3 +1586,41 @@ contained fixes inside code just written. F3 (+ F4's semantics) to the
 **planner** in parallel, to ratify the contract rather than re-litigate at
 next review. First rejection; no escalation triggered by count, but F3 is
 "a specification problem wearing a coding problem's clothes."
+
+### E07-T10 — round 2 — 2026-09-01 — 📋 **CHANGES** (narrow) (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+PR #10 → `epic_07`. All four shipped fixes (F1, F2, F4, F6) independently
+re-verified as functionally correct via the reviewer's own probes — this
+round is a test-integrity + documentation issue, not a code defect.
+
+- **F1 fix verified correct** (per-band reserve, tested up to 4 bands) —
+  but **N1, blocking: the shipped regression test is vacuous.** Reverting
+  *only* the F1 fix (leaving F2's rollover in place) still passes the
+  shipped test, because F2's rollover alone happens to satisfy that
+  specific test's thin-top-band shape. The builder's own falsification
+  claim ("reverted the fix, 0/50 bulk delivered") isn't reproducible by
+  reverting F1 alone — they must have reverted the whole function,
+  conflating F1+F2. **F1 currently ships with no regression guard.**
+  Fix: make the top band fat enough in the test to exhaust the budget
+  (more arrivals/cycle than budget), so F1's per-band reserve is what's
+  actually exercised.
+- **F2, F4, F6 all independently re-verified, including success-path
+  checks** (does `call.unreachable` now over-fire on genuine success? No
+  — checked explicitly) **and composition** (do F1's reserves and F2's
+  rollover interact correctly together? Yes, confirmed with a
+  thin-top/fat-middle/fat-bottom probe).
+- **Contract ratification `b03889c` confirmed docs-only** and now matches
+  the shipped code line-for-line, including corrected F4 semantics.
+- **suite: 665/665**, `flutter analyze` clean, independently confirmed.
+- **N2 (S4, non-blocking):** the F1 fix introduces a priority inversion at
+  budgets smaller than the live band count (realtime can get zero slots) —
+  not reachable today since no production caller passes a bounded budget,
+  but should be a Deviations line.
+- **F5 dropped, not actioned** — recorded only in round 1's tracker
+  verdict, never made it into the task file's §9 Deviations or the
+  tracker's own §Carried-forward observations. Reviewer named this
+  explicitly as the L-process-008 failure mode (a finding with no reader
+  until the sweep).
+
+**Routing:** back to the same builder — test-integrity fix only, no `lib/`
+change needed, no planner/escalation required (F3's specification issue
+was already closed last round; this is contained follow-through).
