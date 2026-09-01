@@ -199,7 +199,14 @@ is how a product acquires seven different empty states.
   instruction, 2026-08-29) — proposal as written: heading kept, rows
   deferred to E07, copy "No groups yet" for the empty treatment (matches
   GAP-002's established voice)
-- **built:** E06-T09 (heading + empty treatment) · rows deferred to E07
+- **built:** E06-T09 (heading + empty treatment) · rows built by **E07-T08**
+  (2026-09-02) — real per-group rows now render when `watchConversations()`
+  returns groups; the empty "No groups yet" treatment stays for a zero-group
+  device. Golden not re-extracted: `test/design/design_probe_test.dart`'s
+  `conversations` fixture (T01-owned, out of E07-T08's `files:` fence) seeds
+  no group data, so the design gate still reports the three rows as absent
+  — see E07-T08's own Run log for why that is a probe-fixture limitation,
+  not a code defect.
 
 ## GAP-007 — conversations, empty state (no conversations at all)
 - **status:** 🟡 proposed

@@ -32,11 +32,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 import 'package:nexora/core/crypto/crypto_stub.dart';
+import 'package:nexora/core/design/tokens.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
+import 'package:nexora/features/groups/data/group_repository.dart';
+import 'package:nexora/features/groups/domain/group_message_envelope.dart';
 import 'package:nexora/features/messaging/data/conversation_repository.dart';
 import 'package:nexora/features/messaging/domain/conversation_summary.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
@@ -130,6 +133,111 @@ String initialsOf(String name) {
   return alnum.substring(0, alnum.length >= 2 ? 2 : 1).toUpperCase();
 }
 
+/// GAP-009's approved delivery-tick glyph mapping — the SAME mapping
+/// `chat_view.dart`'s/`dashboard_view.dart`'s own `_tickIconFor` implement
+/// (byte-for-byte), exported here rather than duplicated a third time inside
+/// `conversations_view.dart` (E06-B03 fixed this screen's tick mapping by
+/// duplicating chat's function verbatim into the view; E07-T08 relocates
+/// that single copy here instead of adding a fourth, so both the Personal
+/// and the Groups sections read from exactly one definition in this
+/// feature — never re-derived, never a second `switch`).
+IconData tickIconFor(DeliveryState state) => switch (state) {
+      DeliveryState.queued => Icons.radio_button_unchecked,
+      DeliveryState.sent || DeliveryState.accepted || DeliveryState.stored =>
+        Icons.check,
+      DeliveryState.delivered => Icons.done_all,
+      DeliveryState.read => Icons.done_all,
+      DeliveryState.failed => Icons.error_outline,
+    };
+
+/// Paired colour split for [tickIconFor] — used by the Personal section only
+/// (task §5's `GroupRowViewModel` contract has no colour field; see the
+/// view's header note on why Groups rows render [tickIconFor]'s icon in one
+/// neutral tone rather than this read/unread split).
+Color tickColorFor(DeliveryState state) => state == DeliveryState.read
+    ? NexoraColors.devicesTrustedGreen
+    : NexoraColors.devicesMuted;
+
+/// "10:42 AM" (today) / "Yesterday" / "Oct 12" (older) — the three example
+/// formats the contract's own rows and its Groups section draw, without a
+/// new `intl` dependency (rule 3 — none is added here). Exported so both
+/// sections format identically from one definition; previously lived only
+/// in `conversations_view.dart` for the Personal section's own inline call.
+String relativeTimeLabel(DateTime dt) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final that = DateTime(dt.year, dt.month, dt.day);
+  final diffDays = today.difference(that).inDays;
+  if (diffDays == 0) return _formatClock(dt);
+  if (diffDays == 1) return 'Yesterday';
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${months[dt.month - 1]} ${dt.day}';
+}
+
+String _formatClock(DateTime dt) {
+  final hour24 = dt.hour;
+  final period = hour24 >= 12 ? 'PM' : 'AM';
+  var hour12 = hour24 % 12;
+  if (hour12 == 0) hour12 = 12;
+  final minute = dt.minute.toString().padLeft(2, '0');
+  return '$hour12:$minute $period';
+}
+
+/// One Groups-section row's already-resolved display data (task §5's exact
+/// contract, field for field against `design/screens/conversations.md`
+/// elements 22-33).
+///
+/// - [preview] is never null (unlike [ConversationTile.preview]) — a decrypt
+///   failure or an own-outgoing message (this device can never decrypt its
+///   own sender-key chain, mirroring the 1:1 asymmetry this file's header
+///   documents — `group_crypto_service_test.dart`: "a single device is
+///   never both the sender AND a receiver of its OWN chain") degrades to the
+///   empty string rather than an error row, exactly the graceful-degrade
+///   contract E06-T10 established for Personal.
+/// - [senderPrefix] is null exactly when the group's last message is this
+///   device's own — GAP-020's already-approved rule ("outgoing bubbles [get
+///   no attribution line]; the design never labels the user to themselves"),
+///   reused here rather than invented a second time for this row shape.
+/// - [connectivityIcon] is `Icons.dns` for every row: no per-group
+///   connectivity/route signal exists anywhere in [ConversationSummary] or
+///   `GroupRepository` (this task's `files:` fence forbids adding one), so a
+///   single, honest, uniform treatment is used rather than fabricating two
+///   states from no data — the same judgment call GAP-003 already made for
+///   the Devices/Personal-row avatar. `cloud_off` (the contract's other
+///   optional glyph, contract §2) is never rendered for the same reason.
+class GroupRowViewModel {
+  const GroupRowViewModel({
+    required this.conversationId,
+    required this.name,
+    required this.timestampLabel,
+    required this.preview,
+    this.senderPrefix,
+    required this.connectivityIcon,
+    required this.deliveryIcon,
+  });
+
+  final String conversationId;
+  final String name;
+  final String timestampLabel;
+  final String preview;
+  final String? senderPrefix;
+  final IconData connectivityIcon;
+  final IconData deliveryIcon;
+}
+
 class ConversationsController extends GetxController {
   // The task's own contract fixes these three named-parameter labels
   // (`repo`/`crypto`/`stack`) — an initializing formal would force the
@@ -147,12 +255,23 @@ class ConversationsController extends GetxController {
   final CryptoService _crypto;
   final MessagingStack _stack;
 
+  /// Constructed in [onInit] (needs `_stack.db`, only available once the
+  /// stack is confirmed ready) — the Groups section's own read surface for
+  /// a row's current `membershipEpoch` (needed to attempt a preview
+  /// decrypt; task §5/§2).
+  late final GroupRepository _groups = GroupRepository(_stack.db);
+
   /// Every loaded conversation, unfiltered — [conversations] is derived from
   /// this plus the current [search] query.
   final List<ConversationTile> _all = <ConversationTile>[];
 
   /// The one thing the view binds to (task contract).
   final RxList<ConversationTile> conversations = <ConversationTile>[].obs;
+
+  /// The Groups section's rows (task §5 contract) — derived from the same
+  /// widened `watchConversations()` stream, never filtered by [search]
+  /// (the task does not extend the client-side search filter to Groups).
+  final RxList<GroupRowViewModel> groups = <GroupRowViewModel>[].obs;
 
   /// True only until the first stream emission arrives (task §5 "loading:
   /// first stream emission pending") — never true again after that, so a
@@ -177,6 +296,11 @@ class ConversationsController extends GetxController {
   /// never needs re-decrypting (task §6 "cache by message id; decrypt only
   /// what changed").
   final Map<String, String?> _previewCache = <String, String?>{};
+
+  /// Same caching discipline as [_previewCache] (task §6), kept separate
+  /// since a group preview's decrypt inputs (`groupId`, `epoch`,
+  /// `senderDeviceId`) differ from a personal preview's.
+  final Map<String, String?> _groupPreviewCache = <String, String?>{};
 
   @override
   void onInit() {
@@ -208,21 +332,24 @@ class ConversationsController extends GetxController {
 
   Future<void> _onSummaries(List<ConversationSummary> summaries) async {
     final tiles = <ConversationTile>[];
+    final groupRows = <GroupRowViewModel>[];
+    // E07-T07 widened `watchConversations()` to emit group rows too, already
+    // interleaved by recency across both kinds. Splitting here preserves
+    // each section's own recency order (task §3 manual test) without a
+    // second query.
     for (final summary in summaries) {
-      // E07-T07 widened `watchConversations()` to emit group rows too. This
-      // screen's Personal section is the only row treatment that exists
-      // today; the `Groups` section is still GAP-006's placeholder and is
-      // populated by E07-T08, which owns this file next. Skipping group rows
-      // here preserves the Personal list byte-for-byte and never renders a
-      // group as if it were a peer.
-      if (summary.kind != ConversationKind.personal) continue;
-      final preview = await _resolvePreview(summary);
-      tiles.add(ConversationTile.from(summary, preview: preview));
+      if (summary.kind == ConversationKind.personal) {
+        final preview = await _resolvePreview(summary);
+        tiles.add(ConversationTile.from(summary, preview: preview));
+      } else {
+        groupRows.add(await _buildGroupRow(summary));
+      }
     }
     _all
       ..clear()
       ..addAll(tiles);
     _applyFilter();
+    groups.value = groupRows;
     errorMessage.value = '';
     loading.value = false;
   }
@@ -262,8 +389,8 @@ class ConversationsController extends GetxController {
     // E07-T07 made that field null for a group row (a group has no single
     // peer). No peer id means no 1:1 session to decrypt against — that is
     // "no preview", the same graceful degrade this method already applies to
-    // every other failure, not an error row. Group previews need the group
-    // sender-key session and belong to E07-T08.
+    // every other failure, not an error row. Group previews use the group
+    // sender-key session instead — see [_resolveGroupPreview].
     final peerDeviceId = summary.peerDeviceId;
     if (peerDeviceId == null) {
       _previewCache[summary.lastMessageId] = null;
@@ -286,6 +413,72 @@ class ConversationsController extends GetxController {
       preview = null;
     }
     _previewCache[summary.lastMessageId] = preview;
+    return preview;
+  }
+
+  /// Builds one Groups-section row (task §5's `GroupRowViewModel` contract)
+  /// from [summary]. The sender-name prefix (design element 26, "David
+  /// Chen:") is assembled HERE, in the screen layer — never added to
+  /// `ConversationSummary`/the repository (task §2, E07-T07 §2 restated) —
+  /// from [ConversationSummary.lastMessageSenderDeviceId], which E07-T07
+  /// exposed specifically so this row would not need a second query.
+  Future<GroupRowViewModel> _buildGroupRow(ConversationSummary summary) async {
+    final preview = await _resolveGroupPreview(summary);
+    return GroupRowViewModel(
+      conversationId: summary.conversationId,
+      name: summary.groupName ?? summary.conversationId,
+      timestampLabel: relativeTimeLabel(
+        DateTime.fromMillisecondsSinceEpoch(summary.lastMessageAt),
+      ),
+      preview: preview ?? '',
+      // GAP-020's already-approved rule, reused rather than re-derived:
+      // outgoing messages carry no self-attribution. `lastMessageIsMine`
+      // being true is exactly "the last message is this device's own".
+      senderPrefix: summary.lastMessageIsMine
+          ? null
+          : '${summary.lastMessageSenderDeviceId}:',
+      connectivityIcon: Icons.dns,
+      deliveryIcon: tickIconFor(summary.lastMessageState),
+    );
+  }
+
+  /// Decrypts a group row's last message for display only (task §2/§3),
+  /// mirroring [_resolvePreview]'s exact division and graceful-degrade
+  /// contract for the personal case: any failure — no chain held for that
+  /// sender/epoch (`group.no_chain`, including this device's own outgoing
+  /// messages, which this device can never decrypt under its own sending
+  /// chain — see `GroupRowViewModel`'s own doc comment), a parse failure, or
+  /// an unrecognized group — degrades to `null` ("no preview"), never an
+  /// error row.
+  Future<String?> _resolveGroupPreview(ConversationSummary summary) async {
+    if (_groupPreviewCache.containsKey(summary.lastMessageId)) {
+      return _groupPreviewCache[summary.lastMessageId];
+    }
+    String? preview;
+    try {
+      final group = await _groups.groupRow(summary.conversationId);
+      final epoch = group?.membershipEpoch;
+      if (epoch != null) {
+        final page = await _repo.messagesPage(
+          summary.conversationId,
+          limit: 1,
+        );
+        if (page.isNotEmpty && page.first.id == summary.lastMessageId) {
+          final plaintext = await _stack.groupCryptoService.decryptFromGroup(
+            groupId: summary.conversationId,
+            epoch: epoch,
+            senderDeviceId: summary.lastMessageSenderDeviceId,
+            bytes: page.first.ciphertext,
+          );
+          final envelope = GroupMessageEnvelope.deserialize(plaintext);
+          preview = utf8.decode(envelope.body);
+        }
+      }
+    } catch (_) {
+      // Graceful degrade — see this method's own doc comment.
+      preview = null;
+    }
+    _groupPreviewCache[summary.lastMessageId] = preview;
     return preview;
   }
 
