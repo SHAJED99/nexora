@@ -1,9 +1,9 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** in-progress (T01/T02/T03/T04/T05/T12/T13 merged to `epic_07`,
-GAP-023 approved, T06 + T09 dispatched) ·
+**Status:** in-progress (T01/T02/T03/T04/T05/T09/T12/T13 merged to `epic_07`,
+GAP-023 approved, T06 round-1 fix + `OQ-E07-T06-1` resolution in flight) ·
 **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 7/13
+**Completed:** — · **Progress:** 8/13
 
 ## Tasks
 
@@ -14,10 +14,10 @@ GAP-023 approved, T06 + T09 dispatched) ·
 | E07-T03 | Group membership control protocol | backend | M | must | T02 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `d6c0a2b` (PR #4) |
 | E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `82d6f20` (PR #5) |
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `dfec62f` (PR #6) |
-| E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | built · PR #8 (606/606) · ⛔ `OQ-E07-T06-1` (sequence-reservation seam left unbound, needs planner/human) — awaiting review dispatch |
+| E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | in-review · builder (sonnet) → reviewer (opus) · round 1 CHANGES (1 blocking, missing dedupe-branch test) · PR #8 back to `claude-sonnet-5` · ⛔ `OQ-E07-T06-1` (send path not production-reachable, sharding defect) — planner dispatched |
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
-| E07-T09 | Call session state machine + signaling | backend | M | should | T04 | built · round 2 fix pushed (625/625) · PR #7 awaiting round-2 review dispatch |
+| E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | todo |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
@@ -1183,3 +1183,140 @@ first-rejection routing. All three findings are missing-test-evidence
 against product code the reviewer judged correct; reviewer left ready-made
 probe files in the scratchpad for the builder to adapt (paths in the full
 review transcript).
+
+### E07-T09 — round 2 — 2026-09-01 — ✅ **APPROVE** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+PR #7 → `epic_07`. Fix commits `25b09d5` (tests + one getter) + `3337514`
+(bookkeeping), re-reviewed against round 1's `7a2a950` CHANGES point.
+
+- **scope: in-contract, independently confirmed.** `git diff --stat
+  7a2a950..3337514` touches exactly 4 files: the task file, one new
+  20-line getter (`hasPendingRingTimer`, 19 of which are its doc comment)
+  on `call_session.dart` (in-fence, `files: create`), and the two test
+  files. `pubspec.yaml`/`pubspec.lock` diff empty — no dependency added,
+  confirming the builder's claim to have avoided `package:fake_async`/
+  `meta` per round 1's instruction.
+- ✅ **F1 (codec) CLOSED, falsified independently — twice.** Reviewer
+  reproduced the builder's own falsification (removed the trailing-byte
+  guard, new test failed for the right reason) **and** ran a second probe
+  the builder never tried (removed the version check — a different test
+  failed for the right reason), proving the suite pins at least two
+  independent guards separately, not one guard covering both cases by
+  accident.
+- ✅ **F2 (timer seam) CLOSED, falsified independently.** Re-deleted
+  `_cancelRingTimer();` from `_end` — exactly the 3 new tests failed, 622
+  others stayed green. Confirmed `hasPendingRingTimer` reads real internal
+  state in both directions (true before a terminal event, false after) in
+  unmutated operation, not hardwired either way.
+- ✅ **F3 (remote-terminal) CLOSED, falsified independently.** Re-made
+  `_applyToCurrentOrDrop` a no-op for decline/cancel — both new tests
+  failed with state genuinely stuck (`outgoingRinging`/`incomingRinging`,
+  not merely a wrong reason), not `ended`. Restored, green.
+- **suite: pass, run by reviewer** — **625/625**, `flutter analyze` clean.
+  Matches builder's claim exactly; arithmetic cross-checked against
+  per-probe failure counts.
+- **round-1-approved surfaces untouched:** `git diff 7a2a950..HEAD -- lib/`
+  is exactly the one getter — `call_signaling.dart` (including the
+  `frame.source`→`wireFrame` rename defense verified sound in round 1) is
+  byte-identical.
+- **Two items carried to the epic sweep / retro, non-blocking:**
+  1. The §9 self-review check that greps for a literal string
+     (`grep -rn "frame.source"`) is gameable by a rename — should be
+     rewritten to assert the property, not the string (lesson→rule→hook
+     path this project has used before).
+  2. Round-1's F1 root cause (a checklist item ticked `[x]` with a commit
+     hash for a test that did not exist) is systemic — a `make health`
+     check that verifies each ticked §7 item's claimed test actually
+     appears in the diff of its cited commit would catch this
+     mechanically. Worth promoting.
+
+**Ready to squash-merge — done, by the reviewer's own words.** Squash-merged
+to `epic_07` as `586c8de` (PR #7).
+
+### E07-T06 — 2026-09-01 — 📋 **CHANGES** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+PR #8 → `epic_07`. One blocking finding; all five self-reported deviations
+independently judged and approved.
+
+- **scope: in-contract.** Exactly the 5 `files:` entries + task file.
+  Confirmed empty diffs on `send_message_use_case.dart`,
+  `lib/core/routing_engine/`, `relay_packet_frame.dart`,
+  `messaging_stack.dart`, `lib/core/persistence/`, `group_crypto_service.dart`.
+- **suite: pass, run by reviewer.** `flutter analyze` → *No issues found!*;
+  `flutter test` → **606/606** (585 baseline + 11 envelope + 10 send/receive,
+  counts verified per file).
+- **EARS: 3/4 genuinely falsifiable, EARS-COMM-32 is not — see F1.**
+
+**❌ F1 — S3 BLOCKER. The `messageId` dedupe branch
+(`inbound_pipeline.dart:577-583`, the exact guard §6 names by name) has
+zero test coverage; disabling it outright leaves the authorized test file
+fully green (`+10: All tests passed!`).**
+`test_EARS_COMM_32_duplicate_delivery_stores_once` re-pushes identical wire
+bytes, so libsignal's `GroupCipher` throws `DuplicateMessageException`
+before `handleGroupMessage` (and therefore the dedupe branch) is ever
+reached — the test proves E07-T04's spent-key discard, not this task's
+dedupe. The two guards cover different real cases: `messageId` dedupe is
+the *sole* guard against a frame that decrypts successfully a second time
+(an epoch re-distribution or same-epoch chain reset, E07-T05's territory),
+and that path is currently unguarded by any test. **Fix:** one test calling
+the public `handleGroupMessage` twice with the same envelope (already
+inside the authorized test file's fence), asserting one row, one
+`delivered` event, `duplicate == 1`. No production change needed — the code
+itself is correct.
+
+**Five self-reported deviations, all judged and approved:**
+1. **Unbound `ReserveGroupSequenceFn` seam — correctly raised, but
+   reviewer found the framing understates the real gap: `SendGroupMessageUseCase`
+   is constructed nowhere in `lib/`** (grepped, zero hits) — because §4
+   fenced off `messaging_stack.dart`, the only composition root in this
+   codebase. Binding the seam alone would not have made the send path
+   reachable; **this is a sharding defect, not a builder failure.** The
+   receive half IS live (`InboundPipeline` self-registers and is
+   constructed by `MessagingStack.create`), so this PR ships a working
+   receiver and a dead sender. Not a merge blocker — no in-fence change can
+   fix it. See `OQ-E07-T06-1` below and carried-forward items.
+2. **`kControlKindGroupMessage` self-registered inside `InboundPipeline`'s
+   constructor** — in-scope, safe today (keyed per-kind, no collision),
+   but creates a second registration pattern alongside kinds 1-4's
+   external wiring in `messaging_stack.dart`. Flagged for the follow-up
+   wiring task to normalize.
+3. **`GroupMessageRoutingHeader`** (cleartext `groupId`/`epoch` outside the
+   ciphertext) — necessary (chain selection must happen pre-decrypt) and
+   not a new side-channel: FR-ROUTE-003 permits routing/delivery metadata
+   in the clear, and the correlation concern is already exposed by the
+   "one payload, N frames" design's byte-identical ciphertext plus shared
+   `packetId` — the header adds nothing new to that linkage.
+4. **Receive-side reordering** (epoch-recognition → decrypt → authoritative
+   membership check, vs. the task text's literal "membership check →
+   decrypt") — judged the *safer* order: pre-decrypt, the only identity
+   available is the unauthenticated `frame.source` (E06-B04); checking
+   membership against it would BE the vulnerability. Falsified: a removed
+   member's stale-chain message is refused at the post-decrypt check
+   before any insert, tested. One residual, non-blocking: decrypt-before-check
+   lets a removed member advance their own chain state before rejection —
+   self-limited, not a leak, argues for purging chains on removal (carry
+   to sweep).
+5. **`DuplicateMessageException` mapping at the `inbound_pipeline.dart`
+   call site** — legitimate (the type isn't in libsignal's public barrel,
+   matches `crypto_failures.dart`'s existing pattern for the same reason),
+   not routing around a T04 bug. Same code path as F1: this mapping is
+   *why* EARS-COMM-32 passes without exercising the real dedupe.
+
+Round 1 → back to the same implementer (`claude-sonnet-5`); F1 is the only
+blocker, one test in an already-authorized file, no production change.
+
+**Carried forward from this review (not T06's to fix, recorded here per
+L-process-008 so they have a reader before the next dispatch):**
+- **FR-COMM-002's send half is not production-reachable** —
+  `SendGroupMessageUseCase` has no construction site anywhere in `lib/`.
+  Needs a follow-up wiring task that resolves `OQ-E07-T06-1` *and* adds the
+  composition-root call in `messaging_stack.dart` (and moves the kind-5
+  registration out of `InboundPipeline`'s constructor while there).
+- **`OQ-E07-T06-1` is a sharding lesson, not a coding one** — a task asked
+  for a working send path while forbidding the only file where it could be
+  composed. Retro candidate: any task producing a new injectable service
+  must have a composition root inside its own `files:` fence, checked at
+  shard time.
+- `handleGroupMessage` stamps `createdAt` from the local clock, discarding
+  `envelope.createdAtMs` — matches the existing 1:1 precedent
+  (`receive_message_use_case.dart:120`), so cross-device ordering isn't
+  actually guaranteed by either path. Epic-level question for the sweep,
+  not a T06 defect.
