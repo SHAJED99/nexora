@@ -19,7 +19,7 @@
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
-| E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | todo |
+| E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | dispatched · builder (sonnet), branch `epic_07_task_10` |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `5f6a81e` (PR #3); GAP-023 human-approved `23c88ab` |
