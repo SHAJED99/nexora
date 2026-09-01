@@ -1,10 +1,10 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** in-progress (T01/T02/T03/T04/T05/T09/T12/T13 merged to `epic_07`,
-GAP-023 approved, T06 round-1 fix + `OQ-E07-T06-1` resolution in flight,
-T14 sharded 2026-09-01 discharging `OQ-E07-T06-2`) ·
+**Status:** in-progress (T01/T02/T03/T04/T05/T06/T09/T12/T13 merged to
+`epic_07`, GAP-023 approved, T14 sharded 2026-09-01 discharging
+`OQ-E07-T06-2` — ready to dispatch now that T06 is merged) ·
 **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 8/14
+**Completed:** — · **Progress:** 9/14
 
 ## Tasks
 
@@ -15,7 +15,7 @@ T14 sharded 2026-09-01 discharging `OQ-E07-T06-2`) ·
 | E07-T03 | Group membership control protocol | backend | M | must | T02 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `d6c0a2b` (PR #4) |
 | E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `82d6f20` (PR #5) |
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `dfec62f` (PR #6) |
-| E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | in-review · round-2 APPROVE (613/613) · ⛔ S1 control-kind collision fix dispatched (merging in T09, renumbering kind 5→6) — merge held until green |
+| E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE → collision-fix APPROVE · squash-merged `6e4864d` (PR #8) |
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
@@ -1366,3 +1366,73 @@ L-process-008 so they have a reader before the next dispatch):**
   (`receive_message_use_case.dart:120`), so cross-device ordering isn't
   actually guaranteed by either path. Epic-level question for the sweep,
   not a T06 defect.
+
+### E07-T06 — round 2 — 2026-09-01 — ✅ **APPROVE** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+PR #8 → `epic_07`. F1 fix commits on top of `0c9becf` (the planner's
+`OQ-E07-T06-1` extraction, sanity-checked but not re-reviewed in full —
+one transaction, two call sites, confirmed clean and in-fence via the
+task's dated fence amendment).
+
+- **scope: in-contract, `inbound_pipeline.dart` diff empty across the fix.**
+  New test (`test_EARS_COMM_32_messageId_dedupe_branch_is_reached_directly`)
+  calls the public `handleGroupMessage` twice with one identical envelope,
+  bypassing the crypto layer entirely — confirmed it genuinely avoids the
+  `DuplicateMessageException` trap round 1 caught (enters below that guard).
+- **F1 CLOSED, falsified independently with two separate probes** (neutered
+  the lookup predicate; separately neutered the counter increment) — both
+  failed for the right reason, both restored clean.
+- **suite: 613/613**, run by reviewer, reconciled arithmetically (606
+  round-1 baseline + 4 reserver tests + 2 group-send tests from the
+  planner's commit + 1 new F1 test).
+- Round-1's four approved deviations confirmed byte-unchanged.
+
+**Ready to squash-merge — but held by the orchestrator**, because this
+round's review ran entirely on the PR's own branch tip, which still
+predated E07-T09's merge into `epic_07` — so it could not have detected
+the collision below.
+
+### E07-T06 — post-approval fix — 2026-09-01 — S1 control-kind collision with E07-T09
+Found by the orchestrator while sharding E07-T14 (not by either review
+round): `epic_07_task_06` branched before T09 merged, and both tasks
+independently claimed control-kind slot 5 —
+`kControlKindGroupMessage` (T06) and `kControlKindCallSignaling` (T09,
+now merged). `InboundPipeline.registerControlHandler` rejects a duplicate
+slot with `StateError`, so merging T06 unrenumbered would have broken
+**every** `MessagingStack.create()` call — an app-wide regression, not a
+group-messaging-only one. Confirmed directly by reading both files before
+dispatching any fix.
+
+**Fix:** merged `origin/epic_07` into the branch (bringing in T09 for the
+first time, zero conflicts), renumbered `kControlKindGroupMessage` from
+`5` to `6`, updated doc comments, confirmed via grep that every call site
+already referenced the constant (no stray literal `5` anywhere in the
+group-message path). Full merged suite (T01-T06, T09, T12, T13 together
+for the first time): **653/653**.
+
+### E07-T06 — collision-fix confirmation — 2026-09-01 — ✅ **APPROVE** (reviewer: `claude-opus-5`)
+Narrow, final check — not a re-review of the feature (rounds 1-2 already
+covered that).
+
+- **Merge clean:** `lib/core/calls/call_signaling.dart` present,
+  `kControlKindCallSignaling = 5` byte-unchanged; `git diff` on
+  `messaging_stack.dart`/`lib/core/calls/` across the merge is empty —
+  pure inclusion, no edits to T09's files.
+- **Renumbering complete:** full 6-slot map independently verified, all
+  named constants, no literal byte anywhere in the group-message
+  construct/dispatch path (`_controlHandlers` is a `Map<int,
+  ControlHandler>` keyed by constant, no switch table for a stale literal
+  to hide in).
+- **Fence respected:** fix commits touch exactly `inbound_pipeline.dart`,
+  `group_message_envelope.dart`, one test file, all in-fence.
+- **Falsification, reviewer's own probe:** reverted the constant to `5`
+  and ran T09's `messaging_stack_test.dart` — **every test failed**,
+  `Bad state: ... a control handler is already registered for
+  controlKind 5`, proving the collision was genuine and the fix is
+  load-bearing, not coincidental. Restored, green.
+- **suite: 653/653**, `flutter analyze` clean, both confirmed independently.
+- **Nothing masked from rounds 1/2:** diff since round 2's approved commit
+  touches exactly one file (`group_message_envelope.dart`, the constant +
+  its doc comment) in `lib/features/groups/`.
+
+**APPROVE — ready to squash-merge.** Squash-merged to `epic_07` as
+`6e4864d` (PR #8).
