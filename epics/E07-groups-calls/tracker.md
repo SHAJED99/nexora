@@ -1,10 +1,10 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** in-progress (T01/T02/T03/T04/T05/T06/T09/T12/T13 merged to
-`epic_07`, GAP-023 approved, T14 sharded 2026-09-01 discharging
-`OQ-E07-T06-2` — ready to dispatch now that T06 is merged) ·
+**Status:** in-progress (T01/T02/T03/T04/T05/T06/T09/T12/T13/T14 merged to
+`epic_07`, GAP-023 approved, `OQ-E07-T06-2` closed — FR-COMM-002's send
+half is now production-reachable, T10 in flight) ·
 **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 9/14
+**Completed:** — · **Progress:** 10/14
 
 ## Tasks
 
@@ -23,7 +23,7 @@
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `5f6a81e` (PR #3); GAP-023 human-approved `23c88ab` |
-| E07-T14 | Compose the group send path into `MessagingStack` | backend | S | must | T06 | in-review · builder (sonnet) → reviewer (opus) · PR #9 (656/656) |
+| E07-T14 | Compose the group send path into `MessagingStack` | backend | S | must | T06 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `517a1e9` (PR #9) |
 
 ⛔ = carries or is blocked by a 🧍 Open Question — see §Blocked.
 
@@ -1436,3 +1436,60 @@ covered that).
 
 **APPROVE — ready to squash-merge.** Squash-merged to `epic_07` as
 `6e4864d` (PR #8).
+
+### E07-T14 — 2026-09-01 — ✅ **APPROVE** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+PR #9 → `epic_07`. Small, mechanical composition task by design — no new
+behavior, only wiring `SendGroupMessageUseCase` (built and tested against
+fakes by E07-T06) into the real `MessagingStack` composition root.
+
+- **scope: in-contract, clean.** Whole diff is `messaging_stack.dart`
+  (+47), `messaging_stack_test.dart` (+290), task file bookkeeping. Empty
+  diffs confirmed on `lib/app/bindings.dart`, `inbound_pipeline.dart`,
+  `lib/features/groups/`, `lib/features/messaging/`,
+  `lib/core/persistence/`, `pubspec.yaml`/`pubspec.lock`.
+- **construction-order hazard — falsified, genuinely load-bearing.**
+  Reviewer hoisted `sendGroupMessage`'s construction above
+  `groupCryptoService`'s assignment — 7 tests failed with
+  `LateInitializationError`, loud and inside `create()` (which every
+  existing stack test calls), so a regression here cannot reach review
+  under a green suite. Restored, 656/656 again.
+- **reservation seam NOT rebound — the strongest finding.**
+  `grep -n "reserveSequence" lib/core/messaging/messaging_stack.dart` →
+  zero hits, confirmed by the reviewer directly, then traced the omission
+  through to `send_group_message_use_case.dart`'s default binding
+  (`_sharedReserver` → `MessageSequenceReserver(db, selfDeviceId)`) — the
+  one shared transaction, no second writer created at the composition
+  root. `OQ-E07-T06-1`'s resolution holds under composition.
+- **test proves composition, not logic — verified with two independent
+  probes the builder didn't run:** neutered `relayEngine.enqueue` to a
+  no-op → the EARS-COMM-35 test times out awaiting real delivery (proves
+  it depends on the real relay path, not a stub); swapped `selfDeviceId`
+  for a wrong value → a different test fails crisply with
+  `group.not_a_member`. Neither test is vacuous.
+- **`relayEngine.enqueue` tear-off signature verified by reading both
+  sides** — identical arity/order/return type to `GroupMessageEnqueueFn`,
+  no adapter needed or invented.
+- **`create()` untouched for the new field** — `sendGroupMessage` appears
+  only in the constructor body assignment and its field declaration,
+  never in `create()`.
+- **suite: 656/656**, `flutter analyze` clean, run independently by the
+  reviewer.
+- **Non-blocking (S4):** §9's "Deviations: None" is technically inaccurate
+  — one `GroupRepository(alice.db)` is constructed in test *setup* (never
+  to reach the use case under test), which §8's test-plan language
+  technically excludes; the choice is defensible (avoids dragging E07-T03
+  membership-frame choreography into an unrelated test) but should have
+  been named as a conscious trade-off rather than left as "none." Not
+  worth a round trip.
+
+**Closes `OQ-E07-T06-2`. FR-COMM-002's send half is now
+production-reachable**, not only proven against fakes. Squash-merged to
+`epic_07` as `517a1e9` (PR #9).
+
+Two carry-forwards, both already named with an owner, neither this task's
+to fix: `kControlKindGroupMessage`'s self-registration inside
+`InboundPipeline`'s constructor remains inconsistent with kinds 1-5's
+external wiring — T14 creates the first external call site, so the
+question is now live for whoever next edits that registration; there is
+still no group-send UI consumer (blocked on GAP-020), so `bindings.dart`
+correctly gained no registration.
