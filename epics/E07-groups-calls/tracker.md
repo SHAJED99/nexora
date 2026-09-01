@@ -1,9 +1,10 @@
 # E07 · Groups & Voice Calls · Progress
 
 **Status:** in-progress (T01/T02/T03/T04/T05/T09/T12/T13 merged to `epic_07`,
-GAP-023 approved, T06 round-1 fix + `OQ-E07-T06-1` resolution in flight) ·
+GAP-023 approved, T06 round-1 fix + `OQ-E07-T06-1` resolution in flight,
+T14 sharded 2026-09-01 discharging `OQ-E07-T06-2`) ·
 **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 8/13
+**Completed:** — · **Progress:** 8/14
 
 ## Tasks
 
@@ -22,6 +23,7 @@ GAP-023 approved, T06 round-1 fix + `OQ-E07-T06-1` resolution in flight) ·
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `5f6a81e` (PR #3); GAP-023 human-approved `23c88ab` |
+| E07-T14 | Compose the group send path into `MessagingStack` | backend | S | must | T06 | todo · sharded 2026-09-01 discharging `OQ-E07-T06-2` (T06 §Open Questions) — nothing in `lib/` constructs `SendGroupMessageUseCase` |
 
 ⛔ = carries or is blocked by a 🧍 Open Question — see §Blocked.
 
@@ -38,6 +40,7 @@ graph TD
     T06["E07-T06<br/>group message fan-out"]
     T07["E07-T07<br/>read model widened"]
     T08["E07-T08<br/>Groups section UI<br/>closes GAP-006"]
+    T14["E07-T14<br/>compose send path into<br/>MessagingStack<br/>discharges OQ-E07-T06-2"]
   end
 
   subgraph calls["Call vertical — independent of OQ-E07-3"]
@@ -52,6 +55,7 @@ graph TD
   end
 
   T01 --> T02 --> T03 --> T04 --> T05 --> T06 --> T07 --> T08
+  T06 --> T14
   T01 --> T04
   T04 -.->|"file serialization on<br/>messaging_stack.dart"| T09
   T09 --> T10 --> T11
@@ -68,7 +72,15 @@ graph TD
 
 **Parallel sets** (file-collision-checked, analyze gate §Collision matrix):
 `{T01, T12}` → `{T02}` → `{T03}` → `{T04}` → `{T06, T09}` →
-`{T07, T10}` → `{T08, T11, T13}`.
+`{T07, T10, T14}` → `{T08, T11, T13}`.
+
+**T14 blocks nothing, verified against the task files rather than assumed.**
+T07 is a read projection (`conversation_repository.dart`,
+`conversation_summary.dart`) and T08 lists groups on the Conversations
+screen — neither sends a group message, and the first thing that would (a
+group *thread* view) is prospective and blocked on GAP-020. `messaging_stack.dart`
+is in no other unmerged E07 task's `files:` fence, so T14 parallelises with
+T07/T08 cleanly.
 
 **T09's `depends_on: [E07-T04]` is deliberate serialization, not a semantic
 dependency** — call signaling needs nothing from the sender-key layer, but
@@ -257,6 +269,30 @@ exact section for eight tasks with no reader.)_
   so the stale row is always there to be loaded. **Fold into E07-T03 and
   E07-T06** — the enforcing layers — as an explicit precondition on every role
   load.
+
+- **2026-09-01 · E07-T06 → E07-T14 sharding · `kControlKindGroupMessage`
+  registration is the only handler not wired in the composition root
+  (advisory, S4 — a consistency cost, not a defect).** E07-T06 self-registers
+  its control kind inside `InboundPipeline`'s own constructor (T06 §9
+  Deviation 2) because no external call site existed inside its `files:`
+  fence; kinds 1–5 are all registered from `messaging_stack.dart`. E07-T14
+  creates that external call site, so the question became live and was
+  deliberately answered **no** — see `E07-T14.md` §4 for the three reasons
+  (it proves none of T14's own criterion; it is an `inbound_pipeline.dart`
+  refactor whose failure mode is a silently unregistered handler with a green
+  suite, deserving its own falsification test; and T06's closure form is safe
+  as written). **Owner: whichever later task next edits
+  `inbound_pipeline.dart`'s control-handler registrations, or the E07 bug
+  sweep.** Re-check at each such dispatch, `L-process-008` style.
+
+- **2026-09-01 · E07-T06 · control-kind slot collision (S1, reported against
+  PR #8 — T06's to fix before merge, NOT T14's).** T06 branched at `182c6e6`,
+  before T09 merged, and assigns `kControlKindGroupMessage = 5`
+  (`group_message_envelope.dart:58`) — the slot `kControlKindCallSignaling = 5`
+  (`call_signaling.dart:95`) already occupies on `epic_07`.
+  `InboundPipeline.registerControlHandler` rejects a duplicate slot, so an
+  unrenumbered merge makes **every** `MessagingStack.create` throw. Recorded
+  in `E07-T14.md` §6 as a precondition to verify at that task's branch point.
 
 - **(from E07-T03 review, 2026-08-31) Group-control authentication is only as
   strong as the project's trust-on-first-use identity model — owner: E11, not
@@ -633,7 +669,7 @@ No second rejection; no planner escalation needed. Ready for the
 orchestrator to squash-merge to `epic_07`.
 
 ## Bug sweep
-_(after all 13 tasks land — `skills/bug-sweep`. Note `L-process-009`: every
+_(after all 14 tasks land — `skills/bug-sweep`. Note `L-process-009`: every
 E07 bug task file must carry a §4 scope fence; every bug file in the
 project before E06's retro lacked one.)_
 
@@ -658,6 +694,16 @@ project before E06's retro lacked one.)_
   deliberately at this pass, as that ADR and this epic's own §Risks both
   required, and recorded as `OQ-E07-8` for cheap rejection. Analyze report
   appended to `epic.md`; 🧍 `analyze_report` gate ⏳.
+- 2026-09-01 **Sharded to 14 tasks** — `E07-T14` added by the planner on
+  `epic_07`, discharging `OQ-E07-T06-2` (nothing in `lib/` constructs
+  `SendGroupMessageUseCase`; `messaging_stack.dart` sat outside every E07
+  task's `files:` fence) after the human approved the advisory to shard
+  rather than widen T06 a second time. `depends_on: [E07-T06]`, `blocks: []`
+  (verified against T07/T08's own task files, not assumed), size S, `must`,
+  `traces_to: [FR-COMM-002]`, new criterion **EARS-COMM-35**. Two
+  carried-forward observations recorded in the same pass: the control-kind
+  slot collision on PR #8, and the deliberate decision not to normalize
+  T06's self-registered handler inside this task.
 
 ### E07-T04 — 2026-08-31 — 📋 **CHANGES** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5) — full security lens
 
