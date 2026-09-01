@@ -11,20 +11,30 @@
 // task frontmatter) — adding shared tokens there is a later screen's
 // housekeeping, not a reason to touch a file outside this task's contract.
 //
-// Two approved gaps this screen renders knowingly-incomplete, per
+// Approved gaps this screen renders knowingly-incomplete, per
 // `design/gaps.md`:
-// - GAP-006 — the `Groups` heading (element 21) stays; its three example
-//   rows (elements 22-33) are deliberately absent until E07.
+// - GAP-006 — the `Groups` heading (element 21) stays unconditionally, in
+//   BOTH the data and the empty state (rule 2 / design-fidelity rule 3 —
+//   never delete a measured element to satisfy the data layer). E07-T08
+//   closes this gap's "rows deferred to E07" clause: the Groups section now
+//   renders real rows (elements 22-33) when `controller.groups` is
+//   non-empty, and GAP-006's own approved "No groups yet" copy otherwise.
 // - GAP-007 — the Personal section shows "No conversations yet" instead of
 //   the design's two example rows when there are none.
 // - GAP-003 (reused from the Devices screen) — there is no avatar-image or
 //   display-name data source pre-E04, so every row uses the `MS`-style
 //   initials treatment (element 15's shape), never the image treatment
-//   (element 9) — the task's own §3 names this explicitly.
+//   (element 9) — the task's own §3 names this explicitly. The Groups
+//   section inherits the same absence for its per-row leading glyph: no
+//   per-group connectivity/route signal exists anywhere in this
+//   projection, so `conversations_controller.dart`'s `GroupRowViewModel`
+//   documents rendering `Icons.dns` uniformly rather than fabricating the
+//   design's two distinct leading-glyph states (`dns`/`group_off`) from no
+//   data, and never rendering the optional `cloud_off` glyph at all for the
+//   same reason (E07-T08 §9 Deviations).
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/design/tokens.dart';
-import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'conversations_controller.dart';
 
 /// Search-field / row-card fill — rgb(229, 238, 255), measured on this
@@ -50,6 +60,21 @@ const _sectionHeadingColor = Color(0xFFEAF1FF);
 const _rowBorder = Color(0x1AC7C4D8);
 const _avatarBackdrop = Color(0xFFCBDBF5);
 const _headerBorder = Color(0x1AC7C4D8);
+
+/// A group row's leading glyph colour — rgb(0, 70, 102), the `dns` example
+/// row's measured colour (element 22). Used uniformly per
+/// `GroupRowViewModel.connectivityIcon`'s own doc comment (no per-group
+/// connectivity signal exists to pick between the design's two example
+/// states).
+const _groupIconColor = Color(0xFF004666);
+
+/// Element 26's sender-name prefix ("David Chen:") — 14px w500
+/// rgb(11, 28, 48), i.e. `NexoraColors.loginHeading` by value.
+const _senderPrefixStyle = TextStyle(
+  fontSize: 14,
+  fontWeight: FontWeight.w500,
+  color: NexoraColors.loginHeading,
+);
 
 const _sectionHeadingStyle = TextStyle(
   fontSize: 22,
@@ -103,11 +128,10 @@ class ConversationsView extends GetView<ConversationsController> {
                   const SizedBox(height: 20),
                   const Text('Groups', style: _sectionHeadingStyle),
                   const SizedBox(height: 12),
-                  // GAP-006 — heading kept, rows deferred to E07.
-                  const Text(
-                    'No groups yet',
-                    style: NexoraTextStyles.devicesSectionSubtitle,
-                  ),
+                  // GAP-006 — heading kept unconditionally (above); the
+                  // empty-state copy or the real rows render below,
+                  // per E07-T08.
+                  _GroupsSection(controller: controller),
                 ],
               ),
             ),
@@ -342,9 +366,9 @@ class _ConversationRow extends StatelessWidget {
                       children: [
                         if (tile.lastMessageIsMine) ...[
                           Icon(
-                            _tickIconFor(tile.lastMessageState),
+                            tickIconFor(tile.lastMessageState),
                             size: 16,
-                            color: _tickColorFor(tile.lastMessageState),
+                            color: tickColorFor(tile.lastMessageState),
                           ),
                           const SizedBox(width: 4),
                         ],
@@ -374,27 +398,149 @@ class _ConversationRow extends StatelessWidget {
   }
 }
 
-/// GAP-009's approved glyph mapping, read from the SAME `DeliveryState`
-/// `ConversationTile.lastMessageState` already carries — the exact function
-/// `chat_view.dart`'s/`dashboard_view.dart`'s `_tickIconFor`/`_tickColorFor`
-/// implement, duplicated here per Dart's privacy model (this file's header,
-/// and dashboard_view.dart's own precedent for duplicating from chat_view)
-/// rather than defined a second, potentially-diverging way. Fixes E06-B03:
-/// this file previously rendered a literal `Icons.check` for every state
-/// except `read`, so `queued`/`delivered`/`failed` were all indistinguishable
-/// from an ordinary sent check on this screen.
-IconData _tickIconFor(DeliveryState state) => switch (state) {
-      DeliveryState.queued => Icons.radio_button_unchecked,
-      DeliveryState.sent || DeliveryState.accepted || DeliveryState.stored =>
-        Icons.check,
-      DeliveryState.delivered => Icons.done_all,
-      DeliveryState.read => Icons.done_all,
-      DeliveryState.failed => Icons.error_outline,
-    };
+/// Elements 22-33: the "Groups" heading's content — GAP-006's approved empty
+/// treatment, or the real per-group rows built by
+/// `ConversationsController._buildGroupRow`.
+class _GroupsSection extends StatelessWidget {
+  const _GroupsSection({required this.controller});
 
-Color _tickColorFor(DeliveryState state) => state == DeliveryState.read
-    ? NexoraColors.devicesTrustedGreen
-    : NexoraColors.devicesMuted;
+  final ConversationsController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final rows = controller.groups;
+      if (rows.isEmpty) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(
+            child: Text(
+              'No groups yet',
+              style: NexoraTextStyles.devicesSectionSubtitle,
+            ),
+          ),
+        );
+      }
+      return Column(
+        children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) const SizedBox(height: 12),
+            _GroupRow(row: rows[i], controller: controller),
+          ],
+        ],
+      );
+    });
+  }
+}
+
+/// One group row — elements 22-27 (or 28-33)'s structure: leading
+/// connectivity glyph (`GroupRowViewModel.connectivityIcon`'s own doc
+/// comment — uniformly `Icons.dns`, no per-group signal exists), name,
+/// timestamp, delivery tick (GAP-009's shared mapping, reused via
+/// `tickIconFor` from `conversations_controller.dart` — never a second
+/// `switch`), optional sender-name prefix, preview, trailing lock.
+///
+/// Tap handled via `InkWell` inside a transparent `Material`, exactly like
+/// `_ConversationRow` — real gesture-arena participation and real semantics
+/// (design-fidelity Rule 5 / L-frontend-001: never a raw `Listener` to score
+/// better against the probe).
+class _GroupRow extends StatelessWidget {
+  const _GroupRow({required this.row, required this.controller});
+
+  final GroupRowViewModel row;
+  final ConversationsController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: () => controller.openConversation(row.conversationId),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _fieldAndRowFill,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _rowBorder),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 46,
+                height: 46,
+                child: Center(
+                  child: Icon(
+                    row.connectivityIcon,
+                    size: 24,
+                    color: _groupIconColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            row.name,
+                            style: NexoraTextStyles.devicesDeviceName,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(row.timestampLabel, style: _timestampStyle),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          row.deliveryIcon,
+                          size: 16,
+                          color: NexoraColors.devicesMuted,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                if (row.senderPrefix != null)
+                                  TextSpan(
+                                    text: '${row.senderPrefix} ',
+                                    style: _senderPrefixStyle,
+                                  ),
+                                TextSpan(
+                                  text: row.preview,
+                                  style: NexoraTextStyles.devicesSectionSubtitle,
+                                ),
+                              ],
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.lock,
+                          size: 20,
+                          color: NexoraColors.welcomeHeading,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 /// Elements 34-45: Dashboard/Conversations/Devices/Settings. Conversations
 /// is the active tab (element 37's filled pill); Dashboard's own route
