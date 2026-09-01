@@ -1,10 +1,10 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** in-progress (T01/T02/T03/T04/T05/T06/T07/T09/T10/T11/T12/T13/T14
-merged to `epic_07` — every backend task done — T08 (last task, frontend)
-in flight) ·
+**Status:** build-complete — all 14 tasks merged to `epic_07`. Awaiting
+the epic bug sweep, then the human `verified` gate and merge to
+`development`. ·
 **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 13/14
+**Completed:** — · **Progress:** 14/14
 
 ## Tasks
 
@@ -17,7 +17,7 @@ in flight) ·
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `dfec62f` (PR #6) |
 | E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE → collision-fix APPROVE · squash-merged `6e4864d` (PR #8) |
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | done · builder (sonnet) + planner (opus, `OQ-E07-T07-1` fix) → reviewer (opus) · APPROVE · squash-merged `430fc88` (PR #11) |
-| E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | in-review · builder-ui (sonnet) → reviewer (opus) · PR #13 (697/697), design gate 21.1%/12/57 matches E06-B03 baseline · flagged: round-trip test bypasses real transport pipeline |
+| E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | done · builder-ui (sonnet) → reviewer (opus) · APPROVE · squash-merged `b33ff62` (PR #13) |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 CHANGES (narrow) → round 3 APPROVE · squash-merged `93c3069` (PR #10) |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `7955610` (PR #12) |
@@ -709,9 +709,27 @@ No second rejection; no planner escalation needed. Ready for the
 orchestrator to squash-merge to `epic_07`.
 
 ## Bug sweep
-_(after all 14 tasks land — `skills/bug-sweep`. Note `L-process-009`: every
-E07 bug task file must carry a §4 scope fence; every bug file in the
-project before E06's retro lacked one.)_
+**All 14 tasks landed 2026-09-02 — ready to run `skills/bug-sweep`.** Note
+`L-process-009`: every E07 bug task file must carry a §4 scope fence;
+every bug file in the project before E06's retro lacked one.
+
+The seam-shaped carried-forward observations accumulated across this
+epic's reviews (§Carried-forward observations above, and the
+task-specific review-log entries) are the sweep's natural starting
+checklist rather than a blank search — in particular:
+- `OQ-E07-T06-2`'s shape recurring at O4 (E07-T11): `CallMigrationController`
+  has no composition-root call site, same as `SendGroupMessageUseCase`
+  had before E07-T14.
+- The T09/T10 `RoutingEngine._lastProfile` per-destination stickiness
+  crossing a task seam.
+- The three E07-T07 read-model seams named for E07-T08 (now merged) —
+  re-check whether E07-T08's shipped code made a deliberate choice on
+  each or inherited the behavior silently.
+- The E07-T11 media-transport seam gaps (O1/O2) to hand to the
+  prospective real-time media-path task as explicit inputs.
+- The likely-narrowed test-hang cause from E07-T08's review (missing
+  `connectPeer`/`recordLinkMeasurement` wiring in cross-stack test
+  helpers) — worth confirming across the epic's other two-stack tests.
 
 ## Event log (append-only)
 - 2026-08-26 E07 drafted during Wave 1 epic-breakdown; deferred to a later wave.
@@ -1859,3 +1877,74 @@ rediscovered:**
   runtime, only under test. Defensible while the media half is deferred,
   but exactly the seam-shaped gap `skills/bug-sweep` exists to catch
   explicitly rather than implicitly (the same shape as `OQ-E07-T06-2`).
+
+### E07-T08 — 2026-09-02 — ✅ **APPROVE** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+PR #13 → `epic_07`. **Final task in E07's 14-task shard.**
+
+- **The round-trip test shortcut — independently re-derived as
+  legitimate, not accepted on the builder's reasoning.** The test copies
+  the sender's chain-state row directly into the receiver's DB (bypassing
+  E07-T06's relay/distribution layer) after the original full-pipeline
+  version hung for reasons never fully root-caused. Reviewer wrote 4
+  falsification probes: **late-copy fails to decrypt** (proving real
+  chain-ratchet key derivation, real forward secrecy — a trivially-
+  matching state would still decrypt late; it doesn't), **a flipped
+  ciphertext byte fails** (proving real AEAD/MAC verification), plus two
+  more confirming the fixture's production-faithfulness. Traced both real
+  send/receive paths and confirmed they store exactly the bytes the test
+  hand-inserts — the shortcut is confined to *how the chain arrived*, not
+  to what decrypt sees.
+- **Bypassing distribution is not a gap** — `group_crypto_service_test.dart`
+  already proves the full real distribution→decrypt path at the layer
+  that owns it (E07-T04); re-proving it here would only add a second,
+  more fragile copy. Correct division of responsibility.
+- **The two "test bugs" found and fixed are genuinely test bugs, not
+  production ambiguities** — verified against production code directly
+  (late chain copy correctly maps to `AppFailure('group.no_chain')`,
+  which is FR-GROUP-006's specified late-joiner behavior, not a defect;
+  the envelope-wrapping bug was purely test-side).
+- **The design-gate-can't-see-the-new-UI question — honestly disclosed,
+  not sold as a pass.** The shared `design_probe_test.dart` fixture
+  (T01-owned, outside this task's fence) seeds zero groups, so the probe
+  still renders the empty-state copy and the gate reports **FAIL, 0/1
+  screen-states** — reviewer independently reproduced this. Disclosed in
+  three places (task file Deviation 4, the GAP-006 `built:` line, the PR
+  body), each accurate; the actual row rendering is proven by this task's
+  own widget tests with real seeded group data instead, and that
+  substitution is stated, not implied. Correct handling under
+  design-fidelity Rule 5 — record the cause, don't reach outside the
+  fence to fix a shared fixture.
+- **All three self-reported deviations judged legitimate**, each forced
+  by what the read model actually exposes (no connectivity field, no
+  colour field in the contract, search-filtering not in scope) — none is
+  scope creep.
+- Heading-unconditional, prefix-in-controller, shared-glyph-mapping,
+  no-create-affordance, zero-`Listener`, blocked-member-still-listed, and
+  file-scope all independently verified with file:line evidence.
+- **suite: 697/697**, `flutter analyze` clean, design gate independently
+  reproduced at 21.1%/12/57 — exactly E06-B03's baseline, no regression.
+
+**Ready to squash-merge — done.** Squash-merged to `epic_07` as `b33ff62`
+(PR #13). **E07 is now build-complete: all 14 tasks merged.**
+
+**Carried forward for the epic bug sweep:**
+- **The abandoned test hang is likely narrowed, not just disclosed.**
+  Reviewer traces it to two mandatory two-stack delivery wiring steps
+  documented in `group_crypto_service_test.dart` (`connectPeer(...)` and
+  `routingEngine.recordLinkMeasurement(...)`) — omitting either makes a
+  test await delivery that silently never completes, matching "hung
+  indefinitely" exactly. Reframes this from "possible shared-infra bug"
+  to "known-required wiring omitted" — much less alarming for
+  T04/T05/T06/T09, but **any future E07 test awaiting cross-stack
+  delivery should copy that helper wholesale rather than re-deriving it.**
+- Sender-name prefix renders the raw device id (`device-a:`) rather than
+  a display name — forced (no display-name source pre-E04), traces
+  cleanly to approved `GAP-003`, consistently applied, not a rule-2
+  violation — but should have been listed as a 4th numbered Deviation
+  alongside the other three for completeness.
+- No test asserts the `Groups` heading renders in the DATA state
+  (only empty) — structurally guaranteed by the view's widget tree so it
+  can't regress silently, but cheap to add explicitly.
+- **Whichever task next owns `design/tools`/`test/design/design_probe_test.dart`
+  should seed a group fixture** so GAP-006's rows finally become
+  gate-visible — currently the gate cannot see this task's own UI at all.
