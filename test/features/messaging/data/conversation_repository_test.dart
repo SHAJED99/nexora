@@ -1,5 +1,8 @@
 // E06-T09 — ConversationRepository: the pure read model over `messages` +
 // `relationships`. Tests are named by the EARS id they prove (task §8).
+// Widened by E07-T07 to also cover `groups` + `group_members`
+// (EARS-COMM-33/34 and the group-related contract tests below) — E06-T09's
+// own tests above the E07-T07 marker are UNMODIFIED.
 //
 // `AppDatabase.forTesting(NativeDatabase.memory())` is the established
 // pattern across this repo's data-layer tests (e.g.
@@ -7,11 +10,13 @@
 // test/core/persistence/message_migration_test.dart).
 import 'dart:io';
 
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/persistence/group_tables.dart';
 import 'package:nexora/features/messaging/data/conversation_repository.dart';
+import 'package:nexora/features/messaging/domain/conversation_summary.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
@@ -55,6 +60,44 @@ Future<void> _insertMessage(
           ciphertext: Uint8List.fromList([1, 2, 3]),
           createdAt: createdAt,
           deliveryState: deliveryState.name,
+        ),
+      );
+}
+
+Future<void> _insertGroup(
+  AppDatabase db, {
+  required String id,
+  required String name,
+  String createdByDeviceId = 'owner-device',
+  int createdAt = 0,
+  bool isDeleted = false,
+}) {
+  return db.into(db.groups).insert(
+        GroupsCompanion.insert(
+          id: id,
+          name: name,
+          createdAt: createdAt,
+          createdByDeviceId: createdByDeviceId,
+          isDeleted: Value(isDeleted),
+        ),
+      );
+}
+
+Future<void> _insertMember(
+  AppDatabase db, {
+  required String groupId,
+  required String deviceId,
+  GroupRole role = GroupRole.member,
+  int joinedAtEpoch = 0,
+  int? removedAtEpoch,
+}) {
+  return db.into(db.groupMembers).insert(
+        GroupMembersCompanion.insert(
+          groupId: groupId,
+          deviceId: deviceId,
+          role: role.name,
+          joinedAtEpoch: joinedAtEpoch,
+          removedAtEpoch: Value(removedAtEpoch),
         ),
       );
 }
@@ -339,6 +382,241 @@ void main() {
       reason: 'ConversationRepository must never import CryptoService or '
           'anything from core/crypto -- decryption for display belongs in '
           'the screen layer (E06-T09 §2/§4).',
+    );
+  });
+
+  // --- E07-T07: widened to groups ---------------------------------------
+
+  test('test_EARS_COMM_33_personal_and_group_interleave_by_recency',
+      () async {
+    // Personal conversation, last activity at t=100.
+    await _insertMessage(db,
+        id: 'p-1', conversationId: 'peer-x', senderDeviceId: 'peer-x', createdAt: 100);
+
+    // Group conversation, last activity at t=300 (most recent overall).
+    await _insertGroup(db, id: 'g:team', name: 'Team');
+    await _insertMember(db, groupId: 'g:team', deviceId: selfDeviceId);
+    await _insertMember(db, groupId: 'g:team', deviceId: 'peer-y');
+    await _insertMessage(db,
+        id: 'g-1', conversationId: 'g:team', senderDeviceId: 'peer-y', createdAt: 300);
+
+    // Another personal conversation, last activity at t=200 (between the two).
+    await _insertMessage(db,
+        id: 'p-2', conversationId: 'peer-z', senderDeviceId: 'peer-z', createdAt: 200);
+
+    final list = await repository.listConversations();
+
+    expect(list, hasLength(3));
+    expect(list.map((c) => c.conversationId),
+        ['g:team', 'peer-z', 'peer-x']);
+
+    final group = list.first;
+    expect(group.kind, ConversationKind.group);
+    expect(group.groupName, 'Team');
+    expect(group.memberCount, 2);
+    expect(group.peerDeviceId, isNull);
+    expect(group.relationshipState, isNull);
+    expect(group.lastMessageId, 'g-1');
+    expect(group.lastMessageSenderDeviceId, 'peer-y');
+    expect(group.lastMessageIsMine, isFalse);
+
+    final personalNewer = list[1];
+    expect(personalNewer.kind, ConversationKind.personal);
+    expect(personalNewer.peerDeviceId, 'peer-z');
+    expect(personalNewer.groupName, isNull);
+    expect(personalNewer.memberCount, isNull);
+  });
+
+  test('test_EARS_COMM_33_deleted_group_is_absent_and_its_rows_are_retained',
+      () async {
+    await _insertGroup(db, id: 'g:gone', name: 'Gone', isDeleted: true);
+    await _insertMember(db, groupId: 'g:gone', deviceId: selfDeviceId);
+    await _insertMessage(db,
+        id: 'g-gone-1',
+        conversationId: 'g:gone',
+        senderDeviceId: 'peer-a',
+        createdAt: 100);
+
+    final list = await repository.listConversations();
+
+    expect(list, isEmpty);
+
+    // Excluded from the view, never deleted.
+    final rows = await (db.select(db.messages)
+          ..where((t) => t.conversationId.equals('g:gone')))
+        .get();
+    expect(rows, hasLength(1));
+  });
+
+  test('test_EARS_COMM_33_group_containing_a_blocked_peer_is_still_listed',
+      () async {
+    await _insertGroup(db, id: 'g:mixed', name: 'Mixed');
+    await _insertMember(db, groupId: 'g:mixed', deviceId: selfDeviceId);
+    await _insertMember(db, groupId: 'g:mixed', deviceId: 'peer-blocked');
+    await _insertMessage(db,
+        id: 'g-mixed-1',
+        conversationId: 'g:mixed',
+        senderDeviceId: 'peer-blocked',
+        createdAt: 100);
+
+    final relationships = RelationshipRepository(db);
+    await relationships.upsert('peer-blocked', RelationshipState.blocked);
+
+    final list = await repository.listConversations();
+
+    // The group is still listed even though one of its members is blocked
+    // on this device (E07-T07 §2 — blocking is asymmetric by design; the
+    // 1:1 exclusion in test_EARS_COMM_17_blocked_peer_is_excluded is
+    // unrelated and unaffected).
+    expect(list, hasLength(1));
+    expect(list.single.conversationId, 'g:mixed');
+    expect(list.single.kind, ConversationKind.group);
+  });
+
+  test('test_EARS_COMM_33_list_is_still_a_single_query', () async {
+    final counter = _QueryCounter();
+    final countedDb = AppDatabase.forTesting(
+      NativeDatabase.memory().interceptWith(counter),
+    );
+    addTearDown(countedDb.close);
+    final countedRepo =
+        ConversationRepository(countedDb, selfDeviceId: selfDeviceId);
+
+    Future<void> seed(int groupIndex) async {
+      final groupId = 'g:union-$groupIndex';
+      await _insertGroup(countedDb, id: groupId, name: 'Group $groupIndex');
+      await _insertMember(countedDb, groupId: groupId, deviceId: selfDeviceId);
+      await _insertMessage(countedDb,
+          id: 'union-msg-$groupIndex',
+          conversationId: groupId,
+          senderDeviceId: selfDeviceId,
+          createdAt: groupIndex);
+    }
+
+    // 2 personal + 2 group conversations.
+    for (var i = 0; i < 2; i++) {
+      await _insertMessage(countedDb,
+          id: 'union-personal-$i',
+          conversationId: 'conv-union-$i',
+          senderDeviceId: 'peer-$i',
+          createdAt: i);
+    }
+    for (var i = 0; i < 2; i++) {
+      await seed(i);
+    }
+    await countedRepo.listConversations();
+    final countAtFour = counter.listConversationsQueryCount;
+    expect(countAtFour, 1);
+
+    // Grow to 10 personal + 10 groups.
+    for (var i = 2; i < 10; i++) {
+      await _insertMessage(countedDb,
+          id: 'union-personal-$i',
+          conversationId: 'conv-union-$i',
+          senderDeviceId: 'peer-$i',
+          createdAt: i);
+    }
+    for (var i = 2; i < 10; i++) {
+      await seed(i);
+    }
+    await countedRepo.listConversations();
+    final countAtTwenty = counter.listConversationsQueryCount - countAtFour;
+
+    // The SECOND call (10 personal + 10 groups) must issue exactly as many
+    // grouped queries as the FIRST call (2 personal + 2 groups) did -- one.
+    // Widening the projection to a UNION over groups must not turn into a
+    // second round trip, let alone an N+1 (E07-T07 §6).
+    expect(countAtTwenty, countAtFour);
+  });
+
+  test('test_EARS_COMM_34_rename_emits_without_a_new_message', () async {
+    await _insertGroup(db, id: 'g:rename', name: 'Original Name');
+    await _insertMember(db, groupId: 'g:rename', deviceId: selfDeviceId);
+    await _insertMessage(db,
+        id: 'g-rename-1',
+        conversationId: 'g:rename',
+        senderDeviceId: selfDeviceId,
+        createdAt: 10);
+
+    final events = <List<dynamic>>[];
+    final subscription = repository
+        .watchConversations(coalesceWindow: const Duration(milliseconds: 5))
+        .listen(events.add);
+    addTearDown(subscription.cancel);
+
+    await Future.delayed(const Duration(milliseconds: 50));
+    expect(events, hasLength(1));
+    expect((events.single.single as dynamic).groupName, 'Original Name');
+
+    // Rename -- no new message.
+    await (db.update(db.groups)..where((t) => t.id.equals('g:rename')))
+        .write(const GroupsCompanion(name: Value('Renamed')));
+
+    await Future.delayed(const Duration(milliseconds: 50));
+    expect(events, hasLength(2));
+    expect((events.last.single as dynamic).groupName, 'Renamed');
+
+    // Membership change -- also no new message.
+    await _insertMember(db, groupId: 'g:rename', deviceId: 'peer-new');
+
+    await Future.delayed(const Duration(milliseconds: 50));
+    expect(events, hasLength(3));
+    expect((events.last.single as dynamic).memberCount, 2);
+  });
+
+  test('test_messages_page_works_unchanged_on_a_group_conversation_id',
+      () async {
+    const groupId = 'g:thread';
+    await _insertMessage(db,
+        id: 'gm-1',
+        conversationId: groupId,
+        senderDeviceId: 'peer-a',
+        createdAt: 10);
+    await _insertMessage(db,
+        id: 'gm-2',
+        conversationId: groupId,
+        senderDeviceId: selfDeviceId,
+        createdAt: 20);
+
+    final page = await repository.messagesPage(groupId);
+    expect(page.map((m) => m.id), ['gm-2', 'gm-1']);
+
+    final unread = await repository.unreadCount(groupId);
+    expect(unread, 1);
+
+    final events = <List<dynamic>>[];
+    final subscription =
+        repository.watchConversation(groupId).listen(events.add);
+    addTearDown(subscription.cancel);
+    await Future.delayed(const Duration(milliseconds: 20));
+    expect(events.last.map((m) => m.id), ['gm-2', 'gm-1']);
+  });
+
+  test('test_summary_has_no_preview_text_field_and_no_crypto_import', () {
+    final source = File(
+      'lib/features/messaging/domain/conversation_summary.dart',
+    ).readAsStringSync();
+    final codeLines = source
+        .split('\n')
+        .where((line) => !line.trim().startsWith('//'));
+
+    expect(
+      codeLines.any((line) => line.contains('previewText')),
+      isFalse,
+      reason: 'ConversationSummary must never grow a previewText field '
+          '(E06-T09 §2, E07-T07 §4) -- decryption for display belongs in '
+          'the screen layer. (Doc comments are allowed to name it while '
+          'explaining why it must not exist; only actual code is checked.)',
+    );
+
+    final importLines = source
+        .split('\n')
+        .where((line) => line.trim().startsWith('import '));
+    expect(
+      importLines.any((line) => line.contains('crypto')),
+      isFalse,
+      reason: 'ConversationSummary must never import anything from '
+          'core/crypto.',
     );
   });
 }
