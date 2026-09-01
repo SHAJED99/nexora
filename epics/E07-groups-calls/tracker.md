@@ -1,10 +1,10 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** in-progress (T01/T02/T03/T04/T05/T06/T07/T09/T10/T12/T13/T14
-merged to `epic_07`, GAP-023 approved, `OQ-E07-T06-2` and `OQ-E07-T07-1`
-closed, T11 in review) ·
+**Status:** in-progress (T01/T02/T03/T04/T05/T06/T07/T09/T10/T11/T12/T13/T14
+merged to `epic_07` — every backend task done — T08 (last task, frontend)
+in flight) ·
 **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 12/14
+**Completed:** — · **Progress:** 13/14
 
 ## Tasks
 
@@ -20,7 +20,7 @@ closed, T11 in review) ·
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | dispatched · builder-ui (sonnet), branch `epic_07_task_08` |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 CHANGES (narrow) → round 3 APPROVE · squash-merged `93c3069` (PR #10) |
-| E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | in-review · builder (sonnet) → reviewer (opus) · PR #12 (680/680) · flagged deviation (CallMediaTransport.attach refactor touching E07-T09's contract) under scrutiny |
+| E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `7955610` (PR #12) |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `5f6a81e` (PR #3); GAP-023 human-approved `23c88ab` |
 | E07-T14 | Compose the group send path into `MessagingStack` | backend | S | must | T06 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `517a1e9` (PR #9) |
@@ -225,6 +225,23 @@ exact section for eight tasks with no reader.)_
   documented in `E07-T10.md` §9 Deviations. **Owner: the epic sweep** —
   check whether messaging's route-failure path should reset or ignore a
   stale `realtime` profile left by an unrelated call.
+
+- **2026-09-02 · E07-T11 · `CallMigrationController` is not wired into
+  the app (advisory, S3 — the same shape as `OQ-E07-T06-2`).**
+  `grep -rn "CallMigrationController(" lib/` returns only its own
+  declaration — nothing in `lib/` constructs or starts it, so FR-CALL-003
+  is unreachable at runtime, only under test. Defensible while
+  `OQ-E07-3`'s media transport remains a human decision (there is nothing
+  useful to migrate to without one), but **owner: the prospective
+  real-time media-path task**, which will need to compose this controller
+  into `MessagingStack`/`CallSignaling` alongside whatever it wires for
+  the transport itself. Two related seam gaps to hand that task at the
+  same time (from T11's review, non-blocking today): (1) `_awaitMediaLive`
+  subscribes to the health stream after calling `attach()`, which would
+  drop a `live` event a real transport emits synchronously; (2) the seam's
+  `attach(CallSession)`/`detach()` signatures carry no route identity —
+  `session.activeRoute` still holds the OLD route at attach time — so a
+  real transport can't learn which route to bring up.
 
 - **2026-09-02 · E07-T07 → owner E07-T08 · three read-model seams to
   decide on deliberately (advisory, S3-S4).** From T07's review: (1) a
@@ -1766,3 +1783,79 @@ task dispatches):**
 - `watchConversations` still doesn't watch `relationships` (pre-existing
   from E06-T09, unchanged here, out of fence) — blocking/unblocking a peer
   doesn't re-emit the list.
+
+### E07-T11 — 2026-09-02 — ✅ **APPROVE** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+PR #12 → `epic_07`.
+
+- **The crux (self-flagged deviation): `CallMediaTransport.attach`
+  refactor — verified correct, in-fence, and load-bearing.** E07-T09's
+  original `attach` unconditionally ended the call
+  (`session.endLocally(CallEndReason.failed)`) — correct for the
+  *initial* attach (EARS-CALL-5), fatal for this task's reuse of the same
+  seam on an already-active call, where EARS-CALL-10 forbids ending the
+  call on any migration failure. Fix: moved the call-ending side effect
+  out of `attach` (now pure) into a new
+  `CallSignaling._attachInitialMedia` wrapper used only for the initial
+  attach path. **Reviewer independently confirmed by reading the merged
+  E07-T09 code directly** (not taking the diff's framing on faith), then
+  **falsified it**: deleted the relocated `endLocally` call and reran the
+  UNTOUCHED, protected `call_signaling_test.dart` — it failed for exactly
+  the right reason (`Expected: ended / Actual: active`) on the exact EARS-CALL-5
+  test, proving the relocation genuinely preserves another already-merged
+  task's acceptance criterion rather than merely not-editing its test
+  file. Restored, green. One wording correction: the self-review's
+  "byte-for-byte identical" claim is slightly overstated (timing shifts
+  by one microtask, and any failing transport now ends the call on
+  initial attach, not just `NullCallMediaTransport` specifically) — both
+  benign given only two implementations exist repo-wide, but "observably
+  equivalent" is the accurate framing.
+- **Contract order verified against real code, not a stub.** The
+  recording fake `RoutingEngine` subclass calls `super` on every
+  override — delegates real decision logic, doesn't fake it. Order test
+  asserts the exact 8-element sequence.
+- **Every failure path leaves the call active — 4 real scenarios, all
+  independently verified non-vacuous**, plus reviewer's own second
+  falsification (moved `detach()` before the health-live wait — both
+  ordering tests failed for the right reason, confirming §6's #1 named
+  risk, "tearing down early," is genuinely gated).
+- **Late-echo-ignored, silent-no-op trap, one-migration-in-flight,
+  `onRouteFailure` delegation, no second heuristic** — all independently
+  verified with file:line evidence, not restated from the builder.
+- **suite: 680/680**, `flutter analyze` clean. Reviewer did not observe
+  the builder-reported flaky `group_key_rotation_service_test.dart` in
+  their own full run — consistent with it being a pre-existing,
+  intermittent flake unrelated to this task.
+
+**Ready to squash-merge — done.** Squash-merged to `epic_07` as `7955610`
+(PR #12).
+
+**Carried forward for the prospective real-time media-path task
+(`OQ-E07-3`/`OQ-E07-12`, still human-gated) — all four are inert today
+only because `NullCallMediaTransport` never reports `live`, and all
+should be given to that task as explicit inputs rather than
+rediscovered:**
+- **O1 (S3):** `_awaitMediaLive` subscribes to the health stream AFTER
+  calling `attach()`, not before. A real transport that emits `live`
+  synchronously during/after `attach` on a broadcast stream would have
+  its event lost, causing the controller to time out — migration could
+  never complete with such a transport. Documented in-source; the test
+  fake was shaped around the race with a real `Timer` rather than the
+  underlying issue being fixed. Fix is small (subscribe before `attach`)
+  and doesn't disturb the recorded order.
+- **O2 (S3):** the seam carries no route identity — actual signatures are
+  `attach(CallSession)`/`detach()`, but `session.activeRoute` still holds
+  the OLD route at attach time (only updated after detach), so a real
+  transport can't learn which route to bring up, and an argument-less
+  `detach()` is indistinguishable from "tear down everything" — exactly
+  the break-before-make failure this task exists to prevent. The media
+  task must reshape this seam.
+- **O3 (S4):** if `stop()` lands between `setActiveRoute(candidate)` and
+  media confirmation, the supersede path doesn't restore the old route in
+  `RoutingEngine` the way the other failure paths do — mitigated by the
+  candidate already being probe-validated at that point, so not wrong,
+  just inconsistent with §3's "leave the active route exactly as it was."
+- **O4 (S3):** `CallMigrationController` is constructed nowhere in
+  `lib/` — not wired into the app, so FR-CALL-003 is unreachable at
+  runtime, only under test. Defensible while the media half is deferred,
+  but exactly the seam-shaped gap `skills/bug-sweep` exists to catch
+  explicitly rather than implicitly (the same shape as `OQ-E07-T06-2`).
