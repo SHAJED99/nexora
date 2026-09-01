@@ -104,6 +104,39 @@ Future<void> _insertMessage(
       );
 }
 
+/// Seeds a group conversation (E07-T01's tables) so a group row reaches this
+/// controller through E07-T07's widened read model — the case the Personal
+/// list must skip until E07-T08 gives Groups its own row treatment.
+Future<void> _insertGroup(
+  AppDatabase db, {
+  required String id,
+  required String name,
+}) async {
+  await db.into(db.groups).insert(
+        GroupsCompanion.insert(
+          id: id,
+          name: name,
+          createdAt: 0,
+          createdByDeviceId: 'self-device',
+        ),
+      );
+}
+
+Future<void> _insertMember(
+  AppDatabase db, {
+  required String groupId,
+  required String deviceId,
+}) async {
+  await db.into(db.groupMembers).insert(
+        GroupMembersCompanion.insert(
+          groupId: groupId,
+          deviceId: deviceId,
+          role: 'member',
+          joinedAtEpoch: 0,
+        ),
+      );
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger =
@@ -169,6 +202,54 @@ void main() {
     expect(controller.loading.value, isFalse);
     expect(controller.conversations.map((t) => t.peerDeviceId).toList(), [
       'device-b',
+      'device-a',
+    ]);
+    controller.onClose();
+  });
+
+  // E07-T07 / OQ-E07-T07-1: `watchConversations()` now also emits group rows,
+  // whose `peerDeviceId`/`relationshipState` are null. Until E07-T08 renders
+  // the Groups section, this screen's Personal list skips them — it must not
+  // crash, and it must not render a group as if it were a peer.
+  test('test_group_conversations_are_skipped_by_the_personal_list', () async {
+    await relationships.upsert('device-a', RelationshipState.trusted);
+    await _insertMessage(
+      db,
+      id: 'm-a1',
+      conversationId: 'device-a',
+      senderDeviceId: 'device-a',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(List<int>.filled(16, 1)),
+      createdAt: 1000,
+    );
+    await _insertGroup(db, id: 'g:team', name: 'Team');
+    await _insertMember(db, groupId: 'g:team', deviceId: 'self-device');
+    await _insertMember(db, groupId: 'g:team', deviceId: 'device-a');
+    await _insertMessage(
+      db,
+      id: 'm-g1',
+      conversationId: 'g:team',
+      senderDeviceId: 'device-a',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(List<int>.filled(16, 3)),
+      createdAt: 3000,
+    );
+
+    // The read model really does surface the group (otherwise this test
+    // would pass for the wrong reason).
+    final summaries = await repo.listConversations();
+    expect(summaries.map((s) => s.conversationId), ['g:team', 'device-a']);
+
+    final controller = ConversationsController(
+      repo: repo,
+      crypto: stack.cryptoService,
+      stack: stack,
+    );
+    controller.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+
+    expect(controller.errorMessage.value, isEmpty);
+    expect(controller.conversations.map((t) => t.conversationId).toList(), [
       'device-a',
     ]);
     controller.onClose();

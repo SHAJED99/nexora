@@ -238,7 +238,18 @@ class DashboardController extends GetxController {
   }
 
   Future<void> _onSummaries(List<ConversationSummary> summaries) async {
-    final top = summaries.take(kDashboardRecentConversationCount);
+    // E07-T07 widened `watchConversations()` to emit group rows too. Recent
+    // Conversations renders the SAME `ConversationTile` the Conversations
+    // screen's Personal section does, and no group row treatment exists yet
+    // (E07-T08 / GAP-006), so group rows are filtered out **before** the
+    // take — filtering after it would silently shrink the section below its
+    // designed three rows. This keeps today's behaviour identical and
+    // renders no group as if it were a peer; whether the Dashboard should
+    // eventually surface groups here is a design question for the task that
+    // owns a group row, not one answered by omission here.
+    final top = summaries
+        .where((s) => s.kind == ConversationKind.personal)
+        .take(kDashboardRecentConversationCount);
     final tiles = <ConversationTile>[];
     for (final summary in top) {
       final preview = await _resolvePreview(summary);
@@ -260,13 +271,22 @@ class DashboardController extends GetxController {
     if (_previewCache.containsKey(summary.lastMessageId)) {
       return _previewCache[summary.lastMessageId];
     }
+    // Same guard, same reason as `ConversationsController._resolvePreview`:
+    // E07-T07's group rows carry no `peerDeviceId`, so there is no 1:1
+    // session to address, and "no preview" is this method's existing,
+    // documented degrade rather than a new behaviour.
+    final peerDeviceId = summary.peerDeviceId;
+    if (peerDeviceId == null) {
+      _previewCache[summary.lastMessageId] = null;
+      return null;
+    }
     String? preview;
     try {
       final page = await _repo.messagesPage(summary.conversationId, limit: 1);
       if (page.isNotEmpty && page.first.id == summary.lastMessageId) {
         final ciphertextMessage = _decodeCiphertext(page.first.ciphertext);
         final plaintext = await _crypto.decrypt(
-          SignalProtocolAddress(summary.peerDeviceId, _localSignalDeviceId),
+          SignalProtocolAddress(peerDeviceId, _localSignalDeviceId),
           ciphertextMessage,
         );
         final envelope = MessageEnvelope.deserialize(plaintext);
