@@ -525,6 +525,22 @@ void main() {
         // the reviewer proved zero `bulk` packets were ever attempted across
         // 200 cycles. This test reproduces exactly that shape and asserts
         // `bulk` still drains.
+        //
+        // Round-2 finding N1: the first version of this test only enqueued
+        // ONE realtime row per cycle against `budget = 5`, so the top band
+        // never came close to exhausting the cycle budget -- F2's rollover
+        // (unused top-band share handed down to lower bands) alone was
+        // enough to satisfy this test's shape even with F1's actual
+        // per-band reserve reverted. Fixed by making the realtime arrival
+        // rate per cycle exceed the whole budget
+        // (`realtimeArrivalsPerCycle > budget`), so the top band is always
+        // fat enough to consume every slot the reserve step leaves it --
+        // there is never leftover budget for F2's rollover to hand down,
+        // so `bulk`'s progress can only come from F1's genuine per-band
+        // reserve. The loop condition also switched from "total queue
+        // empty" to "bulk fully delivered", since a perpetually replenished
+        // realtime stream (simulating a live call) never lets the total
+        // queue reach zero -- exactly the scenario this guard exists for.
         final routingEngine = RoutingEngine(selfId: 'A');
         routingEngine.recordLinkMeasurement(
           'B',
@@ -558,21 +574,30 @@ void main() {
           return rows.where((r) => r.priority == priority).length;
         }
 
-        Future<int> queuedCount() => stateCount(RelayDeliveryState.queued);
+        Future<int> deliveredBulkCount() =>
+            stateCount(RelayDeliveryState.delivered, priority: RelayPriority.bulk);
 
-        // Every cycle, BOTH a fresh realtime packet (a live call) AND a
-        // fresh interactive packet (an active chat) arrive before the
-        // drain -- the exact three-band shape the reviewer's probe used.
+        // Every cycle, a fresh BURST of realtime packets (a live call
+        // generating far more traffic than one cycle's whole budget can
+        // possibly clear) AND a fresh interactive packet (an active chat)
+        // arrive before the drain -- the three-band shape the reviewer's
+        // probe used, strengthened per N1 so the top band is always fat
+        // enough to exhaust the entire budget on its own. This means the
+        // only way `bulk` ever gets a slot is via F1's genuine per-band
+        // reserve -- F2's rollover has nothing left over to hand down.
         var cycle = 0;
         const maxCycles = 200;
         const budget = 5;
-        while (await queuedCount() > 0 && cycle < maxCycles) {
-          await relay.enqueue(
-            'B',
-            _bytes('call-$cycle'),
-            RelayPriority.realtime,
-            const Duration(seconds: 30),
-          );
+        const realtimeArrivalsPerCycle = 10; // > budget: exhausts it alone.
+        while (await deliveredBulkCount() < bulkCount && cycle < maxCycles) {
+          for (var i = 0; i < realtimeArrivalsPerCycle; i++) {
+            await relay.enqueue(
+              'B',
+              _bytes('call-$cycle-$i'),
+              RelayPriority.realtime,
+              const Duration(seconds: 30),
+            );
+          }
           await relay.enqueue(
             'B',
             _bytes('chat-$cycle'),
@@ -583,14 +608,16 @@ void main() {
           cycle++;
         }
 
-        final deliveredBulk =
-            await stateCount(RelayDeliveryState.delivered, priority: RelayPriority.bulk);
+        final deliveredBulk = await deliveredBulkCount();
         expect(
           deliveredBulk,
           bulkCount,
           reason: 'the bottom band must fully drain even with two higher '
-              'bands continuously present -- a merged "everything but top" '
-              'reserve lets the middle band starve the bottom one forever',
+              'bands continuously present and the top band alone able to '
+              'exhaust the entire cycle budget -- a merged "everything but '
+              'top" reserve lets the middle band starve the bottom one '
+              'forever, and without a genuine per-band reserve there is no '
+              'leftover top-band budget for a rollover step to rescue it',
         );
         expect(
           cycle,
