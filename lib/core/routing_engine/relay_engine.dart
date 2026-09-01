@@ -139,6 +139,21 @@ class RelayEngine {
     return id;
   }
 
+  /// Reads back the current `delivery_state` of the row [id] (E07-T10,
+  /// review finding F4). Exposes only the state column `enqueue()` and
+  /// `_attempt()` already maintain -- no new tracking mechanism, no new
+  /// column, just an honest read of what this device actually recorded for
+  /// that packet. Returns `null` if the row does not exist (already reclaimed
+  /// or never inserted, neither of which is expected right after a caller's
+  /// own `enqueue()`, but this is a read, not an assumption).
+  Future<RelayDeliveryState?> deliveryStateOf(String id) async {
+    final row = await (_db.select(_db.relayPackets)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (row == null) return null;
+    return RelayDeliveryState.values.byName(row.deliveryState);
+  }
+
   /// The minimum share of a bounded cycle's budget reserved for whatever is
   /// NOT the highest priority band currently present (E07-T10, §2's
   /// starvation guard) — TUNABLE. Without this, a continuous stream of
@@ -204,35 +219,96 @@ class RelayEngine {
 
   /// Picks up to [budget] rows from [rows] (already sorted
   /// `(priority DESC, created_at ASC)`), reserving a minimum slice of the
-  /// budget for whatever is NOT the highest priority band present — see
+  /// budget for EACH distinct priority band below the top one — see
   /// [_minReservedFractionForLowerBands]. Only called when `rows.length >
   /// budget`, i.e. there is genuine contention for this cycle's slots.
+  ///
+  /// Review finding F1 (round 1): the earlier version of this method merged
+  /// every non-top row into a single "lower" bucket, still sorted
+  /// `(priority DESC, created_at ASC)`. With 3+ distinct bands present, the
+  /// middle band's own rows always sorted ahead of the bottom band's within
+  /// that merged bucket, so `lowerBand.take(reservedForLower)` could -- and,
+  /// under continuous middle-band pressure, always did -- consume the whole
+  /// reserve without ever reaching the bottom band. The fix: reserve a slice
+  /// *per band*, not per "everything but top", so the bottom band's progress
+  /// never depends on how much traffic a band above it (but still below the
+  /// top) happens to have queued.
+  ///
+  /// Review finding F2 (round 1): the earlier version also discarded any
+  /// part of the top band's `remainingForTop` share that the top band was
+  /// too small to fill, instead of letting a lower band use it. The fix:
+  /// after the top band takes what it can, any still-unused budget rolls
+  /// down through the lower bands (in priority order), each still bounded by
+  /// its own remaining rows -- so a thin top band no longer wastes slots
+  /// that a fat lower backlog could have used.
   List<RelayPacketRow> _applyStarvationGuard(
     List<RelayPacketRow> rows,
     int budget,
   ) {
-    final topPriority = rows.first.priority;
-    final topBand = <RelayPacketRow>[];
-    final lowerBand = <RelayPacketRow>[];
+    // Group into distinct priority bands, preserving each band's existing
+    // (created_at ASC) order, highest priority first.
+    final bandsByPriority = <int, List<RelayPacketRow>>{};
     for (final row in rows) {
-      (row.priority == topPriority ? topBand : lowerBand).add(row);
+      bandsByPriority
+          .putIfAbsent(row.priority, () => <RelayPacketRow>[])
+          .add(row);
+    }
+    final prioritiesDesc = bandsByPriority.keys.toList()
+      ..sort((a, b) => b.compareTo(a));
+
+    // Only one band present -- no lower-priority progress to guarantee, so
+    // just take the oldest `budget` rows.
+    if (prioritiesDesc.length == 1) {
+      return rows.take(budget).toList(growable: false);
     }
 
-    // Nothing but the top band is queued -- no lower-priority progress to
-    // guarantee, so just take the oldest `budget` top-band rows.
-    if (lowerBand.isEmpty) {
-      return topBand.take(budget).toList(growable: false);
+    final topPriority = prioritiesDesc.first;
+    final lowerPriorities = prioritiesDesc.skip(1).toList(growable: false);
+    final taken = <int, int>{for (final p in prioritiesDesc) p: 0};
+
+    // Step 1: reserve a minimum slice of the budget for EACH lower band
+    // individually (F1) -- never a single merged "everything but top"
+    // bucket, since that lets a mid band's own row count starve a band
+    // below it even though a per-band reserve was intended.
+    var remaining = budget;
+    final totalReserve =
+        (budget * _minReservedFractionForLowerBands).ceil().clamp(0, budget);
+    final perBandReserve = (totalReserve / lowerPriorities.length).ceil();
+    for (final p in lowerPriorities) {
+      if (remaining <= 0) break;
+      final band = bandsByPriority[p]!;
+      final take = perBandReserve.clamp(0, band.length).clamp(0, remaining);
+      taken[p] = take;
+      remaining -= take;
     }
 
-    final reserved = (budget * _minReservedFractionForLowerBands).floor();
-    final reservedForLower =
-        (reserved < 1 ? 1 : reserved).clamp(0, lowerBand.length).clamp(0, budget);
-    final remainingForTop = budget - reservedForLower;
+    // Step 2: whatever budget remains after the per-band reserves goes to
+    // the top band first.
+    final topBand = bandsByPriority[topPriority]!;
+    final topTake = topBand.length.clamp(0, remaining);
+    taken[topPriority] = topTake;
+    remaining -= topTake;
 
-    return <RelayPacketRow>[
-      ...topBand.take(remainingForTop),
-      ...lowerBand.take(reservedForLower),
-    ];
+    // Step 3: roll any still-unused budget down through the lower bands, in
+    // priority order, each still bounded by its own remaining rows (F2) --
+    // this is what prevents a thin top band from wasting slots a fat lower
+    // backlog could otherwise have used.
+    if (remaining > 0) {
+      for (final p in lowerPriorities) {
+        if (remaining <= 0) break;
+        final band = bandsByPriority[p]!;
+        final already = taken[p] ?? 0;
+        final more = (band.length - already).clamp(0, remaining);
+        taken[p] = already + more;
+        remaining -= more;
+      }
+    }
+
+    final selected = <RelayPacketRow>[];
+    for (final p in prioritiesDesc) {
+      selected.addAll(bandsByPriority[p]!.take(taken[p] ?? 0));
+    }
+    return selected;
   }
 
   Future<void> _attempt(RelayPacketRow row) async {

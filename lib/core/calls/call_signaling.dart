@@ -93,7 +93,8 @@ import '../messaging/group_control.dart'
     show encodeCiphertextControlBody, decodeCiphertextControlBody;
 import '../messaging/messaging_stack.dart';
 import '../messaging/relay_packet_frame.dart';
-import '../routing_engine/relay_engine.dart' show RelayPriority;
+import '../routing_engine/relay_engine.dart'
+    show RelayDeliveryState, RelayPriority;
 import '../routing_engine/route_cost_calculator.dart' show TrafficProfile;
 import 'call_session.dart';
 
@@ -776,14 +777,30 @@ class CallSignaling {
       // "handed off" is the most this device can honestly report, matching
       // `RelayEngine`'s own documented `forwarding`/`delivered` semantics
       // (never "the end recipient's app confirmed receipt").
-      await _stack.relayEngine.enqueue(
+      final packetId = await _stack.relayEngine.enqueue(
         peerDeviceId,
         serialized,
         RelayPriority.realtime,
         _controlFrameTtl,
       );
       await _stack.relayEngine.processQueue();
-      delivered = true;
+      // Review finding F4 (round 1): `delivered` used to be set `true`
+      // unconditionally right after `enqueue`, so a provably-failed send
+      // (both bounded retries in `RelayEngine._attempt` exhausted, row still
+      // `queued`) could never actually reach the `call.unreachable` throw
+      // below. Read back what this device's own queue actually recorded for
+      // THIS packet instead of assuming the enqueue succeeded as a send:
+      // `forwarding`/`delivered` are the two states `_attempt` only ever
+      // writes on a successful hand-off (to an intermediate hop or the final
+      // destination's transport, respectively); `queued` (both attempts
+      // failed, or no route was found) means it never actually left this
+      // device, which is the honest signal to fail on. `processQueue()` is
+      // called unbounded above (no `maxPacketsPerCycle`), so this packet is
+      // always among the rows attempted this cycle -- there is no
+      // budget-selection ambiguity to account for here.
+      final state = await _stack.relayEngine.deliveryStateOf(packetId);
+      delivered = state == RelayDeliveryState.forwarding ||
+          state == RelayDeliveryState.delivered;
     } else {
       // Direct neighbor, or route unknown -- mirrors
       // `prekey_exchange.dart`'s own `_sendControlFrame` reasoning: a call
