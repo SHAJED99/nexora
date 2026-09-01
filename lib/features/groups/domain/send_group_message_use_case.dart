@@ -7,40 +7,29 @@
 // of the Sender-Keys family ADR-0003 chose (task file §2): encrypt once,
 // address N times.
 //
-// **OQ-E07-T06-1 — the sequence-number reservation seam is genuinely
-// unreachable from this file, per the task's own §3/§6 instruction not to
-// duplicate it.** `SendMessageUseCase.call` (`send_message_use_case.dart`)
-// already implements the exact atomic "read MAX(sequence_number), insert a
-// `Queued` placeholder row" transaction this use case's own rows need to
-// participate in — but that logic is inlined inside `call`'s body, over
-// PRIVATE fields (`_db`, `_selfDeviceId`) and a PRIVATE id generator
-// (`_generateId`), with no smaller public entry point exposing just that
-// phase. `call` itself cannot be reused either: it also performs a
-// SINGLE-RECIPIENT pairwise encrypt and a SINGLE enqueue, both wrong for a
-// group send (task file §3 needs one `encryptForGroup` call and N
-// enqueues). This is exactly the "private-member wall" shape the task's own
-// §6 risk names (citing E06-T03's `_localSignalDeviceId` precedent) and its
-// own §3 step 2 says to raise rather than work around: "reusing the same
-// transactional reservation shape SendMessageUseCase already uses — call
-// it, do not re-implement it, and if it cannot be called from here, stop
-// and raise it rather than copying the logic." `send_message_use_case.dart`
-// is also outside this task's `files:` fence (protected, per its own §4),
-// so extracting a public method there is not this task's call either.
+// **OQ-E07-T06-1 — RESOLVED (2026-09-01, planner).** This file's sequence
+// reservation is bound, by default, to the SAME transaction
+// `SendMessageUseCase` uses: `MessageSequenceReserver`
+// (`features/messaging/domain/message_sequence_reserver.dart`).
 //
-// Rather than copying that transaction body into a second, independent
-// implementation (L-backend-003's whole subject: two writers of one
-// counter), this file declares [ReserveGroupSequenceFn] as an INJECTED
-// SEAM — the same shape `SendMessageUseCase` itself already uses for
-// [MessageEncryptFn]/[MessageEnqueueFn] rather than depending on concrete
-// classes directly. Every other step below (permission/membership check,
-// `encryptForGroup`, N-frame fan-out, delivery-state transitions) is fully
-// implemented and tested with a FAKE reservation function; the seam's
-// PRODUCTION binding — to whatever eventually exposes
-// `SendMessageUseCase`'s reservation phase safely (extracting a public
-// method there, or an equally-safe independent implementation the planner
-// accepts for this file's disjoint `groupId` keyspace) — is deliberately
-// left unbound here and recorded as `OQ-E07-T06-1` in this task's Open
-// Questions, exactly as instructed, rather than guessed at.
+// The reservation was originally inlined inside `SendMessageUseCase.call`'s
+// body over its private fields, with no smaller public entry point — the
+// "private-member wall" this task's own §6 risk anticipated — so T06 could
+// neither call it nor (per §3 step 2) copy it, and correctly shipped
+// [ReserveGroupSequenceFn] as an UNBOUND injected seam plus an Open
+// Question. The resolution is the extraction that question asked for: the
+// transaction body moved verbatim out of `SendMessageUseCase.call` into
+// `MessageSequenceReserver.reserve`, and both use cases now call it. ONE
+// transaction implementation, TWO call sites — never two independent
+// writers of one counter, which is L-backend-003's whole subject.
+//
+// [ReserveGroupSequenceFn] survives as an OPTIONAL constructor parameter:
+// omitted (production), it binds to `MessageSequenceReserver` built from
+// this use case's own `db`/`selfDeviceId`; supplied, it lets a test observe
+// or perturb the reservation. That is the same DI shape
+// `SendMessageUseCase` already uses for [MessageEncryptFn]/[MessageEnqueueFn]
+// — with the difference that the default is now real, so constructing this
+// class is enough to send a group message for real.
 //
 // `prefer_initializing_formals` is intentionally not applied to this file's
 // constructor, matching the same documented exclusion already used by
@@ -56,6 +45,7 @@ import '../../../core/messaging/relay_packet_frame.dart';
 import '../../../core/persistence/database.dart';
 import '../../messaging/domain/delivery_state_machine.dart';
 import '../../messaging/domain/message.dart';
+import '../../messaging/domain/message_sequence_reserver.dart';
 import '../data/group_repository.dart';
 import 'group_message_envelope.dart';
 import 'group_permissions.dart';
@@ -74,15 +64,18 @@ typedef GroupMessageEnqueueFn = Future<String> Function(
   Duration ttl,
 );
 
-/// **BLOCKED SEAM — see this file's header and `OQ-E07-T06-1`.** Must,
-/// atomically (a single `AppDatabase.transaction`, mirroring
-/// `SendMessageUseCase.call`'s own phase 1 exactly): compute the next
-/// `sequenceNumber` for `(groupId, senderDeviceId: selfDeviceId)` per
-/// `messages`' existing monotonic-per-`(conversationId, senderDeviceId)`
-/// contract, insert a `Queued` placeholder `messages` row for [messageId]
-/// with that number (`ciphertext: Uint8List(0)`, same placeholder
-/// convention), and return the assigned sequence number. No production
-/// implementation is wired to this seam by this task.
+/// The reservation seam. Must, atomically (a single
+/// `AppDatabase.transaction`): compute the next `sequenceNumber` for
+/// `(groupId, senderDeviceId: selfDeviceId)` per `messages`' existing
+/// monotonic-per-`(conversationId, senderDeviceId)` contract, insert a
+/// `Queued` placeholder `messages` row for [messageId] with that number
+/// (`ciphertext: Uint8List(0)`), and return the assigned sequence number.
+///
+/// Optional at the constructor: when omitted it binds to
+/// [MessageSequenceReserver] — the one shared implementation, also used by
+/// `SendMessageUseCase` (OQ-E07-T06-1). A test may supply its own to observe
+/// the reservation; production code must NOT, and must never write a second
+/// implementation of this transaction.
 typedef ReserveGroupSequenceFn = Future<int> Function(
   String groupId,
   String messageId,
@@ -98,7 +91,7 @@ class SendGroupMessageUseCase {
     required GroupRepository groups,
     required GroupCryptoService crypto,
     required GroupMessageEnqueueFn enqueue,
-    required ReserveGroupSequenceFn reserveSequence,
+    ReserveGroupSequenceFn? reserveSequence,
     int priority = 0,
     Duration ttl = const Duration(days: 3),
     DateTime Function() clock = DateTime.now,
@@ -107,7 +100,8 @@ class SendGroupMessageUseCase {
         _groups = groups,
         _crypto = crypto,
         _enqueue = enqueue,
-        _reserveSequence = reserveSequence,
+        _reserveSequence =
+            reserveSequence ?? _sharedReserver(db, selfDeviceId),
         _priority = priority,
         _ttl = ttl,
         _clock = clock;
@@ -121,6 +115,26 @@ class SendGroupMessageUseCase {
   final int _priority;
   final Duration _ttl;
   final DateTime Function() _clock;
+
+  /// The production binding of [ReserveGroupSequenceFn] — the ONE shared
+  /// reservation transaction (`MessageSequenceReserver`, also
+  /// `SendMessageUseCase`'s), adapted to this typedef's positional shape. A
+  /// group's `conversationId` IS its group id (task file §2), so no
+  /// translation beyond the parameter name is needed.
+  static ReserveGroupSequenceFn _sharedReserver(
+    AppDatabase db,
+    String selfDeviceId,
+  ) {
+    final reserver = MessageSequenceReserver(
+      db: db,
+      selfDeviceId: selfDeviceId,
+    );
+    return (groupId, messageId, createdAtMs) => reserver.reserve(
+          conversationId: groupId,
+          messageId: messageId,
+          createdAtMs: createdAtMs,
+        );
+  }
 
   int _idCounter = 0;
 
@@ -169,10 +183,11 @@ class SendGroupMessageUseCase {
     final now = _clock();
     final createdAtMs = now.millisecondsSinceEpoch;
 
-    // Step 2 (task file §3, BLOCKED -- see this file's header and
-    // `OQ-E07-T06-1`): reserve the sequence number and durably insert a
-    // `Queued` placeholder row, atomically, before any crypto call --
-    // exactly `SendMessageUseCase.call`'s own phase-1 ordering.
+    // Step 2 (task file §3): reserve the sequence number and durably insert
+    // a `Queued` placeholder row, atomically, before any crypto call --
+    // exactly `SendMessageUseCase.call`'s own phase-1 ordering, because it is
+    // literally the same transaction (`MessageSequenceReserver`, bound by
+    // default in this class's constructor -- OQ-E07-T06-1).
     final sequenceNumber =
         await _reserveSequence(groupId, messageId, createdAtMs);
 

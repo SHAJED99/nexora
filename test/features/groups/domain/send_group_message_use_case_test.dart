@@ -8,14 +8,15 @@
 // `encryptForGroup` call" is asserted against the REAL crypto path, not a
 // mock standing in for it.
 //
-// The `reserveSequenceFake` used throughout implements
-// `ReserveGroupSequenceFn` (`send_group_message_use_case.dart`'s own BLOCKED
-// seam, `OQ-E07-T06-1`) with the same atomic "read MAX, insert Queued
-// placeholder" shape `SendMessageUseCase.call`'s own phase 1 uses --
-// written HERE, in the test file, specifically because production code must
-// NOT duplicate that transaction (see the task's Open Questions); a fake
-// standing in for the real seam is exactly how the rest of this file's
-// logic gets exercised without that duplication.
+// `reserveSequenceFake` implements `ReserveGroupSequenceFn` with the same
+// atomic "read MAX, insert Queued placeholder" shape, and is supplied
+// explicitly by the tests that predate OQ-E07-T06-1's resolution. It is now a
+// test *observation* seam, not a stand-in for missing production code: since
+// that question was resolved the parameter is optional and defaults to
+// `MessageSequenceReserver` -- the one shared transaction
+// `SendMessageUseCase` also uses. The two tests at the bottom of this file
+// construct the use case WITHOUT it, which is what proves the production path
+// actually reserves.
 //
 // This file also covers `InboundPipeline`'s group-message RECEIVE branch
 // (EARS-COMM-30/31/32, the wrong-epoch/no-fallback case, and the
@@ -864,4 +865,124 @@ void main() {
       expect(receiver.inbound.counters.malformed, 0);
     },
   );
+
+  // --- OQ-E07-T06-1's resolution: the seam is bound in production ---------
+  //
+  // Every test above supplies `reserveSequenceFake` explicitly. These two
+  // construct `SendGroupMessageUseCase` WITHOUT it -- the production shape --
+  // so what runs is `MessageSequenceReserver`, the same transaction
+  // `SendMessageUseCase.call` uses. Without these, "group send works" would
+  // only ever have been proven against a fake.
+
+  test('test_group_send_reserves_a_real_sequence_number_without_a_fake_seam',
+      () async {
+    final stack = await newStack('device-a');
+    addTearDown(stack.dispose);
+
+    final groups = GroupRepository(stack.db);
+    final groupId = await groups.createGroup(
+      name: 'Squad',
+      ownerDeviceId: 'device-a',
+      memberDeviceIds: ['device-b'],
+    );
+    final crypto = GroupCryptoService(stack: stack);
+    await crypto.ensureOwnChain(groupId: groupId, epoch: 0);
+
+    Future<String> fakeEnqueue(
+      String destination,
+      Uint8List payload,
+      int priority,
+      Duration ttl,
+    ) async =>
+        'relay-id';
+
+    // No `reserveSequence:` argument at all.
+    final useCase = SendGroupMessageUseCase(
+      db: stack.db,
+      selfDeviceId: 'device-a',
+      groups: groups,
+      crypto: crypto,
+      enqueue: fakeEnqueue,
+    );
+
+    expect(
+      await useCase.send(
+          groupId: groupId, body: Uint8List.fromList('one'.codeUnits)),
+      isNull,
+    );
+    expect(
+      await useCase.send(
+          groupId: groupId, body: Uint8List.fromList('two'.codeUnits)),
+      isNull,
+    );
+
+    final rows = await (stack.db.select(stack.db.messages)
+          ..where((t) => t.conversationId.equals(groupId)))
+        .get();
+    expect(rows, hasLength(2));
+    expect(rows.map((r) => r.sequenceNumber).toList()..sort(), [0, 1]);
+    for (final row in rows) {
+      expect(row.senderDeviceId, 'device-a');
+      expect(row.deliveryState, DeliveryState.sent.name);
+      expect(row.ciphertext, isNotEmpty,
+          reason: 'the placeholder must have been overwritten by phase 3');
+    }
+  });
+
+  test(
+      'test_concurrent_group_sends_never_collide_on_one_sequence_counter',
+      () async {
+    // L-backend-003, on the group path: the mirror of
+    // `send_message_use_case_test.dart`'s
+    // `test_sequence_numbers_distinct_under_concurrent_sends_same_conversation`,
+    // now meaningful for groups because the reservation is a real
+    // transaction rather than an unbound seam.
+    final stack = await newStack('device-a');
+    addTearDown(stack.dispose);
+
+    final groups = GroupRepository(stack.db);
+    final groupId = await groups.createGroup(
+      name: 'Squad',
+      ownerDeviceId: 'device-a',
+      memberDeviceIds: ['device-b', 'device-c'],
+    );
+    final crypto = GroupCryptoService(stack: stack);
+    await crypto.ensureOwnChain(groupId: groupId, epoch: 0);
+
+    Future<String> fakeEnqueue(
+      String destination,
+      Uint8List payload,
+      int priority,
+      Duration ttl,
+    ) async =>
+        'relay-id';
+
+    final useCase = SendGroupMessageUseCase(
+      db: stack.db,
+      selfDeviceId: 'device-a',
+      groups: groups,
+      crypto: crypto,
+      enqueue: fakeEnqueue,
+    );
+
+    final results = await Future.wait([
+      for (var i = 0; i < 5; i++)
+        useCase.send(
+          groupId: groupId,
+          body: Uint8List.fromList('msg-$i'.codeUnits),
+        ),
+    ]);
+    expect(results.every((r) => r == null), isTrue);
+
+    final rows = await (stack.db.select(stack.db.messages)
+          ..where((t) => t.conversationId.equals(groupId)))
+        .get();
+    expect(rows, hasLength(5));
+    expect(
+      rows.map((r) => r.sequenceNumber).toSet(),
+      {0, 1, 2, 3, 4},
+      reason: 'five concurrent group sends must get five distinct, dense '
+          'sequence numbers -- one counter, one transaction',
+    );
+  });
 }
