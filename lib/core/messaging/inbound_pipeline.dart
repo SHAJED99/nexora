@@ -64,6 +64,51 @@
 // `MessageEnvelope`, or `messaging_stack.dart`/`bindings.dart` (task file
 // §4) — every dependency below is used exactly as its own epic left it.
 //
+// **E07-T06 addition: group text messages.** A fifth `controlKind`
+// (`kControlKindGroupMessage == 6` — originally `5`, renumbered after
+// E07-T09's `kControlKindCallSignaling` claimed `5` first; see
+// `group_message_envelope.dart`'s header) is
+// dispatched exactly like `PrekeyExchange`(1)/`DeliveryAckService`(2)/
+// `GroupMembershipService`(3)/`GroupCryptoService`(4) before it — via this
+// pipeline's own `registerControlHandler` seam — EXCEPT the registration
+// call site lives HERE, inside this class's own constructor, rather than in
+// `messaging_stack.dart`: this task's `files:` fence updates this file
+// directly and does not touch `messaging_stack.dart` at all, so there is no
+// external composition-root call site available the way T07/T08/T03/T04
+// each had one. The registered handler is a closure, not an eager tear-off,
+// so it never dereferences `_stack.groupCryptoService` at CONSTRUCTION time
+// (which would throw `LateInitializationError`, exactly the ordering hazard
+// `group_membership_service.dart`'s own header already documents for the
+// identical reason) — only when a group-message frame actually arrives,
+// well after `MessagingStack`'s constructor has finished.
+//
+// **Receive-side identity (E06-B04, task file §5).** `RelayPacketFrame.
+// source` (`frameSourceDeviceId`) is used ONLY as the candidate
+// `senderDeviceId` `GroupCryptoService.decryptFromGroup` needs to select
+// which sender's chain to attempt — exactly how `GroupMembershipService.
+// handleWireFrame` already treats `frame.source` for its own pairwise
+// decrypt. The AUTHORITATIVE sender, used for the membership check and for
+// every persisted field, is always `GroupMessageEnvelope.senderDeviceId`,
+// recovered only after decrypt succeeds — never `frame.source`.
+//
+// **Ordering deviation from this task's §3 prose, logged here.** §3 lists
+// "membership check -> decrypt -> dedupe -> persist". Read literally that
+// would require a membership check BEFORE decrypt, but the only identity
+// available pre-decrypt is `frame.source` — not the authoritative
+// `envelope.senderDeviceId` §5's own contract insists the membership check
+// must use ("regardless of what the envelope claims"). Doing the
+// authoritative check against an unauthenticated candidate would defeat the
+// exact property that instruction protects. This file instead: (1) checks
+// the CLEAR routing header's `(groupId, epoch)` against this device's own
+// known `groups.membershipEpoch` purely as a cheap, identity-free
+// pre-decrypt diagnostic (`groupEpochUnknown` — no crypto needed, nothing to
+// authenticate yet); (2) decrypts, candidate-keyed by `frame.source`; (3)
+// performs the REAL, authoritative membership check against
+// `envelope.senderDeviceId` post-decrypt; (4) dedupes by `messageId`; (5)
+// persists. This satisfies every EARS criterion this task names and the
+// more specific, safety-critical "never frameSourceDeviceId" rule takes
+// precedence over the prose's literal step order.
+//
 // `prefer_initializing_formals` is intentionally not applied to this file's
 // constructor: the fields are private (`_stack`, `_clock`) while the
 // constructor's public named parameters (`stack`, `clock`) match the task
@@ -75,8 +120,15 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart';
+
+import '../auth/google_auth_service.dart' show AppFailure;
 import '../crypto/crypto_failures.dart';
+import '../persistence/database.dart';
 import '../transport/transport_service.dart';
+import '../../features/groups/data/group_repository.dart';
+import '../../features/groups/domain/group_message_envelope.dart';
+import '../../features/messaging/domain/delivery_state_machine.dart';
 import '../../features/messaging/domain/message.dart';
 import 'ciphertext_codec.dart';
 import 'messaging_stack.dart';
@@ -131,6 +183,29 @@ class InboundCounters {
   /// rather than inventing a new one for what is still, at heart, "nobody
   /// registered to handle this").
   int unhandledControl = 0;
+
+  // --- E07-T06: group text messages ------------------------------------
+
+  /// A group-message frame's AUTHORITATIVE sender (`GroupMessageEnvelope.
+  /// senderDeviceId`, post-decrypt) is not a current member of that group —
+  /// dropped and never stored, regardless of what the envelope claims
+  /// (task file §2/§5).
+  int groupNotAMember = 0;
+
+  /// `GroupCryptoService.decryptFromGroup` threw `AppFailure('group.
+  /// no_chain')` — this device recognizes the group/epoch but holds no
+  /// chain for that sender at that epoch yet (task file §6: the honest,
+  /// diagnosable "distribution has not landed" state, never a silent
+  /// fallback to another epoch).
+  int groupNoChain = 0;
+
+  /// The wire frame's clear `(groupId, epoch)` routing header names a group
+  /// this device has never heard of, or an epoch strictly ahead of this
+  /// device's own `groups.membershipEpoch` — checked BEFORE any decrypt
+  /// attempt (no identity to authenticate yet, so no crypto call is wasted
+  /// on it), and distinct from [groupNoChain] (task file §6: "make the
+  /// counter and the failure code distinct enough that it is diagnosable").
+  int groupEpochUnknown = 0;
 }
 
 /// The receive half of the messaging wedge (see this file's header).
@@ -142,7 +217,16 @@ class InboundPipeline {
     required MessagingStack stack,
     DateTime Function() clock = DateTime.now,
   })  : _stack = stack,
-        _clock = clock;
+        _clock = clock {
+    // E07-T06: self-registered rather than externally wired from
+    // `messaging_stack.dart` — see this file's header for why. The closure
+    // (not a bare tear-off) defers every `_stack.*` read to invocation time,
+    // well after `MessagingStack`'s own constructor has finished.
+    registerControlHandler(
+      kControlKindGroupMessage,
+      (frame) => _handleGroupMessageWireFrame(frame),
+    );
+  }
 
   final MessagingStack _stack;
   final DateTime Function() _clock;
@@ -375,6 +459,163 @@ class InboundPipeline {
       } else {
         counters.undecryptable++;
       }
+    }
+  }
+
+  // --- E07-T06: group text messages --------------------------------------
+
+  /// The `ControlHandler` registered on [kControlKindGroupMessage] (this
+  /// file's own constructor). [frame.payload] has already had its leading
+  /// `controlKind` byte read and stripped by [_handleBuffer]'s generic
+  /// control dispatch -- exactly [GroupMessageRoutingHeader.serialize]'s
+  /// output.
+  ///
+  /// This is where the CLEAR `(groupId, epoch)` routing header is parsed and
+  /// the actual decrypt happens -- see this file's header for why the
+  /// epoch-recognition check runs BEFORE decrypt (identity-free, cheap) and
+  /// the AUTHORITATIVE membership check runs AFTER it, inside
+  /// [handleGroupMessage].
+  Future<void> _handleGroupMessageWireFrame(RelayPacketFrame frame) async {
+    final GroupMessageRoutingHeader header;
+    try {
+      header = GroupMessageRoutingHeader.deserialize(frame.payload);
+    } on AppFailure {
+      counters.malformed++;
+      return;
+    }
+
+    final groups = GroupRepository(_stack.db);
+    final group = await groups.groupRow(header.groupId);
+    if (group == null || header.epoch > group.membershipEpoch) {
+      // Unknown group, or an epoch this device has never reached yet --
+      // nothing to authenticate here at all, so no decrypt is attempted
+      // (task file §6: distinct from `groupNoChain`, which means the
+      // group/epoch IS recognized but the specific sender's chain isn't
+      // held).
+      counters.groupEpochUnknown++;
+      return;
+    }
+
+    final Uint8List plaintext;
+    try {
+      plaintext = await _stack.groupCryptoService.decryptFromGroup(
+        groupId: header.groupId,
+        epoch: header.epoch,
+        // Candidate only -- selects which sender's chain to attempt.
+        // Authenticated by decrypt succeeding under that specific chain,
+        // never trusted as the stored/checked identity on its own
+        // (E06-B04; this file's header).
+        senderDeviceId: frame.source,
+        bytes: header.ciphertext,
+      );
+    } on AppFailure catch (e) {
+      if (e.code == 'group.no_chain') {
+        counters.groupNoChain++;
+      } else {
+        counters.undecryptable++;
+      }
+      return;
+    } catch (e) {
+      // `GroupCipher.decrypt` (E07-T04) discards a message key once used,
+      // exactly like the pairwise Double Ratchet -- the SAME wire ciphertext
+      // genuinely arriving twice (task file §6: multi-hop relaying can
+      // deliver one message down two paths) fails decrypt a second time
+      // with the library's `DuplicateMessageException`, not a
+      // `group.no_chain` `AppFailure` (`GroupCryptoService.decryptFromGroup`
+      // does not, and per this task's `files:` fence must not, map this
+      // case itself). Matched by `runtimeType` name, mirroring
+      // `crypto_failures.dart`'s own `mapSignalException` discipline for the
+      // identical reason (the type is not exported from
+      // `libsignal_protocol_dart`'s public barrel) -- counted the same way
+      // FR-MSG-003's own 1:1 dedup signal already is, never as
+      // `undecryptable` (EARS-COMM-32).
+      if (e.runtimeType.toString() == 'DuplicateMessageException') {
+        counters.duplicate++;
+      } else {
+        counters.undecryptable++;
+      }
+      return;
+    }
+
+    final GroupMessageEnvelope envelope;
+    try {
+      envelope = GroupMessageEnvelope.deserialize(plaintext);
+    } on AppFailure {
+      counters.malformed++;
+      return;
+    }
+
+    await handleGroupMessage(frame.source, envelope, header.ciphertext);
+  }
+
+  /// The receive half's business logic (task file §5's contract): membership
+  /// check (against the AUTHORITATIVE [envelope.senderDeviceId], never
+  /// [frameSourceDeviceId] -- see this file's header) -> dedupe by
+  /// `envelope.messageId` (never `(sender, sequenceNumber)`, task file §6:
+  /// a group message can legitimately arrive more than once over different
+  /// relay routes) -> persist -> emit on the existing [delivered] stream
+  /// unchanged, so `DeliveryAckService` and the read model need no changes.
+  ///
+  /// [frameSourceDeviceId] is accepted for exactly the shape this task's own
+  /// §5 contract documents -- transport metadata only, never consulted for
+  /// the membership check or for any persisted field.
+  Future<void> handleGroupMessage(
+    String frameSourceDeviceId,
+    GroupMessageEnvelope envelope,
+    Uint8List senderKeyMessageBytes,
+  ) async {
+    final groups = GroupRepository(_stack.db);
+    final role = await groups.roleOf(envelope.groupId, envelope.senderDeviceId);
+    if (role == null) {
+      // Not a current member of this group, regardless of what the
+      // envelope claims (task file §2/§5) -- dropped, never stored.
+      counters.groupNotAMember++;
+      return;
+    }
+
+    final db = _stack.db;
+    final Message? message = await db.transaction(() async {
+      final existing = await (db.select(db.messages)
+            ..where((t) => t.id.equals(envelope.messageId)))
+          .getSingleOrNull();
+      if (existing != null) {
+        // Duplicate delivery (task file §6/EARS-COMM-32): no second row.
+        return null;
+      }
+
+      final createdAt = _clock().millisecondsSinceEpoch;
+      await db.into(db.messages).insert(
+            MessagesCompanion.insert(
+              id: envelope.messageId,
+              conversationId: envelope.groupId,
+              senderDeviceId: envelope.senderDeviceId,
+              sequenceNumber: envelope.sequenceNumber,
+              ciphertext: senderKeyMessageBytes,
+              createdAt: createdAt,
+              // Received and decrypted successfully -- the group-message
+              // equivalent of `ReceiveMessageUseCase`'s own `Accepted`
+              // (task file §2: same `delivery_state` machine, no
+              // per-recipient state for groups).
+              deliveryState: DeliveryState.accepted.name,
+            ),
+          );
+
+      return Message(
+        id: envelope.messageId,
+        conversationId: envelope.groupId,
+        senderDeviceId: envelope.senderDeviceId,
+        sequenceNumber: envelope.sequenceNumber,
+        ciphertext: senderKeyMessageBytes,
+        createdAt: createdAt,
+        deliveryState: DeliveryState.accepted,
+      );
+    });
+
+    if (message == null) {
+      counters.duplicate++;
+    } else {
+      counters.delivered++;
+      _deliveredController.add(message);
     }
   }
 }
