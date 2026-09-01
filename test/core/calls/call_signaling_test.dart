@@ -128,6 +128,116 @@ void main() {
     await connectPeer(bSuffix, a.selfDeviceId);
   }
 
+  group('CallSignalingFrame round-trip + malformed rejection', () {
+    // Round-1 review finding F1: the task file's §7 checklist marked this
+    // done with a commit hash, but no such test actually existed -- this
+    // group is the missing coverage. `CallSignalingFrame.deserialize`
+    // (`call_signaling.dart`) is a hand-rolled length-prefixed binary
+    // decoder reading peer-controlled bytes post-decryption, so it gets
+    // the same "throws on any malformed input, never a partial frame"
+    // scrutiny `GroupControlFrame`'s own codec test already established.
+    CallSignalingFrame frameWith({Uint8List? mediaOffer}) =>
+        CallSignalingFrame(
+          kind: CallSignalKind.invite,
+          callId: 'call-1',
+          fromDeviceId: 'device-a',
+          createdAtMs: 1234,
+          mediaOffer: mediaOffer,
+        );
+
+    test('round trip preserves every field, including mediaOffer', () {
+      final offer = Uint8List.fromList([9, 8, 7]);
+      final withOffer = CallSignalingFrame.deserialize(
+        frameWith(mediaOffer: offer).serialize(),
+      );
+      expect(withOffer.version, callSignalingFrameVersion);
+      expect(withOffer.kind, CallSignalKind.invite);
+      expect(withOffer.callId, 'call-1');
+      expect(withOffer.fromDeviceId, 'device-a');
+      expect(withOffer.createdAtMs, 1234);
+      // `mediaOffer` is placed on the wire specifically so a future media
+      // transport does not have to re-version this frame (task file §3) --
+      // it must round-trip exactly, not merely be present.
+      expect(withOffer.mediaOffer, offer);
+
+      final withoutOffer =
+          CallSignalingFrame.deserialize(frameWith().serialize());
+      expect(withoutOffer.mediaOffer, isNull);
+    });
+
+    test('every kind round-trips to its own tag', () {
+      for (final kind in CallSignalKind.values) {
+        final decoded = CallSignalingFrame.deserialize(
+          CallSignalingFrame(
+            kind: kind,
+            callId: 'c',
+            fromDeviceId: 'd',
+            createdAtMs: 0,
+          ).serialize(),
+        );
+        expect(decoded.kind, kind);
+      }
+    });
+
+    test('truncation at every prefix length is rejected', () {
+      final bytes = frameWith(mediaOffer: Uint8List.fromList([1, 2, 3]))
+          .serialize();
+      for (var i = 0; i < bytes.length; i++) {
+        expect(
+          () => CallSignalingFrame.deserialize(
+            Uint8List.sublistView(bytes, 0, i),
+          ),
+          throwsA(isA<Object>()),
+          reason: 'truncated to $i of ${bytes.length} bytes must be rejected',
+        );
+      }
+      // The full, untruncated buffer is the control: it must NOT throw.
+      expect(CallSignalingFrame.deserialize(bytes).callId, 'call-1');
+    });
+
+    test('trailing garbage after a well-formed frame is rejected', () {
+      final bytes = frameWith().serialize();
+      final withTrailingGarbage = Uint8List.fromList([...bytes, 0xFF]);
+      expect(
+        () => CallSignalingFrame.deserialize(withTrailingGarbage),
+        throwsA(isA<Object>()),
+      );
+    });
+
+    test('wrong version byte is rejected', () {
+      final bytes = Uint8List.fromList(frameWith().serialize());
+      bytes[0] = 0x63; // callSignalingFrameVersion is 1; this is not it.
+      expect(
+        () => CallSignalingFrame.deserialize(bytes),
+        throwsA(isA<Object>()),
+      );
+    });
+
+    test('unknown kind tag is rejected', () {
+      final bytes = Uint8List.fromList(frameWith().serialize());
+      bytes[1] = 0x63; // not any tag in `_kindTags`.
+      expect(
+        () => CallSignalingFrame.deserialize(bytes),
+        throwsA(isA<Object>()),
+      );
+    });
+
+    test('an oversized/adversarial length prefix does not allocate or crash',
+        () {
+      final bytes = Uint8List.fromList(frameWith().serialize());
+      // The callId length prefix (a u32) starts right after
+      // [version, kind] at offset 2.
+      bytes[2] = 0x7F;
+      bytes[3] = 0xFF;
+      bytes[4] = 0xFF;
+      bytes[5] = 0xFF;
+      expect(
+        () => CallSignalingFrame.deserialize(bytes),
+        throwsA(isA<Object>()),
+      );
+    });
+  });
+
   group('real two-stack signaling (EARS-CALL-2)', () {
     test(
         'test_EARS_CALL_2_invite_accept_reaches_active_on_both_ends',
@@ -302,6 +412,92 @@ void main() {
 
       expect(a.callSignaling.counters.callUnauthenticated, 1);
       expect(a.callSignaling.currentSession, isNull);
+    });
+  });
+
+  group('real two-stack signaling (EARS-CALL-3, remote-terminal path)', () {
+    // Round-1 review finding F3: EARS-CALL-3 requires "WHEN either party
+    // ends the call, the system SHALL move BOTH sessions to `ended` with a
+    // matching reason" -- but the named test
+    // (`test_EARS_CALL_3_hangup_from_either_side_ends_both_and_cancels_timers`,
+    // `call_session_test.dart`) only ever drives ONE isolated `CallSession`
+    // object directly, never through `CallSignaling.handleControlFrame`.
+    // That leaves the entire remote-terminal branch of
+    // `_applyToCurrentOrDrop` (`call_signaling.dart`) with no coverage from
+    // this task: these two tests drive a REMOTE terminal frame through the
+    // real wire path (two real `MessagingStack`s, real Signal sessions,
+    // real `TransportApi`/`InboundPipeline` dispatch) and assert the
+    // OTHER side's session also ends, with a matching reason, both
+    // `currentSession`s released.
+    test('test_EARS_CALL_3_remote_decline_ends_the_callers_session_over_the_wire',
+        () async {
+      final aSuffix = nextSuffix();
+      final bSuffix = nextSuffix();
+      final a = await newStack('device-a', aSuffix);
+      final b = await newStack('device-b', bSuffix);
+      addTearDown(a.dispose);
+      addTearDown(b.dispose);
+
+      await wireStacks(a, aSuffix, b, bSuffix);
+      await a.prekeyExchange.ensureSession('device-b');
+
+      final callerSession = await a.callSignaling.invite('device-b');
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      expect(callerSession.state, CallState.outgoingRinging);
+
+      final calleeSession = b.callSignaling.currentSession;
+      expect(calleeSession, isNotNull);
+
+      final declineFailure =
+          await b.callSignaling.decline(calleeSession!.callId);
+      expect(declineFailure, isNull);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      expect(calleeSession.state, CallState.ended);
+      expect(calleeSession.endReason, CallEndReason.declined);
+      expect(
+        callerSession.state,
+        CallState.ended,
+        reason: 'the CALLER must also end when the callee declines '
+            '(EARS-CALL-3: "either party ends the call ... both sessions")',
+      );
+      expect(callerSession.endReason, CallEndReason.declined);
+      expect(a.callSignaling.currentSession, isNull);
+      expect(b.callSignaling.currentSession, isNull);
+    });
+
+    test('test_EARS_CALL_3_remote_cancel_ends_the_callees_session_over_the_wire',
+        () async {
+      final aSuffix = nextSuffix();
+      final bSuffix = nextSuffix();
+      final a = await newStack('device-a', aSuffix);
+      final b = await newStack('device-b', bSuffix);
+      addTearDown(a.dispose);
+      addTearDown(b.dispose);
+
+      await wireStacks(a, aSuffix, b, bSuffix);
+      await a.prekeyExchange.ensureSession('device-b');
+
+      final callerSession = await a.callSignaling.invite('device-b');
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      final calleeSession = b.callSignaling.currentSession;
+      expect(calleeSession, isNotNull);
+
+      final hangupFailure = await a.callSignaling.hangup(callerSession.callId);
+      expect(hangupFailure, isNull);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      expect(callerSession.state, CallState.ended);
+      expect(callerSession.endReason, CallEndReason.cancelled);
+      expect(
+        calleeSession!.state,
+        CallState.ended,
+        reason: 'the CALLEE must stop ringing when the caller cancels '
+            '(EARS-CALL-3)',
+      );
+      expect(calleeSession.endReason, CallEndReason.cancelled);
+      expect(a.callSignaling.currentSession, isNull);
+      expect(b.callSignaling.currentSession, isNull);
     });
   });
 

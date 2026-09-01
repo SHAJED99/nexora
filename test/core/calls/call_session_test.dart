@@ -333,6 +333,59 @@ void main() {
     });
   });
 
+  group('test_EARS_CALL_3_no_pending_ring_timer_after_end', () {
+    // Round-1 review finding F2: the 613-test suite that existed before
+    // this group stayed green even after deleting `_cancelRingTimer();`
+    // from `CallSession._end` -- none of the existing tests actually
+    // observed the TIMER ITSELF; they only observed effects the removal
+    // happened not to disturb (either because `_enter(active)` had already
+    // cancelled it on that particular path, or because the firing timer's
+    // own in-timer state guard silently no-ops once already `ended`,
+    // masking a leaked-but-harmless-looking `Timer` object). These tests
+    // read `hasPendingRingTimer` directly -- the visible seam added to
+    // `CallSession` for exactly this purpose -- on the three `_end` paths
+    // task file §6 names as the actual risk: a REMOTE decline/busy/cancel
+    // arriving while a ring timer is still live.
+    //
+    // Falsified directly (task instructions): with
+    // `_cancelRingTimer();` temporarily deleted from `CallSession._end`,
+    // all three tests below fail -- `hasPendingRingTimer` reads `true`
+    // instead of `false` -- because `_ringTimer` is still non-null the
+    // instant `_end` finishes. Restored, they pass again. See the run log
+    // / PR description for the exact revert-run-restore transcript.
+    test('remote decline while incoming-ringing leaves no pending timer', () {
+      final session = incoming();
+      session.onEvent(CallSignalKind.invite);
+      expect(session.hasPendingRingTimer, isTrue,
+          reason: 'ring timer must be armed while ringing');
+      session.onEvent(CallSignalKind.decline);
+      expect(session.state, CallState.ended);
+      expect(session.endReason, CallEndReason.declined);
+      expect(session.hasPendingRingTimer, isFalse,
+          reason: 'a terminal transition must leave NO pending timer');
+    });
+
+    test('remote busy while outgoing-pending leaves no pending timer', () {
+      final session = outgoing();
+      session.onEvent(CallSignalKind.invite);
+      expect(session.hasPendingRingTimer, isTrue);
+      session.onEvent(CallSignalKind.busy);
+      expect(session.state, CallState.ended);
+      expect(session.endReason, CallEndReason.busy);
+      expect(session.hasPendingRingTimer, isFalse);
+    });
+
+    test('remote cancel while incoming-ringing leaves no pending timer', () {
+      final session = incoming();
+      session.onEvent(CallSignalKind.invite);
+      expect(session.hasPendingRingTimer, isTrue);
+      session.onEvent(CallSignalKind.cancel);
+      expect(session.state, CallState.ended);
+      expect(session.endReason, CallEndReason.cancelled);
+      expect(session.hasPendingRingTimer, isFalse);
+    });
+  });
+
   group('endLocally', () {
     test('drives idle-unreachable-style ending without a wire kind', () {
       final session = outgoing();

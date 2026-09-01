@@ -148,6 +148,26 @@ class CallSession {
   /// state (task file §2: "`ended` carries a reason").
   CallEndReason? get endReason => _endReason;
 
+  /// **Test-only seam** (not part of this task's own contract list, §5) —
+  /// added purely so review round-1 finding F2 (a leaked `_end`-side ring
+  /// timer) is directly observable from a test rather than inferred from
+  /// an effect. Deliberately a plain public getter rather than
+  /// `@visibleForTesting`: adding a `package:meta` import to this file for
+  /// one annotation would trip `depend_on_referenced_packages` (`meta` is
+  /// only a transitive dependency here, never declared directly in
+  /// `pubspec.yaml`), and declaring it directly would itself be a new
+  /// dependency edit — exactly what review round-1 said this fix must not
+  /// do. Product code must never read this getter; only tests do.
+  ///
+  /// `true` only between [_startRingTimer] and the matching
+  /// [_cancelRingTimer] — every `_enter`/`_end` path funnels through one or
+  /// the other (task file §6's named #1 risk: "a leaked 45s timer that
+  /// fires after `ended` will re-enter the machine"), so this reads the
+  /// single private `_ringTimer` field directly rather than inferring its
+  /// absence from an effect, which a defense-in-depth guard elsewhere
+  /// (`_startRingTimer`'s own in-timer state check) could otherwise mask.
+  bool get hasPendingRingTimer => _ringTimer != null;
+
   /// Applies one transition from this task's own state table (task file
   /// §2/§5), driven by [kind]. Throws [StateError] on any `(state, kind)`
   /// pair not in that table — never a silent no-op (task file §5's own
