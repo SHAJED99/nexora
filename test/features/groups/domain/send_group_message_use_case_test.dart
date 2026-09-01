@@ -707,6 +707,68 @@ void main() {
   });
 
   test(
+    'test_EARS_COMM_32_messageId_dedupe_branch_is_reached_directly',
+    () async {
+      // The test above (`test_EARS_COMM_32_duplicate_delivery_stores_once`)
+      // re-pushes byte-identical wire bytes, so libsignal's `GroupCipher`
+      // throws `DuplicateMessageException` at `inbound_pipeline.dart:530`
+      // before `handleGroupMessage` is ever entered a second time -- it
+      // proves E07-T04's spent-key discard, not this task's own
+      // `messageId` dedupe branch (`inbound_pipeline.dart:576-582`). That
+      // branch is the SOLE guard against a frame that decrypts
+      // successfully a second time (an epoch re-distribution or same-epoch
+      // chain reset, E07-T05's territory) -- reached here directly, since
+      // `handleGroupMessage` is public per the task file's §5 contract,
+      // bypassing the need to construct two genuinely-different
+      // ciphertexts that both decrypt successfully.
+      final stack = await newStack('device-b');
+      addTearDown(stack.dispose);
+
+      final groups = GroupRepository(stack.db);
+      final groupId = await groups.createGroup(
+        name: 'G',
+        ownerDeviceId: 'device-a',
+        memberDeviceIds: ['device-b'],
+      );
+
+      final delivered = <Object>[];
+      final sub = stack.inbound.delivered.listen(delivered.add);
+      addTearDown(sub.cancel);
+
+      final envelope = GroupMessageEnvelope(
+        groupId: groupId,
+        epoch: 0,
+        senderDeviceId: 'device-a',
+        messageId: 'direct-dedupe-message',
+        sequenceNumber: 0,
+        createdAtMs: DateTime.now().millisecondsSinceEpoch,
+        body: Uint8List.fromList('direct dedupe'.codeUnits),
+      );
+      final senderKeyMessageBytes = Uint8List.fromList([7, 7, 7]);
+
+      // Same envelope, decrypted "successfully" twice -- exactly what an
+      // epoch re-distribution or chain reset can produce, and exactly what
+      // `DuplicateMessageException` does NOT guard against.
+      await stack.inbound.handleGroupMessage(
+        'device-a',
+        envelope,
+        senderKeyMessageBytes,
+      );
+      await stack.inbound.handleGroupMessage(
+        'device-a',
+        envelope,
+        senderKeyMessageBytes,
+      );
+
+      final rows = await stack.db.select(stack.db.messages).get();
+      expect(rows, hasLength(1));
+      expect(delivered, hasLength(1));
+      expect(stack.inbound.counters.duplicate, 1);
+      expect(stack.inbound.counters.delivered, 1);
+    },
+  );
+
+  test(
     'test_wrong_epoch_fails_explicitly_and_never_falls_back',
     () async {
       final aSuffix = nextSuffix();
