@@ -17,7 +17,7 @@ closed, T11 in review) ·
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `dfec62f` (PR #6) |
 | E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE → collision-fix APPROVE · squash-merged `6e4864d` (PR #8) |
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | done · builder (sonnet) + planner (opus, `OQ-E07-T07-1` fix) → reviewer (opus) · APPROVE · squash-merged `430fc88` (PR #11) |
-| E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
+| E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | dispatched · builder-ui (sonnet), branch `epic_07_task_08` |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 CHANGES (narrow) → round 3 APPROVE · squash-merged `93c3069` (PR #10) |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | in-review · builder (sonnet) → reviewer (opus) · PR #12 (680/680) · flagged deviation (CallMediaTransport.attach refactor touching E07-T09's contract) under scrutiny |
