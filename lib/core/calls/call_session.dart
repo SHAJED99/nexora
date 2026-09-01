@@ -43,6 +43,8 @@
 // ignore_for_file: prefer_initializing_formals
 import 'dart:async';
 
+import '../routing_engine/routing_engine.dart' show Route;
+
 /// The call session lifecycle (task file §2/§5): two shapes sharing a
 /// spine, `idle → outgoingPending → outgoingRinging → active → ending →
 /// ended` for the caller and `idle → incomingRinging → active → ending →
@@ -75,7 +77,81 @@ enum CallEndReason {
 /// §3, `call_signaling.dart`). [CallSession] has no wire-format knowledge of
 /// its own; see this file's header for why the same enum drives both a
 /// local action and a decoded, already-authenticated inbound frame.
-enum CallSignalKind { invite, ringing, accept, decline, busy, hangup, cancel }
+///
+/// [pathProbe]/[pathProbeEcho] are appended by E07-T11 (FR-CALL-003,
+/// make-before-break migration) — **appended, not inserted or reordered**,
+/// matching `TrafficProfile`'s own precedent (`route_cost_calculator.dart`):
+/// this enum is switched on in several places and a reorder would be a
+/// silent behaviour change. Unlike every other member, neither is ever
+/// passed to [CallSession.onEvent] — a path probe validates a *candidate*
+/// route without touching call state at all (`call_migration_controller.dart`
+/// drives them directly through `CallSignaling.sendPathProbe`/
+/// `CallSignaling.pathProbeEchoes`); they exist on this enum only because
+/// `CallSignalingFrame.kind` (`call_signaling.dart`) is typed as
+/// [CallSignalKind] and a path probe is an ordinary signaling frame at the
+/// `realtime` band, riding the same authenticated channel as everything
+/// else (task file §3).
+enum CallSignalKind {
+  invite,
+  ringing,
+  accept,
+  decline,
+  busy,
+  hangup,
+  cancel,
+  pathProbe,
+  pathProbeEcho,
+}
+
+/// One event on [CallSession.migrations] (E07-T11, task file §5) — an
+/// observable record of a make-before-break migration attempt, for a
+/// (prospective) call UI or diagnostics to read as one source of truth
+/// rather than inferring migration state from side effects. Sealed, mirroring
+/// `routing_engine.dart`'s own `MigrationDecision` pattern in this codebase.
+sealed class CallMigrationEvent {
+  const CallMigrationEvent();
+}
+
+/// A candidate route was found and a validation probe is being sent.
+final class CallMigrationAttempted extends CallMigrationEvent {
+  final Route candidate;
+  const CallMigrationAttempted(this.candidate);
+
+  @override
+  String toString() => 'CallMigrationEvent.attempted($candidate)';
+}
+
+/// The candidate's round-trip probe echo arrived within the bound — the
+/// candidate is proven live, not merely computed (task file §2).
+final class CallMigrationValidated extends CallMigrationEvent {
+  final Route candidate;
+  const CallMigrationValidated(this.candidate);
+
+  @override
+  String toString() => 'CallMigrationEvent.validated($candidate)';
+}
+
+/// The migration finished: the new route is active and the old one has been
+/// detached.
+final class CallMigrationCompleted extends CallMigrationEvent {
+  final Route route;
+  const CallMigrationCompleted(this.route);
+
+  @override
+  String toString() => 'CallMigrationEvent.completed($route)';
+}
+
+/// The migration was abandoned at some step — [reason] is one of
+/// `probeTimeout` / `mediaFailed` / `candidateLost` (`call_migration_controller.dart`).
+/// The active route is left exactly as it was before the attempt (task file
+/// §3): abandonment is never a call-ending event.
+final class CallMigrationAbandoned extends CallMigrationEvent {
+  final String reason;
+  const CallMigrationAbandoned(this.reason);
+
+  @override
+  String toString() => 'CallMigrationEvent.abandoned($reason)';
+}
 
 /// How long a session stays in a ringing state — [CallState.outgoingPending]
 /// / [CallState.outgoingRinging] for the caller, [CallState.incomingRinging]
@@ -122,10 +198,17 @@ class CallSession {
   final StreamController<CallState> _statesController =
       StreamController<CallState>.broadcast();
 
+  /// E07-T11 (task file §5): broadcast so more than one listener (a call UI,
+  /// `call_migration_controller.dart`'s own bookkeeping) can observe every
+  /// migration attempt as one source of truth.
+  final StreamController<CallMigrationEvent> _migrationsController =
+      StreamController<CallMigrationEvent>.broadcast();
+
   CallState _state = CallState.idle;
   CallEndReason? _endReason;
   Timer? _ringTimer;
   DateTime? _lastTransitionAt;
+  Route? _activeRoute;
 
   /// The current state. Never anything outside [CallState] — there is no
   /// "unknown" value (task file §2).
@@ -147,6 +230,44 @@ class CallSession {
   /// Set only once [state] reaches [CallState.ended]; null at every other
   /// state (task file §2: "`ended` carries a reason").
   CallEndReason? get endReason => _endReason;
+
+  /// The route this call is currently considered to be using, or `null`
+  /// before any route has ever been recorded (E07-T11, task file §5) — the
+  /// same observable surface a call UI or diagnostics reads rather than
+  /// inferring the call's route from `RoutingEngine`'s own internal
+  /// bookkeeping. Written only by [recordActiveRoute]
+  /// (`call_migration_controller.dart`, mirroring
+  /// `RoutingEngine.setActiveRoute`'s own naming for the same concept one
+  /// layer down).
+  Route? get activeRoute => _activeRoute;
+
+  /// Records [route] as this session's current route (E07-T11) — a small
+  /// addition beyond §5's literal function list, in the same spirit as
+  /// E07-T09's own `lastTransitionAt`/`currentSession` additions (that
+  /// task's §9 Deviation 3): §5 only names the read side
+  /// ([activeRoute]/[migrations]) as this session's own contract, but
+  /// something has to write them, and `call_migration_controller.dart` is
+  /// the only caller — never [onEvent], which has no route knowledge at
+  /// all. Does not emit a [CallMigrationEvent] itself; callers do that
+  /// separately via [recordMigrationEvent] so the two can be sequenced
+  /// independently (e.g. attempted before the route is applied, completed
+  /// after).
+  void recordActiveRoute(Route route) {
+    _activeRoute = route;
+  }
+
+  /// Broadcast so more than one listener can observe every migration
+  /// attempt (task file §5) — see [_migrationsController]'s own doc comment.
+  Stream<CallMigrationEvent> get migrations => _migrationsController.stream;
+
+  /// Publishes [event] on [migrations] (E07-T11) — the write side of the
+  /// stream `call_migration_controller.dart` is the only caller of, for the
+  /// same reason [recordActiveRoute] exists (see that method's own doc
+  /// comment).
+  void recordMigrationEvent(CallMigrationEvent event) {
+    if (_migrationsController.isClosed) return;
+    _migrationsController.add(event);
+  }
 
   /// **Test-only seam** (not part of this task's own contract list, §5) —
   /// added purely so review round-1 finding F2 (a leaked `_end`-side ring
@@ -310,5 +431,6 @@ class CallSession {
   void dispose() {
     _cancelRingTimer();
     unawaited(_statesController.close());
+    unawaited(_migrationsController.close());
   }
 }

@@ -136,6 +136,11 @@ const Map<CallSignalKind, int> _kindTags = {
   CallSignalKind.busy: 5,
   CallSignalKind.hangup: 6,
   CallSignalKind.cancel: 7,
+  // E07-T11 (FR-CALL-003): the make-before-break validation probe/echo.
+  // New tags, appended -- never reusing 1-7 (task file's own contract: the
+  // wire value must survive `CallSignalKind`'s declaration being reordered).
+  CallSignalKind.pathProbe: 8,
+  CallSignalKind.pathProbeEcho: 9,
 };
 
 CallSignalKind _kindFromTag(int tag) {
@@ -328,15 +333,32 @@ const int callSignalingFrameVersion = 1;
 /// [CallMediaTransport.health] exposes. [NullCallMediaTransport] only ever
 /// produces [unavailable] (task file §3): there is no real transport yet,
 /// so there is nothing to report beyond that.
-enum CallMediaHealth { unavailable }
+///
+/// [live] is appended by E07-T11 (FR-CALL-003) — appended, not inserted,
+/// matching `CallSignalKind`'s own reordering discipline in this file.
+/// `CallMigrationController` waits for exactly this value on
+/// [CallMediaTransport.health] after [CallMediaTransport.attach] succeeds,
+/// before it will detach the old route (task file §5's ordered sequence:
+/// "`media.attach(new) -> health live -> media.detach(old)`").
+enum CallMediaHealth { unavailable, live }
 
 /// The seam the (undecided) real-time media transport plugs into once
 /// `OQ-E07-3` is answered — task file §3/§5. Exactly one implementation
 /// exists in this task: [NullCallMediaTransport].
+///
+/// **[attach] itself never ends the [CallSession] it is given** (E07-T11
+/// correction — see [NullCallMediaTransport]'s own doc comment for why):
+/// it only reports success/failure. A caller that treats *any* attach
+/// failure as fatal to the whole call (`CallSignaling._track`, on the
+/// call's first activation) may end the session itself; a caller using this
+/// seam for an *optional* mid-call migration (`CallMigrationController`)
+/// must not, and does not.
 abstract class CallMediaTransport {
-  /// Called once a [CallSession] reaches [CallState.active] on this device.
-  /// Returns an [AppFailure] if media could not be established; `null` on
-  /// success.
+  /// Called once a [CallSession] reaches [CallState.active] on this device
+  /// (the initial attach), or again by `CallMigrationController` for a
+  /// migration candidate route. Returns an [AppFailure] if media could not
+  /// be established; `null` on success. Never itself decides whether a
+  /// failure ends the call — see this class's own doc comment.
   Future<AppFailure?> attach(CallSession session);
 
   Future<void> detach();
@@ -346,21 +368,36 @@ abstract class CallMediaTransport {
 
 /// The honest v1 behaviour while `OQ-E07-3` is open (task file §2/§3): a
 /// call that rings, is answered, and then truthfully reports that it
-/// cannot carry audio — never a call that pretends to connect.
-/// [attach] both returns `AppFailure('call.no_media_transport')` AND drives
-/// [session] straight to `ended(failed)` via [CallSession.endLocally] — the
-/// caller does not have to separately notice the failure and end the call
-/// itself; this transport ends it as part of honestly reporting it cannot
-/// serve it. Every manual call attempt against this transport WILL end
-/// this way; task file §6 says so explicitly: "that is correct and will
-/// look broken."
+/// cannot carry audio — never a call that pretends to connect. [attach]
+/// always returns `AppFailure('call.no_media_transport')` and always
+/// reports [CallMediaHealth.unavailable] — it never produces
+/// [CallMediaHealth.live], so a `CallMigrationController` waiting on that
+/// value for a migration candidate will correctly time out and stay on the
+/// existing route rather than migrate blind (task file §2, §8
+/// EARS-CALL-10).
+///
+/// **E07-T11 correction:** [attach] used to call
+/// [CallSession.endLocally] itself, which was correct for [CallSignaling]'s
+/// own use (the *initial* attach on [CallState.active] — a call this device
+/// genuinely cannot carry audio for is honestly a failed call,
+/// EARS-CALL-5) but is wrong for `CallMigrationController`'s use of this
+/// exact same seam for an *optional* migration attempt on an
+/// already-established call — EARS-CALL-10 requires a media-attach failure
+/// mid-call to leave the call `active`, never to end it. Ending the call is
+/// now [CallSignaling._track]'s own reaction to a failed *initial* attach
+/// (see that method), not this class's; `CallMigrationController` reacts to
+/// the same failure by abandoning the migration and staying on the current
+/// route instead. This is a pure relocation of one line, not a change to
+/// what EARS-CALL-5 proves: the accept-then-media-fails integration inside
+/// `test_EARS_CALL_2_invite_accept_reaches_active_on_both_ends`
+/// (`call_signaling_test.dart`) still passes unmodified, since the net
+/// effect through [CallSignaling] is identical.
 class NullCallMediaTransport implements CallMediaTransport {
   final StreamController<CallMediaHealth> _healthController =
       StreamController<CallMediaHealth>.broadcast();
 
   @override
   Future<AppFailure?> attach(CallSession session) async {
-    session.endLocally(CallEndReason.failed);
     _healthController.add(CallMediaHealth.unavailable);
     return const AppFailure('call.no_media_transport');
   }
@@ -612,7 +649,61 @@ class CallSignaling {
       await _handleInvite(sourceDeviceId, signal);
       return;
     }
+    // E07-T11 (FR-CALL-003): `pathProbe`/`pathProbeEcho` never touch
+    // `CallSession.onEvent` -- neither is in that method's transition table
+    // (`call_session.dart`'s own doc comment), so routing them through
+    // `_applyToCurrentOrDrop` below would throw `StateError` on every single
+    // probe. They validate a candidate route without changing call state at
+    // all, so they get their own dispatch branches instead.
+    if (signal.kind == CallSignalKind.pathProbe) {
+      await _handlePathProbe(sourceDeviceId, signal);
+      return;
+    }
+    if (signal.kind == CallSignalKind.pathProbeEcho) {
+      _handlePathProbeEcho(sourceDeviceId, signal);
+      return;
+    }
     _applyToCurrentOrDrop(sourceDeviceId, signal.callId, signal.kind);
+  }
+
+  /// Replies to a validation probe with [CallSignalKind.pathProbeEcho],
+  /// iff [signal] names this device's own [_currentSession] exactly (same
+  /// callId + peer check as [_applyToCurrentOrDrop] -- task file §6: "reject
+  /// any frame whose `callId` names no known session"). Best-effort, same
+  /// reasoning as every other reply this file sends: the probe's own
+  /// consequence (the sender either sees an echo in time or doesn't) is
+  /// entirely the sender's problem, not this device's.
+  Future<void> _handlePathProbe(
+    String sourceDeviceId,
+    CallSignalingFrame signal,
+  ) async {
+    final session = _currentSession;
+    if (session == null ||
+        session.callId != signal.callId ||
+        session.peerDeviceId != sourceDeviceId) {
+      counters.callUnauthenticated++;
+      return;
+    }
+    await _sendFrameBestEffort(
+      sourceDeviceId,
+      CallSignalKind.pathProbeEcho,
+      signal.callId,
+    );
+  }
+
+  /// Publishes [signal]'s `callId` on [pathProbeEchoes], iff it names this
+  /// device's own [_currentSession] exactly -- same authentication shape as
+  /// every other inbound handler in this file (never trusts a stray/forged
+  /// echo for a call this device isn't actually in).
+  void _handlePathProbeEcho(String sourceDeviceId, CallSignalingFrame signal) {
+    final session = _currentSession;
+    if (session == null ||
+        session.callId != signal.callId ||
+        session.peerDeviceId != sourceDeviceId) {
+      counters.callUnauthenticated++;
+      return;
+    }
+    _pathProbeEchoController.add(signal.callId);
   }
 
   Future<void> _handleInvite(
@@ -706,7 +797,7 @@ class CallSignaling {
     _currentSession = session;
     session.states.listen((state) {
       if (state == CallState.active) {
-        unawaited(_mediaTransport.attach(session));
+        unawaited(_attachInitialMedia(session));
       } else if (state == CallState.ended) {
         if (session.endReason == CallEndReason.timeout) {
           counters.callTimeout++;
@@ -718,6 +809,59 @@ class CallSignaling {
       }
     });
   }
+
+  /// The *initial* media attach on [CallState.active] (task file §3,
+  /// EARS-CALL-5) — the one place a failed [CallMediaTransport.attach] ends
+  /// the whole call, since a call this device cannot carry audio for at all
+  /// is honestly a failed call. See [CallMediaTransport]'s own doc comment
+  /// (E07-T11 correction) for why this reaction now lives here rather than
+  /// inside [NullCallMediaTransport.attach] itself: `CallMigrationController`
+  /// calls [CallMediaTransport.attach] again for a migration candidate on an
+  /// already-active call, and a failure there must NOT end the call
+  /// (EARS-CALL-10) — only this, the first attach, is fatal.
+  Future<void> _attachInitialMedia(CallSession session) async {
+    final failure = await _mediaTransport.attach(session);
+    if (failure != null) {
+      session.endLocally(CallEndReason.failed);
+    }
+  }
+
+  /// Sends a [CallSignalKind.pathProbe] frame for [callId]/[peerDeviceId]
+  /// (E07-T11, task file §5) — `CallMigrationController`'s validation step:
+  /// "send a probe over the candidate, wait for its echo within a bounded
+  /// timeout." Returns `true` only if the frame actually left this device
+  /// (the same delivery evidence [_sendFrame] already computes for every
+  /// other kind — a direct `transport.send` boolean, or a multi-hop
+  /// enqueue's real `forwarding`/`delivered` state); `false` on any send
+  /// failure, mirroring [_sendFrameBestEffort]'s own "never throw, just
+  /// report" shape rather than that method's swallowed-exception one, since
+  /// the caller here (the migration controller) needs the boolean to decide
+  /// whether to even start waiting for an echo.
+  Future<bool> sendPathProbe(String callId, String peerDeviceId) async {
+    try {
+      await _sendFrame(peerDeviceId, CallSignalKind.pathProbe, callId);
+      return true;
+    } catch (_) {
+      // Mirrors `_sendFrameBestEffort`'s own catch-all shape -- any send
+      // failure (unreachable, no session, encrypt error) is reported as
+      // `false`, never thrown, so the migration controller can decide
+      // deterministically whether to even start waiting for an echo.
+      return false;
+    }
+  }
+
+  /// Broadcasts the `callId` of every validated [CallSignalKind.pathProbeEcho]
+  /// this device has received for its own [_currentSession] (E07-T11) --
+  /// `CallMigrationController` listens here, bounded by its own injected
+  /// `probeTimeout`, and cancels its subscription the moment that bound
+  /// expires so a LATE echo (arriving after the controller has already
+  /// moved on) is never observed by anything -- task file §6's named risk:
+  /// "a probe echo arriving after its timeout must be ignored, not applied
+  /// late."
+  Stream<String> get pathProbeEchoes => _pathProbeEchoController.stream;
+
+  final StreamController<String> _pathProbeEchoController =
+      StreamController<String>.broadcast();
 
   Future<void> _sendFrame(
     String peerDeviceId,
