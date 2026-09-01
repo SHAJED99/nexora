@@ -15,7 +15,7 @@ T14 sharded 2026-09-01 discharging `OQ-E07-T06-2`) ·
 | E07-T03 | Group membership control protocol | backend | M | must | T02 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `d6c0a2b` (PR #4) |
 | E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `82d6f20` (PR #5) |
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `dfec62f` (PR #6) |
-| E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | in-review · builder (sonnet) → reviewer (opus) · round 1 CHANGES (1 blocking, missing dedupe-branch test) · PR #8 back to `claude-sonnet-5` · ⛔ `OQ-E07-T06-1` (send path not production-reachable, sharding defect) — planner dispatched |
+| E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | in-review · F1 fixed (613/613), round-2 review dispatched · ⛔ S1 control-kind collision (`kControlKindGroupMessage == kControlKindCallSignaling == 5`, T06 branched before T09 merged) MUST be renumbered before merge — fix not yet dispatched · `OQ-E07-T06-1` resolved by planner |
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
