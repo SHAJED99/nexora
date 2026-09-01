@@ -1,10 +1,9 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** in-progress (T01/T02/T03/T04/T05/T06/T09/T12/T13/T14 merged to
-`epic_07`, GAP-023 approved, `OQ-E07-T06-2` closed — FR-COMM-002's send
-half is now production-reachable, T10 in flight) ·
+**Status:** in-progress (T01/T02/T03/T04/T05/T06/T09/T10/T12/T13/T14
+merged to `epic_07`, GAP-023 approved, `OQ-E07-T06-2` closed) ·
 **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 10/14
+**Completed:** — · **Progress:** 11/14
 
 ## Tasks
 
@@ -19,7 +18,7 @@ half is now production-reachable, T10 in flight) ·
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
 | E07-T09 | Call session state machine + signaling | backend | M | should | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `586c8de` (PR #7) |
-| E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | in-review · round 3 fix pushed (test-strengthened, docs added, 665/665) · round-3 confirmation review dispatched |
+| E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 CHANGES (narrow) → round 3 APPROVE · squash-merged `93c3069` (PR #10) |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `5f6a81e` (PR #3); GAP-023 human-approved `23c88ab` |
@@ -213,6 +212,18 @@ _(empty at sharding — created deliberately so it has a reader from day one.
 each new dispatch and cross-check the next task's `files:` fence.** E06's
 highest-severity finding, `E06-B02` (S1), sat correctly recorded in this
 exact section for eight tasks with no reader.)_
+
+- **2026-09-01 · E07-T09/T10 seam · per-destination route-profile
+  stickiness (advisory, S4).** `RoutingEngine._lastProfile`
+  (`routing_engine.dart:121`) is keyed per-destination and never reset.
+  E07-T10 makes call signaling compute routes under `TrafficProfile.realtime`
+  for a peer; if that same peer is later messaged ordinarily and the send
+  fails, the fallback route is computed under the leftover `realtime`
+  profile rather than `interactive`/`bulk`. Not reachable as a
+  confidentiality or correctness bug — only a routing-cost artifact — and
+  documented in `E07-T10.md` §9 Deviations. **Owner: the epic sweep** —
+  check whether messaging's route-failure path should reset or ignore a
+  stale `realtime` profile left by an unrelated call.
 
 - **2026-08-31 · E07-T01 · migration-test completeness (advisory, S4).**
   `test_EARS_GROUP_5_v12_upgrades_to_v13_additively` proves every pre-existing
@@ -1624,3 +1635,42 @@ round is a test-integrity + documentation issue, not a code defect.
 **Routing:** back to the same builder — test-integrity fix only, no `lib/`
 change needed, no planner/escalation required (F3's specification issue
 was already closed last round; this is contained follow-through).
+
+### E07-T10 — round 3 — 2026-09-01 — ✅ **APPROVE** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+PR #10 → `epic_07`. Commits `91f7835`, `b39847e`.
+
+- **N1 CLOSED, falsified independently.** Reverted only F1's per-band
+  reserve (leaving F2's rollover byte-intact) — strengthened test now
+  fails (`Expected: <50> / Actual: <0>`), while the F2-specific test
+  stayed green in the same run — proving the strengthened test now keys
+  on F1's mechanism specifically, not on F1+F2 conflated. Restored, green
+  again.
+- **No production code this round** — `git diff --stat` confined to the
+  test file + task file; `relay_engine.dart` byte-identical to the
+  round-1 fix commit.
+- **Load-shape arithmetic independently re-derived, not trusted**: with
+  budget=5 and 3 bands, the per-band reserve math leaves the top band's
+  10 arrivals/cycle consuming all 3 non-reserved slots, so the rollover
+  genuinely has zero leftover to hand down — bulk's 1 slot/cycle can only
+  come from F1's own reserve. Loop-exit change verified safe against a
+  false-positive early exit.
+- **N2 and F5 doc additions verified present AND factually re-checked**
+  (not just "present"): N2's claim that no production caller passes a
+  bounded budget confirmed against both call sites; F5's `_lastProfile`
+  read/write/never-reset claim confirmed directly in
+  `routing_engine.dart`.
+- **suite: 665/665**, `flutter analyze` clean, confirmed independently.
+
+**Ready to squash-merge — done.** Squash-merged to `epic_07` as `93c3069`
+(PR #10). Note from reviewer: a stale `epic_07_task_10` worktree exists at
+`.claude/worktrees/agent-a8e9a5f322d5db6e8` (4 commits behind, round-1
+head) — should be pruned so it doesn't ambush a future reader of this
+branch.
+
+**Carried forward for the epic sweep:** F5 (`RoutingEngine._lastProfile`
+stickiness) crosses the T09/T10 seam — call signaling leaves `realtime`
+routing weights behind for a peer that the ordinary messaging path later
+routes to, since the profile is keyed per-destination and never reset.
+Documented now in `E07-T10.md` §9 so it has a reader; not blocking, but
+exactly the kind of seam-shaped issue `skills/bug-sweep` exists to check
+end-to-end.
