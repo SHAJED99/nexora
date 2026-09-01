@@ -30,7 +30,8 @@
 // EARS-GROUP-13 section, since that is exactly the seam this task's receive
 // branch rides: group frames travel the identical mocked-transport ->
 // `RelayEngine` -> `InboundPipeline` path E07-T04's key distribution already
-// proved works, just on a new `controlKind` (5) instead of 4.
+// proved works, just on a new `controlKind` (6 — originally 5, renumbered
+// after E07-T09's `kControlKindCallSignaling` claimed 5 first) instead of 4.
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';

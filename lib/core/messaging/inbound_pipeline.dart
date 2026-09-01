@@ -65,7 +65,9 @@
 // §4) — every dependency below is used exactly as its own epic left it.
 //
 // **E07-T06 addition: group text messages.** A fifth `controlKind`
-// (`kControlKindGroupMessage == 5`, `group_message_envelope.dart`) is
+// (`kControlKindGroupMessage == 6` — originally `5`, renumbered after
+// E07-T09's `kControlKindCallSignaling` claimed `5` first; see
+// `group_message_envelope.dart`'s header) is
 // dispatched exactly like `PrekeyExchange`(1)/`DeliveryAckService`(2)/
 // `GroupMembershipService`(3)/`GroupCryptoService`(4) before it — via this
 // pipeline's own `registerControlHandler` seam — EXCEPT the registration

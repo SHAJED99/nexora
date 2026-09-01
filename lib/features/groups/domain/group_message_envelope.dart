@@ -47,15 +47,21 @@ import '../../../core/auth/google_auth_service.dart' show AppFailure;
 /// The `controlKind` byte a group text message travels as — `1` is
 /// `PrekeyExchange`'s (E06-T07), `2` is `DeliveryAckService`'s (E06-T08),
 /// `3` is `GroupMembershipService`'s (E07-T03), `4` is `GroupCryptoService`'s
-/// key-distribution slot (E07-T04); this is the next unused value.
+/// key-distribution slot (E07-T04). This was originally assigned `5`, but
+/// this task's branch was created before E07-T09 (call signaling) merged
+/// into `epic_07`, and T09 independently claimed `5` for
+/// `kControlKindCallSignaling` (`call_signaling.dart`). Since T09 merged
+/// first, `5` is now permanently call signaling; this slot is renumbered to
+/// `6`, the next free value.
 ///
-/// Unlike those four, this slot is dispatched by `InboundPipeline` itself —
-/// registered onto its OWN `registerControlHandler` seam from inside its own
-/// constructor (`inbound_pipeline.dart`'s header explains why: this task's
-/// `files:` fence updates that file directly and does not touch
+/// Unlike the four control kinds below it, this slot is dispatched by
+/// `InboundPipeline` itself — registered onto its OWN
+/// `registerControlHandler` seam from inside its own constructor
+/// (`inbound_pipeline.dart`'s header explains why: this task's `files:`
+/// fence updates that file directly and does not touch
 /// `messaging_stack.dart`, so there is no external registration call site
 /// available the way T07/T08/T03/T04 each had one).
-const int kControlKindGroupMessage = 5;
+const int kControlKindGroupMessage = 6;
 
 /// Current, and so far only, [GroupMessageEnvelope] wire layout version.
 const int groupMessageEnvelopeVersion = 1;
