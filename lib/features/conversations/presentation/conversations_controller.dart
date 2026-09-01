@@ -86,12 +86,31 @@ class ConversationTile {
   final int unreadCount;
   final String? preview;
 
+  /// Builds a **personal** conversation's row. E07-T07 widened
+  /// [ConversationSummary] to cover groups too, making
+  /// [ConversationSummary.peerDeviceId] nullable — it is non-null exactly
+  /// when `kind == ConversationKind.personal`. Both callers
+  /// ([ConversationsController._onSummaries] and
+  /// `DashboardController._onSummaries`) filter group rows out before
+  /// calling this, because neither screen has a group row treatment yet —
+  /// the Conversations screen's `Groups` section is E07-T08 (GAP-006), and
+  /// this task does not invent one. The `?? s.conversationId` fallbacks are
+  /// therefore unreachable by construction; they exist so a group row that
+  /// ever did reach here degrades to the opaque conversation id (the only
+  /// honest non-null stand-in this projection has) rather than crashing or
+  /// rendering a faked peer id.
   factory ConversationTile.from(ConversationSummary s, {String? preview}) {
+    assert(
+      s.kind == ConversationKind.personal && s.peerDeviceId != null,
+      'ConversationTile describes a personal conversation; group rows are '
+      'E07-T08 and must be filtered out before this factory is called.',
+    );
+    final peerDeviceId = s.peerDeviceId ?? s.conversationId;
     return ConversationTile(
       conversationId: s.conversationId,
-      peerDeviceId: s.peerDeviceId,
-      displayName: s.peerDeviceId,
-      initials: initialsOf(s.peerDeviceId),
+      peerDeviceId: peerDeviceId,
+      displayName: peerDeviceId,
+      initials: initialsOf(peerDeviceId),
       relationshipState: s.relationshipState,
       lastMessageAt: DateTime.fromMillisecondsSinceEpoch(s.lastMessageAt),
       lastMessageIsMine: s.lastMessageIsMine,
@@ -190,6 +209,13 @@ class ConversationsController extends GetxController {
   Future<void> _onSummaries(List<ConversationSummary> summaries) async {
     final tiles = <ConversationTile>[];
     for (final summary in summaries) {
+      // E07-T07 widened `watchConversations()` to emit group rows too. This
+      // screen's Personal section is the only row treatment that exists
+      // today; the `Groups` section is still GAP-006's placeholder and is
+      // populated by E07-T08, which owns this file next. Skipping group rows
+      // here preserves the Personal list byte-for-byte and never renders a
+      // group as if it were a peer.
+      if (summary.kind != ConversationKind.personal) continue;
       final preview = await _resolvePreview(summary);
       tiles.add(ConversationTile.from(summary, preview: preview));
     }
@@ -232,13 +258,24 @@ class ConversationsController extends GetxController {
     if (_previewCache.containsKey(summary.lastMessageId)) {
       return _previewCache[summary.lastMessageId];
     }
+    // A 1:1 Double Ratchet session is addressed by the peer's device id, and
+    // E07-T07 made that field null for a group row (a group has no single
+    // peer). No peer id means no 1:1 session to decrypt against — that is
+    // "no preview", the same graceful degrade this method already applies to
+    // every other failure, not an error row. Group previews need the group
+    // sender-key session and belong to E07-T08.
+    final peerDeviceId = summary.peerDeviceId;
+    if (peerDeviceId == null) {
+      _previewCache[summary.lastMessageId] = null;
+      return null;
+    }
     String? preview;
     try {
       final page = await _repo.messagesPage(summary.conversationId, limit: 1);
       if (page.isNotEmpty && page.first.id == summary.lastMessageId) {
         final ciphertextMessage = _decodeCiphertext(page.first.ciphertext);
         final plaintext = await _crypto.decrypt(
-          SignalProtocolAddress(summary.peerDeviceId, _localSignalDeviceId),
+          SignalProtocolAddress(peerDeviceId, _localSignalDeviceId),
           ciphertextMessage,
         );
         final envelope = MessageEnvelope.deserialize(plaintext);
