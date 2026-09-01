@@ -14,10 +14,10 @@ GAP-023 approved, T06 + T09 dispatched) ·
 | E07-T03 | Group membership control protocol | backend | M | must | T02 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `d6c0a2b` (PR #4) |
 | E07-T04 | Drift-backed `SenderKeyStore` + key distribution | backend | M | must | T01, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE round 2 · squash-merged `82d6f20` (PR #5) |
 | E07-T05 | Key rotation on membership change + exclusion | backend | M | must | T04 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `dfec62f` (PR #6) |
-| E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | dispatched · builder (sonnet), branch `epic_07_task_06` |
+| E07-T06 | Group message send/receive fan-out | backend | M | must | T05 | built · PR #8 (606/606) · ⛔ `OQ-E07-T06-1` (sequence-reservation seam left unbound, needs planner/human) — awaiting review dispatch |
 | E07-T07 | Conversation read model widened to groups | backend | S | must | T06 | todo |
 | E07-T08 | Conversations "Groups" section (closes GAP-006) | frontend | M | must | T07 | todo |
-| E07-T09 | Call session state machine + signaling | backend | M | should | T04 | in-review · builder (sonnet) → reviewer (opus) · round 1 CHANGES (3 blocking, missing test evidence not wrong behavior) · PR #7 back to `claude-sonnet-5` |
+| E07-T09 | Call session state machine + signaling | backend | M | should | T04 | built · round 2 fix pushed (625/625) · PR #7 awaiting round-2 review dispatch |
 | E07-T10 | Real-time traffic profile + call priority | backend | M | should | T09 | todo |
 | E07-T11 | Make-before-break call route migration | backend | M | must | T09, T10 | todo |
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
