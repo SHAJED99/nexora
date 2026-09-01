@@ -103,6 +103,106 @@ void main() {
       expect(a, b);
     });
 
+    test('test_existing_profiles_are_unchanged', () {
+      // E07-T10 appends `TrafficProfile.realtime` to this enum. This test
+      // re-proves the exact same interactive/bulk comparisons this file's
+      // own pre-existing tests above establish still hold -- comparisons
+      // only, never a literal cost number (task file §6/§9): a third
+      // switch arm must not perturb the `interactive`/`bulk` arms it sits
+      // beside.
+      const lowLatency = RouteCostFactors(
+        latencyMs: 20,
+        reliability: 0.95,
+        batteryDrainRate: 0.1,
+        hopCount: 1,
+      );
+      const highLatency = RouteCostFactors(
+        latencyMs: 2000,
+        reliability: 0.95,
+        batteryDrainRate: 0.1,
+        hopCount: 1,
+      );
+      expect(
+        RouteCostCalculator.cost(
+          factors: highLatency,
+          profile: TrafficProfile.interactive,
+        ),
+        greaterThan(
+          RouteCostCalculator.cost(
+            factors: lowLatency,
+            profile: TrafficProfile.interactive,
+          ),
+        ),
+      );
+
+      const good = RouteCostFactors(
+        latencyMs: 500,
+        reliability: 0.99,
+        batteryDrainRate: 0.05,
+        hopCount: 1,
+      );
+      const bad = RouteCostFactors(
+        latencyMs: 500,
+        reliability: 0.5,
+        batteryDrainRate: 2.0,
+        hopCount: 1,
+      );
+      final bulkGood =
+          RouteCostCalculator.cost(factors: good, profile: TrafficProfile.bulk);
+      final bulkBad =
+          RouteCostCalculator.cost(factors: bad, profile: TrafficProfile.bulk);
+      final interactiveGood = RouteCostCalculator.cost(
+        factors: good,
+        profile: TrafficProfile.interactive,
+      );
+      final interactiveBad = RouteCostCalculator.cost(
+        factors: bad,
+        profile: TrafficProfile.interactive,
+      );
+      expect(bulkBad, greaterThan(bulkGood));
+      expect(
+        bulkBad - bulkGood,
+        greaterThan(interactiveBad - interactiveGood),
+      );
+
+      // Route-choice regression, matching the task file §8's own framing
+      // ("interactive and bulk pick exactly the routes they picked
+      // before"): given a pair of route options, `interactive` and `bulk`
+      // must each still prefer the SAME option they always did -- adding a
+      // third profile must not flip either one's preference.
+      const optionA = RouteCostFactors(
+        latencyMs: 30,
+        reliability: 0.99,
+        batteryDrainRate: 0.2,
+        hopCount: 1,
+      );
+      const optionB = RouteCostFactors(
+        latencyMs: 30,
+        reliability: 0.6,
+        batteryDrainRate: 3.0,
+        hopCount: 3,
+      );
+      expect(
+        RouteCostCalculator.cost(
+              factors: optionA,
+              profile: TrafficProfile.interactive,
+            ) <
+            RouteCostCalculator.cost(
+              factors: optionB,
+              profile: TrafficProfile.interactive,
+            ),
+        isTrue,
+      );
+      expect(
+        RouteCostCalculator.cost(factors: optionA, profile: TrafficProfile.bulk) <
+            RouteCostCalculator.cost(
+              factors: optionB,
+              profile: TrafficProfile.bulk,
+            ),
+        isTrue,
+      );
+    });
+
     test('lower is better: fewer hops costs less, all else equal', () {
       const oneHop = RouteCostFactors(
         latencyMs: 50,

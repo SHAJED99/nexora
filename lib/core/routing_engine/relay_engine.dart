@@ -73,6 +73,19 @@ typedef RelaySendFn = Future<bool> Function(
   Uint8List payload,
 );
 
+/// Named priority bands for `relay_packets.priority` (E04-T04's column;
+/// E07-T10 is the first caller to give it named values instead of a bare
+/// int). Integers with gaps so a future band fits between without
+/// renumbering existing enqueues. `bulk = 0` matches
+/// `messaging_stack.dart`'s pre-existing `_defaultPriority = 0` exactly —
+/// every E05/E06 enqueue keeps its current effective priority unchanged by
+/// this task; see this task's own self-review for the explicit check.
+abstract final class RelayPriority {
+  static const int realtime = 200;
+  static const int interactive = 100;
+  static const int bulk = 0;
+}
+
 /// Store-and-forward relay engine (§1). One instance per device identity —
 /// [selfId] must match the [RoutingEngine] it is given, since `onRouteFailure`
 /// blacklists links relative to `RoutingEngine.selfId`.
@@ -126,6 +139,18 @@ class RelayEngine {
     return id;
   }
 
+  /// The minimum share of a bounded cycle's budget reserved for whatever is
+  /// NOT the highest priority band currently present (E07-T10, §2's
+  /// starvation guard) — TUNABLE. Without this, a continuous stream of
+  /// `realtime` traffic arriving between cycles could claim every slot of
+  /// every cycle forever, and a device in a long call would never drain its
+  /// message queue; "a messaging queue that never drains during a
+  /// 40-minute call is a worse bug than a slightly choppy call" (task file
+  /// §2). At least `ceil(budget * this fraction)` slots (never fewer than
+  /// 1, when a lower band is non-empty) go to non-top-priority rows every
+  /// cycle regardless of how much top-priority traffic is queued.
+  static const double _minReservedFractionForLowerBands = 0.2;
+
   /// One pass over the queue (§3): every `queued` packet not yet expired,
   /// priority order then oldest-first, gets one forward attempt (plus, on
   /// failure, one retry via `RoutingEngine.onRouteFailure`'s alternative —
@@ -138,7 +163,17 @@ class RelayEngine {
   /// call — the next hop is a *different* device, running its own
   /// `RelayEngine` instance once it receives and re-enqueues the packet;
   /// this device cannot simulate that other device's forwarding decision.
-  Future<void> processQueue() async {
+  ///
+  /// [maxPacketsPerCycle] (E07-T10) bounds how many packets this single
+  /// call attempts. `null` (the default, and every pre-E07-T10 call site's
+  /// behaviour) means unbounded — every eligible row gets attempted, exactly
+  /// as before this task. When set, rows are still drained
+  /// `(priority DESC, created_at ASC)`, but [_minReservedFractionForLowerBands]
+  /// guarantees a non-highest-priority band still makes progress every
+  /// cycle even under continuous higher-priority load (§2's starvation
+  /// guard) — see [_applyStarvationGuard]. Returns the number of packets
+  /// actually attempted this cycle.
+  Future<int> processQueue({int? maxPacketsPerCycle}) async {
     final now = _clock();
     final rows = await (_db.select(_db.relayPackets)
           ..where((t) => t.deliveryState.equals(RelayDeliveryState.queued.name))
@@ -148,14 +183,56 @@ class RelayEngine {
           ]))
         .get();
 
-    for (final row in rows) {
-      // Defensive: skip (never forward) a packet that is already
-      // time-expired even if `sweepExpired()` hasn't run yet this pass —
-      // `delivery_state` alone is not the authority for "still active";
-      // `expires_at` vs. the current clock always wins (L-backend-003).
-      if (row.expiresAt <= now.millisecondsSinceEpoch) continue;
+    // Defensive: skip (never forward) a packet that is already
+    // time-expired even if `sweepExpired()` hasn't run yet this pass —
+    // `delivery_state` alone is not the authority for "still active";
+    // `expires_at` vs. the current clock always wins (L-backend-003).
+    final eligible = rows
+        .where((row) => row.expiresAt > now.millisecondsSinceEpoch)
+        .toList(growable: false);
+
+    final budget = maxPacketsPerCycle;
+    final selected = (budget == null || eligible.length <= budget)
+        ? eligible
+        : _applyStarvationGuard(eligible, budget);
+
+    for (final row in selected) {
       await _attempt(row);
     }
+    return selected.length;
+  }
+
+  /// Picks up to [budget] rows from [rows] (already sorted
+  /// `(priority DESC, created_at ASC)`), reserving a minimum slice of the
+  /// budget for whatever is NOT the highest priority band present — see
+  /// [_minReservedFractionForLowerBands]. Only called when `rows.length >
+  /// budget`, i.e. there is genuine contention for this cycle's slots.
+  List<RelayPacketRow> _applyStarvationGuard(
+    List<RelayPacketRow> rows,
+    int budget,
+  ) {
+    final topPriority = rows.first.priority;
+    final topBand = <RelayPacketRow>[];
+    final lowerBand = <RelayPacketRow>[];
+    for (final row in rows) {
+      (row.priority == topPriority ? topBand : lowerBand).add(row);
+    }
+
+    // Nothing but the top band is queued -- no lower-priority progress to
+    // guarantee, so just take the oldest `budget` top-band rows.
+    if (lowerBand.isEmpty) {
+      return topBand.take(budget).toList(growable: false);
+    }
+
+    final reserved = (budget * _minReservedFractionForLowerBands).floor();
+    final reservedForLower =
+        (reserved < 1 ? 1 : reserved).clamp(0, lowerBand.length).clamp(0, budget);
+    final remainingForTop = budget - reservedForLower;
+
+    return <RelayPacketRow>[
+      ...topBand.take(remainingForTop),
+      ...lowerBand.take(reservedForLower),
+    ];
   }
 
   Future<void> _attempt(RelayPacketRow row) async {

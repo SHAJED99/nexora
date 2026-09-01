@@ -53,9 +53,27 @@
 // `group_control.dart` or anything under `lib/features/groups/` (task file
 // §4) — [encodeCiphertextControlBody]/[decodeCiphertextControlBody] are
 // imported and used exactly as `group_control.dart` already defines them.
-// Does NOT implement group/conference calling (`OQ-E07-11`), call-routing
-// priority (E07-T10), mid-call route migration (E07-T11), call UI, a route,
-// a notification, or call-history persistence (task file §4).
+// Does NOT implement group/conference calling (`OQ-E07-11`), mid-call route
+// migration (E07-T11), call UI, a route, a notification, or call-history
+// persistence (task file §4).
+//
+// **E07-T10 update (FR-CALL-002 — calls outrank non-real-time sync).**
+// [_sendFrame] now marks every outgoing signaling frame at
+// [RelayPriority.realtime] and calls `routingEngine.computeRoute` under
+// [TrafficProfile.realtime]. The direct-neighbor send this file's own
+// original reasoning describes (a signaling frame that outlives a queue
+// wait has already lost its race against the 45s ring timeout, so there is
+// nothing worth queuing for later delivery) is preserved as the fast path
+// for a directly-reachable peer or an unknown route — this device's own
+// `RoutingEngine` never has graph knowledge of a peer it has not
+// discovered links to/through, so this is also the ONLY path exercised by
+// this file's own pre-existing test suite. When `computeRoute` DOES know a
+// multi-hop path (this device is not the peer's direct neighbor), the frame
+// is handed to `relayEngine.enqueue` at [RelayPriority.realtime] instead —
+// the same shared queue every other packet uses (task file §4: "one queue,
+// ordered") — with an immediate `processQueue()` call so the attempt is not
+// left to the periodic coordinator tick (60s default, longer than the 45s
+// ring timeout this file's own reasoning already worries about).
 //
 // `prefer_initializing_formals` is intentionally not applied to this file's
 // constructor, matching the same documented exclusion already used by
@@ -75,6 +93,8 @@ import '../messaging/group_control.dart'
     show encodeCiphertextControlBody, decodeCiphertextControlBody;
 import '../messaging/messaging_stack.dart';
 import '../messaging/relay_packet_frame.dart';
+import '../routing_engine/relay_engine.dart' show RelayPriority;
+import '../routing_engine/route_cost_calculator.dart' show TrafficProfile;
 import 'call_session.dart';
 
 /// Matches `messaging_stack.dart`/`prekey_exchange.dart`/
@@ -723,17 +743,56 @@ class CallSignaling {
       packetId: _nextPacketId(),
       destination: peerDeviceId,
       source: _stack.selfDeviceId,
-      priority: 0,
+      priority: RelayPriority.realtime,
       createdAtMs: now.millisecondsSinceEpoch,
       expiresAtMs: now.add(_controlFrameTtl).millisecondsSinceEpoch,
       payload: framedBody,
     );
-    // Direct transport send -- NOT `relayEngine.enqueue` -- mirrors
-    // `prekey_exchange.dart`'s own `_sendControlFrame` reasoning: a call
-    // invite/ring/accept/decline/busy/hangup/cancel that outlives a queue
-    // wait has already lost its race against the 45s ring timeout, so
-    // there is nothing worth queuing for later delivery.
-    final delivered = await _stack.transport.send(peerDeviceId, wireFrame.serialize());
+    final serialized = wireFrame.serialize();
+
+    // E07-T10 (FR-CALL-002): route selection under the realtime profile --
+    // see this file's header. `route` is non-null only when this device's
+    // own `RoutingEngine` has multi-hop graph knowledge of `peerDeviceId`
+    // (this device is not its direct neighbor); every scenario this file's
+    // own pre-existing test suite exercises never populates that graph, so
+    // `route` is `null` there and the direct send below (this file's
+    // original T09 behaviour, byte-for-byte) is what actually runs.
+    final route = _stack.routingEngine.computeRoute(
+      peerDeviceId,
+      TrafficProfile.realtime,
+    );
+
+    final bool delivered;
+    if (route != null && route.hops.length > 1) {
+      // Multi-hop: this device is not the peer's direct neighbor, so the
+      // frame needs relaying. Goes through the SAME shared queue every
+      // other packet uses (task file §4: "one queue, ordered"), at
+      // `RelayPriority.realtime` so a relaying device's own
+      // `processQueue()` drains it ahead of message/sync traffic. An
+      // immediate `processQueue()` call attempts delivery now rather than
+      // waiting for the periodic coordinator tick (60s default, longer
+      // than the 45s ring timeout) -- delivery beyond this device's own
+      // next hop is store-and-forward like any other relayed packet, so
+      // "handed off" is the most this device can honestly report, matching
+      // `RelayEngine`'s own documented `forwarding`/`delivered` semantics
+      // (never "the end recipient's app confirmed receipt").
+      await _stack.relayEngine.enqueue(
+        peerDeviceId,
+        serialized,
+        RelayPriority.realtime,
+        _controlFrameTtl,
+      );
+      await _stack.relayEngine.processQueue();
+      delivered = true;
+    } else {
+      // Direct neighbor, or route unknown -- mirrors
+      // `prekey_exchange.dart`'s own `_sendControlFrame` reasoning: a call
+      // invite/ring/accept/decline/busy/hangup/cancel that outlives a queue
+      // wait has already lost its race against the 45s ring timeout, so
+      // there is nothing worth queuing for later delivery when the peer is
+      // (or is assumed to be) directly reachable.
+      delivered = await _stack.transport.send(peerDeviceId, serialized);
+    }
     if (!delivered) {
       throw const AppFailure('call.unreachable');
     }
