@@ -87,6 +87,7 @@ class AppDatabase extends _$AppDatabase {
               mode: 'smart',
               updatedAt: DateTime.now().millisecondsSinceEpoch,
             ),
+            mode: InsertMode.insertOrIgnore,
           );
         },
         onUpgrade: (m, from, to) async {
@@ -357,12 +358,19 @@ class AppDatabase extends _$AppDatabase {
                 'idx_storage_decisions_decided_at ON storage_decisions '
                 '(decided_at);',
               );
+              // insertOrIgnore: drift stamps user_version AFTER onUpgrade
+              // returns, so a process crash between this transaction's
+              // COMMIT and that PRAGMA write makes the next open re-run
+              // this whole step against a DB that already has the row.
+              // createTable/createIndex are already retry-safe (IF NOT
+              // EXISTS); this insert needed the same property.
               await into(storagePolicySettings).insert(
                     StoragePolicySettingsCompanion.insert(
                       id: const Value(1),
                       mode: 'smart',
                       updatedAt: DateTime.now().millisecondsSinceEpoch,
                     ),
+                    mode: InsertMode.insertOrIgnore,
                   );
             });
           }
