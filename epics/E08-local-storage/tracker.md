@@ -30,7 +30,7 @@ content by default).
 | E08-T02 | Storage inventory read model | backend | M | must | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `1efec77` (PR #18) |
 | E08-T03 | Access-frequency signals | backend | S | should | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `222c6dd` (PR #19) |
 | E08-T04 | Smart Mode — the eight-factor plan | backend | M | must | T01, T02, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `77f0505` (PR #20) |
-| E08-T05 | Manual policies + mode selection | backend | S | should | T01, T02 | todo |
+| E08-T05 | Manual policies + mode selection | backend | S | should | T01, T02 | round 1 CHANGES · builder (sonnet) → reviewer (opus) · fix in progress (PR #21) |
 | E08-T06 | Retention execution + decision log + wiring | backend | M | must | T04, T05 | todo |
 | E08-T07 | Design gap pass | docs | M | must | — | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `a94e483` (PR #16) |
 | E08-T08 | Dashboard Local Storage card | frontend | M | must | T06, T07 | todo — blocked on 🧍 `design_contract_approval` GAP-024/025 |
@@ -345,3 +345,47 @@ exact section for eight tasks with no reader.)_
 
 **Ready to squash-merge — done.** Squash-merged to `epic_08` as `77f0505`
 (PR #20).
+
+### E08-T05 — 2026-09-02 — 📋 **CHANGES** round 1 (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+
+- **scope: in-contract** — diff confined to exactly the 4 declared files.
+- **F1 (S2, blocking) — `overSizeMb` applies the byte cap per storage
+  category, not to the total.** Reviewer's own probe: cap 300, three
+  kinds of 200 each (600 total, 2× over cap) → plan is **empty**, no
+  removals, because no single kind individually exceeds the cap. Directly
+  contradicts the task's own §6 ("which items go when **the total**
+  exceeds the cap") and the human-approved design contract's copy
+  ("Delete old data when storage exceeds X MB" — the total). All four
+  existing `overSizeMb` tests used a single-kind snapshot, so the defect
+  was structurally untested, not just missed.
+- **F2 (S3) — recorded as `OQ-E08-T05-1`, not a code fix.** The `items()`
+  callback's fixed §5 signature has no paging control; in production it's
+  `StorageInventory.itemsOfKind`'s default `limit=500, ORDER BY
+  created_at DESC` — newest 500, not oldest. Beyond 500 items in one
+  kind, "oldest-first" silently operates on the wrong window. This is a
+  contract gap T05 cannot fix inside its own fence — needs a
+  human/planner decision on how `StorageInventory` should expose an
+  oldest-first paged read, or an explicit accepted-limitation note.
+- **Everything else verified sound, several beyond the builder's own
+  testing:** validation exactness across all 10 branches including
+  boundary values; `watch()`'s broadcast/replay behavior confirmed with a
+  stronger probe (two live subscriptions on one stream instance) than the
+  builder's own test provided; MiB/MB conversion happens exactly once;
+  no Smart Mode factor leakage into manual modes (the specific defect
+  class §4 warns against); all disclosed deviations
+  (`StoragePolicySettingRow` return type, `StorageMode`'s placement,
+  empty factor maps, duplicated category-key mapping) judged sound on
+  their individual merits.
+- **The builder's disclosed non-red-first process was probed, not just
+  noted**: reviewer independently reproduced both of the builder's own
+  falsification claims (tie-break removal, validation-branch removal) —
+  both held — then falsified a THIRD claim the builder hadn't tested
+  (`Value(null)` vs `Value.absent()` writes) — also held. The actual gap
+  wasn't falsification quality; F1's cap semantics were simply never
+  identified as a claim needing a test, because every existing test
+  matched the shape the (buggy) implementation already had.
+- **suite: 756/756**, `flutter analyze` clean, both re-run by reviewer.
+
+**Routed back to the same implementer (rule: same builder gets first
+right of repair) for F1.** F2 recorded as `OQ-E08-T05-1` in the task
+file, not blocking F1's fix.
