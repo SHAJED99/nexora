@@ -1,27 +1,27 @@
 # E08 · Local Storage & Management · Progress
 
-**Status:** `E08-T01`, `E08-T02`, `E08-T03`, `E08-T04`, `E08-T05` and
-`E08-T07` all merged, reviewed APPROVE (T05 took 2 review rounds — a real
-S2 bug, `overSizeMb` capping per-kind instead of against the combined
-total, found and fixed). All 6 open questions from sharding resolved by
-the human 2026-09-02 (see `epic.md` §Open Questions). `E08-T06` is
-dispatchable next. ·
+**Status:** `E08-T01`, `E08-T02`, `E08-T03`, `E08-T04`, `E08-T05`, `E08-T06`
+and `E08-T07` all merged, reviewed APPROVE. `E08-T06` (the only code path
+that permanently deletes user data, ADR-0005's no-server-copy) survived
+the epic's highest-scrutiny review across 2 rounds — deletion safety
+itself was never broken by falsification; the fixes were both about the
+audit trail's honesty. All 6 open questions from sharding resolved by the
+human 2026-09-02 (see `epic.md` §Open Questions). Only `E08-T08` (frontend)
+remains, blocked on the design gate below. ·
 **Started:** 2026-09-02 ·
-**Completed:** — · **Progress:** 6/8 sharded (+1 prospective)
+**Completed:** — · **Progress:** 7/8 sharded (+1 prospective)
 
-**Remaining gates:**
+**Remaining gate:**
 - 🧍 `design_contract_approval` for `GAP-024`…`GAP-027` (`design/gaps.md`)
-  — ⏳ AWAITING HUMAN — gates T08's build, and gates T09 being sharded at
-  all. `E08-T07` produced the contracts; approval of the gap entries
-  themselves is a separate, still-open gate.
-- 🟡 `OQ-E08-T05-1` (`E08-T05.md`) — the `overSizeMb` item-fetch callback
-  has no paging control; `StorageInventory.itemsOfKind`'s default
-  500-item newest-first window can make "oldest-first" silently operate
-  on the wrong window past 500 items in one kind. **Does not block
-  `E08-T06`'s dispatch** (the plan/log/wiring work is unaffected), but
-  **must be answered before `E08-T06` executes any `overSizeMb` plan in
-  production** — executing a plan built on a truncated, wrong-end window
-  would delete based on a lie about which items are actually oldest.
+  — ⏳ AWAITING HUMAN — gates `E08-T08`'s build, and gates `E08-T09` being
+  sharded at all. `E08-T07` produced the contracts; approval of the gap
+  entries themselves is a separate, still-open gate.
+
+**Still open, non-blocking:** 🟡 `OQ-E08-T05-1` (`E08-T05.md`) — the
+`overSizeMb` item-fetch callback has no paging control; must be answered
+before any `overSizeMb` plan is applied in production with >500 items in
+one kind (currently unreachable — no device in this build has that much
+stored data yet, but worth clearing before it becomes reachable).
 
 **Cleared 2026-09-02:** `analyze_report` (human resolved all 6 OQs at
 sharding), `db_schema_migration` (`OQ-E08-T01-1`, human approved T01's
@@ -38,7 +38,7 @@ content by default).
 | E08-T03 | Access-frequency signals | backend | S | should | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `222c6dd` (PR #19) |
 | E08-T04 | Smart Mode — the eight-factor plan | backend | M | must | T01, T02, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `77f0505` (PR #20) |
 | E08-T05 | Manual policies + mode selection | backend | S | should | T01, T02 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `1c54ecc` (PR #21) |
-| E08-T06 | Retention execution + decision log + wiring | backend | M | must | T04, T05 | round 1 CHANGES → round 2 APPROVE (substance) · blocked on CI-only `flutter analyze` fix (PR #22) |
+| E08-T06 | Retention execution + decision log + wiring | backend | M | must | T04, T05 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE → CI-fix APPROVE · squash-merged `48f51e3` (PR #22) |
 | E08-T07 | Design gap pass | docs | M | must | — | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `a94e483` (PR #16) |
 | E08-T08 | Dashboard Local Storage card | frontend | M | must | T06, T07 | todo — blocked on 🧍 `design_contract_approval` GAP-024/025 |
 | E08-T09 | Storage settings screen | frontend | M | should | T05, T06, T07 | **prospective — not sharded** |
@@ -152,6 +152,20 @@ exact section for eight tasks with no reader.)_
   row ~4× more harshly than observed non-use. Both are correct
   `A-004` placeholders per `OQ-E08-T04-1`, but the asymmetry is worth the
   human's attention when real numbers replace them.
+
+- **2026-09-02 · E08-T06 round-2 review · the transactional-atomicity
+  claim has no regression test in the deliverable's own suite (advisory,
+  S4 — for the epic sweep).** `retention_executor.dart`'s own doc comment
+  asserts "a delete whose decision row fails to write never happens
+  either" — true today, proven true by the round-2 reviewer's manual
+  probe (forcing the decision-row write itself to fail) — but none of
+  T06's 11 executor tests would catch a regression that removed the
+  `db.transaction()` wrapper while keeping delete-then-log order; all 11
+  stay green. A drop-in test exists (a `StorageDecisionLog` subclass
+  throwing on `outcome: applied`, asserting the message row survives) —
+  worth adding at the epic sweep or whenever `retention_executor.dart` is
+  next touched, so this property stays proven by the suite, not only by
+  a one-time manual review probe.
 
 ## Event log (append-only)
 - 2026-08-26 E08 drafted during Wave 1 epic-breakdown; deferred to a later wave.
@@ -531,3 +545,11 @@ bugs, not data-loss bugs.
 **Approved in substance; merge held until the CI-only `flutter analyze`
 fix lands** (does not need a third review round per the reviewer's own
 framing — a one-line fix inside already-approved code).
+
+**CI-fix confirmed:** `bindings.dart:199` — `return file.length();` → `return
+await file.length();`, so an async failure from `.length()` itself is
+caught by F4's `catch` block, not just a failure from `exists()`. CI green
+on both runs before merge (`33640096635`, `33640103226`).
+
+**Ready to squash-merge — done.** Squash-merged to `epic_08` as `48f51e3`
+(PR #22). Verified locally post-merge: 775/775, `flutter analyze` clean.
