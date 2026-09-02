@@ -158,44 +158,56 @@ final class ManualPolicy {
       );
     }
 
-    final groups = <RetentionCandidateGroup>[];
+    // The cap applies to the TOTAL across every kind, not to each kind
+    // independently (task §6 risk note: "which items go when the total
+    // exceeds the cap"; design/screens/settings-storage.md's own wording:
+    // "Delete old data when storage exceeds X MB"). Three kinds each at
+    // 200 bytes with a 300-byte cap is 600 total, 2x over — even though no
+    // single kind exceeds the cap alone.
+    final totalBytes = snapshot.classTotals.fold<int>(
+      0,
+      (sum, classTotal) => sum + classTotal.bytes,
+    );
+    if (totalBytes <= maxBytes) {
+      return _plan(
+        mode: StorageMode.overSizeMb,
+        groups: <RetentionCandidateGroup>[],
+        nowEpochMs: nowEpochMs,
+      );
+    }
+
+    // Gather every kind's items into one pool, oldest-first across the
+    // whole pool, tie-broken by id (task §6 risk note: "get this wrong and
+    // two runs disagree, breaking the explanation surface's reproducibility
+    // guarantee").
+    final pooled = <StorageItem>[];
     for (final classTotal in snapshot.classTotals) {
-      if (classTotal.itemCount == 0 || classTotal.bytes <= maxBytes) {
-        // Not over the cap for this kind — nothing to remove under this
-        // rule (task §2: size only, per kind).
-        continue;
-      }
+      if (classTotal.itemCount == 0) continue;
+      pooled.addAll(await items(classTotal.kind));
+    }
+    pooled.sort((a, b) {
+      final byAge = a.createdAt.compareTo(b.createdAt);
+      if (byAge != 0) return byAge;
+      return a.id.compareTo(b.id);
+    });
 
-      final kindItems = await items(classTotal.kind);
-      // Oldest-first, deterministic, tie-broken by id (task §6 risk note:
-      // "get this wrong and two runs disagree, breaking the explanation
-      // surface's reproducibility guarantee").
-      final sorted = [...kindItems]
-        ..sort((a, b) {
-          final byAge = a.createdAt.compareTo(b.createdAt);
-          if (byAge != 0) return byAge;
-          return a.id.compareTo(b.id);
-        });
+    var runningBytes = totalBytes;
+    final selectedByKind = <StorageItemKind, List<StorageItem>>{};
+    for (final item in pooled) {
+      if (runningBytes <= maxBytes) break;
+      selectedByKind.putIfAbsent(item.kind, () => []).add(item);
+      runningBytes -= item.bytes;
+    }
 
-      var runningBytes = classTotal.bytes;
-      final selected = <StorageItem>[];
-      for (final item in sorted) {
-        if (runningBytes <= maxBytes) break;
-        selected.add(item);
-        runningBytes -= item.bytes;
-      }
-      if (selected.isEmpty) continue;
-
-      selected.sort((a, b) => a.id.compareTo(b.id));
-      groups.add(
+    final groups = <RetentionCandidateGroup>[
+      for (final entry in selectedByKind.entries)
         _group(
-          kind: classTotal.kind,
-          items: selected,
+          kind: entry.key,
+          items: entry.value,
           reason: RetentionReason.overSizeLimit,
           reasonDetail: maxBytes.toString(),
         ),
-      );
-    }
+    ];
 
     return _plan(
       mode: StorageMode.overSizeMb,

@@ -29,6 +29,21 @@ StorageItem _message({
   );
 }
 
+StorageItem _relayPayload({
+  required String id,
+  required int createdAt,
+  int bytes = 100,
+}) {
+  return StorageItem(
+    kind: StorageItemKind.relayPayload,
+    id: id,
+    conversationId: null,
+    bytes: bytes,
+    createdAt: createdAt,
+    isTemporary: true,
+  );
+}
+
 StoragePolicySettingRow _settings({
   required String mode,
   int? olderThanDays,
@@ -237,7 +252,7 @@ void main() {
       expect(group.itemIds, ['aaa']);
     });
 
-    test('a kind under its cap contributes no group', () async {
+    test('the whole inventory under its cap contributes no group', () async {
       final item = _message(id: 'a', createdAt: 1000, bytes: 100);
       final snapshot = StorageInventorySnapshot(
         classTotals: const [
@@ -260,6 +275,95 @@ void main() {
       );
 
       expect(plan.groups, isEmpty);
+    });
+
+    test(
+        'test_EARS_STORE_12_over_size_cap_applies_to_the_combined_total_'
+        'across_kinds — F1 regression', () async {
+      // Reviewer's round-1 repro (PR #21, F1): three kinds each storing 200
+      // bytes (600 total), cap at 300 -- 2x over the cap even though NO
+      // single kind exceeds 300 alone. The per-kind-gated version of this
+      // code planned zero removals here; the cap must apply to the combined
+      // total across every kind (task §6 risk note: "which items go when
+      // the total exceeds the cap"; design/screens/settings-storage.md:
+      // "Delete old data when storage exceeds X MB" -- the total, not a
+      // per-kind figure).
+      final messageOld = _message(id: 'msg-old', createdAt: 1000, bytes: 100);
+      final messageNew = _message(id: 'msg-new', createdAt: 4000, bytes: 100);
+      final relayOld = _relayPayload(id: 'relay-old', createdAt: 2000, bytes: 100);
+      final relayNew = _relayPayload(id: 'relay-new', createdAt: 5000, bytes: 100);
+      // A third kind with no real producer today (voiceMessage) still
+      // contributes to the combined total the same way message/relayPayload
+      // do -- the cap must not special-case which kinds can trip it.
+      const voiceMessageKind = StorageItemKind.voiceMessage;
+      final voiceOld = StorageItem(
+        kind: voiceMessageKind,
+        id: 'voice-old',
+        conversationId: null,
+        bytes: 100,
+        createdAt: 3000,
+        isTemporary: false,
+      );
+      final voiceNew = StorageItem(
+        kind: voiceMessageKind,
+        id: 'voice-new',
+        conversationId: null,
+        bytes: 100,
+        createdAt: 6000,
+        isTemporary: false,
+      );
+
+      final allItems = [
+        messageOld,
+        messageNew,
+        relayOld,
+        relayNew,
+        voiceOld,
+        voiceNew,
+      ];
+
+      final snapshot = StorageInventorySnapshot(
+        classTotals: const [
+          StorageClassTotal(
+            kind: StorageItemKind.message,
+            itemCount: 2,
+            bytes: 200,
+          ),
+          StorageClassTotal(
+            kind: StorageItemKind.relayPayload,
+            itemCount: 2,
+            bytes: 200,
+          ),
+          StorageClassTotal(
+            kind: voiceMessageKind,
+            itemCount: 2,
+            bytes: 200,
+          ),
+        ],
+        databaseFileBytes: 0,
+        measuredAt: DateTime.fromMillisecondsSinceEpoch(nowEpochMs),
+      );
+
+      final plan = await policy.plan(
+        mode: StorageMode.overSizeMb,
+        snapshot: snapshot,
+        items: _fakeItems(allItems),
+        settings: _settings(mode: 'overSizeMb', maxBytes: 300),
+        nowEpochMs: nowEpochMs,
+      );
+
+      // 600 total, cap 300 -- must remove exactly 300 bytes: the three
+      // oldest items across the WHOLE pool (msg-old@1000, relay-old@2000,
+      // voice-old@3000), regardless of which kind each belongs to.
+      expect(plan.groups, isNotEmpty);
+      final allSelectedIds = plan.groups.expand((g) => g.itemIds).toList()
+        ..sort();
+      expect(allSelectedIds, ['msg-old', 'relay-old', 'voice-old']);
+      expect(plan.totalBytes, 300);
+      for (final group in plan.groups) {
+        expect(group.reason, RetentionReason.overSizeLimit);
+        expect(group.reasonDetail, '300');
+      }
     });
   });
 
