@@ -1,0 +1,187 @@
+// core/storage — the composed facade the app registers (E08-T06).
+//
+// `StorageManager` is what `AppBinding` registers and what
+// `MessagingCoordinator`'s tick calls -- the piece this project has now
+// shipped an unwired controller without twice (`OQ-E06-T06-4`, `E07-B03`;
+// this epic's own task file names both explicitly as the pattern this task
+// exists to close for good). It reads the active policy
+// (`StorageSettingsRepository`, E08-T05), picks Smart Mode or a manual
+// policy, computes a plan, logs it, optionally executes it (throttled), and
+// exposes the latest plan for the UI to observe (`E08-T08`/`E08-T09`, not
+// built here).
+//
+// **The mode-dependent allow-list lives here, not in `RetentionExecutor`**
+// (`OQ-E08-T06-1`'s amendment -- see `retention_executor.dart`'s header for
+// the full reasoning). This file is the one place that decides, per pass,
+// which `StorageItemKind`s the executor may delete: empty for a Smart Mode
+// plan (`OQ-E08-3(a)`: "Smart Mode's allow-list excludes conversation
+// content entirely"), `{message}` for a Manual Mode plan (`olderThanDays`/
+// `overSizeMb` -- "message deletion happens only under a manual policy the
+// user explicitly turns on").
+//
+// **Plan and apply stay conceptually separate (task §2)**: `runPass(apply:
+// false)` computes and logs a plan (`outcome: planned`) without ever
+// touching `RetentionExecutor` -- the shape a dashboard's informational
+// warning (`EARS-STORE-2`) would read. `runPass(apply: true)` (the default,
+// and the one `MessagingCoordinator`'s tick calls) hands the plan straight
+// to the executor, which does its own `applied`/`skipped` logging -- this
+// file does not double-log a `planned` row in that path, since `RetentionExecutor.apply`
+// already produces the pass's authoritative decision rows.
+//
+// **Throttled, and the throttle survives a process restart** (task §2/§6
+// risk note): `runPass` reads `StorageDecisionLog.latestPass()`'s own
+// `decided_at` rather than an in-memory timestamp, so a cold start does not
+// re-run a full inventory scan just because no in-memory state survived.
+library;
+
+import 'package:get/get.dart';
+
+import 'manual_policy.dart';
+import 'retention_executor.dart';
+import 'retention_plan.dart';
+import 'smart_mode_policy.dart';
+import 'storage_decision_log.dart';
+import 'storage_inventory.dart';
+import 'storage_item.dart' show StorageItem, StorageItemKind;
+import 'storage_settings_repository.dart';
+
+/// The composed facade `AppBinding` registers (task §3). Every dependency is
+/// injected -- this file constructs none of `AppDatabase`,
+/// `StorageInventory`, `RetentionExecutor` etc. itself (task §5's own
+/// constructor contract), so tests build it from plain fakes/an in-memory
+/// `AppDatabase` exactly as every other `core/storage` file already does.
+class StorageManager {
+  StorageManager({
+    required this.settings,
+    required this.inventory,
+    required this.smart,
+    required this.executor,
+    required this.log,
+    this.storagePassInterval = const Duration(hours: 6),
+  });
+
+  final StorageSettingsRepository settings;
+  final StorageInventory inventory;
+  final SmartModePolicy smart;
+  final RetentionExecutor executor;
+  final StorageDecisionLog log;
+
+  /// A full pass is skipped (recording nothing, task §2) if the most recent
+  /// pass's `decided_at` is closer than this to `nowEpochMs`.
+  final Duration storagePassInterval;
+
+  /// Stateless -- `ManualPolicy.plan` takes every input as a parameter
+  /// (`manual_policy.dart`'s own header), so one `const` instance is all any
+  /// caller ever needs.
+  static const ManualPolicy _manual = ManualPolicy();
+
+  /// The most recent plan, for the UI to observe (task §5) -- null before
+  /// the first pass this process has run. Updated by every [runPass] call
+  /// that was not itself skipped by the throttle.
+  final Rx<RetentionPlan?> latestPlan = Rx<RetentionPlan?>(null);
+
+  /// The one entry point `MessagingCoordinator`'s tick calls (task §5).
+  ///
+  /// Returns the computed plan, or `null` when [storagePassInterval] has not
+  /// elapsed since the last recorded pass (throttled, task §2) -- checked
+  /// against `StorageDecisionLog.latestPass()`'s own `decided_at`, which
+  /// survives a process restart (task §6 risk note), never an in-memory
+  /// field alone.
+  ///
+  /// [apply] `false` computes and logs a plan (`outcome: planned`) without
+  /// executing it -- e.g. for a caller that only wants the forecast. The
+  /// default, `true`, hands the plan straight to [executor], which performs
+  /// its own `applied`/`skipped` logging (this file's header).
+  Future<RetentionPlan?> runPass({
+    required int nowEpochMs,
+    bool apply = true,
+  }) async {
+    final lastPass = await log.latestPass();
+    if (lastPass.isNotEmpty) {
+      var lastDecidedAt = lastPass.first.decidedAt;
+      for (final row in lastPass) {
+        if (row.decidedAt > lastDecidedAt) lastDecidedAt = row.decidedAt;
+      }
+      if (nowEpochMs - lastDecidedAt < storagePassInterval.inMilliseconds) {
+        return null;
+      }
+    }
+
+    final policySettings = await settings.read();
+    final mode = StorageMode.values.byName(policySettings.mode);
+    final snapshot = await inventory.snapshot();
+
+    final RetentionPlan plan;
+    final Set<StorageItemKind> allowedKinds;
+
+    if (mode == StorageMode.smart) {
+      // Smart Mode's allow-list is always empty (`OQ-E08-3(a)`,
+      // `OQ-E08-T06-1`) -- conversation content (`message`) is never a
+      // Smart Mode deletion candidate, regardless of what factors would
+      // otherwise select it.
+      allowedKinds = const <StorageItemKind>{};
+      final items = <StorageItem>[
+        for (final kind in const [
+          StorageItemKind.message,
+          StorageItemKind.relayPayload,
+        ])
+          ...await inventory.itemsOfKind(kind),
+      ];
+      plan = smart.plan(
+        snapshot: snapshot,
+        items: items,
+        stats: await _accessStats(),
+        nowEpochMs: nowEpochMs,
+        budgetBytes: policySettings.budgetBytes,
+      );
+    } else {
+      // The user explicitly turned on a manual rule (`olderThanDays`/
+      // `overSizeMb`) -- that explicit choice is what `OQ-E08-3(a)`
+      // authorises to include `message` (`OQ-E08-T06-1`).
+      allowedKinds = const <StorageItemKind>{StorageItemKind.message};
+      plan = await _manual.plan(
+        mode: mode,
+        snapshot: snapshot,
+        items: inventory.itemsOfKind,
+        settings: policySettings,
+        nowEpochMs: nowEpochMs,
+      );
+    }
+
+    latestPlan.value = plan;
+
+    if (!apply) {
+      await log.recordPass(
+        plan,
+        outcome: DecisionOutcome.planned,
+        nowEpochMs: nowEpochMs,
+      );
+      return plan;
+    }
+
+    await executor.apply(
+      plan,
+      allowedKinds: allowedKinds,
+      nowEpochMs: nowEpochMs,
+    );
+    return plan;
+  }
+
+  /// `storage_item_stats` (E08-T03), mapped into `SmartModePolicy.plan`'s
+  /// own `Map<String, ItemAccessStat>` shape, keyed identically to
+  /// [statsKeyFor] (`'<kind.name>:<itemId>'`) -- this file reads through
+  /// [inventory]'s own `db` field rather than taking a second `AppDatabase`
+  /// parameter (task §5's constructor names no such dependency), matching
+  /// `StorageInventory`/`StorageSettingsRepository`'s own "one AppDatabase,
+  /// injected once" precedent.
+  Future<Map<String, ItemAccessStat>> _accessStats() async {
+    final rows = await inventory.db.select(inventory.db.storageItemStats).get();
+    return {
+      for (final row in rows)
+        '${row.itemKind}:${row.itemId}': ItemAccessStat(
+          accessCount: row.accessCount,
+          lastAccessedAtEpochMs: row.lastAccessedAt,
+        ),
+    };
+  }
+}

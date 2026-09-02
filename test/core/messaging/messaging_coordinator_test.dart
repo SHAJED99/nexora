@@ -18,12 +18,21 @@ import 'dart:typed_data';
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
+import 'package:nexora/app/bindings.dart';
 import 'package:nexora/core/crypto/drift_signal_store.dart';
 import 'package:nexora/core/crypto/identity_service.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/routing_engine/relay_engine.dart';
+import 'package:nexora/core/storage/retention_executor.dart';
+import 'package:nexora/core/storage/retention_plan.dart';
+import 'package:nexora/core/storage/smart_mode_policy.dart';
+import 'package:nexora/core/storage/storage_decision_log.dart';
+import 'package:nexora/core/storage/storage_inventory.dart';
+import 'package:nexora/core/storage/storage_manager.dart';
+import 'package:nexora/core/storage/storage_settings_repository.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
@@ -534,6 +543,135 @@ void main() {
       expect(cursor!.lastConfirmedSequenceNumber, delivered.sequenceNumber);
     });
   });
+
+  group(
+    'EARS-STORE-15 — the storage manager is wired from the composition root',
+    () {
+      // This is the exact composition-root defect class (`E07-B03`,
+      // `OQ-E06-T06-4`) E08-T06 exists to close for good (task file §2):
+      // every test below resolves `StorageManager` through `AppBinding
+      // .dependencies()` + `Get.find`, never from a hand-built object.
+      setUp(Get.reset);
+      tearDown(Get.reset);
+
+      test(
+        'test_EARS_STORE_15_app_binding_registers_storage_manager',
+        () async {
+          final stack = await newStack('device-a', nextSuffix());
+          addTearDown(stack.dispose);
+          addTearDown(stack.coordinator.stop);
+
+          AppBinding(db: stack.db, messagingStack: stack).dependencies();
+
+          final manager = Get.find<StorageManager>();
+          expect(manager, isNotNull);
+          // The SAME instance AppBinding registered is what the coordinator
+          // actually drives -- not a second, disconnected one.
+          expect(identical(stack.coordinator.storageManager, manager), isTrue);
+        },
+      );
+
+      test(
+        'test_EARS_STORE_15_coordinator_tick_runs_a_storage_pass',
+        () async {
+          final stack = await newStack('device-a', nextSuffix());
+          addTearDown(stack.dispose);
+          addTearDown(stack.coordinator.stop);
+
+          AppBinding(db: stack.db, messagingStack: stack).dependencies();
+
+          await stack.coordinator.tick();
+
+          final rows = await stack.db.select(stack.db.storageDecisions).get();
+          expect(
+            rows,
+            isNotEmpty,
+            reason: 'the tick must have driven a real storage pass through '
+                'the registered StorageManager',
+          );
+        },
+      );
+
+      test(
+        'test_EARS_STORE_15_storage_pass_failure_does_not_abort_tick',
+        () async {
+          final suffix = nextSuffix();
+          final stack =
+              await newStack('device-a', suffix, neighborId: 'device-b');
+          addTearDown(stack.dispose);
+          _mockSendAlwaysSucceeds(messenger, suffix);
+
+          await stack.relayEngine.enqueue(
+            'device-b',
+            Uint8List.fromList([1, 2, 3]),
+            0,
+            const Duration(days: 1),
+          );
+
+          // A throwing storage manager, set directly on the coordinator
+          // (this test does not need AppBinding -- it only needs to prove
+          // the coordinator's own isolation, EARS-STORE-15's other half).
+          stack.coordinator.storageManager =
+              _ThrowingStorageManager(stack.db);
+
+          await stack.coordinator.tick();
+
+          expect(stack.coordinator.counters.storagePassFailures, 1);
+          expect(
+            stack.coordinator.counters.tickFailures,
+            0,
+            reason: 'a storage-pass failure must never be counted as, or '
+                'cause, a messaging tick failure',
+          );
+          // The messaging work this same tick did BEFORE the storage pass
+          // ran must have completed regardless.
+          final rows = await stack.db.select(stack.db.relayPackets).get();
+          expect(rows.single.deliveryState, RelayDeliveryState.delivered.name);
+        },
+      );
+
+      test('test_EARS_STORE_15_pass_is_throttled_across_ticks', () async {
+        final stack = await newStack('device-a', nextSuffix());
+        addTearDown(stack.dispose);
+        addTearDown(stack.coordinator.stop);
+
+        AppBinding(db: stack.db, messagingStack: stack).dependencies();
+
+        await stack.coordinator.tick();
+        final afterFirst =
+            await stack.db.select(stack.db.storageDecisions).get();
+        expect(afterFirst, isNotEmpty);
+
+        await stack.coordinator.tick();
+        final afterSecond =
+            await stack.db.select(stack.db.storageDecisions).get();
+        // The default storagePassInterval is hours; back-to-back ticks in
+        // this test are milliseconds apart -- the second pass must be
+        // throttled, recording nothing new.
+        expect(afterSecond.length, afterFirst.length);
+      });
+    },
+  );
+}
+
+/// A [StorageManager] whose [runPass] always throws -- proves
+/// `MessagingCoordinator`'s own isolation of the storage pass
+/// (`test_EARS_STORE_15_storage_pass_failure_does_not_abort_tick`) without
+/// needing a real failure to occur deep inside the storage stack.
+class _ThrowingStorageManager extends StorageManager {
+  _ThrowingStorageManager(AppDatabase db)
+      : super(
+          settings: StorageSettingsRepository(db: db),
+          inventory: StorageInventory(db: db, databaseFileBytes: () async => 0),
+          smart: SmartModePolicy(thresholds: SmartModeThresholds.defaults()),
+          executor: RetentionExecutor(db: db, log: StorageDecisionLog(db: db)),
+          log: StorageDecisionLog(db: db),
+        );
+
+  @override
+  Future<RetentionPlan?> runPass({required int nowEpochMs, bool apply = true}) {
+    throw Exception('simulated storage pass failure');
+  }
 }
 
 /// Small helper matching `messaging_stack_test.dart`'s own out-of-band
