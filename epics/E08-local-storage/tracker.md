@@ -1,29 +1,35 @@
 # E08 · Local Storage & Management · Progress
 
-**Status:** sharded, awaiting 🧍 `analyze_report` · **Started:** — ·
-**Completed:** — · **Progress:** 0/8 sharded (+1 prospective)
+**Status:** `E08-T07` (design gap pass) merged, reviewed APPROVE. `E08-T01`
+(schema migration) in progress. All 6 open questions from sharding
+resolved by the human 2026-09-02 (see `epic.md` §Open Questions). ·
+**Started:** 2026-09-02 ·
+**Completed:** — · **Progress:** 1/8 sharded (+1 prospective)
 
-**Blocking gates before any dispatch:**
-- 🧍 `analyze_report` (`epic.md` §Analyze report) — ⏳ AWAITING HUMAN
-- 🧍 `db_schema_migration` (`OQ-E08-T01-1`, E08-T01) — ⏳
+**Remaining gate before T08/T09 can proceed:**
 - 🧍 `design_contract_approval` for `GAP-024`…`GAP-027` (`design/gaps.md`)
-  — ⏳ — gates T08's build, and gates T09 being sharded at all
-- 🔴 `OQ-E08-1` (storage denominator) — blocks T04's pressure factor and
-  T08's percentage
-- 🔴 `OQ-E08-3` (what Smart Mode may delete) — blocks T06's apply path
+  — ⏳ AWAITING HUMAN — gates T08's build, and gates T09 being sharded at
+  all. `E08-T07` produced the contracts; approval of the gap entries
+  themselves is a separate, still-open gate.
+
+**Cleared 2026-09-02:** `analyze_report` (human resolved all 6 OQs at
+sharding), `db_schema_migration` (`OQ-E08-T01-1`, human approved T01's
+DDL as specified), `OQ-E08-1` (storage denominator — device free space +
+no fabricated percentage), `OQ-E08-3` (Smart Mode excludes conversation
+content by default).
 
 ## Tasks
 
 | id | title | layer | size | MoSCoW | depends_on | status |
 |---|---|---|---|---|---|---|
-| E08-T01 | Storage schema migration v14 | backend | M | must | — | todo |
+| E08-T01 | Storage schema migration v14 | backend | M | must | — | in-progress · builder (sonnet) |
 | E08-T02 | Storage inventory read model | backend | M | must | T01 | todo |
 | E08-T03 | Access-frequency signals | backend | S | should | T01 | todo |
 | E08-T04 | Smart Mode — the eight-factor plan | backend | M | must | T01, T02, T03 | todo |
 | E08-T05 | Manual policies + mode selection | backend | S | should | T01, T02 | todo |
 | E08-T06 | Retention execution + decision log + wiring | backend | M | must | T04, T05 | todo |
-| E08-T07 | Design gap pass | docs | M | must | — | todo |
-| E08-T08 | Dashboard Local Storage card | frontend | M | must | T06, T07 | todo |
+| E08-T07 | Design gap pass | docs | M | must | — | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `a94e483` (PR #16) |
+| E08-T08 | Dashboard Local Storage card | frontend | M | must | T06, T07 | todo — blocked on 🧍 `design_contract_approval` GAP-024/025 |
 | E08-T09 | Storage settings screen | frontend | M | should | T05, T06, T07 | **prospective — not sharded** |
 
 **Why T09 has no task file yet:** rule 2. Its `design_contract:` would be
