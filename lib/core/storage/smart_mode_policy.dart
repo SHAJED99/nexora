@@ -10,15 +10,23 @@
 //
 // **A factor without an input is `Unavailable`, never a default** (task §2,
 // `EARS-STORE-10`, E04-B03's standing prohibition). `storagePressure` is
-// `Unavailable` whenever [SmartModePolicy.plan] is called with
-// `budgetBytes: null` (`OQ-E08-1` unanswered for this call). `importance`
-// is `Unavailable` on every call this build makes — `OQ-E08-4`'s "importance"
-// factor has no input this task is scoped to build (see the file-level
-// Deviations note in `E08-T04.md` for the full reasoning: the epic-level
-// question has since been answered with an advisory derivation, but that
-// derivation is new logic this task's own `files:` fence does not cover,
-// and the task's own §2/§3/§4 text — the binding contract, rule 6 — commits
-// to `unavailable` explicitly and unconditionally).
+// `Unavailable` whenever [SmartModePolicy.plan] is called without a usable
+// denominator — `budgetBytes: null` (no budget supplied at all) or
+// `budgetBytes: 0` (a zero denominator is undefined, not "100% full";
+// `E08-B05`). `importance` is `Unavailable` on every call this build makes.
+//
+// **Both questions are ANSWERED; neither answer is built yet** (`E08-B05`,
+// 2026-09-03) — the reason strings say exactly that, and both obligations
+// are carried in `epics/E08-local-storage/tracker.md` §Carried-forward
+// observations with a named future owner:
+//   * `OQ-E08-1(a)` 🟢 2026-09-02 — device free space via a Pigeon channel.
+//     Not built; `storage_policy_settings.budget_bytes` stays NULL, so the
+//     factor stays honestly `Unavailable`.
+//   * `OQ-E08-4(a)` 🟢 2026-09-02 — "importance" = a Trusted relationship
+//     (E02) plus a never-delete rule for undelivered messages. The
+//     never-delete half ships (`retention_executor.dart`, EARS-STORE-14);
+//     the E02 derivation reaches outside every E08 fence and is unbuilt.
+// Neither is defaulted to a score in the meantime (E04-B03's prohibition).
 library;
 
 import 'retention_plan.dart';
@@ -90,8 +98,10 @@ final class SmartModePolicy {
   /// [nowEpochMs] is the injected clock — this method never reads
   /// `DateTime.now()` (task §5/§6).
   ///
-  /// [budgetBytes] is `OQ-E08-1`'s denominator, or null. Null makes
-  /// [SmartModeFactor.storagePressure] `Unavailable` (`EARS-STORE-10`).
+  /// [budgetBytes] is `OQ-E08-1`'s denominator, or null. Null — and also
+  /// `0`, which is not a usable denominator (`E08-B05`) — makes
+  /// [SmartModeFactor.storagePressure] `Unavailable` (`EARS-STORE-10`),
+  /// never a synthesized ratio.
   RetentionPlan plan({
     required StorageInventorySnapshot snapshot,
     required List<StorageItem> items,
@@ -128,24 +138,40 @@ final class SmartModePolicy {
     final double? pressureRatio;
     if (budgetBytes == null) {
       pressureFactor = const FactorScore.unavailable(
-        'OQ-E08-1 — no storage budget (denominator) supplied to this plan run',
+        'OQ-E08-1(a) answered 2026-09-02 (device free space, read via a '
+        'Pigeon channel) but not yet implemented — no storage budget '
+        '(denominator) supplied to this plan run. Owner: the free-space '
+        'channel task carried in the E08 tracker §Carried-forward '
+        'observations',
+      );
+      pressureRatio = null;
+    } else if (budgetBytes == 0) {
+      // A zero denominator is undefined, not "100% full" (E08-B05, from
+      // E08-T04's own review). Reporting 1.0 here would be a synthesized
+      // measurement — E04-B03's standing prohibition.
+      pressureFactor = const FactorScore.unavailable(
+        'OQ-E08-1 — a budget of 0 bytes is not a usable denominator; '
+        'storage pressure is undefined here, not 100% full',
       );
       pressureRatio = null;
     } else {
-      final ratio = budgetBytes == 0
-          ? 1.0
-          : snapshot.classTotalsSumBytes() / budgetBytes;
+      final ratio = snapshot.classTotalsSumBytes() / budgetBytes;
       pressureFactor = FactorScore.scored(ratio);
       pressureRatio = ratio;
     }
     final pressureIsHigh =
         pressureRatio != null && pressureRatio >= thresholds.storagePressureRatio;
 
-    // Importance: Unavailable on every call this build makes — `OQ-E08-4`
-    // is an undefined term this task's own contract (§2/§3/§4) commits to
-    // never inventing a definition for (see file header note).
+    // Importance: Unavailable on every call this build makes. The term IS
+    // defined — `OQ-E08-4(a)`, answered by the human on 2026-09-02 — but
+    // its derivation (a Trusted relationship, E02) is not built here and
+    // reaches outside every E08 file fence (E08-B05).
     const importanceFactor = FactorScore.unavailable(
-      'OQ-E08-4 — "importance" is not a defined term in this build',
+      'OQ-E08-4(a) answered 2026-09-02 ("importance" = a Trusted '
+      'relationship (E02) plus a never-delete rule for undelivered '
+      'messages) but not yet implemented — the E02 Trusted-relationship '
+      'half is unbuilt. Owner: the importance-derivation task carried in '
+      'the E08 tracker §Carried-forward observations',
     );
 
     // Per-item candidate selection (message + relayPayload — the only two

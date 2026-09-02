@@ -145,7 +145,11 @@ exact section for eight tasks with no reader.)_
   `storagePressure`. Unreachable today (no caller passes `budgetBytes`
   yet). **`E08-T06` must never pass `0`**, and `OQ-E08-1`'s eventual
   budget-semantics answer should say whether a zero/absent budget reports
-  `Unavailable`. (2) **S4 — the storage-pressure reason-override branch
+  `Unavailable`. **→ SETTLED 2026-09-03 by `E08-B05`:** `budgetBytes == 0`
+  now returns `FactorScore.unavailable` (a zero denominator is undefined),
+  with two regression tests; the "must never pass `0`" instruction on T06
+  is retired — passing `0` is now safe by construction, not by discipline.
+  (2) **S4 — the storage-pressure reason-override branch
   is live but untested** (`smart_mode_policy.dart:241-247`) — when
   pressure is high it silently replaces an already-chosen reason with
   `storagePressure`. Disclosed honestly, no EARS criterion currently
@@ -198,6 +202,44 @@ exact section for eight tasks with no reader.)_
   rule to prevent. This entry is the reader. **Owner: `E08-B05`, plus two
   scoped follow-up tasks (a Pigeon free-space task; an E02-fenced importance
   task) that do not exist yet.**
+
+- **2026-09-03 · `E08-B05` · the two unbuilt answers now have named owners
+  (obligation, S3 — carried past E08's close).** `E08-B05` did the cheap,
+  in-fence half (reason strings corrected, `budgetBytes == 0` settled) and
+  deliberately built neither mechanism. **The two obligations below outlive
+  this epic and must be read by whoever next plans storage work:**
+
+  1. **`storagePressure` — `OQ-E08-1(a)` is answered and unbuilt.**
+     Needs: a Pigeon free-space channel (`pigeons/`, ADR-0004 already
+     authorises Pigeon, so this is *not* a new-dependency gate), its
+     Android + iOS native halves, a Dart-side reader, and a caller that
+     feeds the measured figure into `storage_policy_settings.budget_bytes`
+     via `StorageSettingsRepository.setBudgetBytes` (`:165`, zero callers
+     today). Prospective **`E08-T10`** in `epic.md` §Prospective.
+     **Scope fence it will need:** it supplies a *measurement*, never a
+     default — if free space cannot be read, `budget_bytes` stays NULL and
+     the factor stays `Unavailable`. It does not decide a user-facing
+     budget ceiling; that is `OQ-E08-1(b)`, deferred by the human, and
+     the number is the missing NFR-SCALE-001 value an agent may not pick
+     (rule 3).
+  2. **`importance` — `OQ-E08-4(a)` is answered and half-unbuilt.** The
+     never-delete-undelivered half ships (`retention_executor.dart:136-140`,
+     EARS-STORE-14). The Trusted-relationship half needs to read E02's
+     relationship state, which is **outside every E08 file fence by
+     design** — so it cannot be a patch to `smart_mode_policy.dart` alone.
+     Prospective **`E08-T11`** in `epic.md` §Prospective, and **E02's
+     relationship read surface must appear in its `files:` fence** (a
+     read-only port into the storage layer, not a new coupling from E02
+     outward). **Scope fence it will need:** derive from existing state
+     only — no new UI, no new schema column (`OQ-E08-4(a)` says so
+     explicitly), and no heuristic weighting an agent invents.
+
+  **Until both land, `FR-STORE-005`/`EARS-STORE-1` is six factors of
+  eight, and that is now stated accurately in three places** — the two
+  `FactorScore.unavailable` reason strings, `smart_mode_policy.dart`'s
+  file header, and here. **Do not close this entry by defaulting either
+  factor to `0.0`** (E04-B03's standing prohibition, re-verified by T04's
+  reviewer and again by `E08-B05`).
 
 - **2026-09-02 · E08 bug sweep · `itemsOfKind`'s 500-row window is the
   epic's single highest-value defect and it was mis-triaged as unreachable
@@ -903,8 +945,30 @@ frontmatter fix, six bug files and this section.
   shape). One additional pre-existing, out-of-fence observation
   recorded for the sweep: `deleteMessageItems` itself has the identical
   `isIn` ceiling and pre-dates this PR.
-- **`E08-B07` (P2) — dispatched.**
-- **`E08-B05` (P2) — dispatched to the planner.**
+- **`E08-B07` (P2) — dispatched, PR open, review in progress.**
+- **`E08-B05` (P2) — PR open, reviewed APPROVE (rebase pending).**
+  Planner-led, per the bug's own §Fix direction. Delivered all four
+  steps: (1)+(2)+(3) the two answered-but-unbuilt obligations are
+  recorded in §Carried-forward above with concrete scopes, and both are
+  now prospective tasks **`E08-T10`** (Pigeon free-space channel) and
+  **`E08-T11`** (E02 Trusted-relationship derivation) in `epic.md`
+  §Prospective, each with the `files:` fence and the "mechanism, not
+  value" prohibition it will need; `epic.md`'s `OQ-E08-1`/`OQ-E08-4`
+  entries carry a build-status + owner line. (4) both
+  `FactorScore.unavailable` reason strings now state *answered
+  2026-09-02, not yet implemented, owner named* instead of citing the
+  questions as open — the `importance` string no longer claims the term
+  is undefined. **Plus one in-fence code fix:** `budgetBytes == 0`
+  returns `Unavailable` rather than a fabricated `pressureRatio` of
+  `1.0` (T04 review's S3, §Carried-forward item now marked SETTLED),
+  with two regression tests, both independently falsified by the
+  reviewer. **Deliberately not built:** the Pigeon channel and the E02
+  derivation (the bug's own §NOT-do); no budget default, free-space
+  number or importance heuristic was invented; the "no budget at all"
+  case still reports `Unavailable`.
 
-**Remaining:** `E08-B03`'s fix (round 2), `E08-B05` and `E08-B07`'s
-review verdicts.
+**Remaining:** `E08-B03`'s fix (round 2, reviewed, merge pending),
+`E08-B05` (rebase then merge), `E08-B07`'s review verdict. **Carried
+past this epic's close by design:** `E08-T10` and `E08-T11` — the two
+answered decisions now have named owners, which is what `E08-B05` was
+for.
