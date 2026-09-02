@@ -18,6 +18,7 @@ import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/messaging/prekey_exchange.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/storage/storage_access_recorder.dart';
+import 'package:nexora/core/storage/storage_item.dart' show StorageItemKind;
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/chat/presentation/chat_controller.dart';

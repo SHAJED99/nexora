@@ -13,6 +13,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/storage/storage_access_recorder.dart';
+import 'package:nexora/core/storage/storage_item.dart' show StorageItemKind;
 
 Future<StorageItemStatRow?> _statRow(
   AppDatabase db,

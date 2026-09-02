@@ -17,33 +17,21 @@
 // an item it has not itself observed — an absent row stays absent until a
 // real access happens.
 //
-// **`StorageItemKind` — a disclosed, temporary duplicate.** The canonical
-// enum is owned by `E08-T02`'s `lib/core/storage/storage_item.dart`
-// (`docs` in `storage_tables.dart`: "a `StorageItemKind.name` string
-// (E08-T02 owns the enum)") — but T02 is being dispatched in parallel off
-// the same base commit as this task and has not merged, so that file does
-// not exist on this branch, and this task's `files:` fence forbids creating
-// or touching anything under `lib/core/storage/` beyond this file. The
-// values below are copied verbatim from T02's own task file §2 (the
-// approved shard) so `.name` strings line up exactly with what T02 will
-// produce, making this a byte-for-byte drop-in seam: once T02 merges, a
-// follow-up should delete this declaration and import the canonical one
-// instead — nothing about the `.name` strings this recorder writes would
-// change. See this task's `## Open Questions` for the explicit call-out.
+// **`StorageItemKind`** is owned by `E08-T02`'s `storage_item.dart`
+// (`storage_tables.dart`'s own doc: "a `StorageItemKind.name` string (E08-T02
+// owns the enum)"). At the time this task was first built, T02 had not yet
+// merged (dispatched in parallel off the same base commit) and this file
+// declared its own verbatim-matching copy of the enum as a disclosed,
+// temporary seam (`OQ-E08-T03-1`) — now resolved: T02 merged
+// (`epic_08`@`1efec77`) and this file imports the canonical enum below, one
+// value at a time identical to what the seam already produced, so this is a
+// pure import-source change with no behavior change.
 import 'dart:async';
 
 import 'package:drift/drift.dart';
 import 'package:nexora/core/persistence/database.dart';
 
-enum StorageItemKind {
-  message,
-  relayPayload,
-  databaseFile,
-  voiceMessage,
-  pttRecording,
-  callRecording,
-  attachment,
-}
+import 'storage_item.dart' show StorageItemKind;
 
 /// One coalesced write's identity — a `(item_kind, item_id)` pair, matching
 /// `storage_item_stats`'s own primary key (task §5 Data).

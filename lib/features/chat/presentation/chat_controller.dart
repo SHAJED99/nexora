@@ -49,6 +49,7 @@ import 'package:nexora/core/crypto/crypto_stub.dart';
 import 'package:nexora/core/messaging/delivery_ack.dart';
 import 'package:nexora/core/messaging/prekey_exchange.dart';
 import 'package:nexora/core/storage/storage_access_recorder.dart';
+import 'package:nexora/core/storage/storage_item.dart' show StorageItemKind;
 import 'package:nexora/features/messaging/data/conversation_repository.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/messaging/domain/message.dart';
