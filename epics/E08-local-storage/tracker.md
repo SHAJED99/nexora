@@ -967,8 +967,33 @@ frontmatter fix, six bug files and this section.
   number or importance heuristic was invented; the "no budget at all"
   case still reports `Unavailable`.
 
-**Remaining:** `E08-B03`'s fix (round 2, reviewed, merge pending),
-`E08-B05` (rebase then merge), `E08-B07`'s review verdict. **Carried
-past this epic's close by design:** `E08-T10` and `E08-T11` — the two
-answered decisions now have named owners, which is what `E08-B05` was
-for.
+**`E08-B05` (P2) — merged, `79fb930` (PR #29).** Rebased to resolve a
+bookkeeping-only `tracker.md` conflict against `E08-B03`'s round-1 entry
+(no code conflict); re-verified 788/788 clean post-rebase.
+
+**`E08-B07` (P2) — round 1 CHANGES, then re-sequenced.** The reviewer
+found this fix introduces the EXACT SQL-variable-limit regression
+`E08-B03`'s round-1 review just caught, and it's worse than the bug it
+fixes: removing `_planOlderThan`'s 500-item cap with no chunking
+downstream means a device with >32,766 aged messages in one kind gets a
+permanent, silent, forever-repeating failure of the entire
+`olderThanDays` path — escalated to **S2** from S3. Confirmed as a
+genuine regression by the reviewer's own 40,000-message end-to-end
+probe, not inference. **Routing decision (following the reviewer's own
+recommended option): sequence `E08-B07` behind `E08-B03`'s chunking
+fix** rather than duplicate chunking logic in a second file or
+reintroduce an early-termination cap that would defeat this task's
+purpose. `E08-B07.depends_on` now includes `E08-B03`; `status: blocked`
+until it merges. **Also surfaced by this review, carried forward for
+the sweep:** `_planOverSize` (B01) and `_allItemsOfKind` (B02) — both
+already merged — share the identical unbounded-accumulation shape and
+could hit the same bind-variable ceiling at large enough scale. The
+same root cause is now reachable from **three** planners, not one;
+worth a single owned fix at the executor boundary (chunking on the
+*consumer* side, where B03's fix already lives) rather than a fourth
+per-caller rediscovery.
+
+**Remaining:** `E08-B03`'s round-2 review (in progress), `E08-B07`
+(blocked on `E08-B03`). **Carried past this epic's close by design:**
+`E08-T10` and `E08-T11` — the two answered decisions now have named
+owners, which is what `E08-B05` was for.
