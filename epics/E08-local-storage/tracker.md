@@ -6,12 +6,13 @@ no-server-copy) and `E08-T08` (the dashboard card) both survived
 multi-round adversarial review — real bugs found and fixed in both, none
 of them data-loss bugs. Build-complete; ready for the epic-level bug
 sweep, then the human `verified` gate and merge to `development`.
-**Bug sweep run 2026-09-02** — see §Bug sweep at the end of this file:
-**6 defects filed (`E08-B01`…`B06`, one S1, one S2, three S3, one S4)**,
-🧍 `bug_priorities` ⏳ AWAITING HUMAN. **The epic→`development` PR does not
-open until P1/P2 = 0** (`skills/release`). ·
+**Bug sweep closed 2026-09-03** — see §Bug sweep sections below: **7
+defects filed and fixed (`E08-B01`…`B07`), all reviewed APPROVE, all
+merged. P1/P2 = 0** — the `skills/release` gate for the epic→
+`development` PR is open. Next: the human `verified` gate. ·
 **Started:** 2026-09-02 ·
-**Completed:** — · **Progress:** 8/8 sharded (+1 prospective) + 6 bug tasks
+**Completed:** 2026-09-03 · **Progress:** 8/8 sharded (+1 prospective) +
+7 bug tasks, all merged
 
 **Still open, non-blocking, for the bug sweep or a future task to pick
 up:**
@@ -1012,7 +1013,73 @@ regression test past a single page count to an id count above SQLite's
 the class of defect its own round-1 review found), and re-verify against
 the now-chunked `RetentionExecutor`.
 
-**Remaining:** `E08-B07`'s re-verified fix and review. **Carried past
-this epic's close by design:** `E08-T10` and `E08-T11` — the two
-answered decisions now have named owners, which is what `E08-B05` was
-for.
+**`E08-B07` (P2) — merged, `f92672c` (PR #28). Round 2, APPROVE.**
+Reviewer independently re-verified every claim rather than trusting the
+builder's rebase-and-extend report: wrote an own probe with ages
+shuffled independently of ids (ruling out an id-order/created-at-order
+coincidence the builder's own test couldn't rule out), asserting exact
+id-set equality across all three tables (`messages`, `delivery_states`,
+`storage_item_stats`) at 40,600 items — the builder's own end-to-end
+test asserted on `messages` only, never re-exercising B03's own orphan
+finding. Also seeded 600 aged-but-undelivered messages into the same
+probe and confirmed the delivery-state guard still holds at this scale
+(one skipped group of 600, survives in all three tables). Falsified the
+fix (reverted to the pre-fix single unchunked call) and reproduced the
+exact `Actual: <500>` under-deletion signature; falsified the
+falsification test's own claim by capturing the literal
+`SqliteException` text, confirming it really is the bind-variable
+ceiling and not an unrelated throw. Confirmed via `git diff --stat` that
+round 2 touched only the test file and task file — no code changes
+needed, the round-1 fix in `manual_policy.dart` was already correct
+once sequenced behind `E08-B03`. 797/797, `flutter analyze` clean, both
+re-run by the reviewer at the merge SHA.
+
+Two non-blocking findings, recorded rather than gated on: (1) the
+falsification test's error-match predicate has a second, weaker
+disjunct (`contains('sqliteexception')`, case-insensitive) that would
+accept a different SQLite error as proof of the bind-variable ceiling —
+verified the first, exact-string disjunct is what actually fires today,
+so the test isn't currently lying; worth tightening next time this file
+is touched, not worth a round 3. (2) the task file's frontmatter still
+reads `severity: S3` while the Feedback log's round-1 entry documents an
+escalation to S2 — defensible (the S2 escalation was about the
+*proposed fix's* regression, which B03's merge eliminated; the original
+defect really is S3) but reads as contradictory on a skim. Left as-is.
+
+**New carried-forward observation (for the retro, not a fix owed
+here):** `manual_policy.dart:152` sorts `_planOlderThan`'s selected
+items by id, discarding the oldest-first order the paging loop produced
+— harmless today only because the whole aged set is always taken with
+no cap. If any future change reintroduces an early-termination cap on
+`_planOlderThan` (mirroring `_planOverSize`'s shape), this id-sort would
+silently resurrect the exact B07 defect with a green suite, because
+nothing downstream re-checks chronological order after the sort.
+
+---
+
+## E08 bug sweep — closed, 2026-09-03
+
+**All seven bugs (`E08-B01` … `E08-B07`) fixed, independently reviewed
+APPROVE by a different model than executed each (rule 5), and merged to
+`epic_08`.** P1/P2 count is now **zero** — the `skills/release` gate for
+the epic→`development` PR is open. `epic_08` @ `f92672c`, 797/797 tests
+green, `flutter analyze` clean (both re-verified locally, not just
+claimed by CI).
+
+**What's carried past this epic's close, by design, not left dangling:**
+- `E08-T10` (Pigeon free-space channel) and `E08-T11` (E02
+  Trusted-relationship derivation) — prospective tasks in `epic.md`
+  §Prospective, both answered decisions now with named owners
+  (`E08-B05`'s purpose).
+- `OQ-E08-T08-2` (probe-dumper `InkWell` blindness) — an owned,
+  cross-epic follow-up, not this epic's to fix.
+- `OQ-E08-5` (FR-STORE-002/003 have no owner) — waits on the media-path
+  task's creation per the human's answer (i).
+- The `manual_policy.dart:152` id-sort trap noted just above.
+- The bind-variable-ceiling defect class is now closed at its root: all
+  four `RetentionExecutor` query sites chunk (`E08-B03`), and both
+  planners that can produce an unbounded id list (`_planOverSize`,
+  `_planOlderThan`) feed into that chunked executor rather than querying
+  unbounded themselves.
+
+**Next: the human `verified` gate, then the epic→`development` merge.**
