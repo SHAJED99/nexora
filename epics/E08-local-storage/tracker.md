@@ -38,7 +38,7 @@ content by default).
 | E08-T03 | Access-frequency signals | backend | S | should | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `222c6dd` (PR #19) |
 | E08-T04 | Smart Mode — the eight-factor plan | backend | M | must | T01, T02, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `77f0505` (PR #20) |
 | E08-T05 | Manual policies + mode selection | backend | S | should | T01, T02 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `1c54ecc` (PR #21) |
-| E08-T06 | Retention execution + decision log + wiring | backend | M | must | T04, T05 | todo |
+| E08-T06 | Retention execution + decision log + wiring | backend | M | must | T04, T05 | round 1 CHANGES · builder (sonnet) → reviewer (opus) · fix in progress (PR #22) |
 | E08-T07 | Design gap pass | docs | M | must | — | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `a94e483` (PR #16) |
 | E08-T08 | Dashboard Local Storage card | frontend | M | must | T06, T07 | todo — blocked on 🧍 `design_contract_approval` GAP-024/025 |
 | E08-T09 | Storage settings screen | frontend | M | should | T05, T06, T07 | **prospective — not sharded** |
@@ -432,3 +432,49 @@ file, not blocking F1's fix.
 
 **Ready to squash-merge — done.** Squash-merged to `epic_08` as `1c54ecc`
 (PR #21).
+
+### E08-T06 — 2026-09-02 — 📋 **CHANGES** round 1 (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5) — highest-scrutiny pass, deletion-safety task
+
+- **The single most important property — Smart Mode can never delete a
+  message, under any circumstance — verified and could not be broken.**
+  Reviewer probed `apply()` directly, bypassing `StorageManager` entirely,
+  with `plan.mode: 'smart'` and `allowedKinds` containing all seven
+  kinds: zero deletions, all rows survived. Falsified (disabled the
+  guard): the exact same probe deletes everything, confirming the guard
+  is genuinely load-bearing, not dead code. The builder's disclosed
+  defense-in-depth addition (refusing `message` deletion whenever
+  `plan.mode == 'smart'`, independent of the caller's `allowedKinds`)
+  held under direct adversarial testing.
+- **Delivery-state guard, relay-payload protection, restart-safe
+  throttle, composition-root wiring, and tick-failure isolation — all
+  independently falsified and all held.** Reviewer wrote original probes
+  for each (not reusing the builder's own tests), broke the code, watched
+  the right test fail for the right reason, restored.
+- **Two blocking findings, both about the decision log's honesty, not
+  about deleting the wrong data:**
+  - **F1 — "transactional" is claimed 4 times (contract, doc comments,
+    §7 checklist) and implemented zero times.** No `db.transaction(...)`
+    exists anywhere in `retention_executor.dart`. Reviewer's probe: two
+    candidate groups, the second delete call throws mid-loop → one group
+    genuinely deleted, the other not, but the log records **both** as
+    `outcome: applied`. FR-STORE-007's only record of what the app's only
+    deletion path did is now wrong.
+  - **F2 — every Smart Mode pass writes a false `outcome: applied` row**,
+    even when zero items were ever deleted (which is every Smart Mode
+    pass on this build, since Smart Mode can never touch messages and no
+    other class exists yet). The zero-candidate throttle sentinel — sound
+    for its stated purpose, confirmed by falsification — is being emitted
+    in an unintended second context, so `storage_decisions` accumulates
+    "applied" rows on a device that has never deleted anything.
+- **Two smaller issues, not blocking on their own:** F3 (a doc comment in
+  `bindings.dart` describes composition ordering incorrectly, though the
+  actual behavior is safe) and F4 (a database-file-size measurement
+  helper swallows its own failures with no trace — safe direction, but
+  invisible on a device where it fails).
+- **suite: 773/773**, `flutter analyze` clean, both re-run by reviewer.
+
+**Routed back to the same implementer for F1/F2 (required), F3 (trivial),
+F4 (fix or explicitly defer).** Reviewer's framing: "deletion safety
+itself — the part that is unrecoverable if wrong — I could not break, and
+I tried hard to." The remaining issues are integrity-of-the-audit-trail
+bugs, not data-loss bugs.
