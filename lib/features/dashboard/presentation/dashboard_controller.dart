@@ -1,9 +1,10 @@
-// features/dashboard/presentation — DashboardController (E06-T12).
+// features/dashboard/presentation — DashboardController (E06-T12, widened
+// E08-T08).
 //
 // Built against design/screens/dashboard.md. This is the app's front door:
 // FR-UI-004's simple connectivity reading (GAP-013), the Local Storage card
-// (GAP-011, no data source until E08), and Recent Conversations — the SAME
-// `ConversationRepository.watchConversations()` read model and the SAME
+// (GAP-011, now fed real figures by E08-T08), and Recent Conversations — the
+// SAME `ConversationRepository.watchConversations()` read model and the SAME
 // `ConversationTile` view model T10's Conversations screen already defines
 // (task §2/§6: two screens must not define the delivery-state glyph mapping
 // twice, the exact "state defined in two documents" trap E05-B03 already
@@ -11,8 +12,7 @@
 // `conversations_controller.dart` rather than redeclared here.
 //
 // **NEVER SYNTHESIZE A MEASUREMENT (E04-B03's standing prohibition, applied
-// here per task §2/§6).** Three numbers on this screen have no honest
-// default:
+// here per task §2/§6).** On this screen:
 // - `latencyMs` — real value from the most recent `LinkQuality` event on
 //   `LinkQualityFeed.transport.linkQuality` (E06-T04's real producer), or
 //   `null`. Never a literal like `24ms`.
@@ -21,14 +21,43 @@
 //   `discoveredDevices`/`lostDevices` streams for "is any peer known at all"
 //   and `LinkQualityFeed.routing.computeRoute` for "is any of them
 //   reachable") — never a hardcoded `Connected`.
-// - `storageUsage.percentUsed` — GAP-011: no storage quota/denominator
-//   exists anywhere in this schema or spec to compute a percentage against
-//   (the on-disk sqlite file's own byte size is measurable, but "% used"
-//   needs a total to divide by, and inventing one would itself be exactly
-//   the fabricated-figure defect this file's whole design avoids elsewhere
-//   — see this task's own Deviations/Run log). `isMeasured` therefore stays
-//   `false`, permanently, until E08 defines a real quota — never a fake
-//   percentage presented as measured.
+// - `storageUsage.percentUsed` — `GAP-026`'s answered fork (`OQ-E08-1`,
+//   option (c) for this card): `storage_policy_settings.budget_bytes` is
+//   NULL by default (no denominator), so `percentUsed` stays `null` and the
+//   card shows the real measured byte total instead — never a fabricated
+//   percentage presented as measured. `usedBytes`/`isMeasured` are E08-T08's
+//   own widening: `usedBytes` is always `StorageInventory.totalBytes()`'s
+//   real sum; `isMeasured` is `false` only before the controller's first
+//   successful read (or after a read failure) — the honest "not yet
+//   measured" fallback, never a zero presented as real (task §2, `GAP-011`'s
+//   own placeholder pattern reused for this narrower purpose).
+//
+// **The card reads the storage domain; it never triggers a pass** (task
+// §2/§4 — `EARS-STORE-2`/`FR-STORE-006`). `_loadStorageUsage` only calls
+// `StorageManager.inventory.snapshot()` (a read-only SQL aggregate) and
+// `StorageManager.settings.read()` (a read-only row fetch), and observes
+// `StorageManager.latestPlan`/`.log.latestPass()` — the same values
+// `MessagingCoordinator`'s own periodic tick already produced in the
+// background. Nothing here calls `StorageManager.runPass`,
+// `RetentionExecutor.apply`, or writes any row.
+//
+// **The "Will remove:" list is filtered, not the raw plan (task §2's "never
+// re-implement policy in a widget" balanced against a real correctness
+// risk).** `SmartModePolicy.plan()` (E08-T04) scores `message`-kind items by
+// age/access/size regardless of mode — the mode-dependent exclusion
+// (`OQ-E08-3(a)`: Smart Mode never deletes conversation content) is enforced
+// downstream, by `StorageManager`/`RetentionExecutor` at apply time, not by
+// the pure scorer. Showing `plan.groups` uncritically would therefore let a
+// Smart Mode user read "Will remove: Messages" for content that categorically
+// will never be removed under their active policy — exactly the false
+// warning `FR-STORE-006`'s "informational" promise forbids. `_actionableGroups`
+// mirrors the SAME two unconditional invariants `RetentionExecutor.apply`
+// already enforces (never a new policy, never a new number): a `relayPayload`
+// group is always `RelayEngine.reclaimPayloads`'s (E04-B02), and a `message`
+// group is never actionable under a Smart Mode plan. This is exactly
+// `design/screens/dashboard.md`'s own stated reasoning for why "Nothing to
+// remove right now." is the expected default reading (GAP-025), not an
+// invented filter.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -39,6 +68,11 @@ import 'package:nexora/core/crypto/crypto_stub.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/routing_engine/link_quality_feed.dart';
 import 'package:nexora/core/routing_engine/route_cost_calculator.dart';
+import 'package:nexora/core/storage/retention_plan.dart';
+import 'package:nexora/core/storage/storage_item.dart' show StorageItemKind;
+import 'package:nexora/core/storage/storage_manager.dart';
+import 'package:nexora/core/storage/storage_settings_repository.dart'
+    show StorageMode;
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/conversations/presentation/conversations_controller.dart'
     show ConversationTile;
@@ -73,14 +107,55 @@ class NetworkStatusVm {
   final bool encryptionSecure;
 }
 
-/// The Local Storage card's view model (task §5 contract / GAP-011).
-/// `isMeasured == false` renders the disclosed placeholder, never a fake
-/// number presented as measured.
+/// The Local Storage card's view model (E08-T08 §5 contract; widens
+/// GAP-011's placeholder). `usedBytes` is always the real measured total from
+/// `StorageInventory` (via `StorageManager`) — never estimated. `isMeasured`
+/// is `false` only before the first successful read or after a read failure
+/// (the honest fallback; `usedBytes` is meaningless in that case and MUST NOT
+/// be rendered). `percentUsed` is non-null only when
+/// `storage_policy_settings.budget_bytes` is set (`OQ-E08-1`/`GAP-026`) —
+/// never computed against an invented denominator.
+/// `policySummaryKey` is a machine key (never display copy itself) the view
+/// maps to the design contract's `<Mode> - <parameter>` copy (element 18) —
+/// keeping the actual strings out of the controller, per this task's own
+/// "copy is character-for-character from the contract, never from a
+/// controller" rule. `warningActive` says whether element 17's warning glyph
+/// should render — element 18's policy-summary line renders unconditionally
+/// regardless (`dashboard.md`'s own element table: only the glyph is
+/// conditional).
 class StorageUsageVm {
-  const StorageUsageVm({required this.percentUsed, required this.isMeasured});
+  const StorageUsageVm({
+    required this.usedBytes,
+    required this.isMeasured,
+    this.percentUsed,
+    required this.policySummaryKey,
+    required this.warningActive,
+  });
 
-  final int? percentUsed;
+  final int usedBytes;
   final bool isMeasured;
+  final int? percentUsed;
+  final String policySummaryKey;
+  final bool warningActive;
+}
+
+/// One category row FR-STORE-007's expanded explanation renders (GAP-025's
+/// DX2-DX4) — a real candidate group from the latest actionable plan, never
+/// a synthesized row. `reason`/`reasonDetail` are the SAME machine keys
+/// `RetentionCandidateGroup` already carries (`retention_plan.dart`) — the
+/// view, not this controller, maps them to the contract's copy.
+class StorageDecisionVm {
+  const StorageDecisionVm({
+    required this.categoryKey,
+    required this.bytes,
+    required this.reason,
+    required this.reasonDetail,
+  });
+
+  final String categoryKey;
+  final int bytes;
+  final RetentionReason reason;
+  final String? reasonDetail;
 }
 
 /// How many of `watchConversations()`'s rows the Recent Conversations
@@ -94,15 +169,18 @@ class DashboardController extends GetxController {
     required ConversationRepository repo,
     required LinkQualityFeed links,
     required CryptoService crypto,
+    required StorageManager storage,
   })  : _stack = stack, // ignore: prefer_initializing_formals
         _repo = repo, // ignore: prefer_initializing_formals
         _links = links, // ignore: prefer_initializing_formals
-        _crypto = crypto; // ignore: prefer_initializing_formals
+        _crypto = crypto, // ignore: prefer_initializing_formals
+        _storage = storage; // ignore: prefer_initializing_formals
 
   final MessagingStack _stack;
   final ConversationRepository _repo;
   final LinkQualityFeed _links;
   final CryptoService _crypto;
+  final StorageManager _storage;
 
   final Rx<NetworkStatusVm> networkStatus = const NetworkStatusVm(
     reading: ConnectivityReading.noPeers,
@@ -117,9 +195,30 @@ class DashboardController extends GetxController {
   final RxList<ConversationTile> recent = <ConversationTile>[].obs;
 
   final Rx<StorageUsageVm> storageUsage = const StorageUsageVm(
-    percentUsed: null,
+    usedBytes: 0,
     isMeasured: false,
+    percentUsed: null,
+    policySummaryKey: '',
+    warningActive: false,
   ).obs;
+
+  /// FR-STORE-007's expansion state — toggled only by [toggleStorageExpansion]
+  /// (a tap), never set as a side effect of loading data.
+  final RxBool storageExpanded = false.obs;
+
+  /// What the expanded state renders (task §5 contract) — one entry per
+  /// actionable category in the latest pass, most significant (largest
+  /// [StorageDecisionVm.bytes]) first; empty before the first pass, or once
+  /// the active policy has nothing actionable to report (GAP-025's DX7 —
+  /// the expected default reading under Smart Mode).
+  final RxList<StorageDecisionVm> storageExplanation = <StorageDecisionVm>[].obs;
+
+  /// True only while `storage_decisions`' latest pass could not be read
+  /// (mirrors [StorageUsageVm.isMeasured]'s read-failure fallback, but kept
+  /// separate since a byte-total read and a decision-log read can fail
+  /// independently) — renders DX8's `Couldn't read local storage. Try
+  /// again.` in the expanded state rather than a silently-empty list.
+  final RxBool storageExplanationError = false.obs;
 
   /// True only until the first `watchConversations()` emission arrives —
   /// same "loading: first stream emission pending" contract
@@ -136,6 +235,7 @@ class DashboardController extends GetxController {
   StreamSubscription<TransportDevice>? _discoveredSub;
   StreamSubscription<String>? _lostSub;
   StreamSubscription<LinkQuality>? _linkQualitySub;
+  Worker? _storagePlanWorker;
 
   /// Every peer the transport has reported discovered and not yet lost —
   /// real, currently-known state, never a synthesized count. Empty means
@@ -154,6 +254,21 @@ class DashboardController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+
+    // The storage domain is independent of the messaging stack's own
+    // readiness (task §2: "the card reads; it never triggers a pass") — read
+    // it regardless of whether `_stack.status.isReady` below, so a degraded
+    // messaging stack does not also blank out an otherwise-healthy storage
+    // reading.
+    unawaited(_loadStorageUsage());
+    // Re-read whenever `MessagingCoordinator`'s own background tick produces
+    // a new pass — never triggers one itself (`StorageManager.latestPlan` is
+    // observe-only from this file's perspective).
+    _storagePlanWorker = ever<RetentionPlan?>(
+      _storage.latestPlan,
+      (_) => unawaited(_loadStorageUsage()),
+    );
+
     if (!_stack.status.isReady) {
       final status = _stack.status;
       errorMessage.value = status is MessagingStackStatusUnavailable
@@ -201,6 +316,7 @@ class DashboardController extends GetxController {
     unawaited(_discoveredSub?.cancel());
     unawaited(_lostSub?.cancel());
     unawaited(_linkQualitySub?.cancel());
+    _storagePlanWorker?.dispose();
     super.onClose();
   }
 
@@ -209,6 +325,14 @@ class DashboardController extends GetxController {
   /// route-detail screen.
   void openNetworkDetail() {
     Get.toNamed('/devices');
+  }
+
+  /// FR-STORE-007's expansion (task §5 contract). Flips the expansion flag
+  /// ONLY — never runs, applies or schedules anything
+  /// (`EARS-STORE-2`/`FR-STORE-006`). The data it reveals was already loaded
+  /// by [_loadStorageUsage]; tapping never re-reads, never re-plans.
+  void toggleStorageExpansion() {
+    storageExpanded.value = !storageExpanded.value;
   }
 
   void _recomputeNetworkStatus() {
@@ -235,6 +359,105 @@ class DashboardController extends GetxController {
       }
     }
     return false;
+  }
+
+  /// Reads (never writes) `StorageManager.inventory`/`.settings` for the
+  /// collapsed card, and `StorageManager.latestPlan` for the expanded
+  /// explanation — task §2/§4's "the card reads; it never triggers a pass".
+  /// A failure anywhere in this method degrades to the honest
+  /// `isMeasured: false` fallback rather than propagating (this is a display
+  /// read, not something allowed to crash the dashboard).
+  Future<void> _loadStorageUsage() async {
+    try {
+      final snapshot = await _storage.inventory.snapshot();
+      final usedBytes = _storage.inventory.totalBytes(snapshot);
+      final settings = await _storage.settings.read();
+      final percentUsed = settings.budgetBytes == null
+          ? null
+          : ((usedBytes * 100) ~/ settings.budgetBytes!);
+
+      final plan = _storage.latestPlan.value;
+      final actionable =
+          plan == null ? const <RetentionCandidateGroup>[] : _actionableGroups(plan);
+
+      storageUsage.value = StorageUsageVm(
+        usedBytes: usedBytes,
+        isMeasured: true,
+        percentUsed: percentUsed,
+        policySummaryKey: _policySummaryKeyFor(
+          mode: settings.mode,
+          olderThanDays: settings.olderThanDays,
+          maxBytes: settings.maxBytes,
+        ),
+        warningActive: actionable.isNotEmpty,
+      );
+
+      final sorted = [...actionable]..sort((a, b) => b.bytes.compareTo(a.bytes));
+      storageExplanation
+        ..clear()
+        ..addAll([
+          for (final group in sorted)
+            StorageDecisionVm(
+              categoryKey: group.categoryKey,
+              bytes: group.bytes,
+              reason: group.reason,
+              reasonDetail: group.reasonDetail,
+            ),
+        ]);
+      storageExplanationError.value = false;
+    } catch (_) {
+      storageUsage.value = const StorageUsageVm(
+        usedBytes: 0,
+        isMeasured: false,
+        percentUsed: null,
+        policySummaryKey: '',
+        warningActive: false,
+      );
+      storageExplanation.clear();
+      storageExplanationError.value = true;
+    }
+  }
+
+  /// Mirrors `RetentionExecutor.apply`'s own two unconditional invariants
+  /// (`retention_executor.dart`'s header) so the "Will remove:" list never
+  /// shows a category that will never actually be removed under the active
+  /// policy — see this file's header for the full reasoning. Not a new
+  /// policy: both exclusions are already-fixed, spec-mandated constants
+  /// (`OQ-E08-3(a)`, `E04-B02`'s ownership of relay TTL), read here for
+  /// display consistency, never re-scored.
+  List<RetentionCandidateGroup> _actionableGroups(RetentionPlan plan) {
+    final isSmart = plan.mode == StorageMode.smart.name;
+    return [
+      for (final group in plan.groups)
+        if (group.kind != StorageItemKind.relayPayload &&
+            !(isSmart && group.kind == StorageItemKind.message))
+          group,
+    ];
+  }
+
+  /// A machine key (never display copy — the view owns the actual strings,
+  /// per this task's "copy from the contract, never from the controller"
+  /// rule) naming the active policy plus its real parameter. `smart` reuses
+  /// `SmartModeThresholds.ageThresholdDays` — the real value
+  /// `SmartModePolicy` scores against, replacing GAP-011's static "10 days"
+  /// placeholder with the actual threshold. The two manual modes reuse the
+  /// mode names `design/screens/settings-storage.md`'s SS11 already measured
+  /// from BRD §19 (this epic's own sibling derived contract), substituting
+  /// the user's real parameter for BRD's own "X".
+  String _policySummaryKeyFor({
+    required String mode,
+    required int? olderThanDays,
+    required int? maxBytes,
+  }) {
+    switch (StorageMode.values.byName(mode)) {
+      case StorageMode.smart:
+        return 'smart:${_storage.smart.thresholds.ageThresholdDays}';
+      case StorageMode.olderThanDays:
+        return 'olderThanDays:${olderThanDays ?? 0}';
+      case StorageMode.overSizeMb:
+        final mb = (maxBytes ?? 0) ~/ (1024 * 1024);
+        return 'overSizeMb:$mb';
+    }
   }
 
   Future<void> _onSummaries(List<ConversationSummary> summaries) async {
