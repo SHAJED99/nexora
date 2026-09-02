@@ -25,6 +25,21 @@ import 'storage_settings_repository.dart' show StorageMode;
 
 export 'storage_settings_repository.dart' show StorageMode;
 
+/// The shape of `StorageInventory.itemsOfKind` this file calls through
+/// (E08-B01/E08-B02's shared fix): the callback signature had to widen past
+/// the original `(kind, {olderThanEpochMs})` pair to also carry [limit],
+/// [oldestFirst] and [offset] paging, since `_planOverSize` (below) now
+/// pages a genuinely oldest-first enumeration instead of trusting the
+/// injected fetch's own bounded, newest-first default. `OQ-E08-T05-1` named
+/// this contract gap explicitly: "amending either way".
+typedef StorageItemsFetcher = Future<List<StorageItem>> Function(
+  StorageItemKind kind, {
+  int limit,
+  int? olderThanEpochMs,
+  bool oldestFirst,
+  int offset,
+});
+
 /// The two non-default modes of `FR-STORE-004` (task §1). Stateless —
 /// `plan()` takes every input as a parameter.
 final class ManualPolicy {
@@ -56,11 +71,7 @@ final class ManualPolicy {
   Future<RetentionPlan> plan({
     required StorageMode mode,
     required StorageInventorySnapshot snapshot,
-    required Future<List<StorageItem>> Function(
-      StorageItemKind kind, {
-      int? olderThanEpochMs,
-    })
-        items,
+    required StorageItemsFetcher items,
     required StoragePolicySettingRow settings,
     required int nowEpochMs,
   }) async {
@@ -89,11 +100,7 @@ final class ManualPolicy {
 
   Future<RetentionPlan> _planOlderThan({
     required StorageInventorySnapshot snapshot,
-    required Future<List<StorageItem>> Function(
-      StorageItemKind kind, {
-      int? olderThanEpochMs,
-    })
-        items,
+    required StorageItemsFetcher items,
     required StoragePolicySettingRow settings,
     required int nowEpochMs,
   }) async {
@@ -139,13 +146,15 @@ final class ManualPolicy {
     return _plan(mode: StorageMode.olderThanDays, groups: groups, nowEpochMs: nowEpochMs);
   }
 
+  /// The batch size used when paging each kind oldest-first
+  /// (E08-B01) — matches `StorageInventory.itemsOfKind`'s own default
+  /// `limit`, so a kind under the old cliff is fetched in a single page,
+  /// same as before this fix.
+  static const int _pageSize = 500;
+
   Future<RetentionPlan> _planOverSize({
     required StorageInventorySnapshot snapshot,
-    required Future<List<StorageItem>> Function(
-      StorageItemKind kind, {
-      int? olderThanEpochMs,
-    })
-        items,
+    required StorageItemsFetcher items,
     required StoragePolicySettingRow settings,
     required int nowEpochMs,
   }) async {
@@ -176,27 +185,86 @@ final class ManualPolicy {
       );
     }
 
-    // Gather every kind's items into one pool, oldest-first across the
-    // whole pool, tie-broken by id (task §6 risk note: "get this wrong and
-    // two runs disagree, breaking the explanation surface's reproducibility
-    // guarantee").
-    final pooled = <StorageItem>[];
-    for (final classTotal in snapshot.classTotals) {
-      if (classTotal.itemCount == 0) continue;
-      pooled.addAll(await items(classTotal.kind));
+    // E08-B01 fix: select the genuinely-oldest items across the WHOLE pool,
+    // not just the newest-500-per-kind window `itemsOfKind`'s own default
+    // returns. Each kind is paged oldest-first (`oldestFirst: true`,
+    // `_pageSize` per page — `StorageInventory`'s own "bounded by
+    // construction" property, task §5, still holds: no single call ever
+    // returns more than `_pageSize` items), and the pages are merged
+    // oldest-first across kinds via a small streaming k-way merge so at
+    // most one page per kind is ever held in memory at once.
+    final kindsWithItems = [
+      for (final classTotal in snapshot.classTotals)
+        if (classTotal.itemCount > 0) classTotal.kind,
+    ];
+
+    final buffers = <StorageItemKind, List<StorageItem>>{
+      for (final kind in kindsWithItems) kind: <StorageItem>[],
+    };
+    final nextOffset = <StorageItemKind, int>{
+      for (final kind in kindsWithItems) kind: 0,
+    };
+    final exhausted = <StorageItemKind, bool>{
+      for (final kind in kindsWithItems) kind: false,
+    };
+
+    Future<void> refill(StorageItemKind kind) async {
+      if (exhausted[kind]!) return;
+      final page = await items(
+        kind,
+        oldestFirst: true,
+        limit: _pageSize,
+        offset: nextOffset[kind]!,
+      );
+      nextOffset[kind] = nextOffset[kind]! + page.length;
+      buffers[kind]!.addAll(page);
+      if (page.length < _pageSize) exhausted[kind] = true;
     }
-    pooled.sort((a, b) {
-      final byAge = a.createdAt.compareTo(b.createdAt);
-      if (byAge != 0) return byAge;
-      return a.id.compareTo(b.id);
-    });
+
+    for (final kind in kindsWithItems) {
+      await refill(kind);
+    }
 
     var runningBytes = totalBytes;
     final selectedByKind = <StorageItemKind, List<StorageItem>>{};
-    for (final item in pooled) {
-      if (runningBytes <= maxBytes) break;
-      selectedByKind.putIfAbsent(item.kind, () => []).add(item);
-      runningBytes -= item.bytes;
+
+    while (runningBytes > maxBytes) {
+      StorageItemKind? bestKind;
+      StorageItem? bestItem;
+      for (final kind in kindsWithItems) {
+        final buffer = buffers[kind]!;
+        if (buffer.isEmpty) continue;
+        final head = buffer.first;
+        if (bestItem == null ||
+            head.createdAt < bestItem.createdAt ||
+            (head.createdAt == bestItem.createdAt &&
+                head.id.compareTo(bestItem.id) < 0)) {
+          bestItem = head;
+          bestKind = kind;
+        }
+      }
+      // Every kind's buffer is empty and exhausted -- the whole inventory
+      // has been consumed while still over the cap (under-planning, the
+      // second half of `OQ-E08-T05-1`: this can genuinely happen if the
+      // snapshot's totals and the live per-item rows have drifted, e.g. a
+      // concurrent write between `snapshot()` and this call). Stop rather
+      // than loop forever; the plan disclosed here is everything the
+      // inventory actually has to offer.
+      if (bestItem == null || bestKind == null) break;
+
+      buffers[bestKind]!.removeAt(0);
+      selectedByKind.putIfAbsent(bestKind, () => []).add(bestItem);
+      // Decrement by the real selected item's bytes -- runningBytes is
+      // seeded from the SQL-summed TOTAL and must be brought down by every
+      // item this loop actually selects, so the loop's own stopping
+      // condition (`runningBytes <= maxBytes`) reflects reality rather than
+      // exhausting a truncated pool while still over cap (E08-B01's
+      // documented under-planning half).
+      runningBytes -= bestItem.bytes;
+
+      if (buffers[bestKind]!.isEmpty && !exhausted[bestKind]!) {
+        await refill(bestKind);
+      }
     }
 
     final groups = <RetentionCandidateGroup>[

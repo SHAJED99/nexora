@@ -123,21 +123,36 @@ class StorageInventory {
   }
 
   /// Per-item enumeration for candidate selection, bounded by construction
-  /// (task §5): [limit] is a hard bound, the caller pages, this method
-  /// never returns an unbounded list. Newest first. Empty for a kind with
-  /// no producer today.
+  /// (task §5): [limit] is a hard bound on any single call, the caller
+  /// pages, this method never returns an unbounded list from one call.
+  /// Newest first by default; pass [oldestFirst]: true for a genuine
+  /// oldest-first ordering (`ORDER BY created_at ASC, id ASC`) and page
+  /// with [offset] through the WHOLE kind rather than only ever re-reading
+  /// the same newest window (E08-B01/E08-B02: the caller pages until its
+  /// own running total/byte-sum is satisfied or the kind is exhausted --
+  /// raising [limit] alone only moves the cliff further out, it does not
+  /// remove it). Empty for a kind with no producer today.
   Future<List<StorageItem>> itemsOfKind(
     StorageItemKind kind, {
     int limit = 500,
     int? olderThanEpochMs,
+    bool oldestFirst = false,
+    int offset = 0,
   }) async {
     switch (kind) {
       case StorageItemKind.message:
-        return _messageItems(limit: limit, olderThanEpochMs: olderThanEpochMs);
+        return _messageItems(
+          limit: limit,
+          olderThanEpochMs: olderThanEpochMs,
+          oldestFirst: oldestFirst,
+          offset: offset,
+        );
       case StorageItemKind.relayPayload:
         return _relayPayloadItems(
           limit: limit,
           olderThanEpochMs: olderThanEpochMs,
+          oldestFirst: oldestFirst,
+          offset: offset,
         );
       case StorageItemKind.databaseFile:
       case StorageItemKind.voiceMessage:
@@ -154,6 +169,8 @@ class StorageInventory {
   Future<List<StorageItem>> _messageItems({
     required int limit,
     int? olderThanEpochMs,
+    bool oldestFirst = false,
+    int offset = 0,
   }) async {
     final buffer = StringBuffer(
       'SELECT id, conversation_id, LENGTH(ciphertext) AS bytes, created_at '
@@ -164,8 +181,18 @@ class StorageInventory {
       buffer.write(' WHERE created_at < ?');
       variables.add(Variable.withInt(olderThanEpochMs));
     }
-    buffer.write(' ORDER BY created_at DESC LIMIT ?');
+    // `id ASC` is a deterministic tie-break, always applied -- required for
+    // [offset] paging to be safe: without it, rows sharing a `created_at`
+    // could be returned in a different relative order across pages (or
+    // skipped/duplicated) since SQLite does not otherwise guarantee a
+    // stable order for ties.
+    buffer.write(
+      oldestFirst
+          ? ' ORDER BY created_at ASC, id ASC LIMIT ? OFFSET ?'
+          : ' ORDER BY created_at DESC, id ASC LIMIT ? OFFSET ?',
+    );
     variables.add(Variable.withInt(limit));
+    variables.add(Variable.withInt(offset));
 
     final rows = await db
         .customSelect(
@@ -192,6 +219,8 @@ class StorageInventory {
   Future<List<StorageItem>> _relayPayloadItems({
     required int limit,
     int? olderThanEpochMs,
+    bool oldestFirst = false,
+    int offset = 0,
   }) async {
     final buffer = StringBuffer(
       'SELECT id, LENGTH(payload) AS bytes, created_at FROM relay_packets '
@@ -202,8 +231,15 @@ class StorageInventory {
       buffer.write(' AND created_at < ?');
       variables.add(Variable.withInt(olderThanEpochMs));
     }
-    buffer.write(' ORDER BY created_at DESC LIMIT ?');
+    // Same deterministic `id ASC` tie-break as `_messageItems` -- required
+    // for [offset] paging to be safe across calls.
+    buffer.write(
+      oldestFirst
+          ? ' ORDER BY created_at ASC, id ASC LIMIT ? OFFSET ?'
+          : ' ORDER BY created_at DESC, id ASC LIMIT ? OFFSET ?',
+    );
     variables.add(Variable.withInt(limit));
+    variables.add(Variable.withInt(offset));
 
     final rows = await db
         .customSelect(

@@ -60,20 +60,35 @@ StoragePolicySettingRow _settings({
 }
 
 /// A fake `StorageInventory.itemsOfKind`-shaped callback backed by a fixed
-/// in-memory list, applying the same `olderThanEpochMs` pushdown filter the
-/// real implementation does.
-Future<List<StorageItem>> Function(
-  StorageItemKind kind, {
-  int? olderThanEpochMs,
-}) _fakeItems(List<StorageItem> allItems) {
-  return (StorageItemKind kind, {int? olderThanEpochMs}) async {
-    return allItems.where((item) {
+/// in-memory list, applying the same `olderThanEpochMs` pushdown filter,
+/// `oldestFirst` ordering and `limit`/`offset` paging the real
+/// implementation does (E08-B01: `ManualPolicy._planOverSize` now pages
+/// through this callback exactly like the real `StorageInventory`).
+StorageItemsFetcher _fakeItems(List<StorageItem> allItems) {
+  return (
+    StorageItemKind kind, {
+    int limit = 500,
+    int? olderThanEpochMs,
+    bool oldestFirst = false,
+    int offset = 0,
+  }) async {
+    var matching = allItems.where((item) {
       if (item.kind != kind) return false;
       if (olderThanEpochMs != null && item.createdAt >= olderThanEpochMs) {
         return false;
       }
       return true;
     }).toList();
+    matching.sort((a, b) {
+      final byAge = oldestFirst
+          ? a.createdAt.compareTo(b.createdAt)
+          : b.createdAt.compareTo(a.createdAt);
+      if (byAge != 0) return byAge;
+      return a.id.compareTo(b.id);
+    });
+    if (offset >= matching.length) return const [];
+    final end = (offset + limit).clamp(0, matching.length);
+    return matching.sublist(offset, end);
   };
 }
 
