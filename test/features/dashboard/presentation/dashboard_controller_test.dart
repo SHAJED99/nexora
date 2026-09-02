@@ -522,12 +522,57 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump();
 
-    // No "Clean Now", no delete affordance, no confirmation dialog anywhere
-    // on the collapsed card (`FR-STORE-006`/`EARS-STORE-2`).
-    expect(find.text('Clean Now'), findsNothing);
-    expect(find.byIcon(Icons.delete), findsNothing);
-    expect(find.byType(AlertDialog), findsNothing);
-    expect(find.byType(Dialog), findsNothing);
+    // Round-1 review F2: the previous version of this test only denylisted
+    // four specific strings/types ("Clean Now", a delete icon, dialog
+    // widgets) — falsified by the reviewer adding a live
+    // `ElevatedButton(onPressed: () {}, child: Text('Free up space'))` to
+    // the card and watching the test still pass. This version is
+    // structural instead: the card's own `Material` subtree may contain
+    // exactly ONE tap target (`InkWell` -- the expansion toggle) and
+    // exactly ONE `GestureDetector` (the one `InkWell` builds internally,
+    // per Flutter's own `InkResponse` implementation -- never a second,
+    // additional one). Any live button type anywhere in the subtree is a
+    // hard failure regardless of its label, since `EARS-STORE-2`/
+    // `FR-STORE-006` forbid a forced-action affordance, not merely the
+    // literal string "Clean Now".
+    void assertNoActionAffordance() {
+      final cardMaterial = find
+          .ancestor(of: find.text('Local Storage'), matching: find.byType(Material))
+          .first;
+
+      expect(
+        find.descendant(of: cardMaterial, matching: find.byType(InkWell)),
+        findsOneWidget,
+        reason: 'exactly one tap target: the expansion toggle',
+      );
+      expect(
+        find.descendant(of: cardMaterial, matching: find.byType(GestureDetector)),
+        findsOneWidget,
+        reason: "InkWell's own internal GestureDetector, and no other",
+      );
+      for (final buttonType in const [
+        ElevatedButton,
+        TextButton,
+        OutlinedButton,
+        IconButton,
+        FilledButton,
+      ]) {
+        expect(
+          find.descendant(
+            of: cardMaterial,
+            matching: find.byWidgetPredicate((w) => w.runtimeType == buttonType),
+          ),
+          findsNothing,
+          reason: '$buttonType would be a forced-action affordance',
+        );
+      }
+      expect(find.descendant(of: cardMaterial, matching: find.byType(AlertDialog)),
+          findsNothing);
+      expect(find.descendant(of: cardMaterial, matching: find.byType(Dialog)),
+          findsNothing);
+    }
+
+    assertNoActionAffordance();
 
     // Tapping the card only ever expands it in place -- still no such
     // affordance appears once expanded.
@@ -535,10 +580,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump();
 
-    expect(find.text('Clean Now'), findsNothing);
-    expect(find.byIcon(Icons.delete), findsNothing);
-    expect(find.byType(AlertDialog), findsNothing);
-    expect(find.byType(Dialog), findsNothing);
+    assertNoActionAffordance();
 
     // `tearDown`'s `Get.reset()` disposes the controller (calls `onClose`
     // exactly once) -- not called manually here, unlike this file's plain
@@ -603,6 +645,105 @@ void main() {
     expect(decision.reason, RetentionReason.olderThan);
     expect(decision.reasonDetail, '30');
     expect(decision.bytes, greaterThan(0));
+    controller.onClose();
+  });
+
+  // Round-1 review F1 (blocking): `latestPlan` is in-memory only and does
+  // NOT survive a process relaunch, but `storage_decisions` (the durable
+  // log) does. Reproduces the reviewer's own falsification exactly: seed a
+  // real pass via one `StorageManager` instance, then build a FRESH
+  // `StorageManager`/controller instance over the SAME db (simulating an
+  // app relaunch) and confirm the explanation is populated from the
+  // durable log, not silently empty just because this process never ran a
+  // pass itself.
+  test(
+      'test_EARS_STORE_18_explanation_survives_a_relaunch_via_the_durable_log',
+      () async {
+    final old = DateTime.now()
+        .subtract(const Duration(days: 100))
+        .millisecondsSinceEpoch;
+    await _insertMessage(
+      db,
+      id: 'm-old-relaunch-1',
+      conversationId: 'device-a',
+      senderDeviceId: 'device-a',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(List<int>.filled(256, 5)),
+      createdAt: old,
+    );
+
+    // "Session 1": the pass that would have run on a previous app launch
+    // (or the same launch's background tick) -- a SEPARATE StorageManager
+    // instance over the same db, so nothing here can leak through
+    // in-memory state to the fresh instance below.
+    final sessionOneStorage = _newStorageManager(db);
+    await sessionOneStorage.settings
+        .setMode(StorageMode.olderThanDays, olderThanDays: 30);
+    await sessionOneStorage.runPass(
+      nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+      apply: false,
+    );
+    expect(sessionOneStorage.latestPlan.value, isNotNull);
+
+    // "Session 2" (the relaunch): a genuinely FRESH `StorageManager` --
+    // `latestPlan` starts `null`, exactly as it would after a real process
+    // restart, since nothing ran a pass on THIS instance.
+    final freshStorage = _newStorageManager(db);
+    expect(freshStorage.latestPlan.value, isNull);
+
+    final controller = newController(storageManager: freshStorage);
+    controller.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    // The bug (pre-fix): this stayed `isEmpty`/`false` because the
+    // controller read only the in-memory `latestPlan`, never the durable
+    // `storage_decisions` table the prior session actually wrote to.
+    expect(controller.storageUsage.value.warningActive, isTrue);
+    expect(controller.storageExplanation, hasLength(1));
+    final decision = controller.storageExplanation.first;
+    expect(decision.categoryKey, 'messages');
+    expect(decision.reason, RetentionReason.olderThan);
+    expect(decision.reasonDetail, '30');
+    expect(decision.bytes, greaterThan(0));
+    controller.onClose();
+  });
+
+  // A durable `applied` row (something already deleted by a prior pass)
+  // must NOT be reported as something that "will" still be removed -- it
+  // already was.
+  test(
+      'test_EARS_STORE_18_a_durable_applied_row_is_not_shown_as_still_pending',
+      () async {
+    final old = DateTime.now()
+        .subtract(const Duration(days: 100))
+        .millisecondsSinceEpoch;
+    await _insertMessage(
+      db,
+      id: 'm-old-applied-1',
+      conversationId: 'device-a',
+      senderDeviceId: 'device-a',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(List<int>.filled(256, 6)),
+      createdAt: old,
+    );
+
+    final sessionOneStorage = _newStorageManager(db);
+    await sessionOneStorage.settings
+        .setMode(StorageMode.olderThanDays, olderThanDays: 30);
+    // apply: true (the default, and the one MessagingCoordinator's tick
+    // actually calls) -- the message is genuinely deleted and logged
+    // `outcome: applied` by `RetentionExecutor`.
+    await sessionOneStorage.runPass(
+      nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    final freshStorage = _newStorageManager(db);
+    final controller = newController(storageManager: freshStorage);
+    controller.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    expect(controller.storageExplanation, isEmpty);
+    expect(controller.storageUsage.value.warningActive, isFalse);
     controller.onClose();
   });
 }
