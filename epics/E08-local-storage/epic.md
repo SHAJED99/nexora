@@ -55,6 +55,8 @@ Cross-cutting: **NFR-SCALE-001** *(needs number, A-002 placeholder)*,
 | id | title | why not sharded |
 |---|---|---|
 | E08-T09 | Storage settings screen — mode selection, manual policy parameters, decision explanations (`FR-STORE-004`, `FR-STORE-007`) | Rule 2: its `design_contract:` would be `design/screens/settings-storage.md`, which **`E08-T07` has not written yet**. `scheduler.py --validate` rejects a frontend task pointing at a non-existent contract, and it is right to — this is E07's established precedent for exactly this situation ("sharding them would point `design_contract:` at a file `E07-T12` has not written"). **Shard it the moment T07 lands and the human clears `GAP-024`.** Its shape is fully described by `GAP-024`; nothing about it is unknown except the contract it must cite. Expected: `layer: frontend`, `should`, M, `depends_on: [E08-T05, E08-T06, E08-T07]`, sole owner of `lib/app/routes.dart`, `lib/features/settings/**` and `lib/features/storage/presentation/**` |
+| E08-T10 | Device free-space channel — the `storagePressure` factor's missing denominator (`FR-STORE-005`, `EARS-STORE-1`) | **Not "cannot be sharded" — "was never sharded".** `OQ-E08-1(a)` was answered 🟢 by the human on 2026-09-02, *after* the analyze report was written, and no task claimed it (`E08-B05`). Needs a Pigeon free-space channel in `pigeons/` (ADR-0004 already authorises Pigeon — **not** a new-dependency gate), its Android + iOS native halves, a Dart reader, and a caller feeding the measured figure to `StorageSettingsRepository.setBudgetBytes` (`:165`, zero callers today). Expected: `layer: backend`, `should`, M, `depends_on: [E08-T01, E08-T04]`, `files:` covering `pigeons/`, the two native trees and `lib/core/storage/storage_settings_repository.dart`. **Fence: it supplies a measurement, never a default** — free space unreadable ⇒ `budget_bytes` stays NULL ⇒ the factor stays `Unavailable`. It does **not** pick a user-facing budget ceiling; that is `OQ-E08-1(b)`, deferred by the human, and the number is the missing NFR-SCALE-001 value an agent may not choose (rule 3) |
+| E08-T11 | Importance derivation from a Trusted relationship — the `importance` factor's missing input (`FR-STORE-005`, `FR-STORE-007`) | Same shape: `OQ-E08-4(a)` answered 🟢 2026-09-02, never owned (`E08-B05`). Its never-delete-undelivered half already ships (`retention_executor.dart:136-140`, EARS-STORE-14); the Trusted-relationship half reads **E02's** relationship state, which is outside every E08 file fence by design — so it is a cross-epic task, not a patch to `smart_mode_policy.dart`. Expected: `layer: backend`, `should`, S–M, `depends_on: [E08-T04]` + E02's relationship module, and **E02's relationship read surface named explicitly in its `files:` fence**. **Fence: derive from existing state only** — no new UI, no new schema column (`OQ-E08-4(a)` says so in as many words), no agent-invented weighting |
 
 ```mermaid
 graph TD
@@ -107,6 +109,12 @@ Parallel sets, in order: **{T01, T07}** → **{T02, T03}** → **{T04, T05}** �
     bytes, no fabricated percentage (disclosed as `GAP-026`'s deviation).
     (b) a user-set budget deferred, not decided against — the schema
     column stays ready. · **Answered by:** human · **Date:** 2026-09-02
+  - **Build status (added by `E08-B05`, 2026-09-03):** half (c) shipped in
+    `E08-T08`. **Half (a) is unbuilt** — no task claimed it, so
+    `budget_bytes` is permanently NULL and `storagePressure` reports
+    `Unavailable` on every call, now saying exactly that. **Owner:
+    prospective `E08-T10`** (§Prospective above; also carried in
+    `tracker.md` §Carried-forward observations).
 
 - **OQ-E08-2 — NFR-SCALE-001 has no number, and A-002 does not cover
   storage.** ⚠️ **important** (not blocking: E08-T04 ships its thresholds
@@ -191,6 +199,14 @@ Parallel sets, in order: **{T01, T07}** → **{T02, T03}** → **{T04, T05}** �
     relationship (E02) plus a never-delete rule for undelivered messages.
     No new UI, no schema column. · **Answered by:** human ·
     **Date:** 2026-09-02
+  - **Build status (added by `E08-B05`, 2026-09-03):** the never-delete
+    rule for undelivered messages shipped in `E08-T06`
+    (`retention_executor.dart:136-140`, EARS-STORE-14). **The
+    Trusted-relationship half is unbuilt** — it reads E02 state, outside
+    every E08 file fence — so `importance` reports `Unavailable`, now
+    saying that the term *is* defined and the derivation is what is
+    missing. **Owner: prospective `E08-T11`** (§Prospective above; also
+    carried in `tracker.md` §Carried-forward observations).
 
 - **OQ-E08-5 — FR-STORE-002 and FR-STORE-003 have no owner.** ⚠️
   **important** — a traceability finding, not a build blocker.

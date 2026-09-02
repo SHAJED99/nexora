@@ -265,6 +265,49 @@ void main() {
         isA<Unavailable>());
   });
 
+  test('test_EARS_STORE_10_zero_budget_makes_pressure_unavailable', () {
+    // E08-B05: a zero denominator is undefined, not "100% full". The old
+    // `budgetBytes == 0 -> ratio 1.0` shortcut fabricated a maximal
+    // pressure measurement out of no measurement at all.
+    final plan = policy.plan(
+      snapshot: _snapshot(),
+      items: const [],
+      stats: const {},
+      nowEpochMs: nowEpochMs,
+      budgetBytes: 0,
+    );
+
+    final pressure = plan.availableFactors[SmartModeFactor.storagePressure];
+    expect(pressure, isA<Unavailable>());
+    expect(pressure, isNot(const FactorScore.scored(1.0)));
+    expect((pressure as Unavailable).reason, contains('OQ-E08-1'));
+    expect(plan.unavailableFactors[SmartModeFactor.storagePressure],
+        isA<Unavailable>());
+  });
+
+  test('test_EARS_STORE_10_zero_budget_does_not_force_pressure_reason', () {
+    // The reason-override branch must not fire off a fabricated 1.0 ratio:
+    // with budgetBytes 0 the candidate keeps its own age/access/size reason.
+    final plan = policy.plan(
+      snapshot: _snapshot(),
+      items: [
+        _message(
+          id: 'old-1',
+          createdAt: nowEpochMs - 400 * _dayMs,
+          conversationId: 'conv-old',
+        ),
+      ],
+      stats: const {},
+      nowEpochMs: nowEpochMs,
+      budgetBytes: 0,
+    );
+
+    expect(plan.groups, isNotEmpty);
+    for (final group in plan.groups) {
+      expect(group.reason, isNot(RetentionReason.storagePressure));
+    }
+  });
+
   test('test_EARS_STORE_10_importance_is_unavailable_until_defined', () {
     final plan = policy.plan(
       snapshot: _snapshot(),
