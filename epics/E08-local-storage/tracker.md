@@ -993,7 +993,26 @@ worth a single owned fix at the executor boundary (chunking on the
 *consumer* side, where B03's fix already lives) rather than a fourth
 per-caller rediscovery.
 
-**Remaining:** `E08-B03`'s round-2 review (in progress), `E08-B07`
-(blocked on `E08-B03`). **Carried past this epic's close by design:**
-`E08-T10` and `E08-T11` — the two answered decisions now have named
-owners, which is what `E08-B05` was for.
+**`E08-B03` (P2) — merged, `af02704` (PR #27).** Round-2 review found the
+builder's fix genuinely broader than what round 1 asked for — 4 chunking
+sites, not 2 (the extra 2 were proven necessary by tracing the real
+call order, not opportunistic scope creep) — and re-verified everything
+from round 1 still held at real scale: atomicity proven with a
+40,000-id, ~80-chunk, 3-table forced-rollback probe (nothing survived
+partially); a full end-to-end scenario (40k deletable + 500 skipped +
+1000 out-of-group + a same-id cross-kind stats row) reproduced exactly
+the original bug's premise and confirmed correct selective cleanup; all
+four fixes independently falsified one at a time. 794/794 confirmed
+post-merge, `flutter analyze` clean.
+
+**`E08-B07` (P2) — unblocked, ready for its second attempt.** Now that
+`E08-B03`'s chunking has landed, this fix can proceed: extend its
+regression test past a single page count to an id count above SQLite's
+~32,766 bind-variable limit (the current 1500-item test cannot catch
+the class of defect its own round-1 review found), and re-verify against
+the now-chunked `RetentionExecutor`.
+
+**Remaining:** `E08-B07`'s re-verified fix and review. **Carried past
+this epic's close by design:** `E08-T10` and `E08-T11` — the two
+answered decisions now have named owners, which is what `E08-B05` was
+for.
