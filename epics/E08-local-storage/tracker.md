@@ -38,7 +38,7 @@ content by default).
 | E08-T03 | Access-frequency signals | backend | S | should | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `222c6dd` (PR #19) |
 | E08-T04 | Smart Mode — the eight-factor plan | backend | M | must | T01, T02, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `77f0505` (PR #20) |
 | E08-T05 | Manual policies + mode selection | backend | S | should | T01, T02 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `1c54ecc` (PR #21) |
-| E08-T06 | Retention execution + decision log + wiring | backend | M | must | T04, T05 | round 1 CHANGES · builder (sonnet) → reviewer (opus) · fix in progress (PR #22) |
+| E08-T06 | Retention execution + decision log + wiring | backend | M | must | T04, T05 | round 1 CHANGES → round 2 APPROVE (substance) · blocked on CI-only `flutter analyze` fix (PR #22) |
 | E08-T07 | Design gap pass | docs | M | must | — | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `a94e483` (PR #16) |
 | E08-T08 | Dashboard Local Storage card | frontend | M | must | T06, T07 | todo — blocked on 🧍 `design_contract_approval` GAP-024/025 |
 | E08-T09 | Storage settings screen | frontend | M | should | T05, T06, T07 | **prospective — not sharded** |
@@ -478,3 +478,56 @@ F4 (fix or explicitly defer).** Reviewer's framing: "deletion safety
 itself — the part that is unrecoverable if wrong — I could not break, and
 I tried hard to." The remaining issues are integrity-of-the-audit-trail
 bugs, not data-loss bugs.
+
+### E08-T06 — 2026-09-02 — 📋 **APPROVE** round 2, substance (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5) — merge held on a CI-only fix
+
+- **F1's per-group atomicity fix independently verified with probes the
+  builder never ran, not the builder's own tests.** Reviewer forced the
+  *decision-row write itself* to fail (not the delete) and confirmed the
+  delete rolls back — durable proof the transaction is real, not
+  cosmetic, traced through drift's zone-based engine resolution.
+  **Found the pre-fix bug was worse than round 1 reported**: the original
+  code had no try/catch around the delete loop at all, so a mid-pass
+  failure crashed the whole retention pass, not just mislogged one group.
+  Confirmed a failing group's transaction rollback does not abort
+  processing of *other* groups in the same pass (3-group probe: 2
+  correctly deleted+logged, 1 correctly survives+logged skipped).
+  Falsified by reverting to the pre-fix shape — two tests fail for the
+  right reason.
+- **F2's sentinel fix verified, plus a positive check the reviewer added
+  on their own**: confirmed a genuine Smart-Mode pass with real candidate
+  groups that get correctly skipped by the mode guard is NOT confused
+  with the zero-candidate sentinel case — different code path, group's
+  own `categoryKey` preserved, never the `'none'` sentinel.
+- **F3 mostly fixed**; one sub-clause in the corrected comment is itself
+  slightly inaccurate (timer scheduling timing), but the comment's actual
+  safety conclusion is correct — non-blocking, cosmetic.
+- **F4 verified**: `ObservabilityService.instance.logError(...)` genuinely
+  called, failure direction unchanged and still safe.
+- **All of round 1's deletion-safety properties re-verified from
+  scratch after this round's refactor**, not assumed to still hold —
+  delivery-state guard, relay-payload guard (confirmed genuine
+  defense-in-depth: a second layer catches it even with the first
+  disabled), Smart-Mode-never-message (re-confirmed live through the new
+  per-group path), restart-safe throttle, composition-root wiring,
+  tick-failure isolation, unchanged tick semantics.
+- **suite: 775/775**, `flutter analyze` clean **on the reviewer's local
+  toolchain** — but CI (a newer Flutter version) failed on a real,
+  version-sensitive lint the local run didn't catch:
+  `unawaited_return_in_try_block` on `bindings.dart:199` (F4's own fix —
+  `return file.length();` inside a try-block without `await`, which
+  means an async failure from that call escapes the local `catch`
+  entirely, defeating F4's purpose). **Genuine correctness bug, not a
+  style nit** — routed back to the same implementer for a one-line
+  `await` fix; does not require a third full review round.
+- One non-blocking finding recorded for the epic's bug sweep: the
+  transactional-atomicity claim itself (§2's "logged before it happens,
+  in the same transaction") has no direct regression test in the
+  deliverable's own suite — only the reviewer's manual probe caught it.
+  A drop-in test (a `StorageDecisionLog` subclass throwing on `outcome:
+  applied`, asserting the message row survives) is available for T08 or
+  the sweep to add.
+
+**Approved in substance; merge held until the CI-only `flutter analyze`
+fix lands** (does not need a third review round per the reviewer's own
+framing — a one-line fix inside already-approved code).
