@@ -31,3 +31,49 @@ automatically for matching tasks (see `index.yaml`).
 - status: promoted-to-rule(design-fidelity) — see `agent/skills/design-
   fidelity/SKILL.md` Rules §5, promoted 2026-08-27 via `skills/retro`,
   🧍 `retro_promotions` gate approved by human.
+
+## L-design-002 — the shared design-probe fixture never seeds a group conversation, so the design-fidelity gate has been structurally blind to every group-bearing screen since it was built, and the gap was flagged three times without anyone owning the fix
+- date: 2026-09-02 | source: E07 retro — flagged first by `E07-T08`'s own
+  reviewer (2026-09-02), again unprompted by `E07-B01`'s reviewer on a
+  separate task days later, and named explicitly in `E07-T08`'s own §4 as
+  a carried-forward item ("whichever task next owns `design/tools`/`test/
+  design/design_probe_test.dart` should seed a group fixture")
+- situation: `E07-T08` built the Conversations screen's real "Groups"
+  section (closing `GAP-006`) and `E07-B01` fixed a live bug in how a
+  group row's tap behaves — both are group-bearing changes to a
+  design-contracted screen, and both hit the same 21.1% (12/57) gate
+  score, independently confirmed byte-identical before and after each
+  diff. Neither task's reviewer treated this as a defect in the shipped
+  UI (correctly — see `L-frontend-001`'s 2026-09-02 addendum) — but
+  neither could the gate actually see the feature either task built,
+  because `test/design/design_probe_test.dart`'s shared fixture seeds
+  zero groups. The design-fidelity gate has been rule-2's enforcement
+  mechanism for this screen since `GAP-006` first opened, and it has been
+  unable to measure this screen's group behavior at all, in three
+  separate task reviews, without ever becoming a task of its own.
+- root cause: this is the same shape `L-process-008` already named for
+  mid-epic carried-forward observations — a correct, dated, attributed
+  finding sitting in the right place (a task's §4, an epic tracker) with
+  no dispatcher reading it before the *next* task starts. Here the
+  carrier is a design gap specifically: `skills/design-fidelity` has no
+  step that asks "does the shared probe fixture actually exercise what
+  this task is about to build," so a fixture gap discovered by one task's
+  reviewer has no mechanism forcing the very next task touching the same
+  screen to close it, even when that next task (`E07-B01`) is a two-line
+  fix away from being able to.
+- fix applied: none yet — both tasks correctly disclosed the limitation
+  rather than routing around it, but the fixture itself is still unfixed
+  as of this retro. Systemic fix proposed: `skills/design-fidelity` should
+  require, at the point a design-contracted screen gains a new displayed
+  data shape (a new conversation kind, a new row type), that the shared
+  probe fixture is updated in the same task or an explicitly-scoped
+  follow-up is opened — not left as prose in a §4 for an indefinite future
+  reader.
+- recurrence: 3 (the original `GAP-006`/`E07-T08` finding, `E07-B01`'s
+  independent re-discovery, and the still-open carried-forward note itself
+  counted separately since three different reviewers/readers hit the same
+  wall without any of them being positioned to fix it)
+- status: promoted-to-rule — `agent/skills/design-fidelity/SKILL.md` (new
+  rule: a task widening a design-contracted screen's displayed data shape
+  must update the shared probe fixture or open a named follow-up task),
+  2026-09-02 via `skills/retro`, 🧍 `retro_promotions` ⏳ awaiting human.

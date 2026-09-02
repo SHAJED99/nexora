@@ -66,6 +66,15 @@ def _statuses():
 ORDER = _statuses()
 
 
+# L-process-001: an unparseable frontmatter block used to only print a soft
+# ⚠ warning and return {}, so --validate's downstream symptom was a
+# misleading "missing traces_to"/"unknown status" on every field, never the
+# real "frontmatter failed to parse" cause. Collected here so validate() can
+# raise it as its own hard error, in addition to the warning printed at parse
+# time (kept for anyone tailing --next/--status directly).
+_BAD_FRONTMATTER = []
+
+
 def frontmatter(path):
     try:
         text = open(path, encoding="utf-8").read()
@@ -78,7 +87,9 @@ def frontmatter(path):
         data = yaml.safe_load(m.group(1)) or {}
         return data if isinstance(data, dict) else {}
     except yaml.YAMLError as e:
-        print(f"harness: ⚠ bad frontmatter in {os.path.relpath(path, ROOT)}: {e}", file=sys.stderr)
+        rel = os.path.relpath(path, ROOT)
+        print(f"harness: ⚠ bad frontmatter in {rel}: {e}", file=sys.stderr)
+        _BAD_FRONTMATTER.append((rel, str(e)))
         return {}
 
 
@@ -104,6 +115,18 @@ def load():
 
 def validate(epics, tasks):
     errs = []
+    # L-process-001, promoted to a hook at recurrence 2 (this repeated in two
+    # different epics, on two different fields, and the softness of the
+    # original warning is exactly why nobody acted on it either time): a
+    # frontmatter parse failure is a hard --validate error on its own, named
+    # honestly as a parse failure, not left to surface as whatever downstream
+    # field happens to look missing once yaml.safe_load silently returned {}.
+    for rel, err in _BAD_FRONTMATTER:
+        errs.append(f"{rel}: frontmatter FAILED TO PARSE ({err}) — this is a "
+                     f"YAML syntax error (commonly an unquoted colon inside a "
+                     f"free-text value like review_outcome/executed_by), not a "
+                     f"missing field. Every field below reads as absent until "
+                     f"this is fixed.")
     # Epic-level depends_on was neither validated nor honoured: an epic could
     # declare depends_on a nonexistent epic with no error, and its tasks
     # dispatched while the epic it depended on was still todo.

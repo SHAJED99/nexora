@@ -1,7 +1,7 @@
 ---
 id: E07
 title: Groups & Voice Calls
-status: todo
+status: done
 type: feature
 priority: { moscow: should, wsjf: 2.1 }
 depends_on: [E06]

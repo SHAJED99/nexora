@@ -84,6 +84,16 @@ tracker Review log, back to the SAME implementer (they have the context).
 stamps `reviewed_at`/`reviewed_by`/`review_outcome`, removes the worktree,
 stamps metrics. The human flips `done` → `verified` in batches.
 
+**`reviewed_by` must LEAD with a model string from `harness.yaml`'s
+`review_routing.models`, always** — even a disclosed rate-limit-deviation
+review (the orchestrator reviewing directly instead of dispatching) needs
+the actual model identifier first, e.g. `claude-sonnet-5 (direct, rate-limit
+deviation — see Run log for full disclosure)`, never free prose alone
+(`"orchestrator (independent re-verification...)"`). `make health`'s H5
+check can only confirm rule 5 held by finding a declared model name
+somewhere in the field — full disclosure for a human reader belongs in the
+Run log, not instead of the model name in this field (L-process-010).
+
 **Second rejection of the same task** → escalate to the planner. Two rounds on
 one task is a specification problem wearing a coding problem's clothes; a third
 round of the same conversation won't fix it.

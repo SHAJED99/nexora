@@ -22,6 +22,7 @@ import glob
 import json
 import os
 import re
+import subprocess
 import sys
 
 # This module prints ✓ · → and friends. On Windows the default console
@@ -189,6 +190,28 @@ def check_masks():
 
 
 # ── H3 · retros actually happen ───────────────────────────────────────────────
+def _epic_branch_merged_to_development(eid):
+    # L-process-013: epic.md's own status: field is not a reliable signal —
+    # nothing forces it to flip before a merge happens, so an epic can reach
+    # `development` with its mandatory retro never run while this check still
+    # reads epic.md as "todo" and stays silent (E07's exact miss). Ask git
+    # directly instead: is the epic branch actually an ancestor of
+    # development? That can't be defeated by a stale frontmatter field.
+    branch = f"epic_{eid[1:]}" if eid.startswith("E") and eid[1:].isdigit() else None
+    if not branch:
+        return False
+    try:
+        subprocess.run(["git", "rev-parse", "--verify", "--quiet", branch],
+                        cwd=ROOT, capture_output=True, check=True)
+        subprocess.run(["git", "rev-parse", "--verify", "--quiet", "development"],
+                        cwd=ROOT, capture_output=True, check=True)
+        result = subprocess.run(["git", "merge-base", "--is-ancestor", branch, "development"],
+                                 cwd=ROOT, capture_output=True)
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def check_retros():
     r = Result("H3", "completed epics have retros")
     r.fix = ("Run skills/retro on the epic. Without it, recurrence never climbs, nothing is\n"
@@ -197,8 +220,15 @@ def check_retros():
     for ep in sorted(glob.glob(os.path.join(ROOT, "epics", "E*", "epic.md"))):
         fm, _ = frontmatter(ep)
         d = os.path.dirname(ep)
-        if str(fm.get("status")) in DONE and not os.path.exists(os.path.join(d, "retro.md")):
-            r.flag("fail", f"{fm.get('id', os.path.basename(d))} is {fm.get('status')} with no retro.md")
+        eid = fm.get("id", os.path.basename(d))
+        has_retro = os.path.exists(os.path.join(d, "retro.md"))
+        if str(fm.get("status")) in DONE and not has_retro:
+            r.flag("fail", f"{eid} is {fm.get('status')} with no retro.md")
+        elif not has_retro and _epic_branch_merged_to_development(str(eid)):
+            r.flag("fail", f"{eid}'s branch is already merged into development "
+                            f"with no retro.md, regardless of epic.md's status: "
+                            f"'{fm.get('status')}' field (L-process-013 — a stale "
+                            f"status: field must not be able to hide a skipped retro)")
     return r
 
 
@@ -208,7 +238,13 @@ def check_fences():
     r.fix = ("Fill §4 'What this task does NOT do' with the tempting-but-wrong moves THIS\n"
              "  task invites. An agent with an empty fence fills the space with its own\n"
              "  judgement, and its judgement is not the plan.")
-    HEAD = re.compile(r"^##\s*4\.\s*What this task does NOT do.*$", re.M | re.I)
+    # A feature task's fence is titled "## 4. What this task does NOT do";
+    # a bug task's is "## What this fix does NOT do" (skills/bug-sweep's own
+    # convention, established by L-process-009's fix) — no "4." numeral,
+    # "fix" not "task". The original regex only matched the first form, so
+    # every correctly-written bug-file fence read as absent. Found while
+    # investigating an E07-B02/B03 false positive during the E07 retro.
+    HEAD = re.compile(r"^##\s*(?:4\.\s*)?What this (?:task|fix) does NOT do.*$", re.M | re.I)
     for fm, body in tasks():
         if str(fm.get("status")) in ("done", "verified"):
             continue
@@ -282,8 +318,16 @@ def check_lesson_promotion():
             if not block.strip().startswith("## L-"):
                 continue
             title = block.splitlines()[0][3:].strip()
-            rec = re.search(r"recurrence:\s*(\d+)", block)
-            st = re.search(r"status:\s*(.+)", block)
+            # Anchor to the actual frontmatter-style field lines
+            # ("- recurrence: N", "- status: ..."), not any occurrence of
+            # these words inside prose — a lesson's own narrative can
+            # legitimately say `status: blocked` mid-sentence (e.g.
+            # describing a bug file's frontmatter) and that used to win
+            # over the real field below it, since re.search took the
+            # first match anywhere in the block. Found dogfooding this
+            # exact check while writing E07's retro lessons.
+            rec = re.search(r"^-\s*recurrence:\s*(\d+)", block, re.M)
+            st = re.search(r"^-\s*status:\s*(.+)", block, re.M)
             rec = int(rec.group(1)) if rec else 1
             st = (st.group(1).split("#")[0].strip() if st else "lesson")
             if rec >= 2 and not st.startswith("promoted"):
