@@ -32,6 +32,21 @@ E07" written into it.)
 > which is the reading of PTT itself. The gate line above is left **as the
 > human set it** — an agent does not re-open it and does not re-clear it.
 
+> **E08 sharding pass, 2026-09-02.** Four new entries — **GAP-024 ·
+> GAP-025 · GAP-026 · GAP-027** — record the local-storage gap pass. All
+> four are 🟡 **proposed and not approved**: every `approved by:` line is
+> deliberately bare (`L-process-002`), and two of them (GAP-026's
+> denominator, GAP-027's export) carry **no proposal at all**, only named
+> forks, because both would otherwise write a number or a scope the spec
+> does not contain. `E08-T07` writes the derived contract
+> `design/screens/settings-storage.md` against GAP-024/GAP-025;
+> **`E08-T08` does not build until the human clears these, and `E08-T09`
+> (the Storage screen itself) is not even sharded yet — rule 2 forbids a
+> frontend task pointing at a contract that does not exist, and
+> `scheduler.py --validate` enforces it.** The gate line above is left
+> **as the human set it** —
+> an agent does not re-open it and does not re-clear it.
+
 **Clearance history**
 - ✅ cleared by human on 2026-08-26 — the original 7-screen contract
   extraction + gap pass, per Q-DESIGN-001 in `spec/questions.md`.
@@ -1018,6 +1033,107 @@ and that is the strongest single argument for this disposition.**
 - **supersedes:** `GAP-017` — **by reference, unedited.** GAP-017's
   `superseded by:` line is deliberately left as its author wrote it; the
   pointer that matters is this one.
+
+<!-- ── E08 (Local Storage & Management) gap pass — added at E08 task-sharding,
+     2026-09-02. These four are NOT approved. Every `approved by:` line below
+     is deliberately empty (`L-process-002`). `E08-T07` writes the derived
+     contract these describe; `E08-T08` and `E08-T09` are gated on the
+     human clearing them. The gate line at the top of this file is left
+     exactly as the human set it — an agent does not re-open it and does
+     not re-clear it (the practice this file already records twice). ── -->
+
+## GAP-024 — settings, the "Storage" row has no destination screen
+- **status:** 🟡 proposed
+- **screen:** settings (`design/screens/settings.md`) → new derived contract
+  `design/screens/settings-storage.md`
+- **spec:** FR-STORE-004 (the user chooses Smart Mode / older-than-X-days /
+  over-X-MB) and FR-STORE-007 (the decisions the active policy made, with
+  reasons). Both need a real surface; the design draws only the menu row.
+- **design shows:** elements 29-30 — icon `sd_storage`, heading `Storage`,
+  subtitle `Local cache, message retention, export`. A tappable row that
+  implies a destination, with no destination drawn anywhere in the source.
+- **derived from:** exactly the shape `GAP-005` was approved with for the
+  Privacy & Security row — a design pass produces the sub-screen contract
+  first, then a task builds from it. Primitives come from `settings.md`
+  (frame, row fill/border, heading + body typography, icon backdrop) and
+  `devices.md` (a list of rows with trailing metadata); the usage summary
+  reuses `dashboard.md`'s Local Storage card typography.
+- **proposal:** `E08-T07` writes `design/screens/settings-storage.md` as a
+  `source: derived` contract containing: the three-mode selector, the two
+  manual-policy parameter inputs with their validation error state, the
+  measured usage summary, and the decision-explanation list. **No
+  "Clean Now", no apply-now, no destructive affordance** — FR-STORE-006
+  says the user does not need to press one, and this screen must not
+  reintroduce it by the back door. Route `/settings/storage`; every other
+  settings row keeps its existing behaviour untouched.
+- **approved by:**
+- **built:** not built — `E08-T07` writes the contract, `E08-T09` builds it
+
+## GAP-025 — dashboard, the storage warning has no expanded state
+- **status:** 🟡 proposed
+- **screen:** dashboard (`design/screens/dashboard.md`)
+- **spec:** FR-STORE-007 — "when a storage warning is expanded, the system
+  shall show the specific decisions the active policy made and explain
+  why". The design draws the collapsed card only.
+- **design shows:** elements 15-18 — `Local Storage`, `45% used`,
+  `warning`, `Smart Mode - Older than 10 days`. Nothing drawn is expanded,
+  and nothing drawn is a destination.
+- **derived from:** the card's own measured frame and typography, extended
+  downward in the pattern BRD §22's worked example describes (a category
+  list — label, byte figure, one-line reason — then a "Why" summary). Body
+  text uses the card's existing `rgb(70,69,85)` 12px w500 (element 18); the
+  category labels reuse the card heading's scale one step down. No new
+  token, no new geometry.
+- **proposal:** tapping the card toggles an expansion **in place** — not a
+  navigation, not a dialog. The expansion lists one row per category from
+  the latest decision pass with its real measured bytes and its reason
+  string, followed by the "Why" summary sentence. Expanding runs nothing,
+  applies nothing and deletes nothing (EARS-STORE-2).
+- **approved by:**
+- **built:** not built — `E08-T07` contracts it, `E08-T08` builds it
+
+## GAP-026 — dashboard, `45% used` has no denominator, and no copy exists for that
+- **status:** 🟡 proposed — **fork, no proposal** (`OQ-E08-1`)
+- **screen:** dashboard (`design/screens/dashboard.md`)
+- **spec:** FR-STORE-006, NFR-SCALE-001 *(needs number)*
+- **design shows:** `45% used` (element 16) — a percentage, which requires a
+  total to divide by.
+- **derived from:** nothing. `GAP-011` already recorded that no quota exists
+  "anywhere in this schema or spec", and `dashboard_controller.dart` has
+  carried `isMeasured: false` ever since rather than fabricate one. E08
+  measures the numerator honestly (`E08-T02`) and still has no denominator.
+- **the fork (a product decision, not a design one):** (a) a device-volume
+  free-space reading, which needs a platform measurement Dart has no API
+  for — reachable via Pigeon under ADR-0004 with **no new dependency**;
+  (b) a user-set app storage budget with a human-supplied default, and the
+  percentage computed against it; (c) no percentage at all — the card
+  renders its real measured byte total, and the measured string `45% used`
+  becomes a **disclosed deviation** with this entry as its reason.
+- **no proposal is offered**, deliberately: every option here writes a
+  number or a mechanism the spec does not contain, and `NFR-SCALE-001`'s
+  missing number is exactly what `OQ-E08-1`/`OQ-E08-2` put to the human.
+  Until it is answered, `E08-T08` ships option (c) and discloses it.
+- **approved by:**
+- **built:** not built
+
+## GAP-027 — settings, the Storage row promises "export" and no requirement asks for it
+- **status:** 🟡 proposed — **fork, no proposal** (`OQ-E08-T07-1`)
+- **screen:** settings (`design/screens/settings.md`)
+- **spec:** none — and that is the finding. `FR-STORE-001..007` cover
+  storage, lifecycle, warnings and explanations. **No id anywhere requires
+  an export.** The word appears only in a subtitle the design drew.
+- **design shows:** element 30's subtitle, `Local cache, message retention,
+  export`.
+- **derived from:** nothing — a subtitle is not a specification, and
+  building an export flow from one would be inventing scope from copy
+  (this file's own rule: "a gap cites a spec id. No id → it's an idea").
+- **the fork:** (a) export is real and needs an SRS amendment plus its own
+  task, routed through `skills/change-impact`; (b) export is not v1 scope
+  and the subtitle is a disclosed copy deviation on the settings row; (c)
+  the subtitle stays as measured and the Storage screen simply has no
+  export control, with this entry as the record of why.
+- **approved by:**
+- **built:** not built
 
 ## The usual suspects
 
