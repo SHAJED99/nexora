@@ -1,22 +1,27 @@
 # E08 · Local Storage & Management · Progress
 
-**Status:** `E08-T01`–`E08-T07` all merged, reviewed APPROVE. `E08-T06`
+**Status:** **all 8 sharded tasks merged, reviewed APPROVE.** `E08-T06`
 (the only code path that permanently deletes user data, ADR-0005's
-no-server-copy) survived the epic's highest-scrutiny review across 2
-rounds — deletion safety itself was never broken by falsification. 🧍
-`design_contract_approval` for `GAP-024`…`GAP-027` cleared by the human,
-2026-09-02. `E08-T08` (dashboard card) round 1 came back CHANGES — a real
-S2 bug (the explanation surface reads only in-memory state and is dead on
-relaunch within the 6-hour throttle window, the common case) — fix in
-progress. ·
+no-server-copy) and `E08-T08` (the dashboard card) both survived
+multi-round adversarial review — real bugs found and fixed in both, none
+of them data-loss bugs. Build-complete; ready for the epic-level bug
+sweep, then the human `verified` gate and merge to `development`. ·
 **Started:** 2026-09-02 ·
-**Completed:** — · **Progress:** 7/8 sharded (+1 prospective)
+**Completed:** — · **Progress:** 8/8 sharded (+1 prospective)
 
-**Still open, non-blocking:** 🟡 `OQ-E08-T05-1` (`E08-T05.md`) — the
-`overSizeMb` item-fetch callback has no paging control; must be answered
-before any `overSizeMb` plan is applied in production with >500 items in
-one kind (currently unreachable — no device in this build has that much
-stored data yet, but worth clearing before it becomes reachable).
+**Still open, non-blocking, for the bug sweep or a future task to pick
+up:**
+- 🟡 `OQ-E08-T05-1` (`E08-T05.md`) — the `overSizeMb` item-fetch callback
+  has no paging control; must be answered before any `overSizeMb` plan is
+  applied in production with >500 items in one kind (currently
+  unreachable — no device in this build has that much stored data yet).
+- 🟡 `OQ-E08-T08-2` (`E08-T08.md`) — the shared design-probe dumper's
+  `InkWell`-swallowing limitation (`L-frontend-001`'s known category) now
+  confirmed hitting **both** dashboard cards (Network Status and Local
+  Storage), not just this task's own. Root cause, evidence, and a proposed
+  fix shape are recorded in the task file — judged complete enough for a
+  future task to act on without rediscovery. Do not reshape either card's
+  `InkWell` to work around it.
 
 **Cleared 2026-09-02:** `analyze_report` (human resolved all 6 OQs at
 sharding), `db_schema_migration` (`OQ-E08-T01-1`, human approved T01's
@@ -35,7 +40,7 @@ content by default).
 | E08-T05 | Manual policies + mode selection | backend | S | should | T01, T02 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `1c54ecc` (PR #21) |
 | E08-T06 | Retention execution + decision log + wiring | backend | M | must | T04, T05 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE → CI-fix APPROVE · squash-merged `48f51e3` (PR #22) |
 | E08-T07 | Design gap pass | docs | M | must | — | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `a94e483` (PR #16) |
-| E08-T08 | Dashboard Local Storage card | frontend | M | must | T06, T07 | round 1 CHANGES · builder-ui (sonnet) → reviewer (opus) · fix in progress (PR #23) |
+| E08-T08 | Dashboard Local Storage card | frontend | M | must | T06, T07 | done · builder-ui (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `ece088f` (PR #23) |
 | E08-T09 | Storage settings screen | frontend | M | should | T05, T06, T07 | **prospective — not sharded** |
 
 **Why T09 has no task file yet:** rule 2. Its `design_contract:` would be
@@ -161,6 +166,16 @@ exact section for eight tasks with no reader.)_
   worth adding at the epic sweep or whenever `retention_executor.dart` is
   next touched, so this property stays proven by the suite, not only by
   a one-time manual review probe.
+
+- **2026-09-02 · E08-T08 round-2 review · a skipped-for-other-reasons row
+  still renders under "Will remove:" on the log-fallback path (advisory,
+  S4 — for the epic sweep).** E.g. a group skipped by the undelivered-
+  message guard (`retention_executor.dart:230`) — not by the structural
+  Smart-Mode/relay exclusions the card's filter already handles. Judged
+  correct, not a defect: those messages genuinely become removable once
+  delivered, and the live-plan path has the identical behavior (not a new
+  divergence this task introduced). Worth a second look at this seam
+  during the sweep, not a fix owed by T08.
 
 ## Event log (append-only)
 - 2026-08-26 E08 drafted during Wave 1 epic-breakdown; deferred to a later wave.
@@ -595,3 +610,69 @@ on both runs before merge (`33640096635`, `33640103226`).
 **Routed back to the same implementer for F1 (required, with a
 relaunch-simulation regression test), F2 (required), F3 (fix or
 explicitly scope a follow-up + correct the Run log).**
+
+### E08-T08 — 2026-09-02 — 📋 **APPROVE** round 2 (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+
+- **F1's durable-log fallback: verified with probes the reviewer wrote
+  beyond the builder's own tests**, each with an explicit precondition
+  proving the assertion isn't vacuous. Specifically confirmed the exact
+  "false Smart-Mode-will-delete-your-messages" warning this task's
+  design exists to prevent is **not** resurrected via the log-read path —
+  the most important thing to check, since a bug here would recreate the
+  epic's central safety property through a different code path. All five
+  row-exclusion filters (applied-outcome, relay, smart-mode messages,
+  zero-candidate sentinel, plus category-key mapping fidelity between
+  `SmartModePolicy`/`ManualPolicy` and the log reader) independently
+  falsified — each one's removal breaks a targeted assertion.
+- **F2's structural affordance test verified**, including an
+  anti-false-positive check the builder hadn't run: an unrelated button
+  added to a *different* card on the same screen does not trip the test,
+  confirming correct subtree scoping (not an over-broad check that would
+  false-positive on unrelated future changes).
+- **F3's probe-blindness claim independently confirmed** (Network Status
+  card equally blind, not something this task introduced), and the
+  scoped-out `OQ-E08-T08-2` follow-up judged complete enough to act on
+  without rediscovery (one clarifying note added on the proposed fix
+  shape, since the blocking element is the `InkWell`'s own
+  framework-internal child, not an author-authored nested interactive).
+- **suite: 782/782**, `flutter analyze` clean; design-verify score
+  confirmed byte-identical to round 1 (structurally guaranteed — this
+  round touched only the data-loading path, not the widget tree).
+- **Scope confirmed clean**: shared probe-dumper file untouched, as
+  required. Two disclosed `files:` fence gaps from round 1 (a path
+  segment omission, one untracked test file) backfilled by the
+  orchestrator post-merge for the record — not scope creep, just a
+  sharding-time typo.
+- One non-blocking observation recorded above for the epic sweep.
+
+**Ready to squash-merge — done.** Squash-merged to `epic_08` as `ece088f`
+(PR #23).
+
+---
+
+## E08 build-complete, 2026-09-02
+
+**All 8 sharded tasks done, reviewed APPROVE, squash-merged.** 782/782
+tests, `flutter analyze` clean (re-verified locally post-merge). Two
+tasks (`E08-T06`, `E08-T08`) required a second review round; both
+findings in both cases were real defects (never a data-loss bug in T06's
+case — the epic's central safety property — and a real but
+non-catastrophic dead-feature bug in T08's case), and both were caught
+because reviewers falsified claims independently rather than trusting
+green test suites at face value.
+
+**Next per `AGENTS.md`: the epic-level bug sweep** (`skills/bug-sweep`),
+then the human `verified` gate, then merge to `development`. Starting
+checklist for the sweep, from this epic's own review history:
+- `OQ-E08-T05-1` (item-fetch paging gap, `E08-T05`)
+- `OQ-E08-T08-2` (probe-dumper `InkWell` blindness, `E08-T08`)
+- The missing atomicity regression test for `retention_executor.dart`
+  (`E08-T06` round-2 carried-forward)
+- The skipped-for-other-reasons row rendering under "Will remove:"
+  (`E08-T08` round-2 carried-forward)
+- `OQ-E08-5` (FR-STORE-002/003 have no owner — recorded at sharding,
+  still true)
+- Re-check whether `L-process-011`/`L-process-012`'s promoted rules
+  (bug-file `files:` fence + `status:` value) actually held for this
+  epic's own sharded tasks, not just future bug files — a light
+  self-check, not expected to find anything.
