@@ -48,6 +48,7 @@ import 'package:nexora/core/crypto/crypto_failures.dart';
 import 'package:nexora/core/crypto/crypto_stub.dart';
 import 'package:nexora/core/messaging/delivery_ack.dart';
 import 'package:nexora/core/messaging/prekey_exchange.dart';
+import 'package:nexora/core/storage/storage_access_recorder.dart';
 import 'package:nexora/features/messaging/data/conversation_repository.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/messaging/domain/message.dart';
@@ -96,11 +97,13 @@ class ChatController extends GetxController {
     required PrekeyExchange sessions,
     required CryptoService crypto,
     required DeliveryAckService acks,
+    StorageAccessRecorder? recorder,
   })  : _repo = repo, // ignore: prefer_initializing_formals
         _send = send, // ignore: prefer_initializing_formals
         _sessions = sessions, // ignore: prefer_initializing_formals
         _crypto = crypto, // ignore: prefer_initializing_formals
-        _acks = acks; // ignore: prefer_initializing_formals
+        _acks = acks, // ignore: prefer_initializing_formals
+        _recorder = recorder; // ignore: prefer_initializing_formals
 
   final String conversationId;
   final ConversationRepository _repo;
@@ -108,6 +111,14 @@ class ChatController extends GetxController {
   final PrekeyExchange _sessions;
   final CryptoService _crypto;
   final DeliveryAckService _acks;
+
+  /// Access-frequency signal writer (E08-T03, `FR-STORE-005`) — optional,
+  /// defaulting to `null` (a no-op), because wiring a real instance in
+  /// production is `chat_binding.dart`'s job and that file is outside this
+  /// task's `files:` fence (task §6 Risks: "make the recorder an optional
+  /// named parameter defaulting to a no-op, not to widen the fence"). Every
+  /// call site below is `_recorder?.…` for exactly that reason.
+  final StorageAccessRecorder? _recorder;
 
   /// This device's own id. The task's own §5 contract signature carries no
   /// separate `selfDeviceId`/`stack` parameter (unlike
@@ -167,6 +178,10 @@ class ChatController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    // Conversation opened — an access signal even if nothing is ever
+    // scrolled (task §2/§3; `E08-T03`'s own `recordConversationOpened`
+    // doc).
+    _recorder?.recordConversationOpened(conversationId);
     _subscription = _repo.watchConversation(conversationId).listen(
       _onMessages,
       onError: (Object _, StackTrace _) {
@@ -180,6 +195,11 @@ class ChatController extends GetxController {
   void onClose() {
     unawaited(_subscription?.cancel());
     _subscription = null;
+    // Flushes any coalesced access signals still pending in the recorder's
+    // debounce window — this controller is disposed on route pop, and an
+    // un-flushed window would otherwise lose the last few accesses
+    // (E08-T03 task §6 Risks).
+    unawaited(_recorder?.dispose());
     super.onClose();
   }
 
@@ -385,9 +405,15 @@ class ChatController extends GetxController {
 
   /// Read-receipt hook (T08) — a no-op while `kReadReceiptsEnabled` is
   /// false (`OQ-E06-T08-1`); wired now so enabling it later is one constant
-  /// (task §5 contract).
+  /// (task §5 contract). Also the access-frequency signal call site
+  /// (E08-T03 task §2/§3): a message actually rendered, not merely queried.
+  /// The recorder call is additive and independent of the ack — a recorder
+  /// failure must never break `markRead` (E08-T03 task §4), which is why it
+  /// is a separate, non-throwing, un-awaited call rather than anything
+  /// chained onto `_acks.markRead`.
   void onMessageDisplayed(String messageId) {
     unawaited(_acks.markRead(messageId));
+    _recorder?.recordAccess(StorageItemKind.message, messageId);
   }
 
   /// Decrypts [row]'s ciphertext for display only (NFR-SEC-001). Returns
