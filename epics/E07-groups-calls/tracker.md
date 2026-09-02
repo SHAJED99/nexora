@@ -1,10 +1,12 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** build-complete — all 14 tasks merged to `epic_07`. Awaiting
-the epic bug sweep, then the human `verified` gate and merge to
-`development`. ·
+**Status:** bug sweep complete — 4 bugs found (`E07-B01`..`B04`), none
+fixed yet. **`E07-B01` is S2 and live in the shipped app** (tapping a
+group row opens the 1:1 chat screen, which cannot send/receive group
+messages). 🧍 Awaiting the human `bug_priorities` gate on all 4 before any
+fix work, the human `verified` gate, and merge to `development`. ·
 **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 14/14
+**Completed:** — · **Progress:** 14/14 tasks + 0/4 bugs
 
 ## Tasks
 
@@ -89,20 +91,28 @@ Do not "fix" the DAG by removing it.
 
 ## Blocked / Frozen
 
-- **`E07-T01` — 🧍 `OQ-E07-4` (schema migration 12 → 13).** Rule 3 names
-  schema migrations as a human call. The DDL and three forks are on the
-  task file. **The whole group vertical T02…T08 sits behind this.**
-- **`E07-T13` — 🔴 `OQ-E07-3` (real-time media transport).** The human's
-  own parking condition for PTT (`IMP-001`). T13 must not start while
-  `OQ-E07-3` is open.
-- **Prospective media path, and the four prospective UI tasks** — blocked
-  on `OQ-E07-3` and on 🧍 `design_contract_approval` for GAP-018…GAP-022
-  respectively. Neither is sharded; see `epic.md` §Tasks.
+**Stale as of 2026-09-02 (flagged by the bug-sweep reviewer, reconciled by
+the orchestrator):** `OQ-E07-4` and `OQ-E07-3` both resolved 2026-08-31
+(see §Gates) and T13 is `done` — nothing below is actually frozen on them
+any more. Left visible for history; do not delete.
 
-**Not blocked, contrary to first appearance:** `E07-T09`, `E07-T10` and
-`E07-T11` are dispatchable without `OQ-E07-3` — the epic is sliced so the
-call session, priority and migration *control* are independent of the media
-transport, with `NullCallMediaTransport` as the honest v1 seam.
+- ~~`E07-T01` — 🧍 `OQ-E07-4` (schema migration 12 → 13).~~ Resolved
+  2026-08-31, all 3 advisories accepted. T01 merged.
+- ~~`E07-T13` — 🔴 `OQ-E07-3` (real-time media transport).~~ Resolved
+  2026-08-31. T13 merged.
+- **Prospective media path, and the four prospective UI tasks** — still
+  genuinely unsharded/not-started (this is a "not yet planned" state, not
+  a block): the media path needs its own task-sharding pass now that
+  `OQ-E07-3` names a direction, and the four UI tasks need
+  `design_contract_approval` on GAP-018…GAP-022, which is ✅ cleared per
+  §Gates. Neither is sharded yet; see `epic.md` §Tasks.
+
+**Currently blocked, added by the 2026-09-02 bug sweep:** all fix work on
+`E07-B01`..`B04` is blocked on the 🧍 `bug_priorities` human gate (rule 3)
+— severities are the reviewer's call, priorities are the human's, and
+`E07-B01`/`B03` additionally carry a protocol/product-shape decision the
+human must make before a fix direction exists (see each bug file's
+"Proposed fix direction").
 
 ## Gates
 
@@ -112,6 +122,7 @@ transport, with `NullCallMediaTransport` as the honest v1 seam.
 | 🧍 `OQ-E07-4` — schema migration | ✅ resolved 2026-08-31 — all 3 advisories accepted; unblocks T01→T08 |
 | 🟢 `OQ-E07-3` — real-time media transport | ✅ resolved 2026-08-31 — (a) datagram audio over mesh, (c) named fallback; unblocks T13 + prospective media path |
 | 🧍 `design_contract_approval` | ✅ cleared by human, 2026-08-31 — GAP-018…GAP-022 (`design/gaps.md`) |
+| 🧍 `bug_priorities` | ⏳ AWAITING HUMAN — 4 bugs from the 2026-09-02 sweep (`E07-B01` S2 live, `B02`/`B03`/`B04` S3), severities set by the reviewer, priorities and (for B01/B03) fix direction are the human's call — blocks all bug fix work and the epic `verified` gate |
 
 ## Review log
 (date · task · reviewer model · outcome · design gate %)
