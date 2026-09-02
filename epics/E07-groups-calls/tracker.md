@@ -1,10 +1,10 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** bug sweep complete — 4 bugs found (`E07-B01`..`B04`), none
-fixed yet. **`E07-B01` is S2 and live in the shipped app** (tapping a
-group row opens the 1:1 chat screen, which cannot send/receive group
-messages). 🧍 Awaiting the human `bug_priorities` gate on all 4 before any
-fix work, the human `verified` gate, and merge to `development`. ·
+**Status:** `bug_priorities` gate cleared 2026-09-02. Dispatching fixes for
+`E07-B01` (P1, S2, live in the shipped app) and `E07-B04` (P2). `E07-B02`/
+`E07-B03` (P3) deferred to the prospective real-time media-path task.
+Awaiting the human `verified` gate and merge to `development` once B01/B04
+land and re-review. ·
 **Started:** 2026-08-31 ·
 **Completed:** — · **Progress:** 14/14 tasks + 0/4 bugs
 
@@ -122,7 +122,7 @@ human must make before a fix direction exists (see each bug file's
 | 🧍 `OQ-E07-4` — schema migration | ✅ resolved 2026-08-31 — all 3 advisories accepted; unblocks T01→T08 |
 | 🟢 `OQ-E07-3` — real-time media transport | ✅ resolved 2026-08-31 — (a) datagram audio over mesh, (c) named fallback; unblocks T13 + prospective media path |
 | 🧍 `design_contract_approval` | ✅ cleared by human, 2026-08-31 — GAP-018…GAP-022 (`design/gaps.md`) |
-| 🧍 `bug_priorities` | ⏳ AWAITING HUMAN — 4 bugs from the 2026-09-02 sweep (`E07-B01` S2 live, `B02`/`B03`/`B04` S3), severities set by the reviewer, priorities and (for B01/B03) fix direction are the human's call — blocks all bug fix work and the epic `verified` gate |
+| 🧍 `bug_priorities` | ✅ cleared by human, 2026-09-02 — `E07-B01` P1 (fix direction: gate the tap, option (a)), `E07-B04` P2 (fix now), `E07-B02`/`E07-B03` P3 (deferred to the prospective real-time media-path task) |
 
 ## Review log
 (date · task · reviewer model · outcome · design gate %)
