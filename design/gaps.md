@@ -47,6 +47,25 @@ E07" written into it.)
 > **as the human set it** —
 > an agent does not re-open it and does not re-clear it.
 
+> **`E08-T07` follow-up, 2026-09-02.** The derived design work `GAP-024` and
+> `GAP-025` describe now exists: the new contract
+> `design/screens/settings-storage.md`, and a hand-written
+> **§Derived state — `warning-expanded`** appended below the generated marker
+> in `design/screens/dashboard.md` (whose generated tables are
+> **byte-unchanged** — `design-fidelity` rule 1). Each records what it derived
+> and from where, introduces **no new token, colour, radius or glyph**, and
+> contains **no `Clean Now`, apply-now, confirmation or delete affordance** —
+> `FR-STORE-006` says the user does not need to press one, and that
+> prohibition is written into the contracts, not only into the task. **All
+> four entries below remain 🟡 proposed: every `approved by:` line is
+> deliberately bare** (`L-process-002`), `GAP-026` and `GAP-027` still carry
+> **no proposal at all**, and one further fork — how a category with an
+> `Unavailable` factor is worded — is named in both contracts' §Open with no
+> advisory. `OQ-E08-1`'s answer is *recorded* under `GAP-026` as a citation;
+> recording a human's answer is not signing their approval line. The gate line
+> above is left **as the human set it** — an agent does not re-open it and
+> does not re-clear it.
+
 **Clearance history**
 - ✅ cleared by human on 2026-08-26 — the original 7-screen contract
   extraction + gap pass, per Q-DESIGN-001 in `spec/questions.md`.
@@ -1068,6 +1087,23 @@ and that is the strongest single argument for this disposition.**
   settings row keeps its existing behaviour untouched.
 - **approved by:**
 - **built:** not built — `E08-T07` writes the contract, `E08-T09` builds it
+- **contract written (`E08-T07`, 2026-09-02):**
+  `design/screens/settings-storage.md` now exists and records what it derived
+  and from where. It is written **against** this still-unapproved proposal and
+  is **not** independently approved by an agent (`L-process-002`). Four things
+  it deliberately did not decide are listed in its §Open: the
+  unavailable-factor wording, `GAP-027`'s export, `GAP-026`'s denominator, and
+  the screen-as-detail-vs-menu reading. Three derivation decisions are recorded
+  in its §Derivation boundary rather than left to look like drift: geometry is
+  borrowed from `devices.md` while **colour comes from `settings.md`** (devices
+  is a light screen, settings a dark one, and `rgb(11, 28, 48)` is text on one
+  and page fill on the other); `settings.md` element 6's title colour
+  `rgb(234, 241, 255)` is **not** used because it is absent from settings' own
+  measured token table (`group-manage.md`'s `r4px` reasoning); and the
+  parameter field is built from the parent's own card surface rather than
+  `conversations.md`'s light-filled search field. **No new token, no new glyph,
+  no new radius.** No golden exists and the screen cannot be gated by
+  `make design-verify` until `E08-T09` builds it.
 
 ## GAP-025 — dashboard, the storage warning has no expanded state
 - **status:** 🟡 proposed
@@ -1091,6 +1127,22 @@ and that is the strongest single argument for this disposition.**
   applies nothing and deletes nothing (EARS-STORE-2).
 - **approved by:**
 - **built:** not built — `E08-T07` contracts it, `E08-T08` builds it
+- **contract written (`E08-T07`, 2026-09-02):** appended to
+  `design/screens/dashboard.md` as a hand-written
+  **§Derived state — `warning-expanded`**, below the generated marker. **The
+  generated tables are byte-unchanged** (`design-fidelity` rule 1). Written
+  against this still-unapproved proposal; not agent-approved
+  (`L-process-002`). Recorded there rather than assumed: **no expand/collapse
+  glyph is drawn** — `GAP-012` already established on this same screen that a
+  card becomes a tap target without acquiring a chevron, and `dashboard.md`
+  measures no expand glyph; and the expansion **cannot be gated by
+  `make design-verify SCREEN=dashboard`** until the build exists and a second
+  golden is extracted, so `E08-T08`'s reviewer should expect the state to be
+  invisible to the gate. Two of the collapsed card's measured strings will
+  report as **copy findings** once E08 feeds it — `45% used` (→ `GAP-026`) and
+  `Smart Mode - Older than 10 days` (→ `GAP-011`'s approved resolution, which
+  made it static "until E08 builds the retention policy it describes").
+  Neither is a silent rewrite.
 
 ## GAP-026 — dashboard, `45% used` has no denominator, and no copy exists for that
 - **status:** 🟡 proposed — **fork, no proposal** (`OQ-E08-1`)
@@ -1113,6 +1165,19 @@ and that is the strongest single argument for this disposition.**
   number or a mechanism the spec does not contain, and `NFR-SCALE-001`'s
   missing number is exactly what `OQ-E08-1`/`OQ-E08-2` put to the human.
   Until it is answered, `E08-T08` ships option (c) and discloses it.
+- **`OQ-E08-1` has since been answered — recorded here, not decided here
+  (`E08-T07`, 2026-09-02).** The human answered on **2026-09-02**: **(a)**
+  device free space via a Pigeon channel feeds Smart Mode's *pressure factor*,
+  **+ (c)** the dashboard card shows the **real measured byte total, no
+  fabricated percentage**; **(b)** a user-set budget is *deferred, not decided
+  against* — `storage_policy_settings.budget_bytes` stays NULL and ready. The
+  full text is in `epics/E08-local-storage/epic.md` §Open Questions. **This
+  entry's own `approved by:` line stays bare**: answering the question is not
+  the same act as signing off this gap entry, and an agent does not perform the
+  second on the strength of the first (`L-process-002`). Both
+  `design/screens/dashboard.md` §Derived state and
+  `design/screens/settings-storage.md` render bytes accordingly and cite this
+  entry as the deviation's reason.
 - **approved by:**
 - **built:** not built
 
@@ -1132,6 +1197,13 @@ and that is the strongest single argument for this disposition.**
   and the subtitle is a disclosed copy deviation on the settings row; (c)
   the subtitle stays as measured and the Storage screen simply has no
   export control, with this entry as the record of why.
+- **still open after `E08-T07` (2026-09-02):** the contract
+  `design/screens/settings-storage.md` was written with **no export element of
+  any kind**, and says so in its §Derivation boundary 7 and §Open 2 rather than
+  leaving the absence to be read as an oversight. **No proposal is added here**
+  — all three forks above stand exactly as written, and picking one is the
+  human's (`OQ-E08-T07-1`). Until then the Storage screen simply has no export
+  control and `settings.md` element 31's subtitle stays as measured.
 - **approved by:**
 - **built:** not built
 
