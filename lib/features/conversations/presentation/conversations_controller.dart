@@ -373,8 +373,37 @@ class ConversationsController extends GetxController {
   /// Navigates to `/chat/<conversationId>` (T11's route). Until T11 adds it,
   /// `Get.toNamed` on an unregistered route is a documented GetX no-op — the
   /// tap is inert, per this task's §3/§Deviations, not a new destination.
+  ///
+  /// **Personal rows only** (E07-B01). `ChatController` (E06-T11) is built
+  /// exclusively for a 1:1 conversation — its `_peerDeviceId` getter treats
+  /// `conversationId` as a Signal peer device id, and `send()` runs a 1:1
+  /// X3DH handshake + Double-Ratchet send against whatever id it is given.
+  /// A group id reaching this method drives that handshake against a group
+  /// id instead — undecryptable bubbles in, a non-retryable send failure
+  /// out (E07-B01's repro). [openGroup] is the Groups-section's own tap
+  /// handler and must never call this.
   void openConversation(String conversationId) {
     Get.toNamed('/chat/$conversationId');
+  }
+
+  /// Groups-section row tap (E07-B01, human-chosen fix direction (a): gate
+  /// the tap rather than route a group id into the 1:1-only
+  /// `ChatController`).
+  ///
+  /// The real group thread view is GAP-020, still gated on `OQ-E07-13`
+  /// (whether a blocked member's messages are dropped, hidden or
+  /// placeholdered inside a group thread — a product decision this bug does
+  /// not make). Until GAP-020 ships, a group row stays non-navigating and
+  /// acknowledges the tap honestly instead of failing silently or
+  /// misrouting — the SAME "no built destination yet" SnackBar primitive
+  /// `SettingsController.openRow` already established for exactly this
+  /// situation, reused rather than inventing a second affordance.
+  void openGroup(String name) {
+    Get.snackbar(
+      name,
+      'Coming soon',
+      snackPosition: SnackPosition.BOTTOM,
+    );
   }
 
   /// Decrypts [summary]'s last message for display only (task §2). Returns
