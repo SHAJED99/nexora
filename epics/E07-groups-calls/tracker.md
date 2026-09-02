@@ -731,6 +731,144 @@ checklist rather than a blank search — in particular:
   `connectPeer`/`recordLinkMeasurement` wiring in cross-stack test
   helpers) — worth confirming across the epic's other two-stack tests.
 
+### Sweep run — 2026-09-02 — reviewer (`claude-opus-5`), independent
+
+**Baseline on `epic_07` @ `e5c796b`, re-run by the sweep itself, not taken
+from any PR body:** `flutter analyze` clean (`No issues found!`),
+`flutter test` **697/697 green**.
+
+**Four defects → `E07-B01`…`E07-B04`.** All four carry a §4 scope fence
+(`L-process-009`). 🧍 **`bug_priorities` gate ⏳ AWAITING HUMAN** — every
+`priority.p` is deliberately left unset; severity below is the reviewer's,
+priority is not.
+
+| Bug | Severity | What | Live today? |
+|---|---|---|---|
+| `E07-B01` | **S2** | A group row's tap lands on the 1:1 chat screen, which can neither render nor send a group message; `send()` fails closed but shows the *generic retryable* "Try again" copy | **yes — reachable in the shipped app** |
+| `E07-B02` | S3 | `RoutingEngine._lastProfile` leaks `interactive` into a call's route-failure recovery (the Dashboard's connectivity poll overwrites it) | latent — gated behind `E07-B03` |
+| `E07-B03` | S3 | `CallMigrationController` has no composition-root call site; FR-CALL-003 unreachable at runtime | yes (as an absence) |
+| `E07-B04` | S3 | `group_events.id` = wall-clock µs + **per-instance** counter → duplicate ids across two `GroupRepository` instances; reproducible suite flake | production safe only by single-writer accident |
+
+**Against the starting checklist, item by item:**
+
+1. **`CallMigrationController` unwired (O4) — CONFIRMED REAL → `E07-B03`.**
+   `grep -rn "CallMigrationController(" lib/` returns only the declaration,
+   while `MessagingStack` composes `CallSignaling` (`:368`) and
+   `SendGroupMessageUseCase` (`:353`) right there. **Not** in scope for the
+   sweep to fix, and **not** a copy of `E07-T14`'s fix: this controller is
+   *per-call* (`call_migration_controller.dart:83-86`), so the wiring point
+   is `CallSignaling`'s session lifecycle, not a new stack field. Folded
+   into the media-path task together with O1/O2/O3 and `E07-B02`.
+
+2. **`RoutingEngine._lastProfile` — the recorded direction is NOT a bug;
+   the reverse one is → `E07-B02`.** Proved with the reviewer's own probe
+   rather than by reading. `RelayEngine._attempt` calls
+   `computeRoute(dest, _profile)` at `relay_engine.dart:315` immediately
+   before `onRouteFailure` at `:360`, so a stale `realtime` profile can
+   never survive into a message send — the carried-forward entry's stated
+   direction is unreachable. The **opposite** leak is real and has a
+   concrete trigger: `DashboardController._hasRouteToAnyKnownPeer`
+   (`dashboard_controller.dart:232`) runs `computeRoute(peerId,
+   interactive)` for every known peer on every link-quality event, so a
+   call's `onRouteFailure` recovers under `interactive`. Probe output
+   (realtime prefers `[x, peer]`, interactive prefers `[y, peer]`):
+   `control recovered = [x, peer]` · `with-dashboard-poll = [y, peer]`.
+   **This is a case of a carried-forward observation being recorded
+   accurately as a mechanism but backwards as a consequence** — worth a
+   retro line: the fix is to probe the direction, not just the mechanism.
+
+3. **The three E07-T07 read-model seams — E07-T08 inherited all three
+   SILENTLY.** `E07-T08.md` §4 mentions none of them. All three
+   independently reproduced by probe against the real repository:
+   - *zero-message group is invisible* — `listConversations()` returns `[]`
+     for a group with members but no messages. The group branch drives off
+     the `last_msg` CTE (`conversation_repository.dart:316`).
+   - *a group you were removed from stays listed* — returns
+     `g:kicked … members=1`. The group branch has no self-membership
+     predicate at all, only `g.is_deleted = 0` (`:319-320`).
+   - *no permanent group-burst coalescing test* — the only burst test is
+     `test_EARS_COMM_19_burst_of_ten_inserts_is_coalesced_not_ten_re_reads`
+     (`conversation_repository_test.dart:304`), which bursts the **messages**
+     table. The group-membership burst still exists only in the T07
+     reviewer's scratch probe.
+   None is a defect against T07's own contract, and the first two are
+   swallowed by `E07-B01` (the rows are not usefully tappable regardless);
+   recorded below as follow-ups rather than as bugs.
+
+4. **E07-T11's O1/O2/O3/O4 — ACCURATELY CAPTURED, all four re-verified
+   against source, not restated.** O1: `_awaitMediaLive` subscribes at
+   `call_migration_controller.dart:270`, after `await media.attach` at
+   `:261` — confirmed. O2: `attach(CallSession)`/`detach()`
+   (`call_signaling.dart:361,363`) carry no route, and
+   `session.recordActiveRoute(candidate)` runs only at step 8 *after*
+   `detach()` — confirmed. O3: the `_superseded` early returns at `:262`
+   and `:271` skip the `setActiveRoute(oldRoute)` compensation the other
+   failure paths perform — confirmed. All four carried into `E07-B03` as
+   explicit inputs.
+
+5. **The test-hang pattern does NOT recur.** The two mandatory steps
+   (`connectPeer` + `routingEngine.recordLinkMeasurement`) are real and
+   correctly documented at `group_crypto_service_test.dart:327,439`. Every
+   E07 test that awaits cross-stack *relay* delivery does both
+   (`group_crypto_service`, `group_membership_service`,
+   `send_group_message_use_case`, `group_key_rotation_service`).
+   `call_signaling_test.dart` does `connectPeer` only — **correctly**: 
+   `CallSignaling` falls back to a direct send when `computeRoute` returns
+   null (`call_signaling.dart:898-911`), so it needs no route.
+   `conversations_groups_test.dart` names the helper only in a comment and
+   does no cross-stack delivery. No vacuous pass found.
+
+**Independent findings beyond the checklist:**
+- **`E07-B01` (S2), the sweep's most consequential find** — nothing in the
+  checklist pointed at it. `E07-T08` §3 *instructed* the tap to
+  `/chat/:conversationId`, and `ChatController._peerDeviceId => conversationId`
+  (`chat_controller.dart:122`) makes the destination treat the group id as a
+  peer device id. No task violated its fence; the seam simply belonged to
+  nobody. Probe: the group's rows load but decrypt against the 1:1
+  `CryptoService`, and `send()` fails closed with the *generic retryable*
+  copy — no forged frame, no leak (hence S2, not S1), but a retry
+  instruction that can never succeed.
+- **`E07-B04` (S3)** — root-caused the "intermittent flake in
+  `group_key_rotation_service_test.dart`" that `E07-T11`'s reviewer saw but
+  could not reproduce. Reproduced 2 times in ~35 runs;
+  `UNIQUE constraint failed: group_events.id` on `ge:<µs>-0`, from
+  `group_repository.dart:66`'s per-instance counter.
+- **The design gate cannot see E07's only new UI (S3, follow-up).** The
+  shared `design_probe_test.dart` fixture seeds zero groups, so the
+  conversations probe still renders the empty state and GAP-006's rows are
+  invisible to the gate. Honestly disclosed by `E07-T08`, but it means rule
+  2's gate is inoperative for this epic's frontend output. The gate could
+  **not** be re-run by this sweep (`node design/tools/verify.mjs --screen
+  conversations` → `✗ timed out waiting for http://localhost:3000`; the
+  design source server is not available in this environment), so the last
+  independently-reproduced 21.1% (12/57) stands unchanged and unverified
+  by the sweep — stated as a limitation, not claimed as a pass.
+
+**Checked and clean (non-findings, recorded so they are not re-derived):**
+- **Control-kind slots 1-6 are all distinct** — `prekeyExchange 1`,
+  `deliveryAck 2`, `groupControl 3`, `groupKeyDistribution 4`,
+  `callSignaling 5`, `groupMessage 6`. `E07-T06`'s S1 collision is genuinely
+  resolved.
+- **The `removedAtEpoch IS NULL` discipline** that `E07-T02`'s
+  carried-forward entry demanded of T03/T06 is enforced at every enforcing
+  layer: `group_repository.dart:131,156`, `group_crypto_service.dart:285-286`,
+  `group_key_rotation_service.dart:154-155`,
+  `send_group_message_use_case.dart:166`. Discharged.
+- `kControlKindGroupMessage` is still the only handler self-registered
+  inside `InboundPipeline` (`inbound_pipeline.dart:225`) rather than from
+  `messaging_stack.dart` — the S4 consistency item from T06→T14 remains
+  open and unchanged. Still not worth its own bug task.
+
+**Docs inconsistency for the orchestrator (not a bug task):** §Blocked /
+Frozen still says the prospective media path and `E07-T13` are blocked on
+`OQ-E07-3`, but §Gates records `OQ-E07-3` ✅ resolved 2026-08-31 and T13 is
+`done`. §Blocked needs reconciling before the epic→`development` PR.
+
+**Gate status:** `P1/P2 = 0` cannot yet be asserted — the 🧍 `bug_priorities`
+gate is unrun, and `E07-B01` is an S2 that is live in the app. Per
+`skills/bug-sweep` §4 the epic→`development` PR does not open until the
+human has priced these four.
+
 ## Event log (append-only)
 - 2026-08-26 E07 drafted during Wave 1 epic-breakdown; deferred to a later wave.
 - 2026-08-30 PTT re-homed from E06 to E07 by human decision (`IMP-001`,
