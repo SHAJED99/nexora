@@ -884,7 +884,27 @@ frontmatter fix, six bug files and this section.
   🧍 `delete_over_50_lines` gate directly (64 raw deleted lines, 28
   executable, net file size −22, every deleted line grep-proven dead) —
   human-approved before merge.
-- **`E08-B03` (P2) — PR #27 open, review in progress.**
+- **`E08-B03` (P2) — round 1 CHANGES on PR #27.** Everything else the
+  builder built was independently verified correct (genuine
+  per-group-transaction atomicity, proven by the reviewer's own fault
+  injection producing exactly the "worse than the original bug" state
+  when hoisted outside the transaction; correct scoping via adversarial
+  cross-kind/multi-state probes; the paging interaction with E08-B01/B02
+  confirmed structurally sound, not just claimed). **One real regression
+  found**: the bounded `_accessStats` query uses `itemId.isIn(ids)` with
+  no chunking — past SQLite's ~32,766-bind-variable limit (reachable on
+  any device with enough stored history, the exact scenario this bug
+  exists to help), the query throws, `storage_decisions` never gets a
+  row, the 6-hour throttle never advances, and every subsequent pass
+  repeats the identical silent failure forever. Confirmed a genuine
+  regression (the pre-fix `SELECT *` code doesn't hit this limit).
+  Routed back to the same implementer for chunked-query fixes in both
+  `_accessStats` and `_deleteBookkeeping` (same ceiling, same fix
+  shape). One additional pre-existing, out-of-fence observation
+  recorded for the sweep: `deleteMessageItems` itself has the identical
+  `isIn` ceiling and pre-dates this PR.
+- **`E08-B07` (P2) — dispatched.**
+- **`E08-B05` (P2) — dispatched to the planner.**
 
-**Remaining:** `E08-B03`'s review, `E08-B05` (unstarted), `E08-B07`
-(newly filed, needs its own `bug_priorities` entry).
+**Remaining:** `E08-B03`'s fix (round 2), `E08-B05` and `E08-B07`'s
+review verdicts.
