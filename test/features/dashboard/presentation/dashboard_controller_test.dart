@@ -746,4 +746,83 @@ void main() {
     expect(controller.storageUsage.value.warningActive, isFalse);
     controller.onClose();
   });
+
+  // E08-B06: the SAME pass, read two different ways, must not disagree.
+  // Pre-fix, `_loadStorageUsage` preferred `StorageManager.latestPlan` (set
+  // BEFORE `RetentionExecutor.apply` runs, and never cleared or replaced
+  // after) whenever it was non-null -- so in the SAME process as an
+  // applying pass, the in-process read still listed the just-deleted
+  // category under "Will remove:", while a fresh `StorageManager`/
+  // controller over the same db (the relaunch path) correctly read the
+  // durable log and showed nothing. This reproduces the divergence
+  // directly: one `sessionOneStorage` runs an applying manual-mode pass,
+  // then its OWN controller's `storageExplanation` (`latestPlan` still
+  // set, non-null, in that same instance) is compared against a second
+  // controller built over a genuinely fresh `StorageManager` on the same
+  // database. Both must produce the same `storageExplanation`.
+  test(
+      'test_E08_B06_in_process_read_matches_relaunch_read_after_an_applying_pass',
+      () async {
+    final old = DateTime.now()
+        .subtract(const Duration(days: 100))
+        .millisecondsSinceEpoch;
+    await _insertMessage(
+      db,
+      id: 'm-old-divergence-1',
+      conversationId: 'device-a',
+      senderDeviceId: 'device-a',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(List<int>.filled(256, 7)),
+      createdAt: old,
+    );
+
+    final sessionOneStorage = _newStorageManager(db);
+    await sessionOneStorage.settings
+        .setMode(StorageMode.olderThanDays, olderThanDays: 30);
+    // apply: true (the default) -- the message is genuinely deleted and
+    // logged `outcome: applied`, and `sessionOneStorage.latestPlan` is left
+    // set to the plan as it was SCORED (pre-apply), never cleared or
+    // replaced afterward (`storage_manager.dart`'s `runPass`).
+    await sessionOneStorage.runPass(
+      nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    expect(sessionOneStorage.latestPlan.value, isNotNull);
+
+    // The in-process read: a controller built over the SAME storage
+    // instance that just ran the applying pass.
+    final inProcessController =
+        newController(storageManager: sessionOneStorage);
+    inProcessController.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    // The relaunch read: a genuinely fresh `StorageManager` over the same
+    // database -- `latestPlan` starts `null`, exactly as after a real
+    // process restart.
+    final freshStorage = _newStorageManager(db);
+    expect(freshStorage.latestPlan.value, isNull);
+    final relaunchController = newController(storageManager: freshStorage);
+    relaunchController.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    // Both paths read the same underlying database and the same completed
+    // pass -- they must agree. Today's code (pre-fix) fails this: the
+    // in-process read lists the just-deleted "messages" category under
+    // "Will remove:" (`warningActive: true`), while the relaunch read
+    // correctly shows nothing.
+    expect(
+      inProcessController.storageExplanation.map((d) => d.categoryKey),
+      relaunchController.storageExplanation.map((d) => d.categoryKey),
+    );
+    expect(
+      inProcessController.storageUsage.value.warningActive,
+      relaunchController.storageUsage.value.warningActive,
+    );
+    // Pin the actually-correct shape too, not just "the two agree": the
+    // applied category must not appear on EITHER path.
+    expect(inProcessController.storageExplanation, isEmpty);
+    expect(inProcessController.storageUsage.value.warningActive, isFalse);
+
+    inProcessController.onClose();
+    relaunchController.onClose();
+  });
 }
