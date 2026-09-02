@@ -385,9 +385,29 @@ class RetentionExecutor {
   /// not merely asserted (`skills/implement`'s falsification discipline;
   /// task §6 risk note: "falsification ... is the expected review style for
   /// this task specifically").
+  ///
+  /// **Chunked (F1, round-1 review -- upgraded from "carried-forward
+  /// observation, not fixed here" to fixed in this same round)**:
+  /// `t.id.isIn(ids)` has the identical SQLite bind-variable ceiling
+  /// `_deleteBookkeeping`'s own F1 fix documents (>32766 ids throws
+  /// `SqliteException(1): too many SQL variables`). Originally flagged as
+  /// lower-urgency and left for the epic sweep -- a group this large would
+  /// throw inside `apply()`'s per-group `db.transaction()`, roll back, and
+  /// get a truthful `skipped` row (never a false `applied`), so no
+  /// *correctness* gap. But it turned out to be a completeness gap this
+  /// same round: this method runs BEFORE [_deleteBookkeeping] in
+  /// [_deleteGroup], so an unchunked `deleteMessageItems` would throw first
+  /// for a real large Manual Mode group -- meaning `_deleteBookkeeping`'s
+  /// own chunking fix could never actually be exercised end-to-end for the
+  /// "heavy user" scenario this whole bug exists to help (a >32766-message
+  /// group could never be deleted at all, bookkeeping or not). Fixed with
+  /// the same [_chunked]/[_deleteChunkSize] this file's other two F1 fixes
+  /// already use.
   Future<void> deleteMessageItems(List<String> ids) async {
     if (ids.isEmpty) return;
-    await (db.delete(db.messages)..where((t) => t.id.isIn(ids))).go();
+    for (final chunk in _chunked(ids, _deleteChunkSize)) {
+      await (db.delete(db.messages)..where((t) => t.id.isIn(chunk))).go();
+    }
   }
 
   /// Deletes the `delivery_states` and `storage_item_stats` rows that key
@@ -408,18 +428,51 @@ class RetentionExecutor {
   /// and requires the 🧍 `db_schema_migration` gate, not cleared for this
   /// fix -- task file §"Fix direction"/"What this fix does NOT do") -- this
   /// is an explicit, application-level delete instead.
+  ///
+  /// **Round-1 review fix (F1)**: `t.messageId.isIn(ids)`/`t.itemId.isIn(ids)`
+  /// each bind one SQL variable per id. A single `RetentionCandidateGroup`
+  /// can hold as many ids as a Manual Mode `olderThanDays`/`overSizeMb` plan
+  /// selected (unbounded, same root cause `_accessStats`'s own F1 fix
+  /// documents), so past SQLite's `SQLITE_MAX_VARIABLE_NUMBER` (32766 in
+  /// this build) an unchunked delete throws `SqliteException(1): too many
+  /// SQL variables` -- which, inside `apply()`'s per-group
+  /// `db.transaction()`, would roll back the whole group (including the
+  /// `messages` delete that already succeeded) and get logged `skipped`
+  /// with a misleading "delete failed" reason instead of actually reclaiming
+  /// the space. Chunked into [_deleteChunkSize]-sized batches so neither
+  /// delete ever binds more variables than that.
   Future<void> _deleteBookkeeping(List<String> ids) async {
     if (ids.isEmpty) return;
-    await (db.delete(db.deliveryStates)
-          ..where((t) => t.messageId.isIn(ids)))
-        .go();
-    await (db.delete(db.storageItemStats)
-          ..where(
-            (t) =>
-                t.itemKind.equals(StorageItemKind.message.name) &
-                t.itemId.isIn(ids),
-          ))
-        .go();
+    for (final chunk in _chunked(ids, _deleteChunkSize)) {
+      await (db.delete(db.deliveryStates)
+            ..where((t) => t.messageId.isIn(chunk)))
+          .go();
+      await (db.delete(db.storageItemStats)
+            ..where(
+              (t) =>
+                  t.itemKind.equals(StorageItemKind.message.name) &
+                  t.itemId.isIn(chunk),
+            ))
+          .go();
+    }
+  }
+
+  /// Batch size for every chunked `isIn(...)` query in this file (F1, round-1
+  /// review) -- comfortably under SQLite's `SQLITE_MAX_VARIABLE_NUMBER`
+  /// (32766 in this build) and matching `StorageManager._itemsPageSize`, the
+  /// same constant this executor's caller already pages items with.
+  static const int _deleteChunkSize = 500;
+
+  /// Splits [ids] into consecutive batches of at most [size] -- used
+  /// wherever this file builds an `isIn(...)` query over a caller-supplied,
+  /// potentially unbounded id list (F1, round-1 review).
+  static Iterable<List<String>> _chunked(List<String> ids, int size) sync* {
+    for (var offset = 0; offset < ids.length; offset += size) {
+      yield ids.sublist(
+        offset,
+        offset + size > ids.length ? ids.length : offset + size,
+      );
+    }
   }
 
   /// Splits a `message` candidate group into the slice that is actually
@@ -437,39 +490,49 @@ class RetentionExecutor {
       return const _DeliverySplit(deletable: null, undelivered: null);
     }
 
-    // Raw SQL, matching `StorageInventory`'s own `LENGTH(ciphertext)`
-    // pattern (E08-T02) -- a real measured byte length, never estimated.
-    final placeholders =
-        List.filled(group.itemIds.length, '?').join(', ');
-    final rows = await db
-        .customSelect(
-          'SELECT id, delivery_state, LENGTH(ciphertext) AS bytes '
-          'FROM messages WHERE id IN ($placeholders)',
-          variables: [
-            for (final id in group.itemIds) Variable.withString(id),
-          ],
-          readsFrom: {db.messages},
-        )
-        .get();
-
     final deletableIds = <String>[];
     final deletableBytesById = <String, int>{};
     final undeliveredIds = <String>[];
     final undeliveredBytesById = <String, int>{};
-
     final found = <String>{};
-    for (final row in rows) {
-      final id = row.read<String>('id');
-      found.add(id);
-      final bytes = row.read<int>('bytes');
-      final stateName = row.read<String>('delivery_state');
-      final state = DeliveryState.values.byName(stateName);
-      if (!_undeliveredStates.contains(state)) {
-        deletableIds.add(id);
-        deletableBytesById[id] = bytes;
-      } else {
-        undeliveredIds.add(id);
-        undeliveredBytesById[id] = bytes;
+
+    // Round-1 review F1 (carried into this pre-existing raw-SQL query,
+    // found while proving `_deleteBookkeeping`'s own F1 fix end-to-end):
+    // one `?` placeholder per id means one bound SQL variable per id, same
+    // ceiling as every other `isIn(...)` in this file
+    // (`SQLITE_MAX_VARIABLE_NUMBER`, 32766 in this build). This is called
+    // for EVERY message-kind group `apply()` processes, before either
+    // `deleteMessageItems` or `_deleteBookkeeping` ever run -- so an
+    // unchunked query here would throw before this file's other two F1
+    // fixes ever got a chance to matter, for a real Manual Mode
+    // `olderThanDays`/`overSizeMb` group past the ceiling. Chunked into
+    // [_deleteChunkSize] batches, merged into the same accumulators below.
+    for (final chunk in _chunked(group.itemIds, _deleteChunkSize)) {
+      // Raw SQL, matching `StorageInventory`'s own `LENGTH(ciphertext)`
+      // pattern (E08-T02) -- a real measured byte length, never estimated.
+      final placeholders = List.filled(chunk.length, '?').join(', ');
+      final rows = await db
+          .customSelect(
+            'SELECT id, delivery_state, LENGTH(ciphertext) AS bytes '
+            'FROM messages WHERE id IN ($placeholders)',
+            variables: [for (final id in chunk) Variable.withString(id)],
+            readsFrom: {db.messages},
+          )
+          .get();
+
+      for (final row in rows) {
+        final id = row.read<String>('id');
+        found.add(id);
+        final bytes = row.read<int>('bytes');
+        final stateName = row.read<String>('delivery_state');
+        final state = DeliveryState.values.byName(stateName);
+        if (!_undeliveredStates.contains(state)) {
+          deletableIds.add(id);
+          deletableBytesById[id] = bytes;
+        } else {
+          undeliveredIds.add(id);
+          undeliveredBytesById[id] = bytes;
+        }
       }
     }
     // Any id no longer present in `messages` is not deletable (nothing to

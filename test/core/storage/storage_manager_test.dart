@@ -287,5 +287,78 @@ void main() {
         );
       },
     );
+
+    test(
+      'test_E08_B03_F1_access_stats_chunks_past_the_sqlite_variable_limit',
+      () async {
+        // Round-1 review F1: `_accessStats`'s `t.itemId.isIn(ids)` used to
+        // bind one SQL variable per id in a SINGLE query over the WHOLE
+        // per-kind id set -- and `_allItemsOfKind` (E08-B01/B02) deliberately
+        // pages through a WHOLE kind with no upper bound, so a device with
+        // enough stored history legitimately exceeds SQLite's own
+        // `SQLITE_MAX_VARIABLE_NUMBER` (32766 in this build). The unchunked
+        // code threw `SqliteException(1): too many SQL variables` BEFORE
+        // `log.recordPass` ever ran -- so `storage_decisions` never
+        // advanced, the 6-hour throttle never moved, and (since
+        // `MessagingCoordinator` only counts the failure rather than
+        // crashing) every subsequent pass would repeat the same failure
+        // silently, forever, for exactly the "heavy user" this bug exists
+        // to help. 33,000 (> 32766) is the reviewer's own probe threshold.
+        final chunkedDb = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(chunkedDb.close);
+
+        const n = 33000;
+        final ids = List<String>.generate(
+          n,
+          (i) => 'm-${i.toString().padLeft(6, '0')}',
+        );
+
+        await chunkedDb.batch((batch) {
+          batch.insertAll(chunkedDb.messages, [
+            for (final id in ids)
+              MessagesCompanion.insert(
+                id: id,
+                conversationId: 'conv-1',
+                senderDeviceId: 'device-1',
+                sequenceNumber: 1,
+                ciphertext: _bytes(10),
+                createdAt: 0,
+                deliveryState: DeliveryState.stored.name,
+              ),
+          ]);
+          batch.insertAll(chunkedDb.storageItemStats, [
+            for (final id in ids)
+              StorageItemStatsCompanion.insert(
+                itemKind: StorageItemKind.message.name,
+                itemId: id,
+                lastAccessedAt: const Value(500),
+                accessCount: const Value(1),
+              ),
+          ]);
+        });
+
+        final manager = _buildManager(chunkedDb);
+
+        // Must complete without throwing -- the load-bearing assertion.
+        // `Future.value` immediately below is unreachable if `runPass`
+        // throws; `expect`'s own control flow makes the throw itself the
+        // failure, so no explicit try/catch is needed for this to fail
+        // loudly and for the right reason.
+        final plan = await manager.runPass(
+          nowEpochMs: 200000000000,
+          apply: false,
+        );
+
+        expect(plan, isNotNull);
+        final rows = await chunkedDb.select(chunkedDb.storageDecisions).get();
+        expect(
+          rows.any((r) => r.outcome == DecisionOutcome.planned.name),
+          isTrue,
+          reason: 'the pass must reach log.recordPass -- proof it never '
+              'threw before getting there',
+        );
+      },
+      timeout: const Timeout(Duration(minutes: 3)),
+    );
   });
 }

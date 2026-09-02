@@ -696,6 +696,93 @@ void main() {
     );
 
     test(
+      'test_E08_B03_F1_bookkeeping_cleanup_chunks_past_the_sqlite_variable_'
+      'limit',
+      () async {
+        // Round-1 review F1: `_deleteBookkeeping`'s `isIn(ids)` queries used
+        // to bind one SQL variable per id, in a single query, over the WHOLE
+        // group -- and since `E08-B01`/`E08-B02` deliberately made per-kind
+        // enumeration unbounded, a real device with enough stored history
+        // can hand this executor a group past SQLite's own
+        // `SQLITE_MAX_VARIABLE_NUMBER` (32766 in this build). The unchunked
+        // code threw `SqliteException(1): too many SQL variables` from
+        // inside apply()'s per-group `db.transaction()`, rolling back the
+        // WHOLE group -- including the `messages` delete that had already
+        // succeeded -- and logging a misleading `skipped` "delete failed"
+        // row instead of ever reclaiming the space. 33,000 (> 32766) is the
+        // reviewer's own probe threshold.
+        const n = 33000;
+        final ids = List<String>.generate(
+          n,
+          (i) => 'm-${i.toString().padLeft(6, '0')}',
+        );
+
+        await db.batch((batch) {
+          batch.insertAll(db.messages, [
+            for (final id in ids)
+              MessagesCompanion.insert(
+                id: id,
+                conversationId: 'conv-1',
+                senderDeviceId: 'device-1',
+                sequenceNumber: 1,
+                ciphertext: _bytes(10),
+                createdAt: 1000,
+                deliveryState: DeliveryState.stored.name,
+              ),
+          ]);
+          batch.insertAll(db.deliveryStates, [
+            for (final id in ids)
+              DeliveryStatesCompanion.insert(
+                messageId: id,
+                state: DeliveryState.stored.name,
+                changedAt: 1000,
+              ),
+          ]);
+          batch.insertAll(db.storageItemStats, [
+            for (final id in ids)
+              StorageItemStatsCompanion.insert(
+                itemKind: StorageItemKind.message.name,
+                itemId: id,
+                lastAccessedAt: const Value(1000),
+                accessCount: const Value(1),
+              ),
+          ]);
+        });
+
+        final plan = _plan(
+          mode: StorageMode.olderThanDays.name,
+          groups: [
+            _group(kind: StorageItemKind.message, itemIds: ids, bytes: 10),
+          ],
+        );
+
+        final outcome = await executor.apply(
+          plan,
+          allowedKinds: const <StorageItemKind>{StorageItemKind.message},
+          nowEpochMs: 5000,
+        );
+
+        expect(
+          outcome.appliedGroups,
+          hasLength(1),
+          reason: 'must not throw/roll back past the SQLite bind-variable '
+              'ceiling -- a group this size is exactly the "heavy user" '
+              'scenario this bug exists to help',
+        );
+        expect(outcome.skippedGroups, isEmpty);
+        expect(await db.select(db.messages).get(), isEmpty);
+        expect(
+          await db.select(db.deliveryStates).get(),
+          isEmpty,
+          reason: 'chunked cleanup must still remove every row, not just '
+              'the first chunk',
+        );
+        expect(await db.select(db.storageItemStats).get(), isEmpty);
+      },
+      timeout: const Timeout(Duration(minutes: 3)),
+    );
+
+    test(
       'test_EARS_STORE_13_a_delete_whose_decision_row_fails_to_write_is_'
       'rolled_back',
       () async {

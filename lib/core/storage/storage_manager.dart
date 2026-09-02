@@ -227,30 +227,54 @@ class StorageManager {
   /// query is bounded by exactly the same page-through set the paging fix
   /// already established as "representative", never a full-table scan
   /// sitting downstream of it.
+  ///
+  /// **Round-1 review fix (F1)**: [_allItemsOfKind] deliberately pages
+  /// through a WHOLE kind with no upper bound (the `E08-B01`/`E08-B02` fix
+  /// this file's header already documents) -- so on a device with enough
+  /// stored history, [items] can legitimately exceed SQLite's own
+  /// `SQLITE_MAX_VARIABLE_NUMBER` (32766 in this build). `t.itemId.isIn(ids)`
+  /// binds one variable per id, so a single query over that whole set throws
+  /// `SqliteException(1): too many SQL variables` -- and since that throw
+  /// happens BEFORE `log.recordPass` ever runs, `storage_decisions` never
+  /// advances, the throttle never moves, and (`MessagingCoordinator` only
+  /// counting the failure rather than crashing) every subsequent pass
+  /// repeats the same failure silently, forever, for exactly the "heavy
+  /// user" this bug exists to help. Chunked here into
+  /// [_itemsPageSize]-sized batches (the same constant [_allItemsOfKind]
+  /// already uses, so the query never binds more variables than one page's
+  /// worth) -- each chunk's rows are merged into the same [result] map.
   Future<Map<String, ItemAccessStat>> _accessStats(
     List<StorageItem> items,
   ) async {
     if (items.isEmpty) return const <String, ItemAccessStat>{};
 
-    final idsByKind = <String, Set<String>>{};
+    final idsByKind = <String, List<String>>{};
     for (final item in items) {
-      idsByKind.putIfAbsent(item.kind.name, () => <String>{}).add(item.id);
+      idsByKind.putIfAbsent(item.kind.name, () => <String>[]).add(item.id);
     }
 
     final result = <String, ItemAccessStat>{};
     for (final entry in idsByKind.entries) {
-      final ids = entry.value.toList();
-      if (ids.isEmpty) continue;
-      final rows = await (inventory.db.select(inventory.db.storageItemStats)
-            ..where(
-              (t) => t.itemKind.equals(entry.key) & t.itemId.isIn(ids),
-            ))
-          .get();
-      for (final row in rows) {
-        result['${row.itemKind}:${row.itemId}'] = ItemAccessStat(
-          accessCount: row.accessCount,
-          lastAccessedAtEpochMs: row.lastAccessedAt,
+      final ids = entry.value;
+      for (var offset = 0; offset < ids.length; offset += _itemsPageSize) {
+        final chunk = ids.sublist(
+          offset,
+          offset + _itemsPageSize > ids.length
+              ? ids.length
+              : offset + _itemsPageSize,
         );
+        if (chunk.isEmpty) continue;
+        final rows = await (inventory.db.select(inventory.db.storageItemStats)
+              ..where(
+                (t) => t.itemKind.equals(entry.key) & t.itemId.isIn(chunk),
+              ))
+            .get();
+        for (final row in rows) {
+          result['${row.itemKind}:${row.itemId}'] = ItemAccessStat(
+            accessCount: row.accessCount,
+            lastAccessedAtEpochMs: row.lastAccessedAt,
+          );
+        }
       }
     }
     return result;
