@@ -1,21 +1,16 @@
 # E08 · Local Storage & Management · Progress
 
-**Status:** `E08-T01`, `E08-T02`, `E08-T03`, `E08-T04`, `E08-T05`, `E08-T06`
-and `E08-T07` all merged, reviewed APPROVE. `E08-T06` (the only code path
-that permanently deletes user data, ADR-0005's no-server-copy) survived
-the epic's highest-scrutiny review across 2 rounds — deletion safety
-itself was never broken by falsification; the fixes were both about the
-audit trail's honesty. All 6 open questions from sharding resolved by the
-human 2026-09-02 (see `epic.md` §Open Questions). Only `E08-T08` (frontend)
-remains, blocked on the design gate below. ·
+**Status:** `E08-T01`–`E08-T07` all merged, reviewed APPROVE. `E08-T06`
+(the only code path that permanently deletes user data, ADR-0005's
+no-server-copy) survived the epic's highest-scrutiny review across 2
+rounds — deletion safety itself was never broken by falsification. 🧍
+`design_contract_approval` for `GAP-024`…`GAP-027` cleared by the human,
+2026-09-02. `E08-T08` (dashboard card) round 1 came back CHANGES — a real
+S2 bug (the explanation surface reads only in-memory state and is dead on
+relaunch within the 6-hour throttle window, the common case) — fix in
+progress. ·
 **Started:** 2026-09-02 ·
 **Completed:** — · **Progress:** 7/8 sharded (+1 prospective)
-
-**Remaining gate:**
-- 🧍 `design_contract_approval` for `GAP-024`…`GAP-027` (`design/gaps.md`)
-  — ⏳ AWAITING HUMAN — gates `E08-T08`'s build, and gates `E08-T09` being
-  sharded at all. `E08-T07` produced the contracts; approval of the gap
-  entries themselves is a separate, still-open gate.
 
 **Still open, non-blocking:** 🟡 `OQ-E08-T05-1` (`E08-T05.md`) — the
 `overSizeMb` item-fetch callback has no paging control; must be answered
@@ -40,7 +35,7 @@ content by default).
 | E08-T05 | Manual policies + mode selection | backend | S | should | T01, T02 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `1c54ecc` (PR #21) |
 | E08-T06 | Retention execution + decision log + wiring | backend | M | must | T04, T05 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE → CI-fix APPROVE · squash-merged `48f51e3` (PR #22) |
 | E08-T07 | Design gap pass | docs | M | must | — | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `a94e483` (PR #16) |
-| E08-T08 | Dashboard Local Storage card | frontend | M | must | T06, T07 | todo — blocked on 🧍 `design_contract_approval` GAP-024/025 |
+| E08-T08 | Dashboard Local Storage card | frontend | M | must | T06, T07 | round 1 CHANGES · builder-ui (sonnet) → reviewer (opus) · fix in progress (PR #23) |
 | E08-T09 | Storage settings screen | frontend | M | should | T05, T06, T07 | **prospective — not sharded** |
 
 **Why T09 has no task file yet:** rule 2. Its `design_contract:` would be
@@ -553,3 +548,50 @@ on both runs before merge (`33640096635`, `33640103226`).
 
 **Ready to squash-merge — done.** Squash-merged to `epic_08` as `48f51e3`
 (PR #22). Verified locally post-merge: 775/775, `flutter analyze` clean.
+
+### E08-T08 — 2026-09-02 — 📋 **CHANGES** round 1 (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+
+- **F1 (S2, blocking) — the card never actually reads
+  `StorageDecisionLog.latestPass()`; the explanation surface is dead on
+  relaunch.** `dashboard_controller.dart` reads only the in-memory
+  `_storage.latestPlan.value`. `StorageManager.runPass` returns without
+  touching `latestPlan` whenever the durable throttle window (6 hours,
+  tracked via `storage_decisions.decided_at`) hasn't elapsed — which is
+  the common case, not an edge case. Reviewer's probe: seeded and ran a
+  real pass, then built a **fresh** `StorageManager` over the same DB
+  (simulating an app relaunch) — `latestPlan` stayed null, explanation
+  length 0, despite real decision rows existing in the database. The
+  task's own §2 and the controller's own doc comment both explicitly
+  claim both sources are observed; only one is. **Why the existing test
+  suite didn't catch it**: every test ran `runPass` in the same process
+  immediately before constructing the controller, so `latestPlan` was
+  always warm — never simulating a real relaunch reading the durable log
+  instead.
+- **F2 (S3) — the sole guard on the epic-level `EARS-STORE-2` (no action
+  affordance, ever) is a 4-string denylist, not a structural check.**
+  Falsified: reviewer added a live, functioning "Free up space" button to
+  the card and the existing test still passed.
+- **F3 (S3) — the design gate is structurally blind to the entire card,
+  and the Run log's stated cause for the dashboard score delta is
+  wrong.** The card's elements don't appear in the probe dump at all —
+  cause is the known `InkWell`-swallowing probe limitation
+  (`L-frontend-001`), correctly why the widget itself must NOT be
+  reshaped, but the Run log attributed the score shift to "real
+  data-driven content" instead of this actual mechanism. Since this task
+  explicitly claims to close `L-design-002` (the fixture blindness
+  carry-forward), either the probe gap needs a scoped fix or an
+  explicitly-named follow-up — not left implied-closed while still blind.
+- **Two significant claims independently verified sound, not just
+  trusted**: the `_actionableGroups` filter (hiding message-kind groups
+  from Smart Mode's display, since Smart Mode can never actually delete
+  them) judged correct on the merits — it mirrors the executor's own
+  categorical invariants and hides nothing FR-STORE-007 requires the user
+  to see. The one group-conversation fixture seed confirmed genuinely
+  real (probe dump now contains `Groups`/`Family` content it previously
+  had zero of), not superficial.
+- **suite: 780/780**, `flutter analyze` clean, design-verify numbers
+  for all four fixture-fed screens independently reproduced exactly.
+
+**Routed back to the same implementer for F1 (required, with a
+relaunch-simulation regression test), F2 (required), F3 (fix or
+explicitly scope a follow-up + correct the Run log).**
