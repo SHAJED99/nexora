@@ -181,10 +181,20 @@ void main() {
     expect(controller.groups.map((g) => g.conversationId), ['g:team']);
   });
 
-  // --- Tap navigates to the same /chat/:id route Personal rows use --------
+  // --- E07-B01: tap must NOT navigate to the 1:1-only /chat/:id route -----
+  //
+  // Before this fix, this exact scenario asserted `navigated == ['g:team']`
+  // -- the group row routed straight into `ChatController`, which is built
+  // exclusively for a 1:1 peer id (`_peerDeviceId => conversationId`) and
+  // cannot render or send a group conversation (E07-B01's repro: an
+  // undecryptable-bubble thread and a non-retryable "Could not send this
+  // message. Try again." on send). The human's fix direction (a) -- gate
+  // the tap until the real group thread (GAP-020) ships, still blocked on
+  // `OQ-E07-13` -- means the row must stay on `/conversations` and
+  // acknowledge the tap honestly instead of silently misrouting.
 
   testWidgets(
-      'test_EARS_UI_3_group_row_tap_navigates_to_the_group_conversation',
+      'test_EARS_UI_3_group_row_tap_does_not_navigate_to_the_1to1_chat_screen',
       (tester) async {
     await _insertGroup(
       db,
@@ -234,9 +244,24 @@ void main() {
 
     expect(find.text('Team'), findsOneWidget);
     await tester.tap(find.text('Team'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300)); // let the GetX snackbar overlay animate in.
 
-    expect(navigated, ['g:team']);
+    // Still on /conversations -- `ChatController` (1:1-only) was never
+    // reached with a group id.
+    expect(navigated, isEmpty);
+    expect(Get.currentRoute, '/conversations');
+    expect(find.byType(ConversationsView), findsOneWidget);
+
+    // The tap is acknowledged honestly (the same "not built yet" SnackBar
+    // primitive `SettingsController.openRow` already uses), not silently
+    // swallowed.
+    expect(find.text('Team'), findsWidgets);
+    expect(find.text('Coming soon'), findsOneWidget);
+
+    // Let the snackbar's own auto-dismiss timer finish before the test
+    // ends, so no pending timer trips the framework's teardown check.
+    await tester.pumpAndSettle(const Duration(seconds: 4));
   });
 
   // --- The shared delivery-glyph mapping (GAP-009), not a local switch ----
