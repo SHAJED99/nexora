@@ -1,12 +1,12 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** `bug_priorities` gate cleared 2026-09-02. Dispatching fixes for
-`E07-B01` (P1, S2, live in the shipped app) and `E07-B04` (P2). `E07-B02`/
-`E07-B03` (P3) deferred to the prospective real-time media-path task.
-Awaiting the human `verified` gate and merge to `development` once B01/B04
-land and re-review. ·
+**Status:** `E07-B01` (P1, S2) and `E07-B04` (P2) both fixed, reviewed
+APPROVE, squash-merged (`2ef5467` PR #15, `cff6314` PR #14). `E07-B02`/
+`E07-B03` (P3) correctly deferred to the prospective real-time
+media-path task — not blocking. **P1/P2 = 0.** Ready for the human
+`verified` gate and merge to `development`. ·
 **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 14/14 tasks + 0/4 bugs
+**Completed:** — · **Progress:** 14/14 tasks + 2/4 bugs (2 deferred, not owed)
 
 ## Tasks
 
@@ -2097,3 +2097,104 @@ PR #13 → `epic_07`. **Final task in E07's 14-task shard.**
 - **Whichever task next owns `design/tools`/`test/design/design_probe_test.dart`
   should seed a group fixture** so GAP-006's rows finally become
   gate-visible — currently the gate cannot see this task's own UI at all.
+
+### E07-B01 — 2026-09-02 — 📋 **APPROVE** (reviewer: claude-opus-5; `executed_by`: claude-sonnet-5 ✅ rule 5)
+
+- **scope: in-contract.** Diff confined to the `files: update:` fence (2
+  lib files + the test file + the task file). `lib/core/`,
+  `lib/features/chat/` (`ChatController`), and repository files confirmed
+  **empty** via `git diff --stat`. Option (b) not attempted; `OQ-E07-13`
+  untouched.
+- **fix: gates the tap (human's direction (a)).** `ConversationsController.
+  openGroup(name)` shows `Get.snackbar(name, 'Coming soon', ...)` instead
+  of routing to `/chat/:groupId`. Precedent confirmed genuine, not
+  fabricated — `settings_controller.dart:13-19`'s `openRow` is a
+  character-for-character match.
+- **falsified twice, independently.** (1) Reverted the fix → test fails
+  with `Actual: ['g:team']` (the group id reaching the 1:1 route) — matches
+  the builder's claim. (2) **Reviewer's own probe, beyond the builder's
+  testing:** replaced the fix with a silent no-op (tap does nothing, no
+  snackbar) → test fails on missing "Coming soon" text, proving the
+  *honest*-disabled half of the human's direction is independently
+  load-bearing, not just the non-navigating half. Restored both times,
+  suite green.
+- **design gate: FAIL 21.1% (12/57), proven pre-existing, not a
+  regression.** Reviewer checked out base `d01873a`, regenerated the
+  probe, diffed the full report against the PR head's — **byte-identical**.
+  Known probe-fixture/`InkWell`-swallowing limitation (`L-frontend-001`,
+  `design/gaps.md` GAP-006 note), not this diff's fault, correctly not
+  routed around.
+- **`gaps.md` question resolved:** the interim snackbar traces to
+  human-approved `GAP-020` (`built: not yet — blocked on OQ-E07-13`); not
+  a silent rule-2 invention.
+- **seam check (reviewer's own, beyond the task):** audited both
+  `openConversation` call sites — the other one is provably group-free
+  (`conversations_controller.dart:341,107` partitions/asserts
+  `kind == personal`). No remaining path routes a group id into
+  `ChatController`; the bug is closed, not moved.
+- **suite: 697/697**, `flutter analyze` clean, both run by the reviewer.
+
+**Ready to squash-merge — done.** Squash-merged to `epic_07` as `2ef5467`
+(PR #15).
+
+**Carried forward (non-blocking, for the planner):**
+- `GAP-020`'s `built:` note should record that an interim "Coming soon"
+  snackbar currently sits on the group-row tap and must be removed when
+  the real group thread ships.
+- Minor, pre-existing copy-string drift across "no destination yet"
+  treatments (`(title, 'Coming soon')` in settings/this fix vs.
+  `('Not available', "This isn't available yet.")` in `chat_view.dart` /
+  `dashboard_view.dart`) — same primitive, different copy. Worth a small
+  cleanup ticket, not a defect in this fix.
+
+### E07-B04 — 2026-09-02 — 📋 **APPROVE** (reviewer: claude-opus-5; `executed_by`: claude-sonnet-5 ✅ rule 5)
+
+- **scope: in-contract.** Diff is exactly the 2 files claimed
+  (`lib/features/groups/data/group_repository.dart`,
+  `test/features/groups/data/group_repository_test.dart`), one commit
+  `b660e4c`. Every "does NOT" in the fence verified by name-only diff:
+  no migration/`group_events` column change, `newGroupId()` unchanged,
+  `GroupMembershipService` semantics unchanged, `messaging_stack.dart`
+  untouched, no existing test refactored to hide the bug.
+- **fix: per-instance counter replaced with a 128-bit `Random.secure()`
+  suffix** (`group_repository.dart:79-85`), timestamp prefix kept for
+  ordering only. Confirmed against the Dart SDK source that
+  `Random.secure()` is a genuine CSPRNG, not a seeded PRNG. Consistent
+  with the existing `newGroupId()` precedent in the same file — not a
+  new pattern.
+- **falsified independently.** Reverted `_nextEventId()` to the pre-fix
+  counter verbatim → reproduced the bug report's exact
+  `SqliteException(1555)` signature deterministically (frozen clock at
+  `group_repository_test.dart:373`). Restored, re-ran: 14/14 green.
+- **flake claim: settled by construction, not by test-run count.**
+  Reviewer ran an independent isolated 35-run loop of the originally-flaky
+  `group_key_rotation_service_test.dart` (0 failures) — but the stronger
+  argument is that a post-fix collision on this path is a 128-bit CSPRNG
+  birthday-bound event (~1.5×10⁻²⁷ at a million events), i.e. not
+  reachable regardless of any finite run count. The builder's unverified
+  "resource contention" explanation for their own noisy first batch no
+  longer matters, since the failure mode it was invoked to explain is now
+  provably impossible.
+- **security/crypto lens: no concern.** `group_events.id` is a local
+  Drift primary key only — grepped, no consumer outside the repository
+  and generated code; never serialized to a wire frame or used as a
+  capability token/nonce/key. No hand-rolled crypto.
+- **suite: 698/698**, `flutter analyze` clean, both run by the reviewer.
+
+**Ready to squash-merge — done.** Squash-merged to `epic_07` as `cff6314`
+(PR #14).
+
+**Carried forward (non-blocking, process note):** this bug task's `files:`
+fence shipped with all three lists empty (`create`/`update`/`delete`), so
+scope wasn't mechanically verifiable — judged instead against
+`required_context` + the "does NOT" fence, both satisfied. This is a
+sharding-template gap in the bug-task shape, distinct from the fence
+`L-process-009` already fixed (missing §4, not an empty `files:` list) —
+worth a `make health` check catching an empty `files:` on any bug task.
+Orchestrator has since backfilled the fence on `E07-B04.md` itself for
+the record.
+
+**With `E07-B01` and `E07-B04` both fixed, reviewed APPROVE, and merged,
+and `E07-B02`/`E07-B03` correctly deferred (not blocking), P1/P2 = 0
+across the epic's bug sweep. The `epic_07`→`development` PR gate is
+clear** pending only the human `verified` gate.
