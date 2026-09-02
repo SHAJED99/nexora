@@ -102,7 +102,11 @@ Parallel sets, in order: **{T01, T07}** → **{T02, T03}** → **{T04, T05}** �
     card immediately, gives Smart Mode a real pressure input without
     inventing a ceiling, and leaves `storage_policy_settings.budget_bytes`
     (already in T01's schema, nullable, NULL) as the place (b) lands.
-  - **Status:** 🟡 open · **Answer:** _<empty>_ · **Answered by:** _<human>_
+  - **Status:** 🟢 answered · **Answer:** (a) device free space via Pigeon
+    for the pressure factor, + (c) the dashboard card shows real measured
+    bytes, no fabricated percentage (disclosed as `GAP-026`'s deviation).
+    (b) a user-set budget deferred, not decided against — the schema
+    column stays ready. · **Answered by:** human · **Date:** 2026-09-02
 
 - **OQ-E08-2 — NFR-SCALE-001 has no number, and A-002 does not cover
   storage.** ⚠️ **important** (not blocking: E08-T04 ships its thresholds
@@ -125,7 +129,11 @@ Parallel sets, in order: **{T01, T07}** → **{T02, T03}** → **{T04, T05}** �
     proven" is satisfiable against a documented placeholder; it is not
     satisfiable against an undocumented one, which is the only outcome
     worth blocking over.
-  - **Status:** 🟡 open · **Answer:** _<empty>_ · **Answered by:** _<human>_
+  - **Status:** 🟢 answered · **Answer:** (i) — record a new assumption
+    `A-004` extending A-002's tunable-placeholder shape to storage
+    thresholds, named revisit trigger: when NFR-SCALE-001 gets real
+    numbers via `skills/change-impact`. · **Answered by:** human ·
+    **Date:** 2026-09-02
 
 - **OQ-E08-3 — what is Smart Mode actually permitted to delete?**
   🔴 **blocking** for E08-T06's apply path (the plan, log and wiring are
@@ -156,7 +164,11 @@ Parallel sets, in order: **{T01, T07}** → **{T02, T03}** → **{T04, T05}** �
     conversation history by default. `docs/conventions.md`'s own migration
     rule — never drop user conversation data without an explicit
     human-approved exception — points the same way.
-  - **Status:** 🟡 open · **Answer:** _<empty>_ · **Answered by:** _<human>_
+  - **Status:** 🟢 answered · **Answer:** (a) — Smart Mode's allow-list
+    excludes conversation content entirely; message deletion happens only
+    under a manual policy the user explicitly turns on. Nothing irreversible
+    to conversation history by default. · **Answered by:** human ·
+    **Date:** 2026-09-02
 
 - **OQ-E08-4 — "importance" and "temporary status" are undefined terms.**
   ⚠️ **important** (E08-T04 reports both factors `unavailable` until
@@ -175,7 +187,10 @@ Parallel sets, in order: **{T01, T07}** → **{T02, T03}** → **{T04, T05}** �
   - **Advisory: (a).** It uses data the app already has, needs no schema
     change, and is explainable in one sentence to the user — which is what
     FR-STORE-007 requires of every factor.
-  - **Status:** 🟡 open · **Answer:** _<empty>_ · **Answered by:** _<human>_
+  - **Status:** 🟢 answered · **Answer:** (a) — derive from a Trusted
+    relationship (E02) plus a never-delete rule for undelivered messages.
+    No new UI, no schema column. · **Answered by:** human ·
+    **Date:** 2026-09-02
 
 - **OQ-E08-5 — FR-STORE-002 and FR-STORE-003 have no owner.** ⚠️
   **important** — a traceability finding, not a build blocker.
@@ -193,7 +208,10 @@ Parallel sets, in order: **{T01, T07}** → **{T02, T03}** → **{T04, T05}** �
     under a closed epic.
   - **Advisory: (i) now, (ii) when the media-path task is created** — an
     IMP report for a two-id re-home is cheap then and premature now.
-  - **Status:** 🟡 open · **Answer:** _<empty>_ · **Answered by:** _<human>_
+  - **Status:** 🟢 answered · **Answer:** (i) — FR-STORE-002/003 stay on
+    E08's `traces_to:` for the record; owner is the prospective real-time
+    media-path task, to be re-homed via `skills/change-impact` once that
+    task is created. · **Answered by:** human · **Date:** 2026-09-02
 
 - **OQ-E08-6 — E08 is not in an approved wave.** ⚠️ **important** —
   process, not scope.
@@ -205,7 +223,10 @@ Parallel sets, in order: **{T01, T07}** → **{T02, T03}** → **{T04, T05}** �
     this is recorded rather than acted on.
   - **Advisory:** clear a Wave 2 line covering E07 (retroactively) and E08
     in `epics/README.md`, or say E08 should wait.
-  - **Status:** 🟡 open · **Answer:** _<empty>_ · **Answered by:** _<human>_
+  - **Status:** 🟢 answered · **Answer:** Wave 2 [E07, E08] approved,
+    covering E07 retroactively. See `epics/README.md`'s
+    `epic_breakdown_and_wave` gate. · **Answered by:** human ·
+    **Date:** 2026-09-02
 
 ## Analyze report
 *(`skills/task-sharding` §6, run 2026-09-02 against E08-T01…T08, on

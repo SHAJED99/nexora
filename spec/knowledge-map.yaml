@@ -323,6 +323,11 @@ assumptions:
     statement: Target user persona (who specifically needs offline-first mesh messaging) is inferred as "users lacking reliable Internet" but never named explicitly (documentation/BRD.md §1; docs/intake-report.md §3 Users row)
     risk_if_wrong: "Could shape UX priorities (e.g. disaster-response vs. everyday off-grid use) but does not change v1 architecture"
     status: active
+  - id: A-004
+    statement: NFR-SCALE-001's storage thresholds (history-size ceiling, retention age, pressure trigger point) have no number in the spec; E08 extends A-002's placeholder-shape to storage — a documented, tunable default in one value object (SmartModeThresholds), not a blocking unknown
+    risk_if_wrong: "Low — same shape as A-002: constants trivially changed later, no architectural rework"
+    status: active
+    from_question: OQ-E08-2
 
 decisions: []
   # Populated by skills/genesis — ADR-0001..000N (stack, architecture, auth,
