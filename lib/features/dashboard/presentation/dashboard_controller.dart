@@ -47,17 +47,31 @@
 // age/access/size regardless of mode — the mode-dependent exclusion
 // (`OQ-E08-3(a)`: Smart Mode never deletes conversation content) is enforced
 // downstream, by `StorageManager`/`RetentionExecutor` at apply time, not by
-// the pure scorer. Showing `plan.groups` uncritically would therefore let a
+// the pure scorer. Showing a plan's groups uncritically would therefore let a
 // Smart Mode user read "Will remove: Messages" for content that categorically
 // will never be removed under their active policy — exactly the false
-// warning `FR-STORE-006`'s "informational" promise forbids. `_actionableGroups`
+// warning `FR-STORE-006`'s "informational" promise forbids. `_decisionsFromLog`
 // mirrors the SAME two unconditional invariants `RetentionExecutor.apply`
 // already enforces (never a new policy, never a new number): a `relayPayload`
-// group is always `RelayEngine.reclaimPayloads`'s (E04-B02), and a `message`
-// group is never actionable under a Smart Mode plan. This is exactly
+// row is always `RelayEngine.reclaimPayloads`'s (E04-B02), and a `messages`
+// row logged under a Smart Mode pass is never actionable. This is exactly
 // `design/screens/dashboard.md`'s own stated reasoning for why "Nothing to
 // remove right now." is the expected default reading (GAP-025), not an
 // invented filter.
+//
+// **`_loadStorageUsage` reads the durable log unconditionally (E08-B06 fix)
+// — `StorageManager.latestPlan` is observed only as a "a new pass landed,
+// re-read" trigger (`_storagePlanWorker` below), never as the source of the
+// decision list.** `latestPlan` is a plan *as scored*, before
+// `RetentionExecutor.apply` runs, and it is never cleared or replaced once
+// applied — so in the same process as an applying pass, the live plan still
+// names groups the executor has already deleted and logged
+// `outcome: applied`. Only the durable `storage_decisions` log carries that
+// outcome, so only `_decisionsFromLog` can tell a genuine forecast from a
+// description of the past — see its own doc comment for the exclusion rule.
+// Reading it unconditionally (not just as fallback when `latestPlan` is
+// `null`, per F1's original fix) makes the in-process read and the
+// post-relaunch read the SAME code path, so they cannot disagree.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -70,7 +84,6 @@ import 'package:nexora/core/persistence/database.dart' show StorageDecisionRow;
 import 'package:nexora/core/routing_engine/link_quality_feed.dart';
 import 'package:nexora/core/routing_engine/route_cost_calculator.dart';
 import 'package:nexora/core/storage/retention_plan.dart';
-import 'package:nexora/core/storage/storage_item.dart' show StorageItemKind;
 import 'package:nexora/core/storage/storage_manager.dart';
 import 'package:nexora/core/storage/storage_settings_repository.dart'
     show StorageMode;
@@ -363,23 +376,25 @@ class DashboardController extends GetxController {
   }
 
   /// Reads (never writes) `StorageManager.inventory`/`.settings` for the
-  /// collapsed card, and `StorageManager.latestPlan` **or**
-  /// `StorageDecisionLog.latestPass()` for the expanded explanation — task
-  /// §2/§4's "the card reads; it never triggers a pass". A failure anywhere
-  /// in this method degrades to the honest `isMeasured: false` fallback
-  /// rather than propagating (this is a display read, not something allowed
-  /// to crash the dashboard).
+  /// collapsed card, and `StorageDecisionLog.latestPass()` for the expanded
+  /// explanation — task §2/§4's "the card reads; it never triggers a pass".
+  /// A failure anywhere in this method degrades to the honest
+  /// `isMeasured: false` fallback rather than propagating (this is a display
+  /// read, not something allowed to crash the dashboard).
   ///
-  /// **`latestPlan` is in-memory and does not survive a relaunch** (round-1
-  /// review finding F1): `StorageManager.runPass` returns `null` without
+  /// **Always the durable log, never `StorageManager.latestPlan`
+  /// (E08-B06 fix; this file's header has the full reasoning).**
+  /// `storage_decisions` is durable (a real table) and, unlike `latestPlan`,
+  /// carries each row's `outcome` — the only way to tell a still-pending
+  /// forecast from a category the executor already deleted in THIS process.
+  /// Reading it unconditionally also incidentally keeps round-1 review
+  /// finding F1's original fix (`latestPlan` is in-memory and does not
+  /// survive a relaunch — `StorageManager.runPass` returns `null` without
   /// touching `latestPlan` whenever the throttle window hasn't elapsed since
-  /// the last recorded pass — the common case on any launch within
-  /// `storagePassInterval` (6h) of the last background tick, not an edge
-  /// case. `storage_decisions` itself is durable (a real table), so
-  /// `latestPlan == null` falls back to reading
-  /// `StorageDecisionLog.latestPass()` directly and reconstructing the
-  /// explanation from those rows (`_decisionsFromLog`) rather than showing
-  /// an empty list that contradicts real, already-recorded decisions.
+  /// the last recorded pass, the common case on any launch within
+  /// `storagePassInterval` (6h) of the last background tick): there is no
+  /// `latestPlan == null` fallback branch to fall out of any more, because
+  /// there is no other branch.
   Future<void> _loadStorageUsage() async {
     try {
       final snapshot = await _storage.inventory.snapshot();
@@ -389,10 +404,7 @@ class DashboardController extends GetxController {
           ? null
           : ((usedBytes * 100) ~/ settings.budgetBytes!);
 
-      final plan = _storage.latestPlan.value;
-      final decisions = plan != null
-          ? _decisionsFromGroups(_actionableGroups(plan))
-          : _decisionsFromLog(await _storage.log.latestPass());
+      final decisions = _decisionsFromLog(await _storage.log.latestPass());
 
       storageUsage.value = StorageUsageVm(
         usedBytes: usedBytes,
@@ -423,28 +435,12 @@ class DashboardController extends GetxController {
     }
   }
 
-  /// The in-memory path (a pass ran THIS process) — real
-  /// `RetentionCandidateGroup`s, most significant (largest bytes) first.
-  List<StorageDecisionVm> _decisionsFromGroups(
-    List<RetentionCandidateGroup> groups,
-  ) {
-    final sorted = [...groups]..sort((a, b) => b.bytes.compareTo(a.bytes));
-    return [
-      for (final group in sorted)
-        StorageDecisionVm(
-          categoryKey: group.categoryKey,
-          bytes: group.bytes,
-          reason: group.reason,
-          reasonDetail: group.reasonDetail,
-        ),
-    ];
-  }
-
-  /// The durable-log fallback path (F1 fix) — `StorageDecisionLog
-  /// .latestPass()`'s rows, reconstructed into the same `StorageDecisionVm`
-  /// shape `_decisionsFromGroups` produces, so the view cannot tell which
-  /// path fed it. Filters mirror `_actionableGroups`'s own reasoning exactly
-  /// (this file's header), applied to a logged row instead of a live
+  /// The ONLY path (E08-B06 fix; previously a fallback for when `latestPlan`
+  /// was `null`, per F1) — `StorageDecisionLog.latestPass()`'s rows,
+  /// reconstructed into the `StorageDecisionVm` shape the view renders, so
+  /// the view cannot tell an in-process read from a post-relaunch one.
+  /// Filters mirror the SAME two `RetentionExecutor.apply` invariants this
+  /// file's header discusses, applied to a logged row instead of a live
   /// `RetentionCandidateGroup`:
   /// - the zero-candidate sentinel row (`categoryKey: 'none'`,
   ///   `storage_decision_log.dart`'s own convention) is never a category;
@@ -455,9 +451,8 @@ class DashboardController extends GetxController {
   ///   pass or outcome (`RetentionExecutor`'s own invariant 1);
   /// - `categoryKey: 'messages'` logged under a Smart Mode pass
   ///   (`row.mode == StorageMode.smart.name`) is never actionable
-  ///   (`OQ-E08-3(a)`, invariant 2) — the SAME two exclusions
-  ///   `_actionableGroups` applies to a live plan, read here from the row's
-  ///   own `mode`/`categoryKey` columns instead of a `RetentionCandidateGroup
+  ///   (`OQ-E08-3(a)`, invariant 2), read here from the row's own
+  ///   `mode`/`categoryKey` columns instead of a `RetentionCandidateGroup
   ///   .kind`, since the log has no `kind` column of its own
   ///   (`storage_tables.dart`'s schema: `mode`/`categoryKey`/`reasonCode`/
   ///   `reasonDetail`/`outcome`, not a `StorageItemKind`).
@@ -485,23 +480,6 @@ class DashboardController extends GetxController {
     }
     kept.sort((a, b) => b.bytes.compareTo(a.bytes));
     return kept;
-  }
-
-  /// Mirrors `RetentionExecutor.apply`'s own two unconditional invariants
-  /// (`retention_executor.dart`'s header) so the "Will remove:" list never
-  /// shows a category that will never actually be removed under the active
-  /// policy — see this file's header for the full reasoning. Not a new
-  /// policy: both exclusions are already-fixed, spec-mandated constants
-  /// (`OQ-E08-3(a)`, `E04-B02`'s ownership of relay TTL), read here for
-  /// display consistency, never re-scored.
-  List<RetentionCandidateGroup> _actionableGroups(RetentionPlan plan) {
-    final isSmart = plan.mode == StorageMode.smart.name;
-    return [
-      for (final group in plan.groups)
-        if (group.kind != StorageItemKind.relayPayload &&
-            !(isSmart && group.kind == StorageItemKind.message))
-          group,
-    ];
   }
 
   /// A machine key (never display copy — the view owns the actual strings,
