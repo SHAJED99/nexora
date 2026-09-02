@@ -743,7 +743,7 @@ above was the reviewer's; priority was the human's:
 | `E08-B01` | **P1** | fix now, together with B02 (same root cause) |
 | `E08-B02` | **P1** | fix now, together with B01 |
 | `E08-B03` | P2 | fix before merge |
-| `E08-B04` | P2 | fix before merge — **direction: option (b)**, accept + disclose + fix the falsified `created_at`; no tombstones, no schema migration |
+| `E08-B04` | P2 | fix before merge — **direction corrected 2026-09-03 to option 3** after a builder found option (b) impossible (`MessageEnvelope` has no timestamp field to preserve — see `Q-E08-B04-1`): keep `DateTime.now()` unchanged, disclose only. No tombstones, no schema migration, no protocol change. |
 | `E08-B05` | P2 | fix before merge — give the two already-approved decisions a real owner |
 | `E08-B06` | P2 | fix before merge |
 
@@ -853,3 +853,38 @@ reviewer-written probe or a direct read, not against a claim:
 test), `flutter analyze` clean, `scheduler.py --validate` clean.
 **No product code was changed by this sweep** — the diff is one test, one
 frontmatter fix, six bug files and this section.
+
+---
+
+## Bug fix progress — 2026-09-03
+
+- **`E08-B01`/`E08-B02` (P1) — merged as one PR, `74fbd34` (PR #24).**
+  Reviewer independently reproduced both original bugs, built an
+  adversarial multi-kind interleaving probe against a real database
+  (ruling out the per-kind-then-concatenate failure mode this class of
+  k-way-merge fix is prone to), verified paging edge cases, the
+  under-planning fix, and the `id ASC` tie-break with dedicated probes,
+  and falsified both regression tests directly. **Found a third,
+  unfixed caller of the same root cause** (`_planOlderThan`) — filed as
+  `E08-B07` (S3, under-deletion not wrong-deletion, `status: blocked`
+  pending its own `bug_priorities` entry).
+- **`E08-B04` (P2) — scope corrected mid-flight, then merged, `5a5f123`
+  (PR #26).** First builder dispatch correctly found the originally
+  human-approved fix direction (preserve the envelope's timestamp)
+  impossible — `MessageEnvelope`'s wire format has no timestamp field,
+  and adding one is a protocol change outside this bug's fence. Human
+  re-decided (recorded as `Q-E08-B04-1`'s resolution): keep
+  `DateTime.now()` unchanged, disclose only. Reviewer independently
+  verified the comment's five required disclosure points against
+  source and confirmed a genuinely zero-behavior-change diff.
+- **`E08-B06` (P2) — merged, `9048600` (PR #25).** Reviewer wrote two of
+  their own adversarial probes (not in the builder's tests) confirming
+  the fix preserves the confirmed-correct "skipped-for-other-reasons"
+  rendering behavior, including a mixed same-pass case. Cleared the
+  🧍 `delete_over_50_lines` gate directly (64 raw deleted lines, 28
+  executable, net file size −22, every deleted line grep-proven dead) —
+  human-approved before merge.
+- **`E08-B03` (P2) — PR #27 open, review in progress.**
+
+**Remaining:** `E08-B03`'s review, `E08-B05` (unstarted), `E08-B07`
+(newly filed, needs its own `bug_priorities` entry).
