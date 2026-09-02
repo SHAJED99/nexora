@@ -523,6 +523,179 @@ void main() {
     });
 
     test(
+      'test_E08_B03_delete_removes_delivery_states_and_storage_item_stats_'
+      'orphans',
+      () async {
+        // E08-B03 repro, reproduced literally: 3 messages, each with the
+        // bookkeeping rows the real app writes for a stored message
+        // (`MessagingCoordinator.recordStored` -> one `delivery_states` row;
+        // `StorageAccessRecorder` -> one `storage_item_stats` row). Before
+        // this fix, `deleteMessageItems` only ever deleted from `messages`,
+        // leaving `delivery_states: 3, storage_item_stats: 3` behind forever
+        // (this file's own repro signature, task file's Actual section).
+        const ids = ['m-00000', 'm-00001', 'm-00002'];
+        for (final id in ids) {
+          await _seedMessage(db, id: id, state: DeliveryState.stored, bytes: 40);
+          await db.into(db.deliveryStates).insert(
+                DeliveryStatesCompanion.insert(
+                  messageId: id,
+                  state: DeliveryState.stored.name,
+                  changedAt: 1000,
+                ),
+              );
+          await db.into(db.storageItemStats).insert(
+                StorageItemStatsCompanion.insert(
+                  itemKind: StorageItemKind.message.name,
+                  itemId: id,
+                  lastAccessedAt: const Value(1000),
+                  accessCount: const Value(1),
+                ),
+              );
+        }
+
+        // Preconditions -- the repro's literal signature, so a passing
+        // assertion below cannot be vacuous.
+        expect(await db.select(db.messages).get(), hasLength(3));
+        expect(await db.select(db.deliveryStates).get(), hasLength(3));
+        expect(await db.select(db.storageItemStats).get(), hasLength(3));
+
+        final plan = _plan(
+          mode: StorageMode.olderThanDays.name,
+          groups: [
+            _group(kind: StorageItemKind.message, itemIds: ids, bytes: 40),
+          ],
+        );
+
+        final outcome = await executor.apply(
+          plan,
+          allowedKinds: const <StorageItemKind>{StorageItemKind.message},
+          nowEpochMs: 5000,
+        );
+
+        expect(outcome.appliedGroups, hasLength(1));
+        expect(outcome.appliedGroups.single.itemIds, ids);
+
+        expect(await db.select(db.messages).get(), isEmpty);
+        expect(
+          await db.select(db.deliveryStates).get(),
+          isEmpty,
+          reason: 'orphaned delivery_states rows must be cleaned up '
+              '(E08-B03)',
+        );
+        expect(
+          await db.select(db.storageItemStats).get(),
+          isEmpty,
+          reason: 'orphaned storage_item_stats rows must be cleaned up '
+              '(E08-B03)',
+        );
+      },
+    );
+
+    test(
+      'test_E08_B03_bookkeeping_cleanup_never_touches_a_different_message\'s_'
+      'rows',
+      () async {
+        // Deletes only 'm-1'; 'm-2' (undelivered, never a candidate) must
+        // keep every one of its own bookkeeping rows -- proving the cleanup
+        // is scoped to the deleted ids, never the whole table.
+        await _seedMessage(db, id: 'm-1', state: DeliveryState.stored, bytes: 40);
+        await _seedMessage(db, id: 'm-2', state: DeliveryState.queued, bytes: 40);
+        for (final id in ['m-1', 'm-2']) {
+          await db.into(db.deliveryStates).insert(
+                DeliveryStatesCompanion.insert(
+                  messageId: id,
+                  state: DeliveryState.stored.name,
+                  changedAt: 1000,
+                ),
+              );
+          await db.into(db.storageItemStats).insert(
+                StorageItemStatsCompanion.insert(
+                  itemKind: StorageItemKind.message.name,
+                  itemId: id,
+                  lastAccessedAt: const Value(1000),
+                  accessCount: const Value(1),
+                ),
+              );
+        }
+
+        final plan = _plan(
+          mode: StorageMode.olderThanDays.name,
+          groups: [
+            _group(kind: StorageItemKind.message, itemIds: ['m-1', 'm-2'], bytes: 40),
+          ],
+        );
+
+        final outcome = await executor.apply(
+          plan,
+          allowedKinds: const <StorageItemKind>{StorageItemKind.message},
+          nowEpochMs: 5000,
+        );
+
+        expect(outcome.appliedGroups.single.itemIds, ['m-1']);
+
+        final remainingStates = await db.select(db.deliveryStates).get();
+        expect(remainingStates.map((r) => r.messageId).toSet(), {'m-2'});
+        final remainingStats = await db.select(db.storageItemStats).get();
+        expect(remainingStats.map((r) => r.itemId).toSet(), {'m-2'});
+      },
+    );
+
+    test(
+      'test_E08_B03_bookkeeping_cleanup_is_atomic_with_the_message_delete',
+      () async {
+        // Falsifies the atomicity claim: force the group's own `applied`
+        // decision row write to fail (the same fault injection F1's own
+        // test above uses) and confirm the message row AND both bookkeeping
+        // rows survive together -- proving the cleanup runs INSIDE the same
+        // `apply()` per-group `db.transaction()`, not as a separate,
+        // non-atomic step that could half-apply.
+        await _seedMessage(db, id: 'm-1', state: DeliveryState.stored, bytes: 40);
+        await db.into(db.deliveryStates).insert(
+              DeliveryStatesCompanion.insert(
+                messageId: 'm-1',
+                state: DeliveryState.stored.name,
+                changedAt: 1000,
+              ),
+            );
+        await db.into(db.storageItemStats).insert(
+              StorageItemStatsCompanion.insert(
+                itemKind: StorageItemKind.message.name,
+                itemId: 'm-1',
+                lastAccessedAt: const Value(1000),
+                accessCount: const Value(1),
+              ),
+            );
+
+        final failingLog = _AppliedRowFailingLog(db: db);
+        final executorOverFailingLog =
+            RetentionExecutor(db: db, log: failingLog);
+        final plan = _plan(
+          mode: StorageMode.olderThanDays.name,
+          groups: [
+            _group(kind: StorageItemKind.message, itemIds: ['m-1'], bytes: 40),
+          ],
+        );
+
+        final outcome = await executorOverFailingLog.apply(
+          plan,
+          allowedKinds: const <StorageItemKind>{StorageItemKind.message},
+          nowEpochMs: 5000,
+        );
+
+        expect(outcome.appliedGroups, isEmpty);
+
+        expect(
+          await db.select(db.messages).get(),
+          hasLength(1),
+          reason: 'the delete rolled back -- its bookkeeping cleanup must '
+              'have rolled back with it, in the same transaction',
+        );
+        expect(await db.select(db.deliveryStates).get(), hasLength(1));
+        expect(await db.select(db.storageItemStats).get(), hasLength(1));
+      },
+    );
+
+    test(
       'test_EARS_STORE_13_a_delete_whose_decision_row_fails_to_write_is_'
       'rolled_back',
       () async {

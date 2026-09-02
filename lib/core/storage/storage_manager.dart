@@ -34,6 +34,7 @@
 // re-run a full inventory scan just because no in-memory state survived.
 library;
 
+import 'package:drift/drift.dart';
 import 'package:get/get.dart';
 
 import 'manual_policy.dart';
@@ -138,7 +139,7 @@ class StorageManager {
       plan = smart.plan(
         snapshot: snapshot,
         items: items,
-        stats: await _accessStats(),
+        stats: await _accessStats(items),
         nowEpochMs: nowEpochMs,
         budgetBytes: policySettings.budgetBytes,
       );
@@ -205,20 +206,53 @@ class StorageManager {
   }
 
   /// `storage_item_stats` (E08-T03), mapped into `SmartModePolicy.plan`'s
-  /// own `Map<String, ItemAccessStat>` shape, keyed identically to
-  /// [statsKeyFor] (`'<kind.name>:<itemId>'`) -- this file reads through
-  /// [inventory]'s own `db` field rather than taking a second `AppDatabase`
-  /// parameter (task §5's constructor names no such dependency), matching
-  /// `StorageInventory`/`StorageSettingsRepository`'s own "one AppDatabase,
-  /// injected once" precedent.
-  Future<Map<String, ItemAccessStat>> _accessStats() async {
-    final rows = await inventory.db.select(inventory.db.storageItemStats).get();
-    return {
-      for (final row in rows)
-        '${row.itemKind}:${row.itemId}': ItemAccessStat(
+  /// own `Map<String, ItemAccessStat>` shape, keyed identically to this
+  /// method's own construction below (`'<kind.name>:<itemId>'`) -- this file
+  /// reads through [inventory]'s own `db` field rather than taking a second
+  /// `AppDatabase` parameter (task §5's constructor names no such
+  /// dependency), matching `StorageInventory`/`StorageSettingsRepository`'s
+  /// own "one AppDatabase, injected once" precedent.
+  ///
+  /// **E08-B03 fix**: previously ran an unbounded `SELECT *` over the whole
+  /// `storage_item_stats` table -- a table that only ever grows (one row per
+  /// message ever displayed, per `E08-T03`'s recorder, plus one per
+  /// conversation opened), materialized into a Dart `Map` every pass, every 6
+  /// hours, directly contradicting `storage_inventory.dart`'s own stated
+  /// discipline ("a history large enough to be worth managing is a history
+  /// too large to materialize"). Bounded here instead: [items] is the exact,
+  /// already-paged set `runPass` just built via [_allItemsOfKind] (the
+  /// `E08-B01`/`E08-B02` fix) for `SmartModePolicy.plan` to score -- reading
+  /// only the stats rows for those same item ids (grouped by kind, since
+  /// `storage_item_stats`'s own PK is `(item_kind, item_id)`) means this
+  /// query is bounded by exactly the same page-through set the paging fix
+  /// already established as "representative", never a full-table scan
+  /// sitting downstream of it.
+  Future<Map<String, ItemAccessStat>> _accessStats(
+    List<StorageItem> items,
+  ) async {
+    if (items.isEmpty) return const <String, ItemAccessStat>{};
+
+    final idsByKind = <String, Set<String>>{};
+    for (final item in items) {
+      idsByKind.putIfAbsent(item.kind.name, () => <String>{}).add(item.id);
+    }
+
+    final result = <String, ItemAccessStat>{};
+    for (final entry in idsByKind.entries) {
+      final ids = entry.value.toList();
+      if (ids.isEmpty) continue;
+      final rows = await (inventory.db.select(inventory.db.storageItemStats)
+            ..where(
+              (t) => t.itemKind.equals(entry.key) & t.itemId.isIn(ids),
+            ))
+          .get();
+      for (final row in rows) {
+        result['${row.itemKind}:${row.itemId}'] = ItemAccessStat(
           accessCount: row.accessCount,
           lastAccessedAtEpochMs: row.lastAccessedAt,
-        ),
-    };
+        );
+      }
+    }
+    return result;
   }
 }

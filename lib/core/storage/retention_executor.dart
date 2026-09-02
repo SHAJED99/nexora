@@ -341,6 +341,19 @@ class RetentionExecutor {
     switch (group.kind) {
       case StorageItemKind.message:
         await deleteMessageItems(group.itemIds);
+        // E08-B03 fix: `deleteMessageItems` only ever owned `messages`
+        // (correctly, per its own doc below) -- but neither
+        // `delivery_states` nor `storage_item_stats` has a FK/cascade, and
+        // nothing else in `lib/` ever deletes from either, so every prior
+        // pass left two orphan rows per deleted message forever. This call
+        // runs inside the SAME `apply()` per-group `db.transaction()` as the
+        // `messages` delete above and the group's own `applied` decision row
+        // (this file's header) -- so a `messages` delete that succeeds but
+        // whose bookkeeping cleanup then fails rolls back together with it,
+        // never leaving the kind of half-applied state this epic's T06
+        // review rounds already fought to eliminate for the delete+decision
+        // -row pair.
+        await _deleteBookkeeping(group.itemIds);
       case StorageItemKind.relayPayload:
       case StorageItemKind.databaseFile:
       case StorageItemKind.voiceMessage:
@@ -375,6 +388,38 @@ class RetentionExecutor {
   Future<void> deleteMessageItems(List<String> ids) async {
     if (ids.isEmpty) return;
     await (db.delete(db.messages)..where((t) => t.id.isIn(ids))).go();
+  }
+
+  /// Deletes the `delivery_states` and `storage_item_stats` rows that key
+  /// off a now-deleted message's id (E08-B03) -- the two tables this app's
+  /// only deletion path (`deleteMessageItems` above) never touched. Called
+  /// from [_deleteGroup], inside [apply]'s per-group `db.transaction()`, so
+  /// this cleanup and the `messages` delete it belongs to commit or roll
+  /// back together, never half-applied.
+  ///
+  /// `delivery_states`'s PK is `(message_id, state)` (`message_tables.dart`)
+  /// -- deleted by `message_id` alone, all states for the id at once.
+  /// `storage_item_stats`'s PK is `(item_kind, item_id)`
+  /// (`storage_tables.dart`) -- scoped to `item_kind ==
+  /// StorageItemKind.message.name` so this never touches a stats row for any
+  /// other kind (`relayPayload`, etc.) that happens to share an id string.
+  ///
+  /// Does **not** add a foreign key or cascade (that is a schema migration
+  /// and requires the 🧍 `db_schema_migration` gate, not cleared for this
+  /// fix -- task file §"Fix direction"/"What this fix does NOT do") -- this
+  /// is an explicit, application-level delete instead.
+  Future<void> _deleteBookkeeping(List<String> ids) async {
+    if (ids.isEmpty) return;
+    await (db.delete(db.deliveryStates)
+          ..where((t) => t.messageId.isIn(ids)))
+        .go();
+    await (db.delete(db.storageItemStats)
+          ..where(
+            (t) =>
+                t.itemKind.equals(StorageItemKind.message.name) &
+                t.itemId.isIn(ids),
+          ))
+        .go();
   }
 
   /// Splits a `message` candidate group into the slice that is actually
