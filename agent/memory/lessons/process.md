@@ -27,8 +27,8 @@ automatically for matching tasks (see `index.yaml`).
 - status: promoted-to-hook — `agent/orchestrator/scheduler.py` (`frontmatter()`
   now records every parse failure, and `validate()` raises it as its own
   hard `--validate` error naming it a YAML parse failure, not a missing
-  field), 2026-09-02 via `skills/retro` (E07), 🧍 `retro_promotions` ⏳
-  awaiting human. Closes the exact gap the second occurrence (E06-T01)
+  field), 2026-09-02 via `skills/retro` (E07), 🧍 `retro_promotions` ✅
+  approved by the human, 2026-09-02. Closes the exact gap the second occurrence (E06-T01)
   predicted: `--validate`/`--status` can no longer silently miscount a
   task because its frontmatter didn't parse.
 - **2026-08-30 (E06 post-merge status check) — recurred, and the consequence
@@ -358,8 +358,8 @@ automatically for matching tasks (see `index.yaml`).
 - status: promoted-to-rule — `agent/skills/review/SKILL.md` (new stated
   rule: `reviewed_by` must lead with a declared model string, always, even
   under a disclosed deviation — full explanation goes in the Run log
-  instead), 2026-09-02 via `skills/retro` (E07), 🧍 `retro_promotions` ⏳
-  awaiting human.
+  instead), 2026-09-02 via `skills/retro` (E07), 🧍 `retro_promotions` ✅
+  approved by the human, 2026-09-02.
 
 ## L-process-011 — a bug-sweep-authored bug task's `files:` fence ships fully empty (all three lists), not just missing a §4 narrative section — a distinct template gap from L-process-009, and it hit 4-for-4 in one sweep
 - date: 2026-09-02 | source: E07 end-of-epic bug sweep — `E07-B01`, `B02`,
@@ -395,7 +395,7 @@ automatically for matching tasks (see `index.yaml`).
   bug task that gets fixed once" section, alongside the L-process-009 §4
   requirement: require a best-effort `files:` fence at authoring time, not
   just at fix time), 2026-09-02 via `skills/retro`, 🧍 `retro_promotions`
-  ⏳ awaiting human.
+  ✅ approved by the human, 2026-09-02.
 
 ## L-process-012 — `skills/bug-sweep` never names the valid `status:` value for a newly-found bug, so the sweep agent invented one (`open`) that isn't in `harness.yaml`'s status vocabulary
 - date: 2026-09-02 | source: E07 end-of-epic bug sweep — all 4 new bug files
@@ -426,7 +426,7 @@ automatically for matching tasks (see `index.yaml`).
   rather than waiting for a second sweep to repeat it)
 - status: promoted-to-rule — `agent/skills/bug-sweep/SKILL.md` (same
   section as L-process-011), 2026-09-02 via `skills/retro`, 🧍
-  `retro_promotions` ⏳ awaiting human.
+  `retro_promotions` ✅ approved by the human, 2026-09-02.
 
 ## L-process-013 — an epic can be merged into `development` with its mandatory retro never run, because `make health`'s H3 check keys off `epic.md`'s `status:` field, and nothing forces that field to flip before the merge happens
 - date: 2026-09-02 | source: this session, self-caught — E07 was merged
