@@ -76,4 +76,5 @@ automatically for matching tasks (see `index.yaml`).
 - status: promoted-to-rule — `agent/skills/design-fidelity/SKILL.md` (new
   rule: a task widening a design-contracted screen's displayed data shape
   must update the shared probe fixture or open a named follow-up task),
-  2026-09-02 via `skills/retro`, 🧍 `retro_promotions` ⏳ awaiting human.
+  2026-09-02 via `skills/retro`, 🧍 `retro_promotions` ✅ approved by the
+  human, 2026-09-02.
