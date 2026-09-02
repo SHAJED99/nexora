@@ -16,6 +16,7 @@ import 'message_tables.dart';
 import 'relationships_table.dart';
 import 'relay_tables.dart';
 import 'routing_tables.dart';
+import 'storage_tables.dart';
 import 'sync_tables.dart';
 
 part 'database.g.dart';
@@ -58,6 +59,9 @@ class DeviceIdentities extends Table {
   GroupMembers,
   GroupSenderKeys,
   GroupEvents,
+  StorageItemStats,
+  StoragePolicySettings,
+  StorageDecisions,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -66,11 +70,25 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) => m.createAll(),
+        onCreate: (m) async {
+          await m.createAll();
+          // E08-T01: a fresh install must have the same single default
+          // `storage_policy_settings` row (`mode == 'smart'`) that the
+          // `from < 14` upgrade step inserts below — the app never has to
+          // cope with an absent settings row on either path (task §5, §6
+          // risk note: "a fresh install runs onCreate, not onUpgrade").
+          await into(storagePolicySettings).insert(
+            StoragePolicySettingsCompanion.insert(
+              id: const Value(1),
+              mode: 'smart',
+              updatedAt: DateTime.now().millisecondsSinceEpoch,
+            ),
+          );
+        },
         onUpgrade: (m, from, to) async {
           if (from < 2) {
             // Additive only — no drop/backfill, per docs/conventions.md
@@ -295,6 +313,58 @@ class AppDatabase extends _$AppDatabase {
               'idx_group_events_group_epoch ON group_events '
               '(group_id, epoch);',
             );
+          }
+          if (from < 14) {
+            // E08-T01: storage lifecycle tables -- `storage_item_stats`,
+            // `storage_policy_settings`, `storage_decisions` -- additive
+            // only, no changes to any pre-existing table (task §4,
+            // docs/conventions.md "Schema migrations").
+            //
+            // As with `from < 11`/`from < 13` above: `createTable` only
+            // issues the CREATE TABLE statement, never any
+            // `@TableIndex`-declared index -- those are separate
+            // `DatabaseSchemaEntity`s only created via `create`/`createAll`.
+            // Every index this step's tables declare is therefore also
+            // created explicitly here, with `IF NOT EXISTS` (not
+            // `m.createIndex`, whose generated statement in
+            // `database.g.dart` has no such guard and is not retry-safe
+            // across a failed-then-retried migration).
+            //
+            // Wrapped in a transaction (unlike the purely-additive `from <
+            // 13` step above, which has no insert to protect): this step
+            // also inserts the single default `storage_policy_settings` row,
+            // and task §6's own risk note requires that insert be atomic
+            // with the `createTable` calls -- without the wrap, a
+            // crash/kill between "tables created" and "default row
+            // inserted" would leave `storage_policy_settings` created but
+            // empty on a failed-then-retried migration, breaking the "the
+            // app must never have to cope with an absent settings row"
+            // invariant (task §5). Same reasoning as the `from < 10`
+            // rebuild's explicit wrap above, applied here because this step
+            // is a multi-statement sequence with a non-idempotent insert,
+            // not a single atomic CREATE TABLE.
+            await m.database.transaction(() async {
+              await m.createTable(storageItemStats);
+              await m.createTable(storagePolicySettings);
+              await m.createTable(storageDecisions);
+              await m.database.customStatement(
+                'CREATE INDEX IF NOT EXISTS '
+                'idx_storage_item_stats_last_accessed ON storage_item_stats '
+                '(last_accessed_at);',
+              );
+              await m.database.customStatement(
+                'CREATE INDEX IF NOT EXISTS '
+                'idx_storage_decisions_decided_at ON storage_decisions '
+                '(decided_at);',
+              );
+              await into(storagePolicySettings).insert(
+                    StoragePolicySettingsCompanion.insert(
+                      id: const Value(1),
+                      mode: 'smart',
+                      updatedAt: DateTime.now().millisecondsSinceEpoch,
+                    ),
+                  );
+            });
           }
         },
       );
