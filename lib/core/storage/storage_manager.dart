@@ -34,6 +34,7 @@
 // re-run a full inventory scan just because no in-memory state survived.
 library;
 
+import 'package:drift/drift.dart';
 import 'package:get/get.dart';
 
 import 'manual_policy.dart';
@@ -138,7 +139,7 @@ class StorageManager {
       plan = smart.plan(
         snapshot: snapshot,
         items: items,
-        stats: await _accessStats(),
+        stats: await _accessStats(items),
         nowEpochMs: nowEpochMs,
         budgetBytes: policySettings.budgetBytes,
       );
@@ -205,20 +206,77 @@ class StorageManager {
   }
 
   /// `storage_item_stats` (E08-T03), mapped into `SmartModePolicy.plan`'s
-  /// own `Map<String, ItemAccessStat>` shape, keyed identically to
-  /// [statsKeyFor] (`'<kind.name>:<itemId>'`) -- this file reads through
-  /// [inventory]'s own `db` field rather than taking a second `AppDatabase`
-  /// parameter (task §5's constructor names no such dependency), matching
-  /// `StorageInventory`/`StorageSettingsRepository`'s own "one AppDatabase,
-  /// injected once" precedent.
-  Future<Map<String, ItemAccessStat>> _accessStats() async {
-    final rows = await inventory.db.select(inventory.db.storageItemStats).get();
-    return {
-      for (final row in rows)
-        '${row.itemKind}:${row.itemId}': ItemAccessStat(
-          accessCount: row.accessCount,
-          lastAccessedAtEpochMs: row.lastAccessedAt,
-        ),
-    };
+  /// own `Map<String, ItemAccessStat>` shape, keyed identically to this
+  /// method's own construction below (`'<kind.name>:<itemId>'`) -- this file
+  /// reads through [inventory]'s own `db` field rather than taking a second
+  /// `AppDatabase` parameter (task §5's constructor names no such
+  /// dependency), matching `StorageInventory`/`StorageSettingsRepository`'s
+  /// own "one AppDatabase, injected once" precedent.
+  ///
+  /// **E08-B03 fix**: previously ran an unbounded `SELECT *` over the whole
+  /// `storage_item_stats` table -- a table that only ever grows (one row per
+  /// message ever displayed, per `E08-T03`'s recorder, plus one per
+  /// conversation opened), materialized into a Dart `Map` every pass, every 6
+  /// hours, directly contradicting `storage_inventory.dart`'s own stated
+  /// discipline ("a history large enough to be worth managing is a history
+  /// too large to materialize"). Bounded here instead: [items] is the exact,
+  /// already-paged set `runPass` just built via [_allItemsOfKind] (the
+  /// `E08-B01`/`E08-B02` fix) for `SmartModePolicy.plan` to score -- reading
+  /// only the stats rows for those same item ids (grouped by kind, since
+  /// `storage_item_stats`'s own PK is `(item_kind, item_id)`) means this
+  /// query is bounded by exactly the same page-through set the paging fix
+  /// already established as "representative", never a full-table scan
+  /// sitting downstream of it.
+  ///
+  /// **Round-1 review fix (F1)**: [_allItemsOfKind] deliberately pages
+  /// through a WHOLE kind with no upper bound (the `E08-B01`/`E08-B02` fix
+  /// this file's header already documents) -- so on a device with enough
+  /// stored history, [items] can legitimately exceed SQLite's own
+  /// `SQLITE_MAX_VARIABLE_NUMBER` (32766 in this build). `t.itemId.isIn(ids)`
+  /// binds one variable per id, so a single query over that whole set throws
+  /// `SqliteException(1): too many SQL variables` -- and since that throw
+  /// happens BEFORE `log.recordPass` ever runs, `storage_decisions` never
+  /// advances, the throttle never moves, and (`MessagingCoordinator` only
+  /// counting the failure rather than crashing) every subsequent pass
+  /// repeats the same failure silently, forever, for exactly the "heavy
+  /// user" this bug exists to help. Chunked here into
+  /// [_itemsPageSize]-sized batches (the same constant [_allItemsOfKind]
+  /// already uses, so the query never binds more variables than one page's
+  /// worth) -- each chunk's rows are merged into the same [result] map.
+  Future<Map<String, ItemAccessStat>> _accessStats(
+    List<StorageItem> items,
+  ) async {
+    if (items.isEmpty) return const <String, ItemAccessStat>{};
+
+    final idsByKind = <String, List<String>>{};
+    for (final item in items) {
+      idsByKind.putIfAbsent(item.kind.name, () => <String>[]).add(item.id);
+    }
+
+    final result = <String, ItemAccessStat>{};
+    for (final entry in idsByKind.entries) {
+      final ids = entry.value;
+      for (var offset = 0; offset < ids.length; offset += _itemsPageSize) {
+        final chunk = ids.sublist(
+          offset,
+          offset + _itemsPageSize > ids.length
+              ? ids.length
+              : offset + _itemsPageSize,
+        );
+        if (chunk.isEmpty) continue;
+        final rows = await (inventory.db.select(inventory.db.storageItemStats)
+              ..where(
+                (t) => t.itemKind.equals(entry.key) & t.itemId.isIn(chunk),
+              ))
+            .get();
+        for (final row in rows) {
+          result['${row.itemKind}:${row.itemId}'] = ItemAccessStat(
+            accessCount: row.accessCount,
+            lastAccessedAtEpochMs: row.lastAccessedAt,
+          );
+        }
+      }
+    }
+    return result;
   }
 }

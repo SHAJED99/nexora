@@ -6,8 +6,7 @@
 // own scoring logic (T04/T05 already do that exhaustively) -- only that
 // `StorageManager` wires settings -> policy -> plan -> log -> (optional)
 // apply correctly, and that the throttle is real and restart-safe.
-import 'dart:typed_data';
-
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/persistence/database.dart';
@@ -16,9 +15,32 @@ import 'package:nexora/core/storage/retention_plan.dart';
 import 'package:nexora/core/storage/smart_mode_policy.dart';
 import 'package:nexora/core/storage/storage_decision_log.dart';
 import 'package:nexora/core/storage/storage_inventory.dart';
+import 'package:nexora/core/storage/storage_item.dart' show StorageItemKind;
 import 'package:nexora/core/storage/storage_manager.dart';
 import 'package:nexora/core/storage/storage_settings_repository.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
+
+/// Records every `storage_item_stats` `SELECT` this test's `AppDatabase`
+/// runs, and how many rows each one returned (E08-B03) -- lets a test assert
+/// `_accessStats` reads a bounded, item-scoped slice of the table rather than
+/// materializing it whole, without needing to make the private method
+/// itself visible across a library boundary.
+class _CountingInterceptor extends QueryInterceptor {
+  final List<int> storageItemStatsRowCounts = [];
+
+  @override
+  Future<List<Map<String, Object?>>> runSelect(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) async {
+    final rows = await executor.runSelect(statement, args);
+    if (statement.contains('storage_item_stats')) {
+      storageItemStatsRowCounts.add(rows.length);
+    }
+    return rows;
+  }
+}
 
 Uint8List _bytes(int length) => Uint8List.fromList(List<int>.filled(length, 0x41));
 
@@ -191,6 +213,152 @@ void main() {
         );
         expect(secondPlan, isNull, reason: 'a zero-candidate pass must still throttle');
       },
+    );
+
+    test(
+      'test_E08_B03_access_stats_query_is_bounded_not_a_full_table_scan',
+      () async {
+        // E08-B03 defect #2: `_accessStats()` used to run
+        // `SELECT * FROM storage_item_stats` unconditionally -- live on
+        // every Smart Mode pass regardless of any delete having happened,
+        // and directly contradicting `storage_inventory.dart`'s own stated
+        // discipline ("a history large enough to be worth managing is a
+        // history too large to materialize"). This intercepts every SQL
+        // `SELECT` this pass runs against `storage_item_stats` and asserts
+        // the total rows read back is bounded by the handful of REAL items
+        // Smart Mode is actually scoring, never by the size of the table.
+        final interceptor = _CountingInterceptor();
+        final boundedDb = AppDatabase.forTesting(
+          NativeDatabase.memory().interceptWith(interceptor),
+        );
+        addTearDown(boundedDb.close);
+
+        // The only 3 items this pass will ever enumerate (`_allItemsOfKind`
+        // pages fully through real `messages` rows) -- each with its own
+        // real stats row, exactly as `StorageAccessRecorder` writes.
+        const realIds = ['m-1', 'm-2', 'm-3'];
+        for (final id in realIds) {
+          await _seedMessage(boundedDb, id: id, createdAt: 0);
+          await boundedDb.into(boundedDb.storageItemStats).insert(
+                StorageItemStatsCompanion.insert(
+                  itemKind: StorageItemKind.message.name,
+                  itemId: id,
+                  lastAccessedAt: const Value(500),
+                  accessCount: const Value(1),
+                ),
+              );
+        }
+
+        // A large number of stale rows for ids that will NEVER be
+        // enumerated again -- the exact shape `storage_item_stats` grows
+        // into over time (E08-B03's own defect #1, before its fix). The
+        // bounded query must never read these just to score the 3 real
+        // items above.
+        for (var i = 0; i < 500; i++) {
+          await boundedDb.into(boundedDb.storageItemStats).insert(
+                StorageItemStatsCompanion.insert(
+                  itemKind: StorageItemKind.message.name,
+                  itemId: 'stale-$i',
+                  lastAccessedAt: const Value(500),
+                  accessCount: const Value(1),
+                ),
+              );
+        }
+
+        final manager = _buildManager(boundedDb);
+        final plan =
+            await manager.runPass(nowEpochMs: 200000000000, apply: false);
+
+        expect(plan, isNotNull);
+        expect(
+          interceptor.storageItemStatsRowCounts,
+          isNotEmpty,
+          reason: 'the pass must read storage_item_stats at least once',
+        );
+        final totalRowsRead = interceptor.storageItemStatsRowCounts
+            .fold<int>(0, (sum, n) => sum + n);
+        expect(
+          totalRowsRead,
+          lessThanOrEqualTo(realIds.length),
+          reason: 'bounded to the items the plan is actually scoring -- '
+              'must never read the 500 stale/orphan rows (E08-B03). A '
+              'full-table `SELECT * FROM storage_item_stats` (the pre-fix '
+              'code) would read all ${realIds.length + 500} rows here.',
+        );
+      },
+    );
+
+    test(
+      'test_E08_B03_F1_access_stats_chunks_past_the_sqlite_variable_limit',
+      () async {
+        // Round-1 review F1: `_accessStats`'s `t.itemId.isIn(ids)` used to
+        // bind one SQL variable per id in a SINGLE query over the WHOLE
+        // per-kind id set -- and `_allItemsOfKind` (E08-B01/B02) deliberately
+        // pages through a WHOLE kind with no upper bound, so a device with
+        // enough stored history legitimately exceeds SQLite's own
+        // `SQLITE_MAX_VARIABLE_NUMBER` (32766 in this build). The unchunked
+        // code threw `SqliteException(1): too many SQL variables` BEFORE
+        // `log.recordPass` ever ran -- so `storage_decisions` never
+        // advanced, the 6-hour throttle never moved, and (since
+        // `MessagingCoordinator` only counts the failure rather than
+        // crashing) every subsequent pass would repeat the same failure
+        // silently, forever, for exactly the "heavy user" this bug exists
+        // to help. 33,000 (> 32766) is the reviewer's own probe threshold.
+        final chunkedDb = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(chunkedDb.close);
+
+        const n = 33000;
+        final ids = List<String>.generate(
+          n,
+          (i) => 'm-${i.toString().padLeft(6, '0')}',
+        );
+
+        await chunkedDb.batch((batch) {
+          batch.insertAll(chunkedDb.messages, [
+            for (final id in ids)
+              MessagesCompanion.insert(
+                id: id,
+                conversationId: 'conv-1',
+                senderDeviceId: 'device-1',
+                sequenceNumber: 1,
+                ciphertext: _bytes(10),
+                createdAt: 0,
+                deliveryState: DeliveryState.stored.name,
+              ),
+          ]);
+          batch.insertAll(chunkedDb.storageItemStats, [
+            for (final id in ids)
+              StorageItemStatsCompanion.insert(
+                itemKind: StorageItemKind.message.name,
+                itemId: id,
+                lastAccessedAt: const Value(500),
+                accessCount: const Value(1),
+              ),
+          ]);
+        });
+
+        final manager = _buildManager(chunkedDb);
+
+        // Must complete without throwing -- the load-bearing assertion.
+        // `Future.value` immediately below is unreachable if `runPass`
+        // throws; `expect`'s own control flow makes the throw itself the
+        // failure, so no explicit try/catch is needed for this to fail
+        // loudly and for the right reason.
+        final plan = await manager.runPass(
+          nowEpochMs: 200000000000,
+          apply: false,
+        );
+
+        expect(plan, isNotNull);
+        final rows = await chunkedDb.select(chunkedDb.storageDecisions).get();
+        expect(
+          rows.any((r) => r.outcome == DecisionOutcome.planned.name),
+          isTrue,
+          reason: 'the pass must reach log.recordPass -- proof it never '
+              'threw before getting there',
+        );
+      },
+      timeout: const Timeout(Duration(minutes: 3)),
     );
   });
 }
