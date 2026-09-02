@@ -735,13 +735,21 @@ verbatim in each bug file):
 | `E08-B05` | S3 | `EARS-STORE-1`'s eight factors ship as six; `OQ-E08-1(a)` and `OQ-E08-4(a)` were answered by the human and neither was built or given an owner | **yes** |
 | `E08-B06` | S4 | the card's live-plan path lists just-deleted items under "Will remove:"; the durable-log path correctly excludes them | no |
 
-🧍 **HUMAN GATE (`bug_priorities`) — ⏳ AWAITING HUMAN.** Severity above is
-the reviewer's; **priority is yours**. All six carry `priority: { p: TBD }`
-and `status: blocked`. Per `skills/release`, the epic→`development` PR opens
-only when P1/P2 = 0. Note the reachability column: `E08-B01`'s S1 is a
-property of the code path, not of anything a user of *this* build can
-trigger — that is deliberately priority information, not a severity
-discount.
+🧍 **HUMAN GATE (`bug_priorities`) — ✅ CLEARED, 2026-09-02.** Severity
+above was the reviewer's; priority was the human's:
+
+| id | priority | direction |
+|---|---|---|
+| `E08-B01` | **P1** | fix now, together with B02 (same root cause) |
+| `E08-B02` | **P1** | fix now, together with B01 |
+| `E08-B03` | P2 | fix before merge |
+| `E08-B04` | P2 | fix before merge — **direction: option (b)**, accept + disclose + fix the falsified `created_at`; no tombstones, no schema migration |
+| `E08-B05` | P2 | fix before merge — give the two already-approved decisions a real owner |
+| `E08-B06` | P2 | fix before merge |
+
+P1/P2 = 0 is required before the epic→`development` PR opens
+(`skills/release`) — all six are now scheduled, none deferred past this
+epic's close.
 
 **The single root cause behind B01 and B02** is one line:
 `StorageInventory.itemsOfKind`'s `ORDER BY created_at DESC LIMIT 500`
