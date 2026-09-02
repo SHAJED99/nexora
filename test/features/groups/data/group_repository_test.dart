@@ -345,4 +345,62 @@ void main() {
       expect(await repo.roleOf('g:new-to-me', 'other'), GroupRole.member);
     });
   });
+
+  group('E07-B04 regression — _nextEventId must not collide across instances',
+      () {
+    test(
+      'test_E07_B04_two_repository_instances_under_a_frozen_clock_produce_'
+      'distinct_event_ids',
+      () async {
+        // A clock frozen to a constant DateTime -- reproduces E07-B04's root
+        // cause deterministically: `_nextEventId()` built its id from a
+        // wall-clock microsecond timestamp plus a PER-INSTANCE counter
+        // starting at 0, so two fresh `GroupRepository` instances writing
+        // their first event under the identical tick produced the identical
+        // id (`ge:<ts>-0`), throwing `SqliteException(1555)` on the second
+        // insert. Before the fix this test fails on every run, not 1 in 10,
+        // because the clock never advances.
+        DateTime frozenNow() =>
+            DateTime.fromMicrosecondsSinceEpoch(1700000000000000);
+
+        final repoA = GroupRepository(db, clock: frozenNow);
+        final repoB = GroupRepository(db, clock: frozenNow);
+
+        // repoA's own founding write already consumes its first
+        // `_nextEventId()` call (the `created` event) -- exactly the shape
+        // the bug report calls out: "both colliding writes were the FIRST
+        // event from their respective repository instance."
+        final groupId = await repoA.createGroup(
+          name: 'Collision',
+          ownerDeviceId: 'owner',
+          memberDeviceIds: ['member-a'],
+        );
+
+        // repoB is a brand-new instance against the SAME database -- its
+        // counter also starts at 0, so its first event write collides with
+        // repoA's `created` event id under the frozen clock.
+        final failureB = await repoB.applyEvent(frame(
+          kind: GroupEventKind.adminGranted,
+          groupId: groupId,
+          epoch: 1,
+          actorDeviceId: 'owner',
+          subjectDeviceId: 'member-a',
+        ));
+        expect(failureB, isNull);
+
+        final events = await repoA.eventsFor(groupId);
+        // `created` (repoA) + `adminGranted` (repoB).
+        expect(events, hasLength(2));
+
+        final ids = events.map((e) => e.id).toSet();
+        expect(
+          ids.length,
+          2,
+          reason: 'every group_events id must be distinct even when two '
+              'GroupRepository instances write under the identical frozen '
+              'clock tick (E07-B04)',
+        );
+      },
+    );
+  });
 }

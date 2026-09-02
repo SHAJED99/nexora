@@ -41,6 +41,8 @@
 // field is private (`_db`) while the constructor's public positional/named
 // parameters match this task's documented call shape.
 // ignore_for_file: prefer_initializing_formals
+import 'dart:math';
+
 import 'package:drift/drift.dart';
 
 import '../../../core/auth/google_auth_service.dart' show AppFailure;
@@ -51,8 +53,9 @@ import '../domain/group_permissions.dart';
 
 /// The four-table read/write surface `GroupMembershipService` builds on
 /// (task file §3). One instance per [AppDatabase] — cheap to construct,
-/// holds no state of its own beyond an in-process id counter for
-/// `group_events.id`.
+/// holds no state of its own: `group_events.id` is generated fresh each call
+/// (see [_nextEventId]), so any number of instances may write against the
+/// same [AppDatabase] without risking a collision (E07-B04).
 class GroupRepository {
   GroupRepository(this._db, {DateTime Function() clock = DateTime.now})
       : _clock = clock;
@@ -60,10 +63,26 @@ class GroupRepository {
   final AppDatabase _db;
   final DateTime Function() _clock;
 
-  int _eventIdCounter = 0;
+  /// E07-B04: previously a wall-clock microsecond timestamp plus a
+  /// PER-INSTANCE counter starting at 0 — two `GroupRepository` instances
+  /// against one `AppDatabase` produced the identical id whenever both wrote
+  /// their first event in the same clock tick (frequent on Windows, whose
+  /// `DateTime.now()` does not have true microsecond resolution). The
+  /// timestamp prefix is kept for rough chronological ordering/debuggability,
+  /// but uniqueness no longer depends on it, nor on any instance-local
+  /// state: a fresh 128-bit cryptographically-random suffix is generated on
+  /// every call via [Random.secure], making a collision astronomically
+  /// unlikely regardless of clock resolution or how many repository
+  /// instances a caller constructs.
+  static final Random _idRandom = Random.secure();
 
-  String _nextEventId() =>
-      'ge:${_clock().microsecondsSinceEpoch}-${_eventIdCounter++}';
+  String _nextEventId() {
+    final randomSuffix = List<int>.generate(
+      16,
+      (_) => _idRandom.nextInt(256),
+    ).map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+    return 'ge:${_clock().microsecondsSinceEpoch}-$randomSuffix';
+  }
 
   /// The founding write (task file §5): a group row at epoch 0, one Owner,
   /// every member of [memberDeviceIds] joined at epoch 0, and one `created`
