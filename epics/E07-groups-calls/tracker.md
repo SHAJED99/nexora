@@ -1,12 +1,10 @@
 # E07 · Groups & Voice Calls · Progress
 
-**Status:** `E07-B01` (P1, S2) and `E07-B04` (P2) both fixed, reviewed
-APPROVE, squash-merged (`2ef5467` PR #15, `cff6314` PR #14). `E07-B02`/
-`E07-B03` (P3) correctly deferred to the prospective real-time
-media-path task — not blocking. **P1/P2 = 0.** Ready for the human
-`verified` gate and merge to `development`. ·
+**Status:** 🧍 **`verified` gate cleared by the human, 2026-09-02.** Merging
+`epic_07` → `development`. ·
 **Started:** 2026-08-31 ·
-**Completed:** — · **Progress:** 14/14 tasks + 2/4 bugs (2 deferred, not owed)
+**Completed:** 2026-09-02 · **Progress:** 14/14 tasks + 2/4 bugs fixed (2
+correctly deferred, not owed)
 
 ## Tasks
 
@@ -123,6 +121,7 @@ human must make before a fix direction exists (see each bug file's
 | 🟢 `OQ-E07-3` — real-time media transport | ✅ resolved 2026-08-31 — (a) datagram audio over mesh, (c) named fallback; unblocks T13 + prospective media path |
 | 🧍 `design_contract_approval` | ✅ cleared by human, 2026-08-31 — GAP-018…GAP-022 (`design/gaps.md`) |
 | 🧍 `bug_priorities` | ✅ cleared by human, 2026-09-02 — `E07-B01` P1 (fix direction: gate the tap, option (a)), `E07-B04` P2 (fix now), `E07-B02`/`E07-B03` P3 (deferred to the prospective real-time media-path task) |
+| 🧍 `verified` | ✅ cleared by human, 2026-09-02 — 14/14 tasks + B01/B04 merged, P1/P2 = 0, B02/B03 correctly deferred; `epic_07` → `development` merge approved |
 
 ## Review log
 (date · task · reviewer model · outcome · design gate %)
