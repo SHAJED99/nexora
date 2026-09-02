@@ -1,10 +1,10 @@
 # E08 · Local Storage & Management · Progress
 
-**Status:** `E08-T01` (schema migration) and `E08-T07` (design gap pass)
-both merged, reviewed APPROVE. All 6 open questions from sharding
-resolved by the human 2026-09-02 (see `epic.md` §Open Questions). ·
+**Status:** `E08-T01`, `E08-T02`, `E08-T03` and `E08-T07` all merged,
+reviewed APPROVE. All 6 open questions from sharding resolved by the
+human 2026-09-02 (see `epic.md` §Open Questions). ·
 **Started:** 2026-09-02 ·
-**Completed:** — · **Progress:** 2/8 sharded (+1 prospective)
+**Completed:** — · **Progress:** 4/8 sharded (+1 prospective)
 
 **Remaining gate before T08/T09 can proceed:**
 - 🧍 `design_contract_approval` for `GAP-024`…`GAP-027` (`design/gaps.md`)
@@ -23,8 +23,8 @@ content by default).
 | id | title | layer | size | MoSCoW | depends_on | status |
 |---|---|---|---|---|---|---|
 | E08-T01 | Storage schema migration v14 | backend | M | must | — | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `4507119` (PR #17) + follow-up fix `43b891f` |
-| E08-T02 | Storage inventory read model | backend | M | must | T01 | todo |
-| E08-T03 | Access-frequency signals | backend | S | should | T01 | todo |
+| E08-T02 | Storage inventory read model | backend | M | must | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `1efec77` (PR #18) |
+| E08-T03 | Access-frequency signals | backend | S | should | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `222c6dd` (PR #19) |
 | E08-T04 | Smart Mode — the eight-factor plan | backend | M | must | T01, T02, T03 | todo |
 | E08-T05 | Manual policies + mode selection | backend | S | should | T01, T02 | todo |
 | E08-T06 | Retention execution + decision log + wiring | backend | M | must | T04, T05 | todo |
@@ -106,6 +106,21 @@ exact section for eight tasks with no reader.)_
   EXISTS`. Reproduces identically on `epic_08` base, unrelated to storage.
   Out of E08's fence entirely; recorded so it has a reader before the E08
   sweep (or any future infra-hardening pass) rather than being lost.
+
+- **2026-09-02 · E08-T03 review · three observations for T04's brief and
+  a future wiring follow-up (advisory, S4 each).** (1) `recordConversationOpened`
+  correctly writes `kind=message` with a *conversation* id as `item_id`
+  per T03's own contract — **T04 must not join `storage_item_stats` to
+  `messages` naively**, since a `message`-kind row's `item_id` matches no
+  `messages.id`. (2) `ChatController.onClose` calls `_recorder?.dispose()`
+  — harmless today (per-controller instance, `dispose()` only flushes),
+  but if a future task wires a *shared* recorder into
+  `chat_binding.dart`, the first chat close would tear down the shared
+  instance; that task should scope the recorder per-controller or swap
+  the call to `flush()`. (3) `recordAccess` has no dispose-guard (a call
+  after `dispose()` re-arms the debounce timer) — not reachable in the
+  current wiring, cheap to add if the shared-instance path above is ever
+  taken.
 
 ## Event log (append-only)
 - 2026-08-26 E08 drafted during Wave 1 epic-breakdown; deferred to a later wave.
@@ -209,3 +224,68 @@ exact section for eight tasks with no reader.)_
 
 **Ready to squash-merge — done.** Squash-merged to `epic_08` as `a94e483`
 (PR #16).
+
+### E08-T02 — 2026-09-02 — 📋 **APPROVE** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+
+- **scope: in-contract** — diff confined to exactly the 3 declared
+  `create:` files.
+- **real measured bytes: confirmed by reading the SQL**, not by trusting
+  the claim — every measurement is `SUM(LENGTH(...))`/`COUNT(*)` against
+  `AppDatabase`, zero decrypt/parse calls anywhere in the file.
+- **DB file size structurally excluded from `totalBytes()`** (never
+  enters `classTotals` at all — not a runtime guard, a type-level
+  omission) — falsified by injecting a `databaseFile` entry into
+  `classTotals`, confirmed rejected.
+- **NULL-payload exclusion matters more than claimed**: reviewer found
+  `relay_packets.size_bytes` goes *stale* after `reclaimPayloads` nulls
+  only `payload`, so using `LENGTH(payload)` gated on `IS NOT NULL`
+  (rather than the cheaper, wrong `size_bytes` column) avoided a real
+  E04-B03-shaped fabricated-measurement bug.
+- **Four media kinds: confirmed zero producers anywhere in `lib/`** via
+  grep; zero-reporting is in-contract per the task's own §3/§6/§8.
+- **`LENGTH()`-on-BLOB test: falsified independently** by swapping to
+  character-length semantics — caught the regression exactly as claimed.
+- **suite: 720/720**, `flutter analyze` clean, both re-run by reviewer;
+  CI (2 runs) confirmed green before merge.
+- Two non-blocking findings recorded above (§Carried-forward): F1 (a
+  differently-named decrypt call could theoretically slip the guard) and
+  F2 (`StorageClassTotal` has no way to express "unmeasurable" yet,
+  harmless today).
+
+**Ready to squash-merge — done.** Squash-merged to `epic_08` as `1efec77`
+(PR #18).
+
+### E08-T03 — 2026-09-02 — 📋 **APPROVE** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+
+- **Cross-task duplicate-enum consolidation confirmed genuine, not just
+  claimed.** T03 was dispatched in parallel with T02 off the same base
+  commit and initially declared a disclosed-temporary local
+  `StorageItemKind` enum; once T02 merged, the orchestrator sent the
+  builder back to consolidate onto T02's canonical enum before review.
+  Reviewer grepped the whole tree: exactly one `enum StorageItemKind`
+  declaration exists (T02's), zero in this PR's diff.
+- **Atomic upsert: proven by logging the real emitted SQL**, not by
+  reading Dart alone — a single `INSERT ... ON CONFLICT DO UPDATE` with
+  the increment evaluated SQL-side, no read-then-write race window. A
+  100-call/20-concurrent-flush interleaving probe landed exactly 100, no
+  lost updates.
+- **Three independent falsifications**, each reproducing the builder's
+  own claim exactly: the atomic-increment swap (15 vs 5 mismatch), the
+  debounce removal (coalescing test fails on its own pre-window
+  assertion), and the error-swallowing removal (both best-effort tests
+  fail).
+- **NULL-until-observed semantics confirmed**: real wall-clock timestamp
+  on first access, never a synthesized 0, no row at all for an
+  unobserved item.
+- **`ChatController` wiring genuinely optional** — confirmed structurally
+  by the full pre-existing test suite (630+ lines, none passing a
+  `recorder:` argument) still passing unmodified.
+- **No read-back of `storage_item_stats` anywhere in `lib/`**, confirmed
+  by grep — this task only writes.
+- **suite: 730/730**, `flutter analyze` clean, both re-run by reviewer;
+  CI (2 runs) confirmed green before merge.
+- Three non-blocking observations recorded above (§Carried-forward), all
+  aimed at T04's brief or a future wiring follow-up.
+
+**Ready to squash-merge — done.** Squash-merged to `epic_08` as `222c6dd`
+(PR #19).
