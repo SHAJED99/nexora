@@ -196,7 +196,7 @@ class AppBinding extends Bindings {
       final dir = await getApplicationDocumentsDirectory();
       final file = File(p.join(dir.path, 'nexora.sqlite'));
       if (!await file.exists()) return 0;
-      return file.length();
+      return await file.length();
     } catch (e) {
       ObservabilityService.instance.logError(
         'storage.database_file_bytes_measurement_failed',
