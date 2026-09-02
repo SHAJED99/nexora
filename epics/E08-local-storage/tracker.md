@@ -5,9 +5,13 @@
 no-server-copy) and `E08-T08` (the dashboard card) both survived
 multi-round adversarial review — real bugs found and fixed in both, none
 of them data-loss bugs. Build-complete; ready for the epic-level bug
-sweep, then the human `verified` gate and merge to `development`. ·
+sweep, then the human `verified` gate and merge to `development`.
+**Bug sweep run 2026-09-02** — see §Bug sweep at the end of this file:
+**6 defects filed (`E08-B01`…`B06`, one S1, one S2, three S3, one S4)**,
+🧍 `bug_priorities` ⏳ AWAITING HUMAN. **The epic→`development` PR does not
+open until P1/P2 = 0** (`skills/release`). ·
 **Started:** 2026-09-02 ·
-**Completed:** — · **Progress:** 8/8 sharded (+1 prospective)
+**Completed:** — · **Progress:** 8/8 sharded (+1 prospective) + 6 bug tasks
 
 **Still open, non-blocking, for the bug sweep or a future task to pick
 up:**
@@ -176,6 +180,35 @@ exact section for eight tasks with no reader.)_
   delivered, and the live-plan path has the identical behavior (not a new
   divergence this task introduced). Worth a second look at this seam
   during the sweep, not a fix owed by T08.
+
+- **2026-09-02 · E08 bug sweep · two answered human decisions were never
+  built and had no epic-level reader (advisory, S3 — now `E08-B05`).**
+  `OQ-E08-1` is 🟢 answered *"(a) device free space via Pigeon for the
+  pressure factor"* and `OQ-E08-4` is 🟢 answered *"(a) derive importance
+  from a Trusted relationship (E02) + a never-delete rule for undelivered
+  messages"*. Built: (c)'s dashboard half, and the undelivered-message rule.
+  **Not built, by anyone:** the Pigeon free-space channel (`pigeons/` has
+  only `transport.dart`; `setBudgetBytes` has zero callers in `lib/`, so
+  `budgetBytes` is permanently NULL) and the Trusted-relationship
+  derivation. Both factors therefore report `Unavailable` forever, and
+  `smart_mode_policy.dart:147-149` still tells the user *"importance is not
+  a defined term in this build"* about a term the human defined on
+  2026-09-02. `OQ-E08-T04-3` disclosed this honestly **inside `E08-T04.md`**
+  — which is precisely the read-by-nobody position `L-process-008` became a
+  rule to prevent. This entry is the reader. **Owner: `E08-B05`, plus two
+  scoped follow-up tasks (a Pigeon free-space task; an E02-fenced importance
+  task) that do not exist yet.**
+
+- **2026-09-02 · E08 bug sweep · `itemsOfKind`'s 500-row window is the
+  epic's single highest-value defect and it was mis-triaged as unreachable
+  (advisory, S1/S2 — now `E08-B01`/`E08-B02`).** Any task that next touches
+  `storage_inventory.dart`, `manual_policy.dart` or `StorageManager
+  .runPass` must fix the paging rather than raise `limit` — raising it moves
+  the cliff and gives up the "bounded by construction" property, which is
+  correct and worth keeping. **Do not close `E08-B02` on `E08-B01`'s fix
+  alone**: one shared enumeration change may serve both, but each needs its
+  own regression test, because the two callers fail in different directions
+  (B01 selects the wrong rows for deletion; B02 silently under-reports).
 
 ## Event log (append-only)
 - 2026-08-26 E08 drafted during Wave 1 epic-breakdown; deferred to a later wave.
@@ -676,3 +709,139 @@ checklist for the sweep, from this epic's own review history:
   (bug-file `files:` fence + `status:` value) actually held for this
   epic's own sharded tasks, not just future bug files — a light
   self-check, not expected to find anything.
+
+---
+
+## Bug sweep — 2026-09-02 (reviewer: `claude-opus-5`, independent worktree)
+
+**Baseline verified before starting:** `epic_08` @ `0b272d3`, 782/782 tests
+green, `flutter analyze` clean. Design gate re-run against a freshly
+regenerated Flutter probe: `dashboard` **50 missing / 34 copy / 61 style /
+1 off-palette / 11 layout** and `conversations` **46 / 28 / 49 / 1 / 8** —
+byte-for-byte the numbers `E08-T08`'s round-2 Run log recorded. **No design
+drift** was introduced by any merge after T08; the red is the pre-existing,
+disclosed `OQ-E08-T08-2` probe blindness.
+
+**Six defects found, all with reviewer-written probes** (`sweep_probe_test
+.dart`, scratch, deliberately not committed — the numbers are quoted
+verbatim in each bug file):
+
+| id | severity | what | reachable today? |
+|---|---|---|---|
+| `E08-B01` | **S1** | `overSizeMb` skips the genuinely-oldest items and permanently deletes newer ones instead, past 500 items in a kind | no — no UI can set a manual mode until `E08-T09` |
+| `E08-B02` | **S2** | Smart Mode's forecast truncates at 500 items/kind; the dashboard under-reports by 4× at 2000 messages | **yes** — default mode, every device past 500 messages |
+| `E08-B03` | S3 | a delete orphans `delivery_states` + `storage_item_stats` forever; `_accessStats()` materializes that growing table every pass | the materialization half: **yes** |
+| `E08-B04` | S3 | a deleted message passes E05's id dedup, so a re-delivered copy returns dated *today* | no — needs a manual mode |
+| `E08-B05` | S3 | `EARS-STORE-1`'s eight factors ship as six; `OQ-E08-1(a)` and `OQ-E08-4(a)` were answered by the human and neither was built or given an owner | **yes** |
+| `E08-B06` | S4 | the card's live-plan path lists just-deleted items under "Will remove:"; the durable-log path correctly excludes them | no |
+
+🧍 **HUMAN GATE (`bug_priorities`) — ⏳ AWAITING HUMAN.** Severity above is
+the reviewer's; **priority is yours**. All six carry `priority: { p: TBD }`
+and `status: blocked`. Per `skills/release`, the epic→`development` PR opens
+only when P1/P2 = 0. Note the reachability column: `E08-B01`'s S1 is a
+property of the code path, not of anything a user of *this* build can
+trigger — that is deliberately priority information, not a severity
+discount.
+
+**The single root cause behind B01 and B02** is one line:
+`StorageInventory.itemsOfKind`'s `ORDER BY created_at DESC LIMIT 500`
+(`storage_inventory.dart:167`) with two callers that never page —
+`ManualPolicy._planOverSize` (`manual_policy.dart:186`) and
+`StorageManager.runPass`'s Smart branch (`storage_manager.dart:123-129`).
+`OQ-E08-T05-1` had already named half of this and judged it *"currently
+unreachable — no device in this build has that much stored data yet"*.
+**That judgement was wrong on both counts:** the threshold is 500 messages,
+not a large corpus, and the live blast radius is the **default** Smart Mode
+path, which `OQ-E08-T05-1` never covered. Measured, not argued: at 2000
+aged messages the plan reports 500 items / 50 000 bytes against a SQL ground
+truth of 2000 / 200 000.
+
+### Starting-checklist dispositions
+
+1. **`OQ-E08-T05-1`** — real, and materially worse than recorded. Split into
+   `E08-B01` (S1, wrong items deleted) and `E08-B02` (S2, wrong forecast).
+   The "under-planning" half recorded at T05 round 2 is folded into B01.
+2. **`OQ-E08-T08-2`** (probe-dumper `InkWell` blindness) — **not a bug, and
+   correctly deferred.** Independently reproduced: the dashboard's numbers
+   are identical to T08's record, so nothing regressed, and the fix touches
+   `flutter_probe_dumper.dart`, which every screen's gate shares. Fixing it
+   here would move four screens' scores inside a sweep, which is exactly the
+   drive-by this epic's fences forbid. `L-frontend-001` stands: **do not
+   reshape either card's `InkWell`.** Leave as an owned follow-up.
+3. **The missing atomicity regression test** — **written and merged by this
+   sweep**, not deferred:
+   `test_EARS_STORE_13_a_delete_whose_decision_row_fails_to_write_is_rolled_back`
+   (`test/core/storage/retention_executor_test.dart`), via a
+   `_AppliedRowFailingLog` that throws on `outcome: applied`. Every existing
+   F1 test breaks the *delete* side; this one breaks the *log* side, which is
+   the only way to tell a real `db.transaction()` from mere delete-then-log
+   ordering. **Falsified:** removing `apply()`'s `db.transaction(...)`
+   wrapper while keeping the same order and try/catch leaves all 9
+   pre-existing executor tests green and fails exactly this one, for the
+   right reason (`Expected: not null / Actual: <null>`). Wrapper restored
+   byte-identical (`git diff` empty), re-run green.
+4. **Skipped-for-other-reasons rows under "Will remove:"** — **confirmed
+   correct, not a defect**, as T08's round-2 reviewer judged: an
+   undelivered-message group genuinely becomes removable once delivered, so
+   a forecast is the right description, and both render paths agree on it.
+   The second look did however find a *different* divergence at the same
+   seam — the live-plan path shows **already-applied** groups, which the log
+   path explicitly excludes — filed as `E08-B06` (S4).
+5. **`OQ-E08-5`** (FR-STORE-002/003 have no owner) — **confirmed still
+   accurately recorded**, in both `epic.md`'s Open Questions and
+   §Carried-forward. No action. Re-homing waits on the media-path task's
+   creation, per the human's answer (i).
+6. **`L-process-011`/`L-process-012` self-check** — the rules as written
+   held: 8/8 sharded tasks carry a valid `status: done` and a populated
+   `files:` fence, 8/8 have a §4 scope fence, `scheduler.py --validate` is
+   clean. **But the self-check as scoped would have missed a real defect
+   that `make health` caught:** `E08-T07.md`'s frontmatter carried
+   **duplicate keys** — real values at lines 11-13 and a second, empty
+   `reviewed_at:`/`reviewed_by:`/`review_outcome:` block at lines 34-36.
+   YAML is last-wins, so the harness read this task as *reviewed by nobody*,
+   failing both H5 (rule 5 unverifiable) and H7 (merge gate skipped) — the
+   only E08 task in either list, while the tracker's own Review log has the
+   full APPROVE record. **Fixed by this sweep** (duplicate block deleted,
+   values at 11-13 preserved); `make health` now reports **zero E08 entries**
+   in any check. Remaining H4/H5/H7 failures are all E05/E06 legacy and
+   outside this sweep's fence. Lesson candidate: a `status:`-and-`files:`
+   self-check does not catch a *shadowed* key, and `--validate` does not
+   either — only `make health` does.
+
+### What was probed and held
+
+Not everything checked was broken. Verified sound, each against a
+reviewer-written probe or a direct read, not against a claim:
+
+- **Coordinator tick ordering** (§Carried-forward, 2026-09-02, S4) — the
+  storage pass runs strictly **after** `processQueue`/`sweepExpired`/
+  `reclaimPayloads` (`messaging_coordinator.dart:346-364`), in its own
+  try/catch with its own `storagePassFailures` counter. A storage-pass
+  failure cannot abort the messaging work in the same tick. **Held.**
+- **`Unavailable` is never treated as `0.0`** by any downstream reader
+  (the E04-B03 prohibition, the observation T04's reviewer aimed at every
+  downstream dispatch) — grepped and read through T06 and T08. **Held.**
+- **Composition root** — `bindings.dart:160-171` really constructs
+  `StorageManager`, `Get.put`s it, and assigns
+  `coordinator.storageManager`. The `OQ-E06-T06-4`/`E07-B03` pattern (a
+  controller nothing constructs) did **not** recur. **Held.**
+- **Sync cursors** — a retention delete does not rewind
+  `sync_cursors.last_confirmed_sequence_number`, and that is *correct*: the
+  backfill path re-requests by sequence number and is unaffected. Checked
+  because it looked like a seam; it isn't one. **Held.**
+- **The conversation-activity shield** shields an active conversation's
+  *entire* history from every other factor, however old
+  (`smart_mode_policy.dart:119-123`, `activeConversationWindowDays: 14`).
+  Surprising in practice — the conversations that consume the most storage
+  are the active ones — but it is documented, deliberate, and an `A-004`
+  tunable placeholder. **Not a defect.** Flagged only so the human sees it
+  when real numbers replace the placeholders.
+- **`storage_decisions` grows unbounded** (≥1 row per 6-hour pass, no
+  pruning anywhere). Bounded by ~10 groups/pass and ~100 bytes/row, so
+  ~1.5 MB/year worst case. Real, append-only *by design* (FR-STORE-007),
+  and pruning an audit log is a product question. **Recorded, not filed.**
+
+**Suite after the sweep: 783/783** (782 + the new atomicity regression
+test), `flutter analyze` clean, `scheduler.py --validate` clean.
+**No product code was changed by this sweep** — the diff is one test, one
+frontmatter fix, six bug files and this section.

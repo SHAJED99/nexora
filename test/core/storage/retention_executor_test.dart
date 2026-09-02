@@ -93,6 +93,28 @@ RetentionPlan _plan({
 /// A [RetentionExecutor] whose [deleteMessageItems] always throws -- used to
 /// prove the log-before-delete ordering is real (this file's header;
 /// `deleteMessageItems`'s own doc comment in `retention_executor.dart`).
+/// A [StorageDecisionLog] that fails only when asked to write the
+/// `outcome: applied` row -- the OTHER half of `apply()`'s per-group
+/// `db.transaction()`. Every existing F1 test breaks the *delete* side; this
+/// one breaks the *log* side, which is what actually proves the write is
+/// transactional rather than merely ordered delete-then-log (E08 bug sweep,
+/// 2026-09-02 -- the E08-T06 round-2 carried-forward observation).
+class _AppliedRowFailingLog extends StorageDecisionLog {
+  _AppliedRowFailingLog({required super.db});
+
+  @override
+  Future<String> recordPass(
+    RetentionPlan plan, {
+    required DecisionOutcome outcome,
+    required int nowEpochMs,
+  }) {
+    if (outcome == DecisionOutcome.applied) {
+      throw Exception('simulated decision-row write failure');
+    }
+    return super.recordPass(plan, outcome: outcome, nowEpochMs: nowEpochMs);
+  }
+}
+
 class _ThrowingDeleteExecutor extends RetentionExecutor {
   _ThrowingDeleteExecutor({required super.db, required super.log});
 
@@ -499,5 +521,83 @@ void main() {
       expect(packets, hasLength(1));
       expect(packets.single.payload, isNotNull);
     });
+
+    test(
+      'test_EARS_STORE_13_a_delete_whose_decision_row_fails_to_write_is_'
+      'rolled_back',
+      () async {
+        // The half of the F1 fix no existing test covers (E08-T06 round-2
+        // carried-forward, added by the E08 bug sweep). The other F1 tests
+        // break the DELETE and assert the `applied` row never appears; this
+        // one breaks the `applied` ROW WRITE and asserts the delete never
+        // becomes durable. Only a real `db.transaction()` wrapper can make
+        // both true at once -- delete-then-log without a transaction passes
+        // every other test in this file and fails this one.
+        //
+        // Falsified (E08 sweep Run log): removing `apply()`'s
+        // `db.transaction(() async { ... })` wrapper -- keeping the same
+        // delete-then-log order and the same try/catch -- leaves all 11
+        // pre-existing executor tests green and fails exactly this test's
+        // `expect(survivor, isNotNull)`, for the right reason (the message
+        // row is gone).
+        await _seedMessage(db, id: 'm-1', state: DeliveryState.stored, bytes: 40);
+        final failingLog = _AppliedRowFailingLog(db: db);
+        final executorOverFailingLog =
+            RetentionExecutor(db: db, log: failingLog);
+        final plan = _plan(
+          mode: StorageMode.olderThanDays.name,
+          groups: [
+            _group(kind: StorageItemKind.message, itemIds: ['m-1'], bytes: 40),
+          ],
+        );
+
+        // Precondition: the row really is there, and really is a legal
+        // deletion candidate -- so a passing assertion below cannot be
+        // vacuous.
+        expect(
+          await (db.select(db.messages)..where((t) => t.id.equals('m-1')))
+              .getSingleOrNull(),
+          isNotNull,
+        );
+
+        final outcome = await executorOverFailingLog.apply(
+          plan,
+          allowedKinds: const <StorageItemKind>{StorageItemKind.message},
+          nowEpochMs: 5000,
+        );
+
+        // The pass does not crash, and does not claim the group was applied.
+        expect(outcome.appliedGroups, isEmpty);
+        expect(outcome.bytesReclaimed, 0);
+        expect(outcome.skippedGroups, hasLength(1));
+
+        // The load-bearing assertion: the delete rolled back with its own
+        // decision row. `retention_executor.dart`'s header states this
+        // exactly -- "a delete whose decision row fails to write never
+        // happens either".
+        final survivor =
+            await (db.select(db.messages)..where((t) => t.id.equals('m-1')))
+                .getSingleOrNull();
+        expect(
+          survivor,
+          isNotNull,
+          reason: 'the delete must roll back when its own applied decision '
+              'row cannot be written -- otherwise storage_decisions has no '
+              'record at all of a delete that really happened',
+        );
+
+        // And the log is not silent about the group either: a truthful
+        // `skipped` row is written outside the rolled-back transaction.
+        final rows = await db.select(db.storageDecisions).get();
+        expect(
+          rows.any((r) => r.outcome == DecisionOutcome.applied.name),
+          isFalse,
+        );
+        expect(
+          rows.any((r) => r.outcome == DecisionOutcome.skipped.name),
+          isTrue,
+        );
+      },
+    );
   });
 }
