@@ -1,10 +1,14 @@
 # E08 · Local Storage & Management · Progress
 
-**Status:** `E08-T01`, `E08-T02`, `E08-T03` and `E08-T07` all merged,
-reviewed APPROVE. All 6 open questions from sharding resolved by the
-human 2026-09-02 (see `epic.md` §Open Questions). ·
+**Status:** `E08-T01`, `E08-T02`, `E08-T03`, `E08-T04` and `E08-T07` all
+merged, reviewed APPROVE. All 6 open questions from sharding resolved by
+the human 2026-09-02 (see `epic.md` §Open Questions). `E08-T05` and
+`E08-T06` are dispatchable next; `T05` deliberately serialized after `T04`
+since its own contract imports `T04`'s types despite the DAG not
+declaring that dependency (same shape as the T02/T03 parallel-dispatch
+collision). ·
 **Started:** 2026-09-02 ·
-**Completed:** — · **Progress:** 4/8 sharded (+1 prospective)
+**Completed:** — · **Progress:** 5/8 sharded (+1 prospective)
 
 **Remaining gate before T08/T09 can proceed:**
 - 🧍 `design_contract_approval` for `GAP-024`…`GAP-027` (`design/gaps.md`)
@@ -25,7 +29,7 @@ content by default).
 | E08-T01 | Storage schema migration v14 | backend | M | must | — | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `4507119` (PR #17) + follow-up fix `43b891f` |
 | E08-T02 | Storage inventory read model | backend | M | must | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `1efec77` (PR #18) |
 | E08-T03 | Access-frequency signals | backend | S | should | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `222c6dd` (PR #19) |
-| E08-T04 | Smart Mode — the eight-factor plan | backend | M | must | T01, T02, T03 | todo |
+| E08-T04 | Smart Mode — the eight-factor plan | backend | M | must | T01, T02, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `77f0505` (PR #20) |
 | E08-T05 | Manual policies + mode selection | backend | S | should | T01, T02 | todo |
 | E08-T06 | Retention execution + decision log + wiring | backend | M | must | T04, T05 | todo |
 | E08-T07 | Design gap pass | docs | M | must | — | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `a94e483` (PR #16) |
@@ -121,6 +125,26 @@ exact section for eight tasks with no reader.)_
   after `dispose()` re-arms the debounce timer) — not reachable in the
   current wiring, cheap to add if the shared-instance path above is ever
   taken.
+
+- **2026-09-02 · E08-T04 review · three observations for T06's dispatch,
+  the plan's first real caller (advisory, S3/S4).** (1) **S3 —
+  `budgetBytes == 0` synthesizes a fake `pressureRatio` of `1.0`**
+  (`smart_mode_policy.dart:135-137`) — a zero denominator is undefined,
+  not "100% full", and would relabel every candidate's reason as
+  `storagePressure`. Unreachable today (no caller passes `budgetBytes`
+  yet). **`E08-T06` must never pass `0`**, and `OQ-E08-1`'s eventual
+  budget-semantics answer should say whether a zero/absent budget reports
+  `Unavailable`. (2) **S4 — the storage-pressure reason-override branch
+  is live but untested** (`smart_mode_policy.dart:241-247`) — when
+  pressure is high it silently replaces an already-chosen reason with
+  `storagePressure`. Disclosed honestly, no EARS criterion currently
+  requires a test for it, but it needs one before it can run for real
+  under a genuine budget. (3) **S4, non-blocking** — the never-accessed
+  vs. rarely-accessed thresholds (7 days vs. 30 days,
+  `retention_plan.dart` `SmartModeThresholds`) treat absence of an access
+  row ~4× more harshly than observed non-use. Both are correct
+  `A-004` placeholders per `OQ-E08-T04-1`, but the asymmetry is worth the
+  human's attention when real numbers replace them.
 
 ## Event log (append-only)
 - 2026-08-26 E08 drafted during Wave 1 epic-breakdown; deferred to a later wave.
@@ -289,3 +313,35 @@ exact section for eight tasks with no reader.)_
 
 **Ready to squash-merge — done.** Squash-merged to `epic_08` as `222c6dd`
 (PR #19).
+
+### E08-T04 — 2026-09-02 — 📋 **APPROVE** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+
+- **Two orchestrator-ratified deviations re-verified, not taken on
+  faith.** `OQ-E08-T04-2` (added `items` parameter): reviewer read T02's
+  actual types and confirmed `StorageInventorySnapshot`/`StorageClassTotal`
+  genuinely hold only class-level aggregates, no per-item data — the
+  parameter is structurally necessary, not a convenience. Purity
+  confirmed via import/grep: zero Drift/`AppDatabase`/`DateTime.now`
+  hits, doc-comment prose only. `OQ-E08-T04-3` (importance stays
+  `Unavailable`): confirmed the code path is unconditional with no
+  reassignment anywhere, and the `files:` fence genuinely contains none
+  of E02's trust-relationship code — the scope-creep concern was real.
+- **No-fabricated-defaults property attacked directly**, not by
+  inspection: reviewer swapped both `pressure` and `importance` to
+  `Scored(0.0)` and confirmed each change breaks exactly its own targeted
+  test.
+- **Threshold-literal grep and no-composite-score claims independently
+  reproduced.**
+- **Determinism: falsified, not trusted.** Reviewer deleted the group
+  sort — exactly 1 test failed (the determinism test itself) out of 740,
+  confirming the tie-break is genuinely wired, not decorative.
+- **`stats` key helper: falsified.** Reviewer swapped the one call site
+  to an ad-hoc lookup (the exact `kind:id`-vs-`id` bug §6 warns about) —
+  two tests failed.
+- **suite: 740/740**, `flutter analyze` clean, both re-run by reviewer;
+  CI (2 runs) confirmed green before merge.
+- Three non-blocking findings recorded above (§Carried-forward), all
+  aimed at `E08-T06`'s dispatch — the plan's first real caller.
+
+**Ready to squash-merge — done.** Squash-merged to `epic_08` as `77f0505`
+(PR #20).
