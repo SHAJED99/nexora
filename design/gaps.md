@@ -13,6 +13,17 @@ the already-approved, already-measured `conversations.md` contract and
 closes GAP-006, which was approved on 2026-08-29 with "rows deferred to
 E07" written into it.)
 
+> **E08 reopening, cleared 2026-09-02.** `E08-T07`'s design gap pass
+> reopened this gate for **GAP-024 · GAP-025 · GAP-026 · GAP-027** (the
+> Storage settings sub-screen, the dashboard warning's expanded state,
+> the storage-percentage denominator, and the settings row's "export"
+> subtitle). All four approved: GAP-024/025 as proposed; GAP-026 as the
+> record of the already-made `OQ-E08-1` decision; GAP-027's fork resolved
+> as (c) — no export control, the subtitle stays a disclosed copy
+> artifact. `E08-T08` (dashboard card) and the future `E08-T09` (Storage
+> settings screen, once sharded) may now build against `design/screens/
+> settings-storage.md` and `dashboard.md`'s new derived state.
+
 > **`E07-T12` follow-up, 2026-08-31.** The three contracts named in that
 > clearance now exist (`group-create.md`, `group-manage.md`, `call.md`) and
 > each records what it derived and from where. The gate line above is left
@@ -1085,7 +1096,7 @@ and that is the strongest single argument for this disposition.**
   says the user does not need to press one, and this screen must not
   reintroduce it by the back door. Route `/settings/storage`; every other
   settings row keeps its existing behaviour untouched.
-- **approved by:**
+- **approved by:** human, 2026-09-02
 - **built:** not built — `E08-T07` writes the contract, `E08-T09` builds it
 - **contract written (`E08-T07`, 2026-09-02):**
   `design/screens/settings-storage.md` now exists and records what it derived
@@ -1125,7 +1136,7 @@ and that is the strongest single argument for this disposition.**
   the latest decision pass with its real measured bytes and its reason
   string, followed by the "Why" summary sentence. Expanding runs nothing,
   applies nothing and deletes nothing (EARS-STORE-2).
-- **approved by:**
+- **approved by:** human, 2026-09-02
 - **built:** not built — `E08-T07` contracts it, `E08-T08` builds it
 - **contract written (`E08-T07`, 2026-09-02):** appended to
   `design/screens/dashboard.md` as a hand-written
@@ -1178,7 +1189,8 @@ and that is the strongest single argument for this disposition.**
   `design/screens/dashboard.md` §Derived state and
   `design/screens/settings-storage.md` render bytes accordingly and cite this
   entry as the deviation's reason.
-- **approved by:**
+- **approved by:** human, 2026-09-02 (approving this gap entry's record of
+  the `OQ-E08-1` decision already made — not a new decision)
 - **built:** not built
 
 ## GAP-027 — settings, the Storage row promises "export" and no requirement asks for it
@@ -1204,7 +1216,13 @@ and that is the strongest single argument for this disposition.**
   — all three forks above stand exactly as written, and picking one is the
   human's (`OQ-E08-T07-1`). Until then the Storage screen simply has no export
   control and `settings.md` element 31's subtitle stays as measured.
-- **approved by:**
+- **`OQ-E08-T07-1` resolved (human, 2026-09-02): fork (c).** No export
+  control anywhere in this build. The `export` word in element 30/31's
+  subtitle stays as a disclosed, measured copy artifact rather than a
+  claim about built functionality — this entry is its record. Not
+  routed through `skills/change-impact`: no scope was added or removed,
+  since nothing was ever going to be built for it.
+- **approved by:** human, 2026-09-02
 - **built:** not built
 
 ## The usual suspects
