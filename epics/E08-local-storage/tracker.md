@@ -1,10 +1,10 @@
 # E08 · Local Storage & Management · Progress
 
-**Status:** `E08-T07` (design gap pass) merged, reviewed APPROVE. `E08-T01`
-(schema migration) in progress. All 6 open questions from sharding
+**Status:** `E08-T01` (schema migration) and `E08-T07` (design gap pass)
+both merged, reviewed APPROVE. All 6 open questions from sharding
 resolved by the human 2026-09-02 (see `epic.md` §Open Questions). ·
 **Started:** 2026-09-02 ·
-**Completed:** — · **Progress:** 1/8 sharded (+1 prospective)
+**Completed:** — · **Progress:** 2/8 sharded (+1 prospective)
 
 **Remaining gate before T08/T09 can proceed:**
 - 🧍 `design_contract_approval` for `GAP-024`…`GAP-027` (`design/gaps.md`)
@@ -22,7 +22,7 @@ content by default).
 
 | id | title | layer | size | MoSCoW | depends_on | status |
 |---|---|---|---|---|---|---|
-| E08-T01 | Storage schema migration v14 | backend | M | must | — | in-progress · builder (sonnet) |
+| E08-T01 | Storage schema migration v14 | backend | M | must | — | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `4507119` (PR #17) + follow-up fix `43b891f` |
 | E08-T02 | Storage inventory read model | backend | M | must | T01 | todo |
 | E08-T03 | Access-frequency signals | backend | S | should | T01 | todo |
 | E08-T04 | Smart Mode — the eight-factor plan | backend | M | must | T01, T02, T03 | todo |
@@ -98,6 +98,15 @@ exact section for eight tasks with no reader.)_
   chooses option (ii), it needs an IMP report at the time the media-path
   task is created, not at E08's retro.
 
+- **2026-09-02 · E08-T01 review (F2) · `onCreate` is not re-runnable at
+  all — pre-existing, not introduced by T01 (advisory, S3).** A fresh
+  install killed mid-`onCreate` and reopened fails on
+  `SqliteException(1): index idx_messages_conversation_created_at already
+  exists` — an E05-era `Migrator.createIndex` call with no `IF NOT
+  EXISTS`. Reproduces identically on `epic_08` base, unrelated to storage.
+  Out of E08's fence entirely; recorded so it has a reader before the E08
+  sweep (or any future infra-hardening pass) rather than being lost.
+
 ## Event log (append-only)
 - 2026-08-26 E08 drafted during Wave 1 epic-breakdown; deferred to a later wave.
 - 2026-09-02 Sharded into 8 tasks (+1 prospective) by the planner against `development` @
@@ -134,3 +143,69 @@ exact section for eight tasks with no reader.)_
   §Prospective and in `GAP-024`, and its one inherited obligation (the
   `L-design-002` probe-fixture seed) re-homed to `E08-T08`, which owns that
   file. Validator clean afterwards.
+
+## Review log
+
+### E08-T01 — 2026-09-02 — 📋 **APPROVE** (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+
+- **DDL: verified against a real `sqlite_master` dump**, not source
+  reading — column-for-column identical to the human-approved §5 contract.
+  `budget_bytes INTEGER NULL` with no `DEFAULT`, both PKs and both indexes
+  exact.
+- **scope: clean.** `pubspec.yaml`/`pubspec.lock` zero bytes changed;
+  `messages`/`delivery_states`/`relay_packets`/`routes`/`sync_cursors`/
+  group-crypto tables confirmed untouched by diff AND by the migration
+  test's own byte-identical DDL assertion pre/post.
+- **atomicity: proven by differential fault injection**, not just read.
+  Reviewer threw inside the migration step with and without the
+  transaction wrap — without it, all three tables persisted half-created
+  after a simulated crash (the exact hazard §6 named); with it, zero
+  tables and `user_version` unchanged.
+- **exact-set-equality migration test: independently re-falsified.**
+  Reviewer injected their own extra table, reproduced the claimed failure
+  signature exactly, reverted, confirmed green — not trusting the
+  builder's report of their own falsification.
+- **default-row tests: confirmed structurally distinct** `onCreate`
+  (`NativeDatabase.memory()` → `wasCreated`) vs. `onUpgrade` (raw v13 DB →
+  `hadUpgrade`) paths — no shared hook that could fake one via the other.
+- **`database.g.dart`: confirmed genuinely regenerated.** Reviewer reran
+  `build_runner` themselves — byte-identical output, zero diff.
+- **suite: 713/713**, `flutter analyze` clean, both re-run by reviewer.
+
+**Two non-blocking findings, both recorded rather than gated on:**
+- **F1 (S3) — the default-row insert wasn't retry-safe** against a crash
+  in drift's post-`onUpgrade` version-stamping window (reproduced via
+  fault injection: `UNIQUE constraint failed` on re-run). Reviewer's
+  recommended fix (`InsertMode.insertOrIgnore` on both insert call sites,
+  zero risk, no re-review needed) applied directly by the orchestrator as
+  a same-day follow-up commit (`43b891f`) — re-verified 713/713 green,
+  analyze clean.
+- **F2 (S3, pre-existing, not introduced by this task)** — see
+  §Carried-forward observations above.
+
+**Ready to squash-merge — done.** Squash-merged to `epic_08` as `4507119`
+(PR #17), plus the F1 follow-up fix `43b891f`.
+
+### E08-T07 — 2026-09-02 — 📋 **APPROVE** (reviewer: `claude-sonnet-5`; `executed_by`: `claude-opus-5` ✅ rule 5)
+
+- **scope: in-contract** — diff confined to exactly the 4 claimed paths.
+- **`approved by:` lines on GAP-024/025/026/027: directly grepped, genuinely
+  blank** — no self-signature (`L-process-002`).
+- **rule 2 primitive reuse: spot-checked**, including one honestly
+  disclosed deviation (a title colour substituted because the parent
+  screen's own value wasn't in its own measured token table).
+- **`dashboard.md`'s generated table region: confirmed byte-identical**
+  to HEAD via diff — only the new Derived-state section added.
+- **OQ-E08-1/OQ-E08-3 fidelity: verified against the full open-question
+  text**, not a paraphrase — copy matches the human's actual decision
+  exactly (no fabricated percentage, "Not measured" never "0", Smart
+  Mode's content-exclusion copy, empty state framed as expected-default
+  not rare).
+- **No forbidden UI element** (Clean Now / apply-now / dialog / delete
+  affordance) found anywhere — confirmed by grep and cross-checked that
+  no dialog primitive exists anywhere in this design system.
+- Zero Dart files touched; suite result provably a no-op. Design gate
+  correctly n/a for a pre-build derived contract.
+
+**Ready to squash-merge — done.** Squash-merged to `epic_08` as `a94e483`
+(PR #16).
