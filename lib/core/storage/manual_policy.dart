@@ -118,10 +118,29 @@ final class ManualPolicy {
     final groups = <RetentionCandidateGroup>[];
     for (final classTotal in snapshot.classTotals) {
       if (classTotal.itemCount == 0) continue;
-      final kindItems = await items(
-        classTotal.kind,
-        olderThanEpochMs: cutoffEpochMs,
-      );
+
+      // E08-B07 fix: page oldest-first through the WHOLE aged set, reusing
+      // E08-B01's own paging pattern (`oldestFirst: true`, `_pageSize` per
+      // page) rather than trusting a single default-limited,
+      // newest-first-among-aged call. Unlike `_planOverSize`, there is no
+      // early-termination byte cap here — the rule is simply "everything
+      // older than X days" — so this pages until the kind is exhausted.
+      final kindItems = <StorageItem>[];
+      var offset = 0;
+      while (true) {
+        final page = await items(
+          classTotal.kind,
+          olderThanEpochMs: cutoffEpochMs,
+          oldestFirst: true,
+          limit: _pageSize,
+          offset: offset,
+        );
+        if (page.isEmpty) break;
+        kindItems.addAll(page);
+        offset += page.length;
+        if (page.length < _pageSize) break;
+      }
+
       // Age only — never access frequency, importance or pressure (task
       // §2). Re-check the cutoff defensively rather than trusting the
       // injected fetch to have applied it: the literal contract of [items]
