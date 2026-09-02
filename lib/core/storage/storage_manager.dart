@@ -120,12 +120,20 @@ class StorageManager {
       // Smart Mode deletion candidate, regardless of what factors would
       // otherwise select it.
       allowedKinds = const <StorageItemKind>{};
+      // E08-B02 fix: `SmartModePolicy.plan`'s own contract
+      // (`smart_mode_policy.dart:79-84`) requires "a representative set
+      // (e.g. every `message` item, not an age-filtered subset)" for its
+      // age/access/conversation-activity factors to mean what their names
+      // say. `itemsOfKind`'s bounded, newest-first default silently handed
+      // it only the newest 500 -- exactly backwards for an `olderThan`
+      // factor. Page fully through each kind instead (still bounded per
+      // call, `_allItemsOfKind`'s own page size).
       final items = <StorageItem>[
         for (final kind in const [
           StorageItemKind.message,
           StorageItemKind.relayPayload,
         ])
-          ...await inventory.itemsOfKind(kind),
+          ...await _allItemsOfKind(kind),
       ];
       plan = smart.plan(
         snapshot: snapshot,
@@ -165,6 +173,35 @@ class StorageManager {
       nowEpochMs: nowEpochMs,
     );
     return plan;
+  }
+
+  /// Pages fully through one kind, oldest-first, `_itemsPageSize` at a
+  /// time (E08-B02) -- `StorageInventory.itemsOfKind`'s own single-call
+  /// bound (`limit`) still holds for every individual call this makes; what
+  /// changes is that this method keeps calling until the kind is genuinely
+  /// exhausted instead of stopping after the first (newest) page. Smart
+  /// Mode's own contract requires a representative set for its per-item
+  /// factors to be meaningful (`smart_mode_policy.dart:79-84`), so no bound
+  /// is left standing here -- see this file's header for why that is an
+  /// honest choice rather than a silent truncation.
+  static const int _itemsPageSize = 500;
+
+  Future<List<StorageItem>> _allItemsOfKind(StorageItemKind kind) async {
+    final all = <StorageItem>[];
+    var offset = 0;
+    while (true) {
+      final page = await inventory.itemsOfKind(
+        kind,
+        oldestFirst: true,
+        limit: _itemsPageSize,
+        offset: offset,
+      );
+      if (page.isEmpty) break;
+      all.addAll(page);
+      offset += page.length;
+      if (page.length < _itemsPageSize) break;
+    }
+    return all;
   }
 
   /// `storage_item_stats` (E08-T03), mapped into `SmartModePolicy.plan`'s
