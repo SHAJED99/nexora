@@ -102,6 +102,27 @@ class _ThrowingDeleteExecutor extends RetentionExecutor {
   }
 }
 
+/// Throws only for a delete call that would touch [failingIds] -- lets a
+/// multi-group `apply()` call succeed for some groups and fail for others,
+/// proving the per-group atomicity fix (F1: round-1 review) is real.
+class _SelectivelyThrowingExecutor extends RetentionExecutor {
+  _SelectivelyThrowingExecutor({
+    required super.db,
+    required super.log,
+    required this.failingIds,
+  });
+
+  final Set<String> failingIds;
+
+  @override
+  Future<void> deleteMessageItems(List<String> ids) async {
+    if (ids.any(failingIds.contains)) {
+      throw Exception('simulated delete failure for $ids');
+    }
+    await super.deleteMessageItems(ids);
+  }
+}
+
 void main() {
   late AppDatabase db;
   late StorageDecisionLog log;
@@ -119,9 +140,12 @@ void main() {
 
   group('EARS-STORE-13 — decisions logged, allow-list enforced', () {
     test('test_EARS_STORE_13_decisions_are_logged_before_deletes', () async {
+      // A group whose delete fails must NEVER get a durable `applied`
+      // decision row (F1, round-1 review) -- it must get a TRUTHFUL
+      // `skipped` row instead, and `apply()` must not abort (it recovers
+      // and returns normally rather than propagating the delete failure).
       await _seedMessage(db, id: 'm-1', state: DeliveryState.stored, bytes: 40);
-      final throwingExecutor =
-          _ThrowingDeleteExecutor(db: db, log: log);
+      final throwingExecutor = _ThrowingDeleteExecutor(db: db, log: log);
       final plan = _plan(
         mode: 'olderThanDays',
         groups: [
@@ -129,22 +153,25 @@ void main() {
         ],
       );
 
-      await expectLater(
-        () => throwingExecutor.apply(
-          plan,
-          allowedKinds: {StorageItemKind.message},
-          nowEpochMs: 5000,
-        ),
-        throwsException,
+      final outcome = await throwingExecutor.apply(
+        plan,
+        allowedKinds: {StorageItemKind.message},
+        nowEpochMs: 5000,
       );
 
-      // The decision row must already be durable even though the delete
-      // itself failed (task §2/§6 risk note) -- falsifiable: removing the
-      // log-before-delete ordering in `RetentionExecutor.apply` (moving the
-      // delete loop before the `log.recordPass` calls) makes this fail.
+      expect(outcome.appliedGroups, isEmpty);
+      expect(outcome.skippedGroups, hasLength(1));
+      expect(outcome.skippedGroups.single.why, contains('delete failed'));
+
+      // A decision row for this group must exist -- but it must be
+      // `skipped`, never `applied` (falsifiable: reverting the F1 fix --
+      // batch-logging `applied` upfront before any delete runs -- makes
+      // this row read `applied` even though nothing was actually deleted).
       final rows = await db.select(db.storageDecisions).get();
       expect(rows, isNotEmpty);
-      expect(rows.any((r) => r.outcome == DecisionOutcome.applied.name), isTrue);
+      expect(rows.any((r) => r.outcome == DecisionOutcome.applied.name), isFalse,
+          reason: 'a failed delete must never leave a false applied row');
+      expect(rows.any((r) => r.outcome == DecisionOutcome.skipped.name), isTrue);
 
       // What was NOT deleted: the message row must still exist, since the
       // delete itself never actually completed.
@@ -153,6 +180,67 @@ void main() {
               .getSingleOrNull();
       expect(stillThere, isNotNull);
     });
+
+    test(
+      'test_EARS_STORE_13_a_mid_pass_delete_failure_never_falsely_marks_a_'
+      'sibling_group_applied',
+      () async {
+        // F1 regression (round-1 review): two candidate groups; the SECOND
+        // group's delete throws. The first group must still be genuinely
+        // applied (deleted + logged applied); the second must be skipped
+        // with a truthful reason, NEVER logged applied.
+        await _seedMessage(db, id: 'm-1', state: DeliveryState.stored, bytes: 40);
+        await _seedMessage(db, id: 'm-2', state: DeliveryState.stored, bytes: 40);
+        final selectivelyThrowingExecutor = _SelectivelyThrowingExecutor(
+          db: db,
+          log: log,
+          failingIds: {'m-2'},
+        );
+        final plan = _plan(
+          mode: 'olderThanDays',
+          groups: [
+            _group(
+              kind: StorageItemKind.message,
+              itemIds: ['m-1'],
+              categoryKey: 'messages',
+              bytes: 40,
+            ),
+            _group(
+              kind: StorageItemKind.message,
+              itemIds: ['m-2'],
+              categoryKey: 'messages',
+              reason: RetentionReason.rarelyAccessed,
+              reasonDetail: '30',
+              bytes: 40,
+            ),
+          ],
+        );
+
+        final outcome = await selectivelyThrowingExecutor.apply(
+          plan,
+          allowedKinds: {StorageItemKind.message},
+          nowEpochMs: 5000,
+        );
+
+        expect(outcome.appliedGroups, hasLength(1));
+        expect(outcome.appliedGroups.single.itemIds, ['m-1']);
+        expect(outcome.skippedGroups, hasLength(1));
+        expect(outcome.skippedGroups.single.group.itemIds, ['m-2']);
+
+        // m-1 genuinely deleted; m-2 genuinely still there.
+        final remaining = await db.select(db.messages).get();
+        expect(remaining.map((r) => r.id).toSet(), {'m-2'});
+
+        // The log must never claim m-2 was applied -- only m-1.
+        final rows = await db.select(db.storageDecisions).get();
+        final appliedRows =
+            rows.where((r) => r.outcome == DecisionOutcome.applied.name);
+        expect(appliedRows, hasLength(1));
+        final skippedRows =
+            rows.where((r) => r.outcome == DecisionOutcome.skipped.name);
+        expect(skippedRows, isNotEmpty);
+      },
+    );
 
     test(
       'test_EARS_STORE_13_group_outside_allow_list_is_skipped_with_reason',
@@ -298,6 +386,36 @@ void main() {
             await (db.select(db.messages)..where((t) => t.id.equals('m-1')))
                 .getSingleOrNull();
         expect(stillThere, isNull, reason: 'Manual Mode authorised this delete');
+      },
+    );
+
+    test(
+      'test_EARS_STORE_13_empty_plan_sentinel_is_never_logged_applied',
+      () async {
+        // F2 regression (round-1 review): a genuinely empty plan (nothing
+        // to report at all -- the common Smart Mode shape, since Smart
+        // Mode never has anything in candidatesToApply on this build) must
+        // still advance the throttle clock with a sentinel row, but that
+        // sentinel must NEVER read `outcome: applied` -- nothing was ever
+        // applied.
+        final plan = _plan(mode: 'smart', groups: const []);
+
+        final outcome = await executor.apply(
+          plan,
+          allowedKinds: const <StorageItemKind>{},
+          nowEpochMs: 5000,
+        );
+
+        expect(outcome.appliedGroups, isEmpty);
+        expect(outcome.bytesReclaimed, 0);
+
+        final rows = await db.select(db.storageDecisions).get();
+        expect(rows, isNotEmpty, reason: 'the throttle clock must still advance');
+        expect(
+          rows.any((r) => r.outcome == DecisionOutcome.applied.name),
+          isFalse,
+          reason: 'a pass that deleted nothing must never claim applied',
+        );
       },
     );
   });

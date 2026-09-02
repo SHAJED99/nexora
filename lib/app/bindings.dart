@@ -16,6 +16,7 @@ import 'dart:io';
 
 import 'package:get/get.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
+import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/routing_engine/link_quality_feed.dart';
 import 'package:nexora/core/storage/retention_executor.dart';
@@ -126,13 +127,20 @@ class AppBinding extends Bindings {
 
     // E08-T06: the storage-retention composition root. Built AFTER `db`
     // above (StorageInventory/StorageSettingsRepository/RetentionExecutor/
-    // StorageDecisionLog all depend on it) and BEFORE
-    // `messagingStack.coordinator.start()` is ever called, so the very
-    // first tick already has a `storageManager` to drive (task file §6
-    // risk: registering too early yields a `Get.find` failure at startup;
-    // this order avoids that entirely by never calling `Get.find` for this
-    // wiring at all -- every dependency below is the already-registered
-    // `db` or a value this method already has in scope).
+    // StorageDecisionLog all depend on it). `messagingStack.coordinator
+    // .start()` is actually called EARLIER in this method (line ~95,
+    // above), not after this block -- but that call is fire-and-forget
+    // (`start()`'s own body suspends at its first `await`, well before it
+    // schedules any tick that could read `coordinator.storageManager`;
+    // `MessagingCoordinator`'s own tick only ever runs from the
+    // `Timer.periodic` `start()` sets up or an explicit `tick()` call, both
+    // strictly later than this synchronous method returning) -- so by the
+    // time a real tick can ever observe the field, it is already set here,
+    // synchronously, before this method returns control to its caller.
+    // Never calls `Get.find` for this wiring at all -- every dependency
+    // below is the already-registered `db` or a value this method already
+    // has in scope (task file §6 risk: registering too early yields a
+    // `Get.find` failure at startup; this order avoids that entirely).
     //
     // `MessagingCoordinator` is already fully constructed inside
     // `MessagingStack.create()` (before this binding ever runs, E06-T03) --
@@ -176,14 +184,24 @@ class AppBinding extends Bindings {
   /// this is a peripheral display measurement, never allowed to take down
   /// the whole storage pass (task file §6 risk: "An exception in the
   /// storage pass must not abort the coordinator tick" applies with equal
-  /// force to a sub-measurement failing inside one).
+  /// force to a sub-measurement failing inside one). The failure direction
+  /// is safe either way (undercounting never causes a false deletion), but
+  /// a silent `0` forever on a device where this genuinely fails would
+  /// leave no trace of why (round-1 review F4) -- logged once per failure
+  /// via `ObservabilityService`, never `print()` (docs/conventions.md),
+  /// and never the exception's own message content (it is a path/IO
+  /// failure, not user data, so nothing here risks FR-DIAG-002).
   static Future<int> _measureDatabaseFileBytes() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File(p.join(dir.path, 'nexora.sqlite'));
       if (!await file.exists()) return 0;
       return file.length();
-    } catch (_) {
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'storage.database_file_bytes_measurement_failed',
+        cause: e,
+      );
       return 0;
     }
   }

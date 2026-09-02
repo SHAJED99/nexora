@@ -31,15 +31,33 @@
 // enforces whatever set it is handed, plus the two guards above that no
 // allow-list can ever override.
 //
-// **Log-before-delete, verified, not assumed (task §6 risk note).** Every
-// decision row this pass will write is committed to `storage_decisions`
-// *before* a single delete statement runs -- so a delete that then fails
-// leaves a fully honest, already-durable explanation of what was decided,
-// rather than an unexplainable deletion (`FR-STORE-007`). This is proven,
-// not merely asserted, by `test_EARS_STORE_13_decisions_are_logged_before_
-// deletes`, which forces the delete step to throw via [deleteMessageItems]
-// (see that method's own doc) and asserts the decision rows still exist
-// afterward.
+// **Per-group atomicity, real, not just claimed (fixed after round-1
+// review's F1 finding).** An earlier version of this file logged every
+// `appliedGroups` group as `outcome: applied` in one upfront batch, then
+// deleted each group's rows in a separate loop -- so a delete that failed
+// partway through a multi-group pass left a decision row that FALSELY
+// claimed `applied` for a group whose rows were never actually removed.
+// `FR-STORE-007`'s explanation surface is the ONLY record of what this app
+// did to a user's data; a log entry that lies about a delete having
+// happened is worse than one that is merely late. The fix: for each group
+// that survives every guard above, [deleteMessageItems] and the SINGLE
+// `storage_decisions` row claiming `outcome: applied` for that group are
+// wrapped in one `AppDatabase.transaction()` -- so either both the delete
+// and its own decision row commit together, or neither does (a delete
+// whose decision row fails to write never happens either, restoring the
+// task's original "unexplainable deletion" invariant in the direction that
+// actually matters). If the delete throws, the transaction rolls back
+// (nothing durable for that group from this attempt), and a SEPARATE,
+// truthful `outcome: skipped` row (`why`: the failure) is written outside
+// that rolled-back transaction -- so `storage_decisions` never goes silent
+// about a group either, it just never claims success it didn't earn. Every
+// group this executor declines to touch at all (relay payload, wrong mode,
+// outside the allow-list, undelivered) is logged `skipped` upfront, in one
+// batch, before any delete runs at all -- safe to batch, since nothing is
+// ever deleted for these. Falsified (see this task's Run log) with a
+// two-group plan whose second delete throws: confirmed the first group's
+// `applied` row survives, the second is `skipped` (never falsely
+// `applied`), and both are visible in `storage_decisions`.
 library;
 
 import 'package:drift/drift.dart';
@@ -93,9 +111,11 @@ final class RetentionOutcome {
 }
 
 /// The only code path in this app that deletes stored user data (task §1).
-/// Transactional per decision write, delivery-state guarded, log-before-
-/// delete (task §2/§6). See this file's header for the three unconditional
-/// invariants.
+/// Delivery-state guarded; each group's delete and its own `applied`
+/// decision row commit atomically together, in one `AppDatabase
+/// .transaction()`, so `storage_decisions` can never claim a delete
+/// succeeded when it didn't (task §2/§6; F1 fix -- see this file's header).
+/// See this file's header for the three unconditional invariants.
 class RetentionExecutor {
   RetentionExecutor({required this.db, required this.log});
 
@@ -119,9 +139,18 @@ class RetentionExecutor {
     DeliveryState.failed,
   };
 
-  /// Execute [plan] transactionally: log every decision (planned candidate
-  /// groups, partitioned into what will actually be deleted vs. what will
-  /// not, and why) *before* deleting a single row (task §2/§6 risk note).
+  /// Execute [plan]: every group this method declines to touch (relay
+  /// payload, wrong mode, outside the allow-list, undelivered) is logged
+  /// `outcome: skipped` upfront, in one batch -- safe, since nothing is
+  /// ever deleted for these. Every group that survives every guard is then
+  /// processed ONE AT A TIME: its delete and its own `outcome: applied`
+  /// decision row are wrapped in a single `AppDatabase.transaction()`, so
+  /// the log can never claim a delete happened when it didn't (round-1
+  /// review's F1 finding; see this file's header for the full story). A
+  /// group whose delete fails gets a truthful `outcome: skipped` row
+  /// instead, written outside the rolled-back transaction, and processing
+  /// continues to the next group (one bad delete must not silently drop
+  /// every group after it from the explanation).
   ///
   /// [allowedKinds] is supplied per call by `StorageManager`, mode-dependent
   /// (`OQ-E08-T06-1`) -- empty for a Smart Mode plan, `{message}` for a
@@ -133,7 +162,11 @@ class RetentionExecutor {
     required Set<StorageItemKind> allowedKinds,
     required int nowEpochMs,
   }) async {
-    final appliedGroups = <RetentionCandidateGroup>[];
+    // Candidate groups cleared by every guard, pending their own individual
+    // delete attempt below -- NOT yet logged as `applied` (that would be
+    // this file's F1 bug: claiming a delete happened before it's known to
+    // have succeeded).
+    final candidatesToApply = <RetentionCandidateGroup>[];
     final skippedGroups = <SkippedRetentionGroup>[];
 
     for (final group in plan.groups) {
@@ -190,7 +223,7 @@ class RetentionExecutor {
         // Invariant 2: the delivery-state guard, unconditional -- checked
         // even though this group already passed the allow-list above.
         final split = await _splitByDeliveryState(group);
-        if (split.deletable != null) appliedGroups.add(split.deletable!);
+        if (split.deletable != null) candidatesToApply.add(split.deletable!);
         if (split.undelivered != null) {
           skippedGroups.add(
             SkippedRetentionGroup(
@@ -218,27 +251,68 @@ class RetentionExecutor {
       );
     }
 
-    // Log every decision BEFORE deleting anything (task §2/§6 risk note) --
-    // both calls below commit their own rows independently of the delete
-    // loop further down, so a delete that later throws can never take an
-    // already-written decision row down with it (proven by
-    // `test_EARS_STORE_13_decisions_are_logged_before_deletes`, which forces
-    // exactly that failure via [deleteMessageItems]).
-    await log.recordPass(
-      _planFor(plan, appliedGroups),
-      outcome: DecisionOutcome.applied,
-      nowEpochMs: nowEpochMs,
-    );
-    await log.recordPass(
-      _planFor(plan, [for (final s in skippedGroups) s.group]),
-      outcome: DecisionOutcome.skipped,
-      nowEpochMs: nowEpochMs,
-    );
+    var loggedAnything = false;
 
+    // Every group this method already decided not to touch -- safe to log
+    // upfront in one batch, since nothing is ever deleted for these
+    // (invariant 1/2/3, this file's header).
+    if (skippedGroups.isNotEmpty) {
+      await log.recordPass(
+        _planFor(plan, [for (final s in skippedGroups) s.group]),
+        outcome: DecisionOutcome.skipped,
+        nowEpochMs: nowEpochMs,
+      );
+      loggedAnything = true;
+    }
+
+    // Every remaining candidate is processed ONE AT A TIME: its delete and
+    // its own `outcome: applied` row commit together, atomically, in one
+    // `db.transaction()` -- so the log can never claim a delete happened
+    // when it didn't (F1). A failed delete rolls back that attempt (nothing
+    // durable from it) and gets a truthful `outcome: skipped` row instead,
+    // written outside the rolled-back transaction; processing continues to
+    // the next candidate rather than aborting the whole pass.
+    final appliedGroups = <RetentionCandidateGroup>[];
     var bytesReclaimed = 0;
-    for (final group in appliedGroups) {
-      await _deleteGroup(group);
-      bytesReclaimed += group.bytes;
+    for (final group in candidatesToApply) {
+      try {
+        await db.transaction(() async {
+          await _deleteGroup(group);
+          await log.recordPass(
+            _planFor(plan, [group]),
+            outcome: DecisionOutcome.applied,
+            nowEpochMs: nowEpochMs,
+          );
+        });
+        appliedGroups.add(group);
+        bytesReclaimed += group.bytes;
+        loggedAnything = true;
+      } catch (e) {
+        skippedGroups.add(
+          SkippedRetentionGroup(group: group, why: 'delete failed: $e'),
+        );
+        await log.recordPass(
+          _planFor(plan, [group]),
+          outcome: DecisionOutcome.skipped,
+          nowEpochMs: nowEpochMs,
+        );
+        loggedAnything = true;
+      }
+    }
+
+    // A genuinely empty plan (no candidates at all, not even a skipped
+    // one) must still advance `storage_decisions.decided_at` -- the
+    // restart-safe throttle's own requirement (`storage_decision_log.dart`'s
+    // header) -- via a `skipped`-outcome sentinel row, never `applied`
+    // (round-1 review's F2 finding: an `applied` sentinel on a pass that
+    // deleted nothing is itself a false claim, and every Smart Mode pass on
+    // this build never has anything in `candidatesToApply` at all).
+    if (!loggedAnything) {
+      await log.recordPass(
+        plan,
+        outcome: DecisionOutcome.skipped,
+        nowEpochMs: nowEpochMs,
+      );
     }
 
     return RetentionOutcome(
@@ -291,12 +365,13 @@ class RetentionExecutor {
   /// Deletes [ids] from `messages`. Exposed as its own (non-private) method,
   /// overridable in tests, specifically so
   /// `test_EARS_STORE_13_decisions_are_logged_before_deletes` can force a
-  /// delete failure *after* the decision log has already committed, and
-  /// assert the log survives it -- the log-before-delete ordering claim
-  /// this file's header makes needs to be provably real, not merely
-  /// asserted (`skills/implement`'s falsification discipline; task §6 risk
-  /// note: "falsification ... is the expected review style for this task
-  /// specifically").
+  /// delete to fail from inside [apply]'s per-group `db.transaction()` and
+  /// assert that group's `applied` row never becomes durable (F1 fix) while
+  /// a truthful `skipped` row for it still does -- the log can never claim
+  /// a delete happened when it didn't, and this needs to be provably real,
+  /// not merely asserted (`skills/implement`'s falsification discipline;
+  /// task §6 risk note: "falsification ... is the expected review style for
+  /// this task specifically").
   Future<void> deleteMessageItems(List<String> ids) async {
     if (ids.isEmpty) return;
     await (db.delete(db.messages)..where((t) => t.id.isIn(ids))).go();
