@@ -1,9 +1,21 @@
 // features/dashboard/presentation — DashboardView vs
-// design/screens/dashboard.md (E06-T12). EARS-COMM-2/26/27 plus a fast
-// in-suite contract-element check, in the style
+// design/screens/dashboard.md (E06-T12, widened E08-T08). EARS-COMM-2/26/27
+// plus a fast in-suite contract-element check, in the style
 // `test/features/devices/presentation/devices_view_test.dart` established
 // (the real gate is `make design-verify SCREEN=dashboard IMPL=flutter`, run
 // and recorded separately in this task's Run log).
+//
+// NOT in E08-T08's own `files:` fence, but this file's `DashboardController`
+// construction sites break at compile time the moment that controller's
+// constructor gains a required `storage` parameter (task §5's own
+// contract) — a fence gap the task file left, not new scope this file is
+// choosing for itself. Fixed here to the minimum needed to keep this suite
+// compiling and its EARS coverage accurate: a real `StorageManager` per
+// construction site (mirrors `dashboard_controller_test.dart`'s own
+// `_newStorageManager`), and `test_dashboard_view_matches_contract_elements`'s
+// Local Storage assertions updated from the retired static placeholder to
+// the real, now-measured collapsed-card content (E08-T08's own Deviations
+// record this explicitly).
 import 'dart:typed_data';
 
 import 'package:drift/native.dart';
@@ -14,6 +26,13 @@ import 'package:get/get.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/routing_engine/link_quality_feed.dart';
+import 'package:nexora/core/storage/retention_executor.dart';
+import 'package:nexora/core/storage/retention_plan.dart' show SmartModeThresholds;
+import 'package:nexora/core/storage/smart_mode_policy.dart';
+import 'package:nexora/core/storage/storage_decision_log.dart';
+import 'package:nexora/core/storage/storage_inventory.dart';
+import 'package:nexora/core/storage/storage_manager.dart';
+import 'package:nexora/core/storage/storage_settings_repository.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/dashboard/presentation/dashboard_controller.dart';
@@ -22,6 +41,19 @@ import 'package:nexora/features/messaging/data/conversation_repository.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
+
+/// Mirrors `dashboard_controller_test.dart`'s own `_newStorageManager` — a
+/// plain, real `StorageManager` over [db].
+StorageManager _newStorageManager(AppDatabase db) {
+  final log = StorageDecisionLog(db: db);
+  return StorageManager(
+    settings: StorageSettingsRepository(db: db),
+    inventory: StorageInventory(db: db, databaseFileBytes: () async => 0),
+    smart: SmartModePolicy(thresholds: SmartModeThresholds.defaults()),
+    executor: RetentionExecutor(db: db, log: log),
+    log: log,
+  );
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -65,6 +97,7 @@ void main() {
         routing: stack.routingEngine,
       ),
       crypto: stack.cryptoService,
+      storage: _newStorageManager(db),
     );
     Get.put<DashboardController>(controller);
     return controller;
@@ -184,6 +217,7 @@ void main() {
         routing: degradedStack.routingEngine,
       ),
       crypto: degradedStack.cryptoService,
+      storage: _newStorageManager(degradedDb),
     );
     Get.put<DashboardController>(controller);
 
@@ -224,10 +258,15 @@ void main() {
     expect(find.text('Secure'), findsOneWidget);
     expect(find.text('Latency'), findsOneWidget);
 
-    // Local Storage card — elements 15-18.
+    // Local Storage card — elements 15-18 (E08-T08: real figures, not the
+    // retired static placeholder). Default Smart Mode, no aged data seeded
+    // -- nothing actionable, so the warning glyph is absent (element 17's
+    // own conditional rendering) and the summary line names the real
+    // threshold (`SmartModeThresholds.defaults().ageThresholdDays`), never
+    // the old fabricated "10 days".
     expect(find.text('Local Storage'), findsOneWidget);
-    expect(find.text('Smart Mode - Older than 10 days'), findsOneWidget);
-    expect(find.byIcon(Icons.warning), findsOneWidget);
+    expect(find.text('Smart Mode - Older than 45 days'), findsOneWidget);
+    expect(find.byIcon(Icons.warning), findsNothing);
 
     // Recent Conversations — element 19 + at least one real row.
     expect(find.text('Recent Conversations'), findsOneWidget);

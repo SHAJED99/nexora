@@ -12,11 +12,22 @@
 //
 // Approved gaps this screen renders knowingly-incomplete or data-driven, per
 // `design/gaps.md`:
-// - GAP-011 — Local Storage card: labels rendered exactly as measured;
-//   `45% used` has no honest data source (no storage quota exists anywhere
-//   in this schema to divide a byte count by), so the percent line renders
-//   the disclosed placeholder "Not yet measured", never a fabricated
-//   percentage. `Smart Mode - Older than 10 days` stays static copy (E08).
+// - GAP-011/GAP-025/GAP-026 (E08-T08) — the Local Storage card is now fed
+//   real figures. `45% used` (element 16) has no denominator
+//   (`storage_policy_settings.budget_bytes` is NULL by default, `OQ-E08-1`),
+//   so per `GAP-026`'s answered fork (option (c) for this card) it renders
+//   the real measured byte total instead — `N MB used`, never a fabricated
+//   percentage — a disclosed deviation from the design's measured `45% used`
+//   string. `Smart Mode - Older than 10 days` (element 18) becomes the
+//   active policy's real summary (`_policySummaryText`), another disclosed
+//   copy finding per `GAP-011`'s approved resolution. The card is a tap
+//   target (no new glyph — `GAP-012`'s precedent) that toggles `GAP-025`'s
+//   derived expanded state in place; that state is not part of the golden
+//   and is invisible to `make design-verify` until a second golden is
+//   extracted (`dashboard.md`'s own header on the derived section). No
+//   "Clean Now", no confirmation, no delete affordance anywhere on this
+//   card, not even disabled (`FR-STORE-006`/`EARS-STORE-2`) — tapping only
+//   ever flips `DashboardController.toggleStorageExpansion`'s local flag.
 // - GAP-012 — the whole Network Status card is the tap target for
 //   `/devices`, FR-UI-004's "one tap away" detail surface.
 // - GAP-013 — three data-driven connectivity readings (`Connected`,
@@ -44,6 +55,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/design/tokens.dart';
+import 'package:nexora/core/storage/retention_plan.dart' show RetentionReason;
 import 'package:nexora/features/conversations/presentation/conversations_controller.dart'
     show ConversationTile;
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
@@ -123,6 +135,32 @@ const _navActiveStyle = TextStyle(
   fontSize: 12,
   fontWeight: FontWeight.w500,
   color: NexoraColors.welcomeTextAccent,
+);
+
+/// GAP-025 DX2 — "the recent-conversation row title" style, as the derived
+/// contract literally measures it: `14px` `w500` `rgb(11, 28, 48)`. Distinct
+/// from `NexoraTextStyles.devicesDeviceName` (16px) which this screen's own
+/// Recent Conversations rows use — the contract cites the row-title
+/// *treatment*, not that exact token, so this is declared locally at the
+/// size the contract actually measures.
+const _storageCategoryLabelStyle = TextStyle(
+  fontSize: 14,
+  fontWeight: FontWeight.w500,
+  color: NexoraColors.loginHeading,
+);
+
+/// GAP-025 DX3 — "the timestamp treatment" (elements 22/27/32) plus
+/// `JetBrains Mono`, per the contract's own citation. No font asset is
+/// bundled for `JetBrains Mono` anywhere in this project (`pubspec.yaml`
+/// carries no `fonts:` section) — declaring the family name is honest intent
+/// per the contract's citation; Flutter falls back to the platform default
+/// when the family is unavailable, matching how every other text style in
+/// this file already renders.
+const _storageByteStyle = TextStyle(
+  fontSize: 12,
+  fontWeight: FontWeight.w500,
+  color: NexoraColors.loginBody,
+  fontFamily: 'JetBrains Mono',
 );
 
 class DashboardView extends GetView<DashboardController> {
@@ -352,8 +390,16 @@ Color _dotColorFor(ConnectivityReading reading) =>
         ? _connectedDotColor
         : NexoraColors.loginBody;
 
-/// Elements 15-18: GAP-011 — labels exact, percent line is the disclosed
-/// placeholder until E08 defines a real storage quota.
+/// Elements 15-18 (`GAP-011`/`GAP-026` collapsed) + the derived
+/// `warning-expanded` state (`GAP-025`, `FR-STORE-007`). The whole card is
+/// the tap target that toggles the expansion in place — no new glyph is
+/// drawn, matching `GAP-012`'s already-established precedent on this same
+/// screen (`dashboard.md`'s own §Derived state: "no expand/collapse glyph is
+/// drawn"). **No "Clean Now", no apply-now, no confirmation, no delete
+/// affordance anywhere in this widget, not even disabled**
+/// (`FR-STORE-006`/`EARS-STORE-2`) — the only `onTap` here calls
+/// `controller.toggleStorageExpansion`, which flips a local flag and nothing
+/// else (see that method's own doc comment).
 class _LocalStorageCard extends StatelessWidget {
   const _LocalStorageCard({required this.controller});
 
@@ -361,42 +407,225 @@ class _LocalStorageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _cardFill,
+    return Material(
+      color: _cardFill,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: controller.toggleStorageExpansion,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _cardBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Local Storage', style: _sectionHeadingStyle),
-          const SizedBox(height: 8),
-          Obx(() {
-            final vm = controller.storageUsage.value;
-            return Text(
-              vm.isMeasured ? '${vm.percentUsed}% used' : 'Not yet measured',
-              style: _cardValueStyle,
-            );
-          }),
-          const SizedBox(height: 8),
-          const Row(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _cardBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.warning, size: 18, color: NexoraColors.loginBody),
-              SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Smart Mode - Older than 10 days',
-                  style: _cardSubtitleStyle,
-                ),
-              ),
+              const Text('Local Storage', style: _sectionHeadingStyle),
+              const SizedBox(height: 8),
+              Obx(() {
+                final vm = controller.storageUsage.value;
+                return Text(
+                  !vm.isMeasured
+                      ? 'Not yet measured'
+                      : (vm.percentUsed != null
+                          ? '${vm.percentUsed}% used'
+                          : '${_formatMb(vm.usedBytes)} MB used'),
+                  style: _cardValueStyle,
+                );
+              }),
+              const SizedBox(height: 8),
+              Obx(() {
+                final vm = controller.storageUsage.value;
+                return Row(
+                  children: [
+                    if (vm.warningActive) ...[
+                      const Icon(
+                        Icons.warning,
+                        size: 18,
+                        color: NexoraColors.loginBody,
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Expanded(
+                      child: Text(
+                        _policySummaryText(vm.policySummaryKey),
+                        style: _cardSubtitleStyle,
+                      ),
+                    ),
+                  ],
+                );
+              }),
+              Obx(() {
+                if (!controller.storageExpanded.value) {
+                  return const SizedBox.shrink();
+                }
+                return _StorageExplanation(controller: controller);
+              }),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
+}
+
+/// `GAP-025`'s derived expansion body (DX1-DX8). Reads-only:
+/// `DashboardController.storageExplanation`/`.storageExpanded` are both
+/// populated/toggled without ever running, applying or scheduling a
+/// retention pass (this file's header, `EARS-STORE-2`).
+class _StorageExplanation extends StatelessWidget {
+  const _StorageExplanation({required this.controller});
+
+  final DashboardController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      if (controller.storageExplanationError.value) {
+        return const Padding(
+          padding: EdgeInsets.only(top: 12),
+          child: Text(
+            "Couldn't read local storage. Try again.",
+            style: NexoraTextStyles.devicesSectionSubtitle,
+            textAlign: TextAlign.center,
+          ),
+        );
+      }
+      final decisions = controller.storageExplanation;
+      if (decisions.isEmpty) {
+        // GAP-025 DX7 — the expected default reading (this file's header
+        // and `dashboard_controller.dart`'s own filtering reasoning), not a
+        // rare edge case: replaces DX1-DX6 when there is nothing actionable
+        // to report, or no pass has run yet.
+        return const Padding(
+          padding: EdgeInsets.only(top: 12),
+          child: Text(
+            'Nothing to remove right now.',
+            style: NexoraTextStyles.devicesSectionSubtitle,
+            textAlign: TextAlign.center,
+          ),
+        );
+      }
+      final totalBytes = decisions.fold<int>(0, (sum, d) => sum + d.bytes);
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Will remove:', style: _cardSubtitleStyle),
+            const SizedBox(height: 8),
+            for (var i = 0; i < decisions.length; i++) ...[
+              if (i > 0) const SizedBox(height: 8),
+              _StorageDecisionRow(decision: decisions[i]),
+            ],
+            const SizedBox(height: 12),
+            const Text('Why:', style: _cardSubtitleStyle),
+            const SizedBox(height: 4),
+            Text(
+              'Removing these would free up ${_formatMb(totalBytes)} MB.',
+              style: NexoraTextStyles.devicesSectionSubtitle,
+            ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _StorageDecisionRow extends StatelessWidget {
+  const _StorageDecisionRow({required this.decision});
+
+  final StorageDecisionVm decision;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            _categoryLabelFor(decision.categoryKey),
+            style: _storageCategoryLabelStyle,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text('${_formatMb(decision.bytes)} MB', style: _storageByteStyle),
+        const SizedBox(width: 8),
+        Text(
+          _reasonTextFor(decision.reason, decision.reasonDetail),
+          style: _cardSubtitleStyle,
+        ),
+      ],
+    );
+  }
+}
+
+/// GAP-025's proposed category labels — "no BRD source, the BRD's worked
+/// example is media only" (dashboard.md §Copy). `messages`/`databaseFile`
+/// are the only two `categoryKey`s this build's policies can ever produce
+/// (`smart_mode_policy.dart`/`manual_policy.dart`'s shared
+/// `_categoryKeyFor`); any other key falls back to itself rather than a
+/// blank label, since a category with no producer in this build should never
+/// silently disappear from an explanation surface (`FR-STORE-007`).
+String _categoryLabelFor(String categoryKey) => switch (categoryKey) {
+      'messages' => 'Messages',
+      'databaseFile' => 'Database file',
+      _ => categoryKey,
+    };
+
+/// GAP-025's reason copy — `Older than N days` / `Over the size limit` are
+/// the contract's own format strings; `Rarely accessed` / `No longer
+/// required` are BRD §20/§22's verbatim reason strings (dashboard.md
+/// §Copy). `storagePressure` has no approved copy yet (`OQ-E08-4`'s
+/// neighbourhood, dashboard.md §Open 1) — reported honestly rather than
+/// invented, since `budget_bytes` is NULL by default and this branch is not
+/// reachable in this build's shipped configuration.
+String _reasonTextFor(RetentionReason reason, String? reasonDetail) =>
+    switch (reason) {
+      RetentionReason.olderThan => 'Older than ${reasonDetail ?? '0'} days',
+      RetentionReason.rarelyAccessed => 'Rarely accessed',
+      RetentionReason.noLongerRequired => 'No longer required',
+      RetentionReason.overSizeLimit => 'Over the size limit',
+      RetentionReason.storagePressure => 'Storage running low',
+    };
+
+/// `dashboard.md` element 18's `<Mode> - <parameter>` FORMAT contract
+/// (§Copy: "the format is the contract, the number is data") —
+/// `DashboardController._policySummaryKeyFor`'s machine key is parsed here so
+/// the actual copy lives in the view, never the controller. `Smart Mode -
+/// Older than N days` keeps the design's own measured mode word and shape
+/// (`GAP-011`'s resolution); the two manual modes reuse
+/// `design/screens/settings-storage.md` SS11's own BRD-§19-verbatim mode
+/// names (this epic's sibling derived contract), substituting the user's
+/// real parameter for BRD's own "X" placeholder.
+String _policySummaryText(String policySummaryKey) {
+  final parts = policySummaryKey.split(':');
+  if (parts.length != 2) return '';
+  final mode = parts[0];
+  final parameter = parts[1];
+  return switch (mode) {
+    'smart' => 'Smart Mode - Older than $parameter days',
+    'olderThanDays' => 'Delete data older than $parameter days',
+    'overSizeMb' => 'Delete old data when storage exceeds $parameter MB',
+    _ => '',
+  };
+}
+
+/// Binary MiB, matching `StorageSettingsRepository.minMaxBytes`'s own
+/// established "1 MiB = 1,048,576 bytes" conversion (that file's own header:
+/// "the one and only conversion point ... never convert twice") — this is
+/// the one further MB-facing display conversion that file's own header
+/// anticipates a UI task would need, applied consistently rather than
+/// re-deriving a second convention. Never renders a negative or fabricated
+/// value; a non-zero byte count that rounds to 0 MB shows `<1` rather than
+/// `0`, so a genuinely non-empty class never reads as nothing.
+String _formatMb(int bytes) {
+  if (bytes <= 0) return '0';
+  final mb = bytes / (1024 * 1024);
+  final rounded = mb.round();
+  return rounded < 1 ? '<1' : '$rounded';
 }
 
 /// Elements 19-34: heading + loading / empty / real rows from the shared

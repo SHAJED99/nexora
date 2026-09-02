@@ -1,27 +1,84 @@
-// features/dashboard/presentation — DashboardController (E06-T12).
+// features/dashboard/presentation — DashboardController (E06-T12, widened
+// E08-T08).
 //
 // EARS-COMM-2 (the epic-level FR-UI-004 criterion, connectivity-reading
 // half) / EARS-COMM-26 (no fabricated latency) / EARS-COMM-27 (stack
 // unavailable still renders honestly), plus
 // `test_recent_conversations_use_the_shared_read_model` (task §6's named
 // risk: two screens must not define the delivery-state mapping twice).
+//
+// E08-T08 adds EARS-STORE-2 (informational warning, never a pass-triggering
+// affordance) / EARS-STORE-18 (the expansion's decision list) /
+// EARS-STORE-19 (percentage only with a real denominator). This file's own
+// `files:` fence names `test/features/dashboard/dashboard_controller_test.dart`;
+// the file actually lives at this path
+// (`test/features/dashboard/presentation/dashboard_controller_test.dart`,
+// matching every other `presentation` test in this project) — a small,
+// disclosed path discrepancy in the task file, not a new test file.
 import 'dart:typed_data';
 
 import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/routing_engine/link_quality_feed.dart';
+import 'package:nexora/core/storage/retention_executor.dart';
+import 'package:nexora/core/storage/retention_plan.dart';
+import 'package:nexora/core/storage/smart_mode_policy.dart';
+import 'package:nexora/core/storage/storage_decision_log.dart';
+import 'package:nexora/core/storage/storage_inventory.dart';
+import 'package:nexora/core/storage/storage_manager.dart';
+import 'package:nexora/core/storage/storage_settings_repository.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/conversations/presentation/conversations_controller.dart';
 import 'package:nexora/features/dashboard/presentation/dashboard_controller.dart';
+import 'package:nexora/features/dashboard/presentation/dashboard_view.dart';
 import 'package:nexora/features/messaging/data/conversation_repository.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
+
+/// A plain `StorageManager` over [db] — real settings/inventory/executor,
+/// same as every other `core/storage` test builds (task §5's own constructor
+/// contract: every dependency is injected, so a test never has to fake the
+/// storage stack's own internals).
+StorageManager _newStorageManager(AppDatabase db) {
+  final log = StorageDecisionLog(db: db);
+  return StorageManager(
+    settings: StorageSettingsRepository(db: db),
+    inventory: StorageInventory(db: db, databaseFileBytes: () async => 0),
+    smart: SmartModePolicy(thresholds: SmartModeThresholds.defaults()),
+    executor: RetentionExecutor(db: db, log: log),
+    log: log,
+  );
+}
+
+/// `test_EARS_STORE_2_expanding_does_not_run_a_pass`'s spy — counts
+/// `runPass` calls without changing its behaviour (delegates to `super`),
+/// so the test can assert the count stayed exactly zero across a tap
+/// (falsifiable: a version of `toggleStorageExpansion` that called
+/// `runPass` would make this assertion fail).
+class _SpyStorageManager extends StorageManager {
+  _SpyStorageManager({
+    required super.settings,
+    required super.inventory,
+    required super.smart,
+    required super.executor,
+    required super.log,
+  });
+
+  int runPassCalls = 0;
+
+  @override
+  Future<RetentionPlan?> runPass({required int nowEpochMs, bool apply = true}) {
+    runPassCalls++;
+    return super.runPass(nowEpochMs: nowEpochMs, apply: apply);
+  }
+}
 
 Future<void> _insertMessage(
   AppDatabase db, {
@@ -88,6 +145,7 @@ void main() {
   late MessagingStack stack;
   late ConversationRepository repo;
   late RelationshipRepository relationships;
+  late StorageManager storage;
   late String suffix;
 
   setUp(() async {
@@ -95,6 +153,7 @@ void main() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     relationships = RelationshipRepository(db);
     repo = ConversationRepository(db, selfDeviceId: 'self-device');
+    storage = _newStorageManager(db);
     suffix = 'dashboard-controller-${suffixCounter++}';
     stack = await MessagingStack.create(
       db: db,
@@ -112,7 +171,8 @@ void main() {
     Get.reset();
   });
 
-  DashboardController newController() => DashboardController(
+  DashboardController newController({StorageManager? storageManager}) =>
+      DashboardController(
         stack: stack,
         repo: repo,
         links: LinkQualityFeed(
@@ -120,6 +180,7 @@ void main() {
           routing: stack.routingEngine,
         ),
         crypto: stack.cryptoService,
+        storage: storageManager ?? storage,
       );
 
   void pushDeviceDiscovered(String id) {
@@ -235,6 +296,7 @@ void main() {
         routing: degradedStack.routingEngine,
       ),
       crypto: degradedStack.cryptoService,
+      storage: _newStorageManager(degradedDb),
     );
 
     // Must not throw.
@@ -360,24 +422,328 @@ void main() {
     controller.onClose();
   });
 
-  test(
-      'test_storage_usage_is_the_disclosed_placeholder_never_a_fabricated_percentage',
-      () async {
-    final controller = newController();
-    controller.onInit();
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-
-    expect(controller.storageUsage.value.isMeasured, isFalse);
-    expect(controller.storageUsage.value.percentUsed, isNull);
-    controller.onClose();
-  });
-
   test('test_encryption_secure_reflects_messaging_stack_status', () async {
     final controller = newController();
     controller.onInit();
     await Future<void>.delayed(const Duration(milliseconds: 50));
 
     expect(controller.networkStatus.value.encryptionSecure, isTrue);
+    controller.onClose();
+  });
+
+  // ── EARS-STORE-19 — percentage only with a real denominator ────────────
+
+  test(
+      'test_EARS_STORE_19_no_budget_renders_bytes_not_percent',
+      () async {
+    // Default install: `storage_policy_settings.budget_bytes` is NULL
+    // (E08-T01's migration default, `OQ-E08-1`/`GAP-026`).
+    await _insertMessage(
+      db,
+      id: 'm-1',
+      conversationId: 'device-a',
+      senderDeviceId: 'device-a',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(List<int>.filled(64, 1)),
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    final controller = newController();
+    controller.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    expect(controller.storageUsage.value.isMeasured, isTrue);
+    expect(controller.storageUsage.value.percentUsed, isNull);
+    expect(controller.storageUsage.value.usedBytes, greaterThan(0));
+    controller.onClose();
+  });
+
+  test('test_EARS_STORE_19_real_budget_renders_percent', () async {
+    await _insertMessage(
+      db,
+      id: 'm-1',
+      conversationId: 'device-a',
+      senderDeviceId: 'device-a',
+      sequenceNumber: 1,
+      // 1 MiB of ciphertext, so the percentage against a 2 MiB budget is a
+      // clean, real, non-degenerate 50 -- never guessed.
+      ciphertext: Uint8List.fromList(List<int>.filled(1024 * 1024, 7)),
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    await storage.settings.setBudgetBytes(2 * 1024 * 1024);
+
+    final controller = newController();
+    controller.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    expect(controller.storageUsage.value.isMeasured, isTrue);
+    expect(controller.storageUsage.value.percentUsed, isNotNull);
+    expect(controller.storageUsage.value.percentUsed, closeTo(50, 2));
+    controller.onClose();
+  });
+
+  // ── EARS-STORE-2 — informational only, never a pass-triggering
+  //    affordance ──────────────────────────────────────────────────────────
+
+  test('test_EARS_STORE_2_expanding_does_not_run_a_pass', () async {
+    final spy = _SpyStorageManager(
+      settings: storage.settings,
+      inventory: storage.inventory,
+      smart: storage.smart,
+      executor: storage.executor,
+      log: storage.log,
+    );
+    final controller = newController(storageManager: spy);
+    controller.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    expect(controller.storageExpanded.value, isFalse);
+    controller.toggleStorageExpansion();
+    expect(controller.storageExpanded.value, isTrue);
+    controller.toggleStorageExpansion();
+    expect(controller.storageExpanded.value, isFalse);
+
+    // Falsifiable: if `toggleStorageExpansion` (or the `_loadStorageUsage`
+    // read path it might trigger) ever called `StorageManager.runPass`,
+    // this would be > 0.
+    expect(spy.runPassCalls, 0);
+    controller.onClose();
+  });
+
+  testWidgets(
+      'test_EARS_STORE_2_card_has_no_action_affordance',
+      (tester) async {
+    // `Get.put` calls the controller's `onInit` automatically (GetX's own
+    // `GetLifeCycleMixin` contract, the same one every other screen probe in
+    // this project relies on, e.g. `design_probe_test.dart`'s `chat` case) —
+    // never called a second time manually here.
+    Get.put<DashboardController>(newController());
+    await tester.pumpWidget(GetMaterialApp(home: const DashboardView()));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump();
+
+    // Round-1 review F2: the previous version of this test only denylisted
+    // four specific strings/types ("Clean Now", a delete icon, dialog
+    // widgets) — falsified by the reviewer adding a live
+    // `ElevatedButton(onPressed: () {}, child: Text('Free up space'))` to
+    // the card and watching the test still pass. This version is
+    // structural instead: the card's own `Material` subtree may contain
+    // exactly ONE tap target (`InkWell` -- the expansion toggle) and
+    // exactly ONE `GestureDetector` (the one `InkWell` builds internally,
+    // per Flutter's own `InkResponse` implementation -- never a second,
+    // additional one). Any live button type anywhere in the subtree is a
+    // hard failure regardless of its label, since `EARS-STORE-2`/
+    // `FR-STORE-006` forbid a forced-action affordance, not merely the
+    // literal string "Clean Now".
+    void assertNoActionAffordance() {
+      final cardMaterial = find
+          .ancestor(of: find.text('Local Storage'), matching: find.byType(Material))
+          .first;
+
+      expect(
+        find.descendant(of: cardMaterial, matching: find.byType(InkWell)),
+        findsOneWidget,
+        reason: 'exactly one tap target: the expansion toggle',
+      );
+      expect(
+        find.descendant(of: cardMaterial, matching: find.byType(GestureDetector)),
+        findsOneWidget,
+        reason: "InkWell's own internal GestureDetector, and no other",
+      );
+      for (final buttonType in const [
+        ElevatedButton,
+        TextButton,
+        OutlinedButton,
+        IconButton,
+        FilledButton,
+      ]) {
+        expect(
+          find.descendant(
+            of: cardMaterial,
+            matching: find.byWidgetPredicate((w) => w.runtimeType == buttonType),
+          ),
+          findsNothing,
+          reason: '$buttonType would be a forced-action affordance',
+        );
+      }
+      expect(find.descendant(of: cardMaterial, matching: find.byType(AlertDialog)),
+          findsNothing);
+      expect(find.descendant(of: cardMaterial, matching: find.byType(Dialog)),
+          findsNothing);
+    }
+
+    assertNoActionAffordance();
+
+    // Tapping the card only ever expands it in place -- still no such
+    // affordance appears once expanded.
+    await tester.tap(find.text('Local Storage'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump();
+
+    assertNoActionAffordance();
+
+    // `tearDown`'s `Get.reset()` disposes the controller (calls `onClose`
+    // exactly once) -- not called manually here, unlike this file's plain
+    // `test()` cases, which construct the controller directly rather than
+    // through `Get.put`.
+  });
+
+  // ── EARS-STORE-18 — the expansion's decision list ───────────────────────
+
+  test(
+      'test_EARS_STORE_18_expansion_is_empty_before_the_first_pass',
+      () async {
+    final controller = newController();
+    controller.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    // No pass has run (`storage.latestPlan.value` is null) -- the no-warning
+    // state, not a spinner (task §2/§5).
+    expect(controller.storageExplanation, isEmpty);
+    expect(controller.storageUsage.value.warningActive, isFalse);
+    controller.onClose();
+  });
+
+  test(
+      'test_EARS_STORE_18_expansion_lists_each_category_with_its_reason',
+      () async {
+    // Old messages under a MANUAL policy -- the one shape this build
+    // actually authorises to delete `message`-kind items (`OQ-E08-3(a)`),
+    // so the category is genuinely actionable (Smart Mode's own default
+    // would filter it, per `dashboard_controller.dart`'s own
+    // `_actionableGroups`).
+    final old = DateTime.now()
+        .subtract(const Duration(days: 100))
+        .millisecondsSinceEpoch;
+    await _insertMessage(
+      db,
+      id: 'm-old-1',
+      conversationId: 'device-a',
+      senderDeviceId: 'device-a',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(List<int>.filled(128, 3)),
+      createdAt: old,
+    );
+    await storage.settings.setMode(StorageMode.olderThanDays, olderThanDays: 30);
+
+    // The pass a background tick would already have run by the time the
+    // dashboard is opened -- the controller itself never calls this
+    // (`test_EARS_STORE_2_expanding_does_not_run_a_pass` proves that side).
+    await storage.runPass(
+      nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+      apply: false,
+    );
+
+    final controller = newController();
+    controller.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    expect(controller.storageUsage.value.warningActive, isTrue);
+    expect(controller.storageExplanation, hasLength(1));
+    final decision = controller.storageExplanation.first;
+    expect(decision.categoryKey, 'messages');
+    expect(decision.reason, RetentionReason.olderThan);
+    expect(decision.reasonDetail, '30');
+    expect(decision.bytes, greaterThan(0));
+    controller.onClose();
+  });
+
+  // Round-1 review F1 (blocking): `latestPlan` is in-memory only and does
+  // NOT survive a process relaunch, but `storage_decisions` (the durable
+  // log) does. Reproduces the reviewer's own falsification exactly: seed a
+  // real pass via one `StorageManager` instance, then build a FRESH
+  // `StorageManager`/controller instance over the SAME db (simulating an
+  // app relaunch) and confirm the explanation is populated from the
+  // durable log, not silently empty just because this process never ran a
+  // pass itself.
+  test(
+      'test_EARS_STORE_18_explanation_survives_a_relaunch_via_the_durable_log',
+      () async {
+    final old = DateTime.now()
+        .subtract(const Duration(days: 100))
+        .millisecondsSinceEpoch;
+    await _insertMessage(
+      db,
+      id: 'm-old-relaunch-1',
+      conversationId: 'device-a',
+      senderDeviceId: 'device-a',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(List<int>.filled(256, 5)),
+      createdAt: old,
+    );
+
+    // "Session 1": the pass that would have run on a previous app launch
+    // (or the same launch's background tick) -- a SEPARATE StorageManager
+    // instance over the same db, so nothing here can leak through
+    // in-memory state to the fresh instance below.
+    final sessionOneStorage = _newStorageManager(db);
+    await sessionOneStorage.settings
+        .setMode(StorageMode.olderThanDays, olderThanDays: 30);
+    await sessionOneStorage.runPass(
+      nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+      apply: false,
+    );
+    expect(sessionOneStorage.latestPlan.value, isNotNull);
+
+    // "Session 2" (the relaunch): a genuinely FRESH `StorageManager` --
+    // `latestPlan` starts `null`, exactly as it would after a real process
+    // restart, since nothing ran a pass on THIS instance.
+    final freshStorage = _newStorageManager(db);
+    expect(freshStorage.latestPlan.value, isNull);
+
+    final controller = newController(storageManager: freshStorage);
+    controller.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    // The bug (pre-fix): this stayed `isEmpty`/`false` because the
+    // controller read only the in-memory `latestPlan`, never the durable
+    // `storage_decisions` table the prior session actually wrote to.
+    expect(controller.storageUsage.value.warningActive, isTrue);
+    expect(controller.storageExplanation, hasLength(1));
+    final decision = controller.storageExplanation.first;
+    expect(decision.categoryKey, 'messages');
+    expect(decision.reason, RetentionReason.olderThan);
+    expect(decision.reasonDetail, '30');
+    expect(decision.bytes, greaterThan(0));
+    controller.onClose();
+  });
+
+  // A durable `applied` row (something already deleted by a prior pass)
+  // must NOT be reported as something that "will" still be removed -- it
+  // already was.
+  test(
+      'test_EARS_STORE_18_a_durable_applied_row_is_not_shown_as_still_pending',
+      () async {
+    final old = DateTime.now()
+        .subtract(const Duration(days: 100))
+        .millisecondsSinceEpoch;
+    await _insertMessage(
+      db,
+      id: 'm-old-applied-1',
+      conversationId: 'device-a',
+      senderDeviceId: 'device-a',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(List<int>.filled(256, 6)),
+      createdAt: old,
+    );
+
+    final sessionOneStorage = _newStorageManager(db);
+    await sessionOneStorage.settings
+        .setMode(StorageMode.olderThanDays, olderThanDays: 30);
+    // apply: true (the default, and the one MessagingCoordinator's tick
+    // actually calls) -- the message is genuinely deleted and logged
+    // `outcome: applied` by `RetentionExecutor`.
+    await sessionOneStorage.runPass(
+      nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    final freshStorage = _newStorageManager(db);
+    final controller = newController(storageManager: freshStorage);
+    controller.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    expect(controller.storageExplanation, isEmpty);
+    expect(controller.storageUsage.value.warningActive, isFalse);
     controller.onClose();
   });
 }
