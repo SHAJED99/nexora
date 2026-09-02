@@ -52,3 +52,13 @@ automatically for matching tasks (see `index.yaml`).
   known and already had to be re-taught twice by hand in one epic — the
   exact signal the ladder exists to catch before a third, unwarned task
   repeats it for real.
+- **2026-09-02 (E07 retro) — the promoted rule held, twice more, without
+  restatement.** `E07-T08` and `E07-B01` both hit the same red gate on the
+  Conversations screen (21.1%/12/57, later confirmed byte-identical
+  across both diffs) and both correctly disclosed the score as a known
+  probe-fixture/`InkWell`-swallowing limitation rather than reshaping any
+  widget to improve it — with no per-dispatch prose reminder needed this
+  time, because the rule now lives in `skills/design-fidelity` itself.
+  Not incremented (no new occurrence of the miss) — recorded because a
+  rule holding under real pressure, twice, unprompted, is exactly the
+  evidence `skills/retro` §Rules 1 asks retros to capture, not just misses.

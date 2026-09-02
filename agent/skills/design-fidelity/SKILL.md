@@ -128,6 +128,19 @@ markup scores 100%.
    understood) — never the shipped UI's problem to route around. If a
    correct, accessible widget choice costs gate score, that is the gate
    telling the truth about its own limits, not a defect to engineer past.
+6. **A task that widens a design-contracted screen's displayed data shape
+   must update the shared probe fixture, or open a named follow-up.**
+   (Added 2026-09-02, L-design-002: the Conversations screen's shared
+   probe fixture (`test/design/design_probe_test.dart`) never seeded a
+   group conversation, so the design gate was structurally blind to
+   `E07-T08`'s new Groups section and `E07-B01`'s fix to it — both
+   correctly disclosed the resulting red score as a known cause rather
+   than routing around it (rule 5 above), but three separate
+   reviewers hit the same wall across two tasks before anyone owned
+   fixing the fixture itself.) Disclosing a fixture gap is correct;
+   leaving it unfixed for the *next* task touching the same screen to
+   rediscover is not — either seed the fixture in the same task, or open
+   an explicitly-scoped fixture-fix task rather than another prose note.
 
 ## Recording the gate
 When you write the derived-gap list, put the gate line at the top of
