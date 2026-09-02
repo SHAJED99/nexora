@@ -117,6 +117,34 @@ class ReceiveMessageUseCase {
         return null;
       }
 
+      // DISCLOSED LIMITATION (E08-B04, resolved 2026-09-03, option 3 —
+      // "keep DateTime.now(), disclose only"): this dedup check is "does a
+      // row with this id exist in `messages`" — sound only as long as
+      // nothing ever deletes a message. `RetentionExecutor.deleteMessageItems`
+      // (a manual retention mode) does delete rows here, and records nothing
+      // this check consults. So once a message has been retention-deleted,
+      // nothing remembers that it ever existed: if a copy is still
+      // circulating in the mesh (held by a peer or a not-yet-reclaimed relay
+      // payload) and gets re-delivered, `existing` above comes back null and
+      // the packet is treated as brand new, not as the duplicate it actually
+      // is. It is re-inserted below with `createdAt: DateTime.now()`, i.e.
+      // today's date, not whatever date it originally carried — so it can
+      // sort back into view and is immune to the same age policy that
+      // removed it, for another full retention window.
+      //
+      // This is a known, accepted limitation, not a bug to fix here: the
+      // alternative is tombstones (recording deleted ids, or a `deleted`
+      // stub row, so this check can consult them) which is a schema
+      // migration and trades storage back for the space the deletion just
+      // reclaimed — a decision this storage epic has deliberately deferred,
+      // not one a bug fix may make unilaterally. An earlier attempt at this
+      // task tried instead to preserve "the envelope's own creation
+      // timestamp" on re-insert, but `MessageEnvelope`'s wire format has no
+      // timestamp field at all (see `message_envelope.dart`); adding one
+      // would be a protocol change, not a bug fix, so the human chose to
+      // keep `DateTime.now()` exactly as today's code does and disclose the
+      // limitation instead. See `epics/E08-local-storage/tasks/E08-B04.md`
+      // (`Q-E08-B04-1`) for the full history.
       final createdAt = DateTime.now().millisecondsSinceEpoch;
       final ciphertextBytes = Uint8List.fromList(ciphertext.serialize());
 
