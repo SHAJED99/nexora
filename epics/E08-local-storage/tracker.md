@@ -1,20 +1,27 @@
 # E08 · Local Storage & Management · Progress
 
-**Status:** `E08-T01`, `E08-T02`, `E08-T03`, `E08-T04` and `E08-T07` all
-merged, reviewed APPROVE. All 6 open questions from sharding resolved by
-the human 2026-09-02 (see `epic.md` §Open Questions). `E08-T05` and
-`E08-T06` are dispatchable next; `T05` deliberately serialized after `T04`
-since its own contract imports `T04`'s types despite the DAG not
-declaring that dependency (same shape as the T02/T03 parallel-dispatch
-collision). ·
+**Status:** `E08-T01`, `E08-T02`, `E08-T03`, `E08-T04`, `E08-T05` and
+`E08-T07` all merged, reviewed APPROVE (T05 took 2 review rounds — a real
+S2 bug, `overSizeMb` capping per-kind instead of against the combined
+total, found and fixed). All 6 open questions from sharding resolved by
+the human 2026-09-02 (see `epic.md` §Open Questions). `E08-T06` is
+dispatchable next. ·
 **Started:** 2026-09-02 ·
-**Completed:** — · **Progress:** 5/8 sharded (+1 prospective)
+**Completed:** — · **Progress:** 6/8 sharded (+1 prospective)
 
-**Remaining gate before T08/T09 can proceed:**
+**Remaining gates:**
 - 🧍 `design_contract_approval` for `GAP-024`…`GAP-027` (`design/gaps.md`)
   — ⏳ AWAITING HUMAN — gates T08's build, and gates T09 being sharded at
   all. `E08-T07` produced the contracts; approval of the gap entries
   themselves is a separate, still-open gate.
+- 🟡 `OQ-E08-T05-1` (`E08-T05.md`) — the `overSizeMb` item-fetch callback
+  has no paging control; `StorageInventory.itemsOfKind`'s default
+  500-item newest-first window can make "oldest-first" silently operate
+  on the wrong window past 500 items in one kind. **Does not block
+  `E08-T06`'s dispatch** (the plan/log/wiring work is unaffected), but
+  **must be answered before `E08-T06` executes any `overSizeMb` plan in
+  production** — executing a plan built on a truncated, wrong-end window
+  would delete based on a lie about which items are actually oldest.
 
 **Cleared 2026-09-02:** `analyze_report` (human resolved all 6 OQs at
 sharding), `db_schema_migration` (`OQ-E08-T01-1`, human approved T01's
@@ -30,7 +37,7 @@ content by default).
 | E08-T02 | Storage inventory read model | backend | M | must | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `1efec77` (PR #18) |
 | E08-T03 | Access-frequency signals | backend | S | should | T01 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `222c6dd` (PR #19) |
 | E08-T04 | Smart Mode — the eight-factor plan | backend | M | must | T01, T02, T03 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `77f0505` (PR #20) |
-| E08-T05 | Manual policies + mode selection | backend | S | should | T01, T02 | round 1 CHANGES · builder (sonnet) → reviewer (opus) · fix in progress (PR #21) |
+| E08-T05 | Manual policies + mode selection | backend | S | should | T01, T02 | done · builder (sonnet) → reviewer (opus) · round 1 CHANGES → round 2 APPROVE · squash-merged `1c54ecc` (PR #21) |
 | E08-T06 | Retention execution + decision log + wiring | backend | M | must | T04, T05 | todo |
 | E08-T07 | Design gap pass | docs | M | must | — | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `a94e483` (PR #16) |
 | E08-T08 | Dashboard Local Storage card | frontend | M | must | T06, T07 | todo — blocked on 🧍 `design_contract_approval` GAP-024/025 |
@@ -389,3 +396,39 @@ exact section for eight tasks with no reader.)_
 **Routed back to the same implementer (rule: same builder gets first
 right of repair) for F1.** F2 recorded as `OQ-E08-T05-1` in the task
 file, not blocking F1's fix.
+
+### E08-T05 — 2026-09-02 — 📋 **APPROVE** round 2 (reviewer: `claude-opus-5`; `executed_by`: `claude-sonnet-5` ✅ rule 5)
+
+- **F1's fix independently verified, not trusted.** Reviewer reproduced
+  the original zero-removal repro against the fixed code, then built a
+  genuinely discriminating adversarial fixture (mixed item sizes/ages
+  across kinds) where global-oldest-first and per-kind-then-concatenate
+  actually diverge — confirmed the fix chooses the correct global answer,
+  and confirmed a same-timestamp cross-kind tie-break works correctly.
+- **Three independent falsifications**, all reproducing their exact
+  expected failure signature, then restored to a byte-identical clean
+  tree: the per-kind gate reverted (exact round-1 symptom reproduced),
+  the global sort reverted (wrong items selected, matching what a
+  per-kind pass would choose), the unmodifiable-list fix reverted
+  (`UnsupportedError` reproduced). **Notably: the round-1 pre-existing
+  tests stayed green even with F1 reverted** — mechanical proof the new
+  regression test is what actually holds the line, not decoration.
+- **Re-grouping after global selection confirmed correct** — per-kind
+  byte/item totals reflect only that kind's own selected items, no
+  pool-total leakage.
+- **Secondary `const []` bug confirmed fixed with no sibling instance** —
+  grepped the whole file; one pre-existing E08-T02 instance probed and
+  confirmed not a live hazard.
+- **F2/`OQ-E08-T05-1` confirmed correctly left untouched** — no attempted
+  fix, still open, correctly deferred to a human/planner decision.
+- **One additional detail folded into the same open question**, not a
+  new entry: `runningBytes` is seeded from the SQL-summed total but
+  decremented by pooled-item bytes, so the same 500-item truncation could
+  also cause *under-planning* (exhausting the pool while still over cap),
+  not just wrong-item selection. Whoever answers `OQ-E08-T05-1` should
+  treat this as part of the same gap.
+- **suite: 757/757**, `flutter analyze` clean, both re-run twice by
+  reviewer; CI (2 runs) confirmed green before merge.
+
+**Ready to squash-merge — done.** Squash-merged to `epic_08` as `1c54ecc`
+(PR #21).
