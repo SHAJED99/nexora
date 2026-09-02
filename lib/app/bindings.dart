@@ -12,10 +12,19 @@
 // instance it is handed — never construct a second one of either (task file
 // §2: two `AppDatabase`s, or two of anything `MessagingStack` owns, is the
 // exact defect this task exists to prevent, not a style preference).
+import 'dart:io';
+
 import 'package:get/get.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/routing_engine/link_quality_feed.dart';
+import 'package:nexora/core/storage/retention_executor.dart';
+import 'package:nexora/core/storage/retention_plan.dart' show SmartModeThresholds;
+import 'package:nexora/core/storage/smart_mode_policy.dart';
+import 'package:nexora/core/storage/storage_decision_log.dart';
+import 'package:nexora/core/storage/storage_inventory.dart';
+import 'package:nexora/core/storage/storage_manager.dart';
+import 'package:nexora/core/storage/storage_settings_repository.dart';
 import 'package:nexora/features/home/presentation/home_controller.dart';
 import 'package:nexora/features/login/data/device_identity_repository.dart';
 import 'package:nexora/features/login/domain/sign_in_use_case.dart';
@@ -23,6 +32,8 @@ import 'package:nexora/features/login/presentation/login_controller.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
 import 'package:nexora/features/trust/domain/block_use_case.dart';
 import 'package:nexora/features/welcome/presentation/welcome_controller.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 class AppBinding extends Bindings {
   AppBinding({required this.db, required this.messagingStack});
@@ -112,5 +123,68 @@ class AppBinding extends Bindings {
       ),
       permanent: true,
     ).start();
+
+    // E08-T06: the storage-retention composition root. Built AFTER `db`
+    // above (StorageInventory/StorageSettingsRepository/RetentionExecutor/
+    // StorageDecisionLog all depend on it) and BEFORE
+    // `messagingStack.coordinator.start()` is ever called, so the very
+    // first tick already has a `storageManager` to drive (task file §6
+    // risk: registering too early yields a `Get.find` failure at startup;
+    // this order avoids that entirely by never calling `Get.find` for this
+    // wiring at all -- every dependency below is the already-registered
+    // `db` or a value this method already has in scope).
+    //
+    // `MessagingCoordinator` is already fully constructed inside
+    // `MessagingStack.create()` (before this binding ever runs, E06-T03) --
+    // this task's own fence excludes `messaging_stack.dart`, so the
+    // coordinator's own constructor call cannot change. `storageManager` is
+    // therefore set on the coordinator's public, mutable field
+    // (`messaging_coordinator.dart`'s own E08-T06 header) rather than
+    // passed at construction.
+    // One `StorageDecisionLog` instance, shared by the manager's own
+    // `planned`-outcome writes and the executor's `applied`/`skipped`
+    // writes — both are the single logical writer of `storage_decisions`
+    // for this app (task file §3: "the only writer"), and sharing the
+    // instance keeps its in-process row-id counter (`storage_decision_log
+    // .dart`'s own header) monotonic across both call paths rather than
+    // resetting per instance.
+    final decisionLog = StorageDecisionLog(db: db);
+    final storageManager = StorageManager(
+      settings: StorageSettingsRepository(db: db),
+      inventory: StorageInventory(
+        db: db,
+        databaseFileBytes: _measureDatabaseFileBytes,
+      ),
+      smart: SmartModePolicy(thresholds: SmartModeThresholds.defaults()),
+      executor: RetentionExecutor(db: db, log: decisionLog),
+      log: decisionLog,
+    );
+    Get.put(storageManager, permanent: true);
+    messagingStack.coordinator.storageManager = storageManager;
+  }
+
+  /// The sqlite file's own on-disk size (`StorageInventory`'s own
+  /// `databaseFileBytes` contract, E08-T02) -- mirrors
+  /// `database.dart`'s private `_openConnection` path construction exactly
+  /// (`getApplicationDocumentsDirectory()` + `nexora.sqlite`) rather than
+  /// exposing a new public path getter on `AppDatabase`, since
+  /// `database.dart` is not in this task's `files:` fence. Returns `0` for
+  /// a fresh install where the file has not been created yet (a real zero,
+  /// never a fabricated estimate — E04-B03's standing prohibition), and
+  /// also `0` if the platform channel itself is unavailable (e.g. a plain
+  /// `flutter_test` unit test with no `path_provider` mock registered) --
+  /// this is a peripheral display measurement, never allowed to take down
+  /// the whole storage pass (task file §6 risk: "An exception in the
+  /// storage pass must not abort the coordinator tick" applies with equal
+  /// force to a sub-measurement failing inside one).
+  static Future<int> _measureDatabaseFileBytes() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File(p.join(dir.path, 'nexora.sqlite'));
+      if (!await file.exists()) return 0;
+      return file.length();
+    } catch (_) {
+      return 0;
+    }
   }
 }

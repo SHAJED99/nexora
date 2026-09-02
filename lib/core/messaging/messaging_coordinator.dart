@@ -117,6 +117,26 @@
 // merely assumed, by `test_EARS_COMM_12_concurrent_stores_do_not_lose_a_cursor_update`
 // exercising it through this coordinator's own new call path.
 //
+// **E08-T06 addition: an optional storage pass, appended after this file's
+// existing tick work.** [storageManager] is a public, mutable, nullable
+// field -- not a constructor parameter -- deliberately: `MessagingStack
+// .create()` (this task's own fence excludes `messaging_stack.dart`, so its
+// existing `MessagingCoordinator(...)` construction call cannot change)
+// already fully constructs this coordinator before `AppBinding
+// .dependencies()` ever runs (E06-T03's composition-root ordering, this
+// file's own header above). `AppBinding` sets this field once, after
+// building `StorageManager` from the already-registered `AppDatabase`, and
+// before calling `coordinator.start()` -- the same "already-built instance,
+// registered, never reconstructed" discipline `bindings.dart`'s own header
+// already documents for `AppDatabase`/`MessagingStack`. When set, [tick]
+// calls `StorageManager.runPass` once per pass, strictly AFTER
+// `processQueue`/`sweepExpired`/`reclaimPayloads` (task file §4: no
+// reordering of this file's existing tick steps) and inside its own,
+// separate try/catch -- a storage-pass failure is isolated from, and can
+// never retroactively fail, the messaging work that already completed in
+// this same tick (task file §6 risk: "An exception in the storage pass must
+// not abort the coordinator tick"; `EARS-STORE-15`).
+//
 // Does NOT modify `RelayEngine`, `RoutingEngine`, `SendMessageUseCase`,
 // `ReceiveMessageUseCase` or `InboundPipeline` (task file §4) — every
 // dependency below is called exactly as its own epic left it. Does NOT
@@ -140,6 +160,7 @@ import 'package:drift/drift.dart';
 
 import '../persistence/database.dart';
 import '../routing_engine/relay_engine.dart';
+import '../storage/storage_manager.dart';
 import '../transport/transport_service.dart';
 import '../../features/messaging/domain/delivery_state_machine.dart';
 import '../../features/messaging/domain/message.dart';
@@ -167,6 +188,12 @@ class CoordinatorCounters {
   /// Number of ticks whose pass threw before completing. The loop itself
   /// never stops because of one (EARS-COMM-13).
   int tickFailures = 0;
+
+  /// Number of ticks whose storage pass (E08-T06 addition) threw. Counted
+  /// separately from [tickFailures] since a storage-pass failure must never
+  /// be conflated with, or abort, this tick's messaging work
+  /// (`EARS-STORE-15`).
+  int storagePassFailures = 0;
 
   /// Total messages moved `queued` -> `sent` by [MessagingCoordinator
   /// .reconcileQueuedMessages] across every call (normally just the one
@@ -215,6 +242,12 @@ class MessagingCoordinator {
   Future<void>? _inFlightTick;
 
   final CoordinatorCounters counters = CoordinatorCounters();
+
+  /// Set by `AppBinding` after construction (this file's header, E08-T06
+  /// addition) -- null until then, and in every test that does not care
+  /// about the storage pass. When non-null, [tick] drives it, once per
+  /// pass, strictly after this file's existing three messaging steps.
+  StorageManager? storageManager;
 
   /// Begins driving the mesh (task file §3/§5): calls `InboundPipeline
   /// .start()` (E06-T05's obligation, discharged here), subscribes to its
@@ -301,19 +334,36 @@ class MessagingCoordinator {
   Future<void> _runTick() async {
     counters.ticks++;
     try {
-      final beforeQueued = await _countQueued();
-      await _stack.relayEngine.processQueue();
-      final afterQueued = await _countQueued();
-      if (afterQueued < beforeQueued) {
-        counters.forwarded += beforeQueued - afterQueued;
+      try {
+        final beforeQueued = await _countQueued();
+        await _stack.relayEngine.processQueue();
+        final afterQueued = await _countQueued();
+        if (afterQueued < beforeQueued) {
+          counters.forwarded += beforeQueued - afterQueued;
+        }
+
+        counters.swept += await _stack.relayEngine.sweepExpired();
+        counters.reclaimed += await _stack.relayEngine.reclaimPayloads();
+      } catch (_) {
+        // One bad pass must never kill the loop (EARS-COMM-13) — counted as
+        // metadata, never rethrown.
+        counters.tickFailures++;
       }
 
-      counters.swept += await _stack.relayEngine.sweepExpired();
-      counters.reclaimed += await _stack.relayEngine.reclaimPayloads();
-    } catch (_) {
-      // One bad pass must never kill the loop (EARS-COMM-13) — counted as
-      // metadata, never rethrown.
-      counters.tickFailures++;
+      // E08-T06 addition: appended strictly after the messaging work above
+      // (task file §4 — no reordering of processQueue/sweepExpired/
+      // reclaimPayloads), in its own try/catch so a storage-pass failure is
+      // isolated from — and can never retroactively fail — the messaging
+      // work this tick already completed (EARS-STORE-15, task file §6
+      // risk).
+      final storage = storageManager;
+      if (storage != null) {
+        try {
+          await storage.runPass(nowEpochMs: _clock().millisecondsSinceEpoch);
+        } catch (_) {
+          counters.storagePassFailures++;
+        }
+      }
     } finally {
       _inFlightTick = null;
     }
