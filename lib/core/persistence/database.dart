@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'crypto_tables.dart';
+import 'group_tables.dart';
 import 'message_tables.dart';
 import 'relationships_table.dart';
 import 'relay_tables.dart';
@@ -53,6 +54,10 @@ class DeviceIdentities extends Table {
   Messages,
   DeliveryStates,
   SyncCursors,
+  Groups,
+  GroupMembers,
+  GroupSenderKeys,
+  GroupEvents,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -61,7 +66,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -251,6 +256,45 @@ class AppDatabase extends _$AppDatabase {
             // index; the fix for *this* table is simply not declaring one,
             // confirmed deliberately, not by omission.)
             await m.createTable(syncCursors);
+          }
+          if (from < 13) {
+            // E07-T01: group data model -- `groups`, `group_members`,
+            // `group_sender_keys`, `group_events` -- additive only, no
+            // changes to any pre-existing table (`OQ-E07-4`, resolved
+            // 2026-08-31; docs/conventions.md "Schema migrations").
+            //
+            // As with `from < 11` (E05-T01's own finding, restated there):
+            // `createTable` only issues the CREATE TABLE statement, never
+            // any `@TableIndex`-declared index -- those are separate
+            // `DatabaseSchemaEntity`s only created via `create`/`createAll`.
+            // Every index this step's tables declare is therefore also
+            // created explicitly here, with `IF NOT EXISTS` (not
+            // `m.createIndex`, whose generated statement in
+            // `database.g.dart` has no such guard and is not retry-safe
+            // across a failed-then-retried migration).
+            await m.createTable(groups);
+            await m.createTable(groupMembers);
+            await m.createTable(groupSenderKeys);
+            await m.createTable(groupEvents);
+            await m.database.customStatement(
+              'CREATE INDEX IF NOT EXISTS '
+              'idx_group_members_current ON group_members '
+              '(group_id, removed_at_epoch);',
+            );
+            // Partial unique index enforcing "exactly one current Owner per
+            // group" (EARS-GROUP-3/4) -- this single-owner invariant must be
+            // enforced by the database, not by application code that
+            // someone will forget to call (task's §6 risk note).
+            await m.database.customStatement(
+              'CREATE UNIQUE INDEX IF NOT EXISTS '
+              'idx_group_single_owner ON group_members (group_id) '
+              "WHERE role = 'owner' AND removed_at_epoch IS NULL;",
+            );
+            await m.database.customStatement(
+              'CREATE INDEX IF NOT EXISTS '
+              'idx_group_events_group_epoch ON group_events '
+              '(group_id, epoch);',
+            );
           }
         },
       );

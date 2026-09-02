@@ -13,6 +13,25 @@ the already-approved, already-measured `conversations.md` contract and
 closes GAP-006, which was approved on 2026-08-29 with "rows deferred to
 E07" written into it.)
 
+> **`E07-T12` follow-up, 2026-08-31.** The three contracts named in that
+> clearance now exist (`group-create.md`, `group-manage.md`, `call.md`) and
+> each records what it derived and from where. The gate line above is left
+> **as the human set it** — it is not re-opened by an agent and it is not
+> re-cleared by one. Four things remain genuinely undecided and are listed in
+> their own entries rather than assumed: GAP-018's **entry point** (which
+> GAP-018 itself deferred into the contract), and GAP-021's **destructive
+> treatment**, **three glyph names** and **two copy strings**. None of them is
+> approved below; every `approved by:` line written by `E07-T12` is
+> deliberately absent (`L-process-002`).
+
+> **`E07-T13` follow-up, 2026-08-31.** One new entry, **GAP-023**, records the
+> PTT disposition and supersedes GAP-017 **by reference** (GAP-017 is
+> byte-unchanged — it records a decision the human already made). GAP-023 is
+> 🟡 **proposed and not approved**: its `approved by:` line is deliberately
+> bare (`L-process-002`) and it carries four explicit forks, the first of
+> which is the reading of PTT itself. The gate line above is left **as the
+> human set it** — an agent does not re-open it and does not re-clear it.
+
 **Clearance history**
 - ✅ cleared by human on 2026-08-26 — the original 7-screen contract
   extraction + gap pass, per Q-DESIGN-001 in `spec/questions.md`.
@@ -180,7 +199,14 @@ is how a product acquires seven different empty states.
   instruction, 2026-08-29) — proposal as written: heading kept, rows
   deferred to E07, copy "No groups yet" for the empty treatment (matches
   GAP-002's established voice)
-- **built:** E06-T09 (heading + empty treatment) · rows deferred to E07
+- **built:** E06-T09 (heading + empty treatment) · rows built by **E07-T08**
+  (2026-09-02) — real per-group rows now render when `watchConversations()`
+  returns groups; the empty "No groups yet" treatment stays for a zero-group
+  device. Golden not re-extracted: `test/design/design_probe_test.dart`'s
+  `conversations` fixture (T01-owned, out of E07-T08's `files:` fence) seeds
+  no group data, so the design gate still reports the three rows as absent
+  — see E07-T08's own Run log for why that is a probe-fixture limitation,
+  not a code defect.
 
 ## GAP-007 — conversations, empty state (no conversations at all)
 - **status:** 🟡 proposed
@@ -579,8 +605,19 @@ is how a product acquires seven different empty states.
   measured screen; `E07-T12` proposes it as part of the contract and the
   human approves it there, or it waits.
 - **approved by:** ✅ human, 2026-08-31 — approved as proposed
-- **built:** _(not yet — `E07-T12` writes the contract; the build task is
-  prospective)_
+- **built:** contract written — `design/screens/group-create.md` (`E07-T12`,
+  2026-08-31). Not built in code; the build task is prospective. Golden is
+  extracted **after** the build, per `design-fidelity` §3.
+- **still open after this entry's approval (`E07-T12`, 2026-08-31):** the
+  **entry point**, which this entry deliberately deferred into the contract
+  ("`E07-T12` proposes it as part of the contract and the human approves it
+  there, or it waits"). The proposal now exists — `group-create.md` §Open —
+  and is an `add` icon-button in `conversations.md`'s header, in that
+  screen's own 48×48 `r9999px` / `24px` `rgb(195, 192, 255)` vocabulary.
+  It is **not** covered by the 2026-08-31 clearance above and is **not**
+  approved by an agent (`L-process-002`). Until the human says so, no build
+  task adds any affordance to `conversations.md`; `/groups/new` is reachable
+  only by direct navigation, which blocks nothing else in this contract.
 
 ## GAP-019 — group management (roles, membership, deletion) has no design source
 - **status:** 🟡 proposed
@@ -612,8 +649,25 @@ is how a product acquires seven different empty states.
 - **approved by:** ✅ human, 2026-08-31 — both advisories accepted: (1) a
   full-screen confirm step for leave/delete, no new modal primitive;
   (2) a text label per row for roles, not an icon
-- **built:** _(not yet — `E07-T12` writes the contract; the build task is
-  prospective)_
+- **built:** contract written — `design/screens/group-manage.md` (`E07-T12`,
+  2026-08-31), with both fork decisions honoured literally: a full-screen
+  confirm step (no scrim, no elevation, no modal primitive) and a plain
+  `12px` `w500` text label per row for the role. Not built in code; the
+  build task is prospective.
+- **clarified by `E07-T12` (2026-08-31), not re-decided:** this entry's
+  "a Member … sees the roster and no actions at all" is one row stronger
+  than `E07-T02`'s matrix, which this entry itself names as the source of
+  truth: `allows(member, leave)` is **`true`** — every role may leave. The
+  contract therefore renders **no management action** for a Member and keeps
+  `Leave group`. Correspondingly, an **Owner** sees no `Leave group` at all
+  (`allows(owner, leave)` is `false` until ownership is transferred). If the
+  human prefers the literal reading of this entry over the matrix, say so
+  here and the contract changes; the matrix is not edited from the UI side.
+- **`more_vert` deliberately unused (`E07-T12`):** `devices.md` draws it, but
+  it implies a menu surface no contract in `design/screens/` measures.
+  Per-row actions are inline chips in devices element 31's own treatment
+  instead. Recorded so the difference from `devices.md` reads as a decision,
+  not drift.
 
 ## GAP-020 — the chat thread draws only 1:1 bubbles; a group thread needs sender attribution and event lines
 - **status:** 🟡 proposed
@@ -641,6 +695,17 @@ is how a product acquires seven different empty states.
 - **approved by:** ✅ human, 2026-08-31 — approved as proposed (build still
   waits on `OQ-E07-13`, unresolved by this approval)
 - **built:** _(not yet — blocked on `OQ-E07-13` as well as this gate)_
+- **no contract written by `E07-T12` (2026-08-31), deliberately:** this gap is
+  a **state on `chat.md`**, not a new screen, and `E07-T12` §4 forbids
+  designing group-thread rendering beyond naming the gap while `OQ-E07-13`
+  (a blocked member's messages inside a group thread — a product decision) is
+  unanswered. `chat.md` is a generated contract and is not hand-edited
+  (`design-fidelity` rule 1). The approved derivation stands as written here:
+  the sender-attribution line takes `conversations.md` element 26's treatment
+  (`14px` `w500` `rgb(11, 28, 48)`) on **incoming** bubbles only, and event
+  lines are centred, surface-less, in `chat.md`'s `14px` `rgb(70, 69, 85)`,
+  one per `group_events` row. Whoever writes that contract inherits this
+  paragraph and answers `OQ-E07-13` first.
 
 ## GAP-021 — voice calls have no design source: no outgoing, incoming, in-call or failed state
 - **status:** 🟡 proposed
@@ -673,8 +738,26 @@ is how a product acquires seven different empty states.
   it quietly.*
 - **approved by:** ✅ human, 2026-08-31 — approved as proposed, including
   adding a call-entry icon-button to `chat.md`'s header
-- **built:** _(not yet — `E07-T12` writes the contract; the build task is
-  prospective)_
+- **built:** contract written — `design/screens/call.md` (`E07-T12`,
+  2026-08-31), four states plus the approved `chat.md` header entry point
+  (elements C24/C25, in chat's own 40×46 `r9999px` / `24px`
+  `rgb(70, 69, 85)` header vocabulary). No speaker toggle, no video, no
+  add-participant, and **no element for FR-CALL-002** — priority is a routing
+  weight with no user-facing state. Not built in code; the build task is
+  prospective.
+- **three items `E07-T12` left open rather than decide (`L-process-002`):**
+  (a) the **destructive treatment** for decline/hang up — neither parent
+  contract measures a red; advisory is to tint the `call_end` glyph
+  `rgb(186, 26, 26)` (devices' measured destructive *text* colour) as a
+  cross-screen borrow in GAP-009's pattern, with the fallback until answered
+  being the ordinary `rgb(53, 37, 205)` glyph and **no** new colour;
+  (b) three **glyph identities** — `call`, `call_end`, `mic_off` (family,
+  size and colour are measured; only the names are proposed), in
+  `chat-voice.md`'s established pattern; (c) two **copy strings** —
+  `Connection degraded` and the media-unavailable line.
+- **note for the reviewer:** `make design-verify SCREEN=chat` will report the
+  header call button as an **extra element**. That finding traces here, per
+  `design-fidelity` §6. `chat.md` was **not** hand-edited (rule 1).
 
 ## GAP-022 — mid-call route migration is invisible to the user, and it may need to stay that way
 - **status:** 🟡 proposed
@@ -701,7 +784,240 @@ is how a product acquires seven different empty states.
   treatment on degradation.*
 - **approved by:** ✅ human, 2026-08-31 — approved as proposed: silent on a
   successful migration, GAP-013's degraded-card treatment on an abandoned one
-- **built:** _(not yet)_
+- **built:** contract written — the `in-call` / `in-call-degraded` state pair
+  in `design/screens/call.md` (`E07-T12`, 2026-08-31). The two states differ
+  in exactly two cells (the status dot's colour and the status word); nothing
+  moves, appears or is added, because a mid-call layout shift would defeat the
+  quietness this entry chose. `attempted`, `validated` and `completed`
+  migration events render nothing at all. Not built in code.
+
+<!-- ── PTT disposition — supersedes GAP-017 by reference (E07-T13, 2026-08-31) ── -->
+
+## GAP-023 — PTT, answered: a hold-to-transmit delta on GAP-014's approved voice-message contract
+
+- **status:** 🟢 approved — **supersedes `GAP-017` by reference.** GAP-017
+  is not edited: it records the human's 2026-08-30 decision to park PTT
+  until the real-time transport question settled, and it stays exactly as
+  written. This entry is what that parking condition was waiting for.
+- **screen:** chat (`design/screens/chat.md`) → a **delta on the already-approved
+  derived contract `design/screens/chat-voice.md`** (GAP-014). No new screen,
+  no new route.
+- **spec:** FR-COMM-001 ("personal communication via text, voice messages,
+  **PTT**, voice calls, attachments, and location sharing") · FR-COMM-002
+  ("group communication via text, **PTT**, voice calls, attachments, and
+  group events") · **FR-STORE-002** ("store voice messages, **PTT
+  recordings**, and call recordings locally on-device") · **FR-NOTIFY-001**
+  (PTT is its own notification class, listed beside "new messages, voice
+  messages … incoming calls") · FR-PLAT-001 (background operation includes
+  PTT) · `spec/feature-list.md` §Personal Communication UC ("User
+  sends/receives text, voice messages, PTT, attachments, location **with a
+  contact**") · FR-UI-001 (Material 3, no competing visual language)
+- **owner:** `E07-T13`, the named owner of `OQ-E07-2` / `IMP-001`. Outcome
+  **(b)** of the three its §2 allows: *PTT layers on GAP-014's
+  voice-message recording UI with a small delta contract.*
+
+### The precondition that had to clear first
+`OQ-E07-3` — what carries live call audio — was resolved by the human on
+**2026-08-31: (a) datagram audio over the existing mesh with an Opus codec,
+with (c) a native real-time Pigeon channel as the named fallback if measured
+multi-hop-BLE latency proves unworkable**, the latency risk accepted
+knowingly rather than resolved by measurement first. GAP-017 could not be
+answered before that, which is exactly why the human parked it.
+
+### GAP-017's three questions, answered
+
+**Q1 — Is PTT a live half-duplex stream (a transport problem), or a fast
+voice-message loop layered on GAP-014? → A fast voice-message loop, in v1.**
+
+The tempting read of `OQ-E07-3`'s answer is that PTT is now nearly free: with
+a datagram path over the mesh, PTT is the same path with a hold-to-transmit
+gate and no duplex mixing. That is true, and it is **not** the whole picture:
+
+- **"Free" is conditional on work that does not exist yet.** The datagram
+  media path is a *prospective, unsharded* task (`epic.md` §Follow-on), and
+  `OQ-E07-3`'s own answer says `OQ-E06-T04-2` — real-hardware multi-hop-BLE
+  latency, never measured — "should still be prioritized before the
+  media-path prospective task is sharded, so the fallback can be exercised
+  cheaply if (a) doesn't hold up". Making PTT depend on that chain would be a
+  fourth deferral wearing a contract, which is precisely what `E07-T13`
+  exists to prevent.
+- **The spec describes an artifact, not a channel.** Three requirements
+  constrain PTT and none of them describes a live session: **FR-STORE-002**
+  says a PTT transmission is *stored on-device as a recording*;
+  **FR-NOTIFY-001** gives PTT its own *notification* class, which only means
+  something if a transmission can arrive while nobody is holding the channel
+  open; and PTT appears in FR-COMM-001/002 in the list of *message types*,
+  between voice messages and voice calls. **FR-CALL-001/002/003 — the entire
+  call chapter — never mention PTT.** A live half-duplex channel is a
+  reading the spec permits but nowhere requires; a stored, notifiable,
+  per-conversation recording is the reading the spec actually writes down.
+- **On this product's transport, the message reading is the more honest
+  one.** E04's mesh is store-and-forward with a TTL measured in days; a live
+  route between two specific devices is the lucky case, not the normal one.
+  A walkie-talkie that only works when the peer happens to be reachable *at
+  that instant* fails silently most of the time; a hold-to-talk clip that
+  arrives in seconds when a route exists and minutes when it doesn't is the
+  same feature, degrading correctly.
+- **What `OQ-E07-3` genuinely buys PTT is the codec, not the channel.**
+  Opus is now an authorized dependency (for calls). GAP-014 deliberately left
+  codec, bit rate and max length out of scope as engineering; with Opus
+  chosen, PTT needs **no new dependency at all** — which is what makes this
+  delta small. FR-STORE-003's low-CPU/low-battery/low-bandwidth voice profile
+  applies to it unchanged.
+
+**This is an interpretation, and it is put to you as one** — see §Forks below.
+
+**Q2 — Does a PTT transmission leave a message in the thread, or is it
+ephemeral? → It leaves a message. This is decided by the spec, not by this
+entry.**
+
+**FR-STORE-002** says the system *shall* store PTT recordings locally
+on-device. Ephemeral PTT would contradict a "shall" (rule 1), so this was
+never actually an open design question — it was an open question that had a
+spec answer nobody had gone looking for. The artifact is **GAP-014's already
+approved voice bubble (`chat-voice.md` V10-V16), unchanged**: same geometry,
+same play/pause glyphs, same plain progress track, same timestamp and
+delivery-tick treatment. A second, near-identical bubble type for "the same
+object recorded with a different gesture" would be a competing visual
+language for one artifact — FR-UI-001, and rule 2's "never silently invent
+one".
+
+*Boundary:* FR-STORE-002 also names **call recordings**, which no epic
+currently claims and which this entry does **not** decide anything about —
+flagged here only so it has been seen once. It is E08's (local storage), and
+`E07-T09` §4 explicitly persists no call history.
+
+**Q3 — Per-conversation, or its own surface? → Per-conversation. No new
+route, no new screen, no PTT channel list.**
+
+Every spec id that names PTT places it inside a conversation: FR-COMM-001
+scopes it to *personal* communication, FR-COMM-002 to *group* communication,
+and `spec/feature-list.md`'s UC says "with a contact". Nothing in `spec/`
+names a PTT surface, a channel roster, or a global talk button. A dedicated
+PTT screen would be an invented navigation destination with no id behind it —
+which rule 2 forbids as squarely as dropping one.
+
+### The delta — what actually gets built
+
+Deliberately written **into this entry rather than into
+`design/screens/chat-voice.md`**: `E07-T13`'s `files:` fence permits
+`design/gaps.md` and `epic.md` only (rule 6), and a contract file should not
+be amended before the human has approved the amendment (`L-process-002`).
+Once this entry is approved, a follow-on docs task writes these rows into
+`chat-voice.md` as a `ptt-transmitting` state and the build task follows.
+Everything below is either an **unchanged** GAP-014 row or is named as new.
+
+| # | role | copy / label | derived from |
+|---|---|---|---|
+| P1 | `button` | — (the existing `mic` button, chat 30/31) | **no new element.** PTT is entered by **press-and-hold on the same 48×48 accent `mic` button**; a *tap* still starts a tap-to-toggle voice message exactly as the human approved on 2026-08-30. The gesture is the feature's own name |
+| P2 | `generic` | `circle` 12×12, `rgb(53, 37, 205)` | GAP-014 **V3**, unchanged — the transmitting dot |
+| P3 | `generic` | `0:07` (`M:SS`) | GAP-014 **V4**, unchanged — the elapsed counter, `JetBrains Mono`, `12px` `w500` `rgb(70, 69, 85)` |
+| P4 | `generic` | `Transmitting…` | **one new copy string**, in GAP-014 **V5**'s exact treatment (the `Recording…` slot). Flagged for sign-off below |
+| P5 | — | (no stop button, no cancel button) | GAP-014's **V1/V2** (stop) and **V6/V7** (cancel) are **absent** in this state: the finger is the control, and release commits. Nothing is added to compensate |
+| P6 | `generic` | GAP-014 **V10-V16**, unchanged | the delivered artifact is the approved voice bubble, in both alignments, with the same delivery-tick set (GAP-009) |
+
+**Not visually distinguished from a voice message.** A PTT clip and a voice
+message produce the same bubble. FR-STORE-002 separates them as *storage
+classes*, not as visual ones, and FR-NOTIFY-001 separates them as
+*notification* classes — so the difference the user experiences is in
+arrival, not in the thread. *Advisory, and a fork below:* an incoming PTT
+clip **auto-plays when its thread is already open** and otherwise raises
+FR-NOTIFY-001's PTT notification; a voice message never auto-plays. That is
+the whole behavioural difference, and it needs no pixel.
+
+**Explicitly not proposed here:** any claim on FR-CALL-002's real-time
+traffic priority (`E07-T10`). FR-CALL-002 names *calls*; a PTT clip is an
+ordinary message on the ordinary pipeline in v1. Engineering may later
+argue for a priority class, and that is an engineering change with its own
+gate, not something this entry grants quietly.
+
+### Group floor control (FR-COMM-002)
+
+FR-COMM-002 names PTT for groups in one word, and one word in the spec is
+still spec (rule 1). **Group PTT is in v1 scope and needs no floor control,
+and that is the strongest single argument for this disposition.**
+
+- Under the **live half-duplex** reading, a group PTT channel is a floor
+  arbitration problem: who holds the floor, what happens on simultaneous
+  press, whether a queue exists, how a stale floor is reclaimed when its
+  holder walks out of range. On an intermittent multi-hop mesh with no
+  central authority, that is a distributed-consensus problem with **no spec
+  text, no ADR and no derivable design primitive** behind it. It would have
+  to be raised as its own blocking question.
+- Under the **message** reading adopted here, **there is no floor.** Two
+  members holding the button at once produce two clips, exactly as two
+  members typing at once produce two messages. Group PTT is then the
+  existing group fan-out (`E07-T04`/`T05`/`T06`) carrying a voice bubble,
+  rendered with GAP-020's already-approved sender-attribution line on
+  incoming bubbles. Zero new mechanism, zero new floor state, zero new
+  design element.
+- **Therefore group PTT is neither deferred nor re-homed.** It rides the
+  same delta as 1:1 PTT and inherits GAP-020's build precondition
+  (`OQ-E07-13`, the blocked-member-in-a-group-thread product decision) — the
+  same precondition every other group-thread bubble already has, not a new
+  one invented for PTT.
+- **If the human takes the live-channel fork below**, floor control comes
+  back and is *not* solvable inside this delta: it would need its own
+  blocking question and its own owner, and this paragraph is the record that
+  says so in advance.
+
+### Forks — put to you, not decided
+
+1. **The reading itself (the one that matters).** This entry reads PTT as a
+   hold-to-transmit clip that is stored, notified and rendered as a voice
+   bubble. If your intent for PTT is a genuinely **live half-duplex channel**
+   — hold the button and the other person hears you *now*, nothing kept —
+   then (i) FR-STORE-002 needs an amendment, because it says the opposite;
+   (ii) PTT becomes downstream of the media-path prospective task and of
+   `OQ-E06-T04-2`'s hardware latency numbers; and (iii) group PTT needs a
+   floor-control design that does not exist. Say so here and it routes
+   through `skills/change-impact` as a changed requirement. **Advisory:
+   ship this reading now.** The two are not exclusive — a live mode can be
+   added later over the same button and the same bubble artifact (which
+   FR-STORE-002 requires either way), so this is a subset, not a fork that
+   closes a door. **Named trigger for revisiting:** the media-path task
+   shipping *and* `OQ-E06-T04-2` producing real multi-hop-BLE latency
+   numbers.
+2. **Press-and-hold on the `mic` button.** On 2026-08-30 you chose
+   tap-to-toggle for voice messages and struck GAP-014's press-and-hold rows.
+   This entry does **not** reverse that — tap still toggles — but it does
+   put a *second* gesture on the same button. The alternative is a third
+   composer button, which costs real width in a 390px row that already
+   carries `add` (chat 26), a 214px textbox (chat 28), `lock` (chat 29) and
+   `mic` (chat 30). *Advisory: the long-press, because "push to talk" is the
+   gesture the feature is named after; a hidden affordance is the honest
+   cost, and it is smaller than a crowded rail.*
+3. **The `Transmitting…` string**, and whether a slip-of-the-finger
+   sub-second clip should be discarded rather than sent. A minimum-duration
+   discard needs no new element (the state simply ends), but "how short is
+   too short" is a product number, not a measured token, so no value is
+   proposed.
+4. **Auto-play on receipt** for an incoming PTT clip in an open thread (see
+   the delta table). It is the only behavioural difference between PTT and a
+   voice message, and it is a product decision wearing a UI costume.
+
+- **derived from:** `design/screens/chat-voice.md` (GAP-014, approved
+  2026-08-30) in its entirety — V3/V4/V5 for the transmitting state,
+  V10-V16 for the artifact; `design/screens/chat.md` elements 30-31 for the
+  button that carries the gesture; `design/gaps.md` GAP-020 (approved
+  2026-08-31) for group sender attribution; GAP-009's approved delivery-tick
+  mapping. **No new token, no new geometry, no new glyph** — the only new
+  string is `Transmitting…`.
+- **approved by:** ✅ human, 2026-08-31 — all four forks accepted as
+  advised: (1) the stored-clip reading, shipped now, not the live
+  half-duplex channel; (2) press-and-hold on the existing `mic` button, no
+  new composer element; (3) a minimum-duration threshold discards a
+  slip-of-the-finger sub-second press-and-release rather than sending it
+  (exact threshold left to the builder as an engineering choice); (4)
+  auto-play on receipt when the clip's conversation thread is already open
+- **built:** not built — this entry is the disposition, not the build. On
+  approval: one docs task folds the delta into
+  `design/screens/chat-voice.md` as a `ptt-transmitting` state, then the
+  PTT build task (`epic.md` §Follow-on) becomes shardable for the first
+  time.
+- **supersedes:** `GAP-017` — **by reference, unedited.** GAP-017's
+  `superseded by:` line is deliberately left as its author wrote it; the
+  pointer that matters is this one.
 
 ## The usual suspects
 

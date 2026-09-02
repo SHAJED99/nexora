@@ -102,6 +102,7 @@ import '../../../core/persistence/database.dart';
 import 'delivery_state_machine.dart';
 import 'message.dart';
 import 'message_envelope.dart';
+import 'message_sequence_reserver.dart';
 
 /// The seam this use case needs from E03's `CryptoService.encrypt`
 /// (`SignalProtocolAddress`, `Uint8List` -> `Future<CiphertextMessage>`),
@@ -162,6 +163,14 @@ class SendMessageUseCase {
   final Duration _ttl;
   final DateTime Function() _clock;
 
+  /// The one sequence-number reservation transaction, shared with
+  /// `SendGroupMessageUseCase` (OQ-E07-T06-1). See
+  /// `message_sequence_reserver.dart`.
+  late final MessageSequenceReserver _reserver = MessageSequenceReserver(
+    db: _db,
+    selfDeviceId: _selfDeviceId,
+  );
+
   int _idCounter = 0;
 
   /// The one call site described by the task's §5 contract. Returns the
@@ -198,33 +207,18 @@ class SendMessageUseCase {
     // both T01 and this task) -- this transaction is the sole guard against
     // the race, per that note's own guidance to rely on transaction
     // discipline alone unless proven insufficient.
-    final sequenceNumber = await _db.transaction(() async {
-      final maxRow = await (_db.selectOnly(_db.messages)
-            ..addColumns([_db.messages.sequenceNumber.max()])
-            ..where(_db.messages.conversationId.equals(conversationId) &
-                _db.messages.senderDeviceId.equals(_selfDeviceId)))
-          .getSingleOrNull();
-      final currentMax = maxRow?.read(_db.messages.sequenceNumber.max());
-      final next = (currentMax ?? -1) + 1;
-
-      // `ciphertext` is a NOT NULL blob column with no default -- an empty
-      // placeholder reserves the row/sequence number without pretending any
-      // encryption has happened yet; phase 2 below overwrites it with the
-      // real bytes (or, on encrypt failure, this row is transitioned to
-      // Failed and the placeholder is never observed as "Sent").
-      await _db.into(_db.messages).insert(
-            MessagesCompanion.insert(
-              id: id,
-              conversationId: conversationId,
-              senderDeviceId: _selfDeviceId,
-              sequenceNumber: next,
-              ciphertext: Uint8List(0),
-              createdAt: now.millisecondsSinceEpoch,
-              deliveryState: DeliveryState.queued.name,
-            ),
-          );
-      return next;
-    });
+    // OQ-E07-T06-1: this transaction's body now lives in
+    // `message_sequence_reserver.dart` — ONE implementation, called from here
+    // (1:1) and from `SendGroupMessageUseCase.send` (groups). It was inlined
+    // here until E07-T06 needed the same reservation from the group send path
+    // and found no way to call it; the behaviour, ordering and transactional
+    // critical section are byte-for-byte what they were, only the location
+    // changed. See that file's header for why a second copy is never allowed.
+    final sequenceNumber = await _reserver.reserve(
+      conversationId: conversationId,
+      messageId: id,
+      createdAtMs: now.millisecondsSinceEpoch,
+    );
 
     var message = Message(
       id: id,

@@ -46,6 +46,38 @@ Future<void> _insertMessage(
       );
 }
 
+/// Seeds a group conversation (E07-T01's tables) so a group row reaches this
+/// controller through E07-T07's widened read model.
+Future<void> _insertGroup(
+  AppDatabase db, {
+  required String id,
+  required String name,
+}) async {
+  await db.into(db.groups).insert(
+        GroupsCompanion.insert(
+          id: id,
+          name: name,
+          createdAt: 0,
+          createdByDeviceId: 'self-device',
+        ),
+      );
+}
+
+Future<void> _insertMember(
+  AppDatabase db, {
+  required String groupId,
+  required String deviceId,
+}) async {
+  await db.into(db.groupMembers).insert(
+        GroupMembersCompanion.insert(
+          groupId: groupId,
+          deviceId: deviceId,
+          role: 'member',
+          joinedAtEpoch: 0,
+        ),
+      );
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger =
@@ -256,6 +288,52 @@ void main() {
     expect(
       controller.recent.map((t) => t.peerDeviceId).toList(),
       ['device-b', 'device-a'],
+    );
+    controller.onClose();
+  });
+
+  // E07-T07 / OQ-E07-T07-1: the widened read model also emits group rows,
+  // which carry no `peerDeviceId`. Recent Conversations renders the shared
+  // personal `ConversationTile` and has no group treatment yet (E07-T08), so
+  // group rows are filtered out BEFORE the three-row cap — filtering after
+  // it would silently shrink the section below its designed row count.
+  test('test_recent_conversations_skip_groups_before_the_row_cap', () async {
+    for (var i = 0; i < 3; i++) {
+      await relationships.upsert('device-$i', RelationshipState.trusted);
+      await _insertMessage(
+        db,
+        id: 'm-$i',
+        conversationId: 'device-$i',
+        senderDeviceId: 'device-$i',
+        sequenceNumber: 1,
+        ciphertext: Uint8List.fromList(List<int>.filled(16, i + 1)),
+        createdAt: 1000 + i,
+      );
+    }
+    // Newest activity of all — it would occupy a capped slot if it were not
+    // filtered first.
+    await _insertGroup(db, id: 'g:team', name: 'Team');
+    await _insertMember(db, groupId: 'g:team', deviceId: 'self-device');
+    await _insertMember(db, groupId: 'g:team', deviceId: 'device-0');
+    await _insertMessage(
+      db,
+      id: 'm-g1',
+      conversationId: 'g:team',
+      senderDeviceId: 'device-0',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(List<int>.filled(16, 9)),
+      createdAt: 9000,
+    );
+
+    final controller = newController();
+    controller.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    expect(controller.errorMessage.value, isEmpty);
+    expect(controller.recent.length, kDashboardRecentConversationCount);
+    expect(
+      controller.recent.map((t) => t.peerDeviceId).toList(),
+      ['device-2', 'device-1', 'device-0'],
     );
     controller.onClose();
   });
