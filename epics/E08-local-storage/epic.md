@@ -1,7 +1,7 @@
 ---
 id: E08
 title: Local Storage & Management
-status: todo
+status: done
 type: feature
 priority: { moscow: should, wsjf: 3.0 }
 depends_on: [E06]

@@ -119,6 +119,25 @@ is a wasted review cycle with your name on it.
   three epics — E03-T02, its own fix, the sweep-found sibling reader, that
   fix's own fix (all check 1), and E05-T04's non-atomic cursor write
   (check 2, which the rule did not name until it had already recurred).)
+- **feeding an enumerated id list into `.isIn(ids)` or a raw SQL
+  `IN (...)`?** The list must be provably bounded at the call site (a fixed
+  page size, a hard cap) or chunked into batches (≤500 ids) before the
+  query runs. SQLite's bind-variable ceiling
+  (`SQLITE_MAX_VARIABLE_NUMBER`, ~32,766) is not a theoretical limit —
+  paging the *enumeration* side of a query (so it no longer caps at some
+  small row count) removes the bound on the *consumption* side too, and
+  every caller downstream of that enumeration that builds an `isIn`/`IN`
+  query must be re-checked, not just the one that motivated the paging fix.
+  Write the falsification test at the scale that actually exercises the
+  limit (tens of thousands of ids, not a few hundred) — a small-scale test
+  passes on both sides of this bug and proves nothing.
+
+  (Real cost of skipping this: recurred at four call sites in one epic —
+  `E08-B03` found it at two sites, tracing the fix end-to-end to prove it
+  safe surfaced two more in the same delete path, and a different task
+  weeks later (`E08-B07`) rebuilt the identical unbounded shape in a
+  different planner, independently, escalating from a self-correcting
+  under-deletion bug to a permanent silent failure. `L-backend-004`.)
 
 ### 7. Hand over
 `status: review-requested` → push → PR to the **epic** branch → 📋 DEV STATUS

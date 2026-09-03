@@ -62,3 +62,13 @@ automatically for matching tasks (see `index.yaml`).
   Not incremented (no new occurrence of the miss) — recorded because a
   rule holding under real pressure, twice, unprompted, is exactly the
   evidence `skills/retro` §Rules 1 asks retros to capture, not just misses.
+
+- **2026-09-03 (E08 retro) - held a third and fourth time, on a screen the
+  rule had never been exercised against before.** `E08-T08`'s dashboard
+  Local Storage card hit the identical `InkWell`-swallowing probe blindness
+  (filed as `OQ-E08-T08-2` rather than routed around), and the epic-level
+  bug sweep independently confirmed it now affects **both** dashboard cards
+  (Network Status and Local Storage), reproduced, disclosed, left as an
+  owned cross-epic follow-up, never worked around by reshaping either
+  widget. Not incremented - this is the rule doing its job on unfamiliar
+  ground, which is the harder test than repeating it on the same screen.

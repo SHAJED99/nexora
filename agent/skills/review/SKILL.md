@@ -59,7 +59,17 @@ Every accepted decision the diff touches is implemented, or listed in
 §Deviations with a reason. Decisions get silently dropped under deadline
 pressure — this line exists because it happened.
 
-### 7. The security lens
+### 7. Unbounded id lists
+Any `.isIn(ids)` or raw SQL `IN (...)` in the diff — is the id list provably
+bounded at the call site, or chunked (≤500 ids) before the query runs? A
+list built by paging through an enumeration with no upper cap is unbounded
+by construction, even though it looks safe; it recurred at four call sites
+in one epic (`L-backend-004`) before this became a checklist line. If a
+regression test claims to prove the fix, confirm it seeds past SQLite's
+~32,766-bind-variable ceiling — a few-hundred-id test passes on both sides
+of this bug.
+
+### 8. The security lens
 Auth · payments · RBAC · single-use tokens · money or state machines → run
 [references/security.md](references/security.md) fully. Every item gets
 PASS/FAIL with a file:line. These are the attacks that have actually bitten

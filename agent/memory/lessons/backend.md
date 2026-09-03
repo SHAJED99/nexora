@@ -118,7 +118,10 @@ automatically for matching tasks (see `index.yaml`).
   `skills/retro`, 🧍 `retro_promotions` gate approved by human on
   2026-08-27 (as drafted); **rule extended 2026-08-29** (E05 retro,
   writer-side atomicity + required concurrency falsification test),
-  🧍 `retro_promotions` ⏳ awaiting human for the extension.
+  🧍 `retro_promotions` ✅ approved by the human, 2026-09-03 (E08 retro —
+  retroactive cleanup: the extension had been live and operating
+  successfully since 2026-08-29, gate formally cleared at the same time
+  as three other long-pending promotions).
 - promotion assessment (E05 retro, evidence-based — did the rule help?):
   the rule did **not** prevent authorship (the builder wrote the race), and
   it did not fire in self-review because its wording is about readers. What
@@ -134,16 +137,90 @@ automatically for matching tasks (see `index.yaml`).
   point", which is a real dataflow analysis, not a grep; noted as a
   recommendation for the human, not built.
 
-> Deliberately empty, like every area here. A lesson is evidence from *this*
-> codebase, and its recurrence count is what decides which trap gets automated
-> next — seeding it with another project's findings would put fiction in that
-> count and spend context on traps this code may never have.
->
-> Generic craft that belongs in every project already lives in the skills
-> (`skills/implement`, `skills/task-sharding/references/api-contracts.md`).
-> This file is for what only your own reviews can teach.
->
-> Why the harness itself is built this way: `docs/ARCHITECTURE.md`.
+## L-backend-004 — a list built by unrestricted enumeration (paging until a kind is exhausted) and then fed whole into one `isIn(ids)`/raw-SQL `IN (...)` query is unbounded, and SQLite's ~32,766-bind-variable ceiling is not a theoretical limit — it recurred at four separate call sites in one epic
+- date: 2026-09-03 | source: E08 bug sweep — `E08-B03` round 1 (found at
+  `_accessStats`), the same fix's own round-1→round-2 work (found at
+  `deleteMessageItems` and `_splitByDeliveryState`, both discovered only
+  because proving the round-1 fix end-to-end required exercising the real
+  call order), and `E08-B07` round 1 (found as a new caller — `_planOlderThan`
+  — building the identical unbounded shape a second time, independently)
+- situation: `E08-B01`/`E08-B02` deliberately fixed a 500-row *enumeration*
+  cap by adding paging — correct, and the right fix for what those two bugs
+  were about. But paging removes the bound on the *enumeration*, not on
+  whatever the enumerated ids are used for next. `E08-B03`'s `_accessStats`
+  and `_deleteBookkeeping` each took that now-unbounded id list and passed it
+  straight into `itemId.isIn(ids)` — one bind variable per id — so a device
+  with enough history throws `SqliteException(1): too many SQL variables`,
+  not on a rare edge case but as soon as a single kind's aged/tracked set
+  passes ~32,766 rows. Tracing the actual call order to prove the fix safe
+  end-to-end surfaced **two more** unchunked sites in the same delete path
+  (`deleteMessageItems`, `_splitByDeliveryState`) that would have blocked the
+  fix from ever being reachable at the scale it exists to help. Weeks later
+  in the same sweep, `E08-B07`'s fix removed `_planOlderThan`'s cap the same
+  way `E08-B01` had removed `_planOverSize`'s — and produced the identical
+  failure mode a fourth time, this time escalated to **worse than the bug it
+  fixed** (a permanent, silent, forever-repeating failure of an entire
+  retention mode, versus the original bug's self-correcting under-deletion).
+- root cause: "add paging so the enumeration isn't capped at 500" and "chunk
+  the query that consumes the enumerated ids" are two different fixes, and
+  nothing connects them — a planner fixing the *producer* side of an
+  unbounded-list defect has no prompt to check whether anything downstream
+  assumed the old cap as an implicit safety bound. `_planOverSize`'s own fix
+  (`E08-B01`) and `_allItemsOfKind`'s fix (`E08-B02`) both still hold this
+  same unbounded-accumulation shape in memory (harmless today only because
+  nothing yet queries their output with a raw `IN (...)`), so the class is
+  reachable from **three** planners, not the two actually hit.
+- fix applied: all four call sites in `RetentionExecutor` (`_accessStats`,
+  `_deleteBookkeeping`, `deleteMessageItems`, `_splitByDeliveryState`) chunk
+  id lists into ≤500-id batches (`_chunked`/`_deleteChunkSize`), merging
+  results/applying deletes chunk-by-chunk. Every fix independently falsified
+  (reverted, confirmed the exact `too many SQL variables` signature at
+  ≥32,766-40,600-id scale, restored). No third-caller fix was needed for
+  `E08-B07` once `E08-B03`'s chunking existed *downstream* of it — the
+  correct architectural fix was chunking at the query boundary the executor
+  owns, not at each planner that can produce an unbounded list.
+- recurrence: 4 (three sites found by tracing one fix's real call order, one
+  independent rediscovery by a different task weeks later)
+- status: promoted-to-rule+hook — human chose rule + hook at E08's retro,
+  2026-09-03. Rule: `agent/skills/implement/SKILL.md` §6 self-review
+  checklist (new "feeding an enumerated id list" item) and
+  `agent/skills/review/SKILL.md` §7 (new "Unbounded id lists" checklist
+  item). Hook: `agent/orchestrator/health.py` H8 — greps `lib/**/*.dart` for
+  `.isIn(`/raw SQL `IN (...)` call sites with no chunking marker in the
+  surrounding 6 lines, flags as WARN (heuristic, not proof — a human still
+  judges each finding; one true-negative flagged in the real codebase at
+  first run, `relay_engine.dart:416`, a small fixed enum set not an id
+  list). 🧍 `retro_promotions` ✅ approved by the human, 2026-09-03.
+
+## L-backend-005 — a new table keyed to another table's row, with no foreign key/cascade and no task's contract naming who deletes it when the parent is deleted, orphans forever and nobody notices until a bug sweep greps for it
+- date: 2026-09-03 | source: E08 bug sweep (`E08-B03`)
+- situation: `delivery_states` (E05) and `storage_item_stats` (E08-T03) both
+  key off a message id. `E08-T06` built the app's only deletion path
+  (`RetentionExecutor.deleteMessageItems`) against `messages` alone — correct
+  and in-fence for T06's own contract, which owns `messages` and nothing
+  else. Neither table declares a foreign key or cascade, and a repo-wide grep
+  found zero deletes against either table anywhere in `lib/` before this bug
+  was filed. The rows survive their message forever; the epic's own
+  `_accessStats()` then materializes the growing orphan-laden table every
+  pass. No task's `files:` fence or §4 named this join as anyone's
+  responsibility — it fell through the seam between the task that writes
+  each side-table (E05, E08-T03) and the task that eventually deletes the
+  row they key off of (E08-T06), because none of the three needed to read
+  each other's contract to satisfy their own.
+- root cause: `skills/task-sharding`'s obligation-ownership check (§0/its
+  analyze-report step) greps for *cross-task prose references* between
+  sharded tasks, but a table that a later task's deletion path never
+  mentions at all isn't a reference gap it can catch — it's a *missing*
+  reference. Nothing in the sharding brief asks "does any existing table key
+  off this task's rows with no cascade, and if so, who deletes it when a row
+  here is removed?" at the point a task's own deletion contract is written.
+- fix applied: `RetentionExecutor.apply`'s existing per-group transaction
+  extended to delete matching `delivery_states`/`storage_item_stats` rows
+  alongside the `messages` delete it belongs to (`E08-B03`). A real FK
+  cascade was presented as an alternative and correctly deferred to the
+  🧍 `db_schema_migration` gate (rule 3) rather than taken unilaterally.
+- recurrence: 1
+- status: lesson
 
 > Deliberately empty, like every area here. A lesson is evidence from *this*
 > codebase, and its recurrence count is what decides which trap gets automated

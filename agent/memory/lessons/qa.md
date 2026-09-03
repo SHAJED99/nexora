@@ -46,4 +46,23 @@ automatically for matching tasks (see `index.yaml`).
 - recurrence: 5 (occurrences of the practice paying off, not of a miss)
 - status: promoted-to-rule — `agent/skills/review/SKILL.md` §2
   ("Falsify the evidence"), 2026-08-29 via `skills/retro`,
-  🧍 `retro_promotions` ⏳ awaiting human.
+  🧍 `retro_promotions` ✅ approved by the human, 2026-09-03 (E08 retro —
+  retroactive cleanup, live and operating successfully since 2026-08-29).
+
+- **2026-09-03 (E08 retro) — the promoted rule held through an entire
+  epic-level bug sweep, at higher scale and against harder cases than
+  anything it was promoted on.** Every one of E08's seven sweep bugs was
+  closed only after the reviewer broke the fix and watched the right test
+  fail: `E08-B01`/`E08-B02`'s reviewer built a real-database multi-kind
+  interleaving probe to rule out a k-way-merge subtlety no unit test could
+  see; `E08-B03`'s round-2 reviewer forced a 40,000-id/~80-chunk atomicity
+  rollback rather than trust the round-1 fix's own smaller-scale proof;
+  `E08-B07`'s round-2 reviewer wrote an independent probe with ages shuffled
+  against ids specifically because the builder's own end-to-end test could
+  not rule out an id-order/created-at-order coincidence, then asserted exact
+  id-set equality across all three tables the fix touches — catching that
+  the builder's own test had never re-exercised `E08-B03`'s orphan-row
+  finding at all. Every falsification reproduced its exact predicted failure
+  signature before being restored. Not incremented (no new occurrence of a
+  miss the practice caused to be caught) — recorded because the rule paid
+  for itself at real production-scale stakes this time, not toy fixtures.
