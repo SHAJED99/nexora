@@ -11,6 +11,11 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- E10-T01: runtime notification permission on API 33+ (FR-NOTIFY-001,
+         FR-PLAT-003). NotificationApiHost.kt branches on
+         Build.VERSION.SDK_INT — no-op below API 33, where no such runtime
+         permission exists. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="nexora"
         android:name="${applicationName}"
