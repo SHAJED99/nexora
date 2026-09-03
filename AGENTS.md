@@ -52,8 +52,15 @@ input (idea|PRD|SRS|design|code) ─▶ intake + questions ─▶ knowledge map 
    fully and the lessons for its area (`agent/memory/lessons/`, auto-injected
    by the lesson hook) plus ADRs touching its files. After a miss: write the
    lesson. Recurrence promotes it to a rule, then to a hook.
-9. **Log everything.** Every headless run lands in `runs/<task_id>/`; every
-   completed task appends a row to its epic's `metrics.csv`.
+9. **Log everything.** This applies to `run-claude.sh`-dispatched headless
+   runs specifically: every one lands in `runs/<task_id>/`, and every
+   completed task appends a row to its epic's `metrics.csv`. An orchestrator
+   dispatching via an interactive session's own Agent tool has no
+   `run-claude.sh` invocation to log through, and this rule does not apply
+   to that path — do not treat the resulting absence of `runs/`/`metrics.csv`
+   entries as a violation. (`L-process-015`: confirmed 0% compliance
+   project-wide, twice, precisely because every dispatch in this project so
+   far has used the Agent-tool path.)
 10. **Commit style.** Conventional commits referencing the task id —
     `feat(E03-T07): add refresh-token endpoint`. No AI co-author trailers
     (enforced by the commit-msg hook).

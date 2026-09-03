@@ -78,3 +78,5 @@ automatically for matching tasks (see `index.yaml`).
   must update the shared probe fixture or open a named follow-up task),
   2026-09-02 via `skills/retro`, 🧍 `retro_promotions` ✅ approved by the
   human, 2026-09-02.
+
+- **2026-09-03 (E08 retro) - the promoted rule fired correctly and closed the fixture gap.** `E08-T08` (dashboard Local Storage card) inherited the fixture-seed obligation at sharding time (re-homed from prospective `E08-T09` since T08 owns `test/design/design_probe_test.dart`), and its round-2 review independently confirmed the seed is genuinely real: the probe dump now contains `Groups`/`Family` content it previously had zero of. The three-reviewer-no-owner gap this lesson named is closed - a fourth reader was positioned to fix it, and did. Not incremented - no new occurrence of the miss.

@@ -359,8 +359,51 @@ def check_gates():
     return r
 
 
+# ── H8 · unbounded id lists into isIn(...)/IN (...) ───────────────────────────
+# L-backend-004: a list built by unrestricted enumeration and fed whole into
+# one `isIn(ids)`/raw SQL `IN (...)` blows past SQLite's ~32,766-bind-variable
+# ceiling. Recurred at 4 call sites in one epic before this was a hook.
+# Heuristic, not proof: flags a call site as a WARN (never fail — this can't
+# prove a list is unbounded, only that no recognized chunking marker is
+# nearby) when neither the same line nor the surrounding ~6 lines mention a
+# chunking helper. A human/reviewer still judges each finding.
+_CHUNK_MARKERS = re.compile(r"chunk|_pageSize|pageSize|batchSize|take\(", re.I)
+_ISIN_CALL = re.compile(r"\.isIn\(")
+_RAW_IN = re.compile(r"\bIN\s*\(", re.I)
+
+
+def check_unbounded_id_lists():
+    r = Result("H8", "no unbounded id list feeds isIn(...)/IN (...) (L-backend-004)")
+    r.fix = ("Chunk the id list into bounded batches (<=500 ids) before the query runs, or\n"
+             "  confirm at the call site the list is already provably bounded (a fixed page\n"
+             "  size, a hard cap) and note why. See agent/skills/implement/SKILL.md's\n"
+             "  self-review checklist and L-backend-004 for the failure mode this catches.")
+    for path in sorted(glob.glob(os.path.join(ROOT, "lib", "**", "*.dart"), recursive=True)):
+        try:
+            lines = open(path, encoding="utf-8").read().splitlines()
+        except OSError:
+            continue
+        rel = os.path.relpath(path, ROOT).replace("\\", "/")
+        for i, line in enumerate(lines):
+            if line.strip().startswith(("//", "*", "/*")):
+                continue  # doc comments quoting the pattern aren't a live call site
+            hit = _ISIN_CALL.search(line) or (
+                _RAW_IN.search(line) and ("db.customSelect" in line or "sql(" in line
+                                           or any("customSelect" in l or ".sql(" in l
+                                                  for l in lines[max(0, i - 3):i]))
+            )
+            if not hit:
+                continue
+            window = "\n".join(lines[max(0, i - 6):i + 3])
+            if not _CHUNK_MARKERS.search(window):
+                r.flag("warn", f"{rel}:{i + 1} — {line.strip()[:80]} "
+                                f"(no chunking marker within 6 lines)")
+    return r
+
+
 CHECKS = [check_thresholds, check_masks, check_retros, check_fences,
-          check_review_independence, check_lesson_promotion, check_gates]
+          check_review_independence, check_lesson_promotion, check_gates,
+          check_unbounded_id_lists]
 
 
 def main():

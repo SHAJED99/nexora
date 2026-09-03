@@ -189,12 +189,13 @@ automatically for matching tasks (see `index.yaml`).
 - recurrence: 1
 - status: promoted-to-rule — `agent/skills/task-sharding/SKILL.md` (Analyze
   gate, "Obligation ownership" row), 2026-08-29 via `skills/retro`,
-  🧍 `retro_promotions` ⏳ awaiting human. Promoted at recurrence 1 rather
-  than 2 because the check is mechanical and cheap at sharding time (grep
-  each task file for other task ids, then read the named task's contract),
-  and because it is the third member in two epics of one family — the
-  Analyze gate verifying non-contradiction while nobody verifies ownership
-  or sufficiency (E04-B03, E05-B01, E05-B02).
+  🧍 `retro_promotions` ✅ approved by the human, 2026-09-03 (E08 retro —
+  retroactive cleanup, live and operating successfully since 2026-08-29).
+  Promoted at recurrence 1 rather than 2 because the check is mechanical
+  and cheap at sharding time (grep each task file for other task ids, then
+  read the named task's contract), and because it is the third member in
+  two epics of one family — the Analyze gate verifying non-contradiction
+  while nobody verifies ownership or sufficiency (E04-B03, E05-B01, E05-B02).
 
 ## L-process-007 — an obligation handed from one epic to the next at a merge gate has no reader: the next epic's sharding never looks at the previous epic's retro or bug-sweep advisories
 - date: 2026-08-29 | source: E05-B02 (found by sweep) + the E04-B03
@@ -238,8 +239,10 @@ automatically for matching tasks (see `index.yaml`).
   E04's close — a 100% loss rate for this carrier)
 - status: promoted-to-rule — `agent/skills/task-sharding/SKILL.md` (Analyze
   gate, "Inherited obligations" row + step 0 of the procedure), 2026-08-29
-  via `skills/retro`, 🧍 `retro_promotions` ⏳ awaiting human. A hook is
-  plausible here and is **recommended, not built**: `make validate` could
+  via `skills/retro`, 🧍 `retro_promotions` ✅ approved by the human,
+  2026-09-03 (E08 retro — retroactive cleanup, live and operating
+  successfully since 2026-08-29). A hook is plausible here and is
+  **recommended, not built**: `make validate` could
   fail an epic whose `depends_on:` epics' retros contain "must" language
   naming it, unless that epic's files cite the source. The parsing is
   heuristic (English in a retro), so it belongs to a human's judgement about
@@ -466,7 +469,25 @@ automatically for matching tasks (see `index.yaml`).
   what `epic.md`'s `status:` field says — so the check can't be defeated
   by a stale frontmatter field the way it just was.
 - recurrence: 1
-- status: lesson
+- status: promoted-to-hook — `agent/orchestrator/health.py`'s H3 check now
+  does the merge-base-ancestry check proposed above, independent of
+  `epic.md`'s `status:` field.
+
+- **2026-09-03 (E08 retro) — the hook fired correctly on the exact
+  recurrence it was built for, and this time nothing shipped broken.** E08
+  merged into `development` (PR #30) before its retro ran — `make health`
+  caught it immediately: *"E08's branch is already merged into development
+  with no retro.md, regardless of `epic.md`'s status: 'todo' field."*
+  Difference from E07's occurrence: the human asked for the retro in the
+  same session, immediately after the merge, rather than it being missed
+  for an entire session boundary — so the gap this hook exists to catch was
+  open for minutes, not indefinitely. `epic.md`'s `status:` corrected to
+  `done` as part of this retro, same as E07's. Not incremented as a new
+  miss (the hook did its job); recorded as evidence the promoted hook
+  works, and that `skills/release`'s own precondition wording ("its retro
+  done") is satisfied by retro-before-next-release rather than strictly
+  retro-before-epic-merge — the harness tolerates the latter ordering as
+  long as H3 keeps catching the gap before anything ships past it.
 
 ## L-process-014 — `make health`'s H4 check itself only recognized the feature-task scope-fence heading, so every correctly-written bug-task fence read as absent since L-process-009 introduced the convention
 - date: 2026-09-02 | source: E07 retro, investigating an H4 false positive
@@ -552,11 +573,13 @@ automatically for matching tasks (see `index.yaml`).
   (H8?) flagging "an epic with `done` tasks but no `metrics.csv`" would
   make this visible going forward regardless of which fix direction is
   chosen.
-- recurrence: 1 (first time anyone checked; the underlying gap is
-  project-wide across all 7 completed epics, not new to E07)
-- status: lesson — deliberately not promoted straight to a rule/hook this
-  retro, since which of (a)/(b) above is correct is a process-design
-  choice with real cost implications (building a logging shim vs.
-  admitting a stated rule doesn't apply to how this project actually
-  runs), and `skills/retro` Rule 2 reserves that kind of change for a
-  human decision, not an inference made under one epic's retro alone.
+- recurrence: 2 (checked again at E08's retro — still no `metrics.csv` for
+  any of 8 completed epics, `runs/` still empty project-wide; the gap has
+  now persisted across two consecutive retros where it was explicitly
+  looked for and found unchanged)
+- status: promoted-to-rule — human chose (b) at E08's retro, 2026-09-03:
+  `AGENTS.md` rule 9 and `CLAUDE.md` both amended to state plainly that
+  `runs/`/`metrics.csv` logging is `run-claude.sh`-specific and does not
+  apply to Agent-tool dispatch; `skills/retro` §5 amended to say the same
+  so future retros don't re-flag the absence as a gap. 🧍 `retro_promotions`
+  ✅ approved by the human, 2026-09-03.
