@@ -4,6 +4,10 @@
 ("Approve as proposed" — the 14-epic map, WSJF scores, and Wave 1
 [E01..E06] all approved as drafted.)
 
+**Wave 2 [E07, E08]** — ✅ cleared by human on 2026-09-02, covering E07
+retroactively (sharded and shipped without a wave re-open — `OQ-E08-6`
+caught this at E08's own sharding) and E08 going forward.
+
 > Derived from `spec/srs.md` + `spec/feature-list.md`, scored via
 > `skills/epic-breakdown`.
 

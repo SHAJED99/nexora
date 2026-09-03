@@ -33,6 +33,13 @@ import 'package:nexora/features/conversations/presentation/conversations_view.da
 import 'package:nexora/features/dashboard/presentation/dashboard_binding.dart';
 import 'package:nexora/features/dashboard/presentation/dashboard_view.dart';
 import 'package:nexora/core/routing_engine/link_quality_feed.dart';
+import 'package:nexora/core/storage/retention_executor.dart';
+import 'package:nexora/core/storage/retention_plan.dart' show SmartModeThresholds;
+import 'package:nexora/core/storage/smart_mode_policy.dart';
+import 'package:nexora/core/storage/storage_decision_log.dart';
+import 'package:nexora/core/storage/storage_inventory.dart';
+import 'package:nexora/core/storage/storage_manager.dart';
+import 'package:nexora/core/storage/storage_settings_repository.dart';
 import 'package:nexora/features/devices/presentation/devices_binding.dart';
 import 'package:nexora/features/devices/presentation/devices_view.dart';
 import 'package:nexora/features/messaging/data/conversation_repository.dart';
@@ -43,6 +50,58 @@ import 'package:nexora/features/trust/domain/relationship.dart';
 import 'package:path/path.dart' as p;
 
 import 'flutter_probe_dumper.dart';
+
+/// A plain `StorageManager` over [db] — real settings/inventory/executor,
+/// mirroring `dashboard_controller_test.dart`'s own `_newStorageManager`
+/// (E08-T08). Used only by the `dashboard` probe below, so its own
+/// `DashboardBinding` has a real singleton to `Get.find`, exactly as
+/// `app/bindings.dart` registers one in production.
+StorageManager _newStorageManager(AppDatabase db) {
+  final log = StorageDecisionLog(db: db);
+  return StorageManager(
+    settings: StorageSettingsRepository(db: db),
+    inventory: StorageInventory(db: db, databaseFileBytes: () async => 0),
+    smart: SmartModePolicy(thresholds: SmartModeThresholds.defaults()),
+    executor: RetentionExecutor(db: db, log: log),
+    log: log,
+  );
+}
+
+/// Seeds a group conversation (E07-T01's tables), mirroring
+/// `dashboard_controller_test.dart`'s/`conversations_groups_test.dart`'s own
+/// `_insertGroup` helper — so a group row reaches the `conversations` probe
+/// below through E07-T07's widened read model (`L-design-002`'s carried-
+/// forward closure: this fixture seeded zero group conversations before
+/// E08-T08).
+Future<void> _insertGroup(
+  AppDatabase db, {
+  required String id,
+  required String name,
+}) async {
+  await db.into(db.groups).insert(
+        GroupsCompanion.insert(
+          id: id,
+          name: name,
+          createdAt: 0,
+          createdByDeviceId: 'self-probe-device',
+        ),
+      );
+}
+
+Future<void> _insertMember(
+  AppDatabase db, {
+  required String groupId,
+  required String deviceId,
+}) async {
+  await db.into(db.groupMembers).insert(
+        GroupMembersCompanion.insert(
+          groupId: groupId,
+          deviceId: deviceId,
+          role: 'member',
+          joinedAtEpoch: 0,
+        ),
+      );
+}
 
 void main() {
   // ── 1. Screens dumped for `make design-probe` ───────────────────────────
@@ -121,6 +180,31 @@ void main() {
               ciphertext: Uint8List.fromList(List<int>.filled(32, 9)),
               createdAt: DateTime.now()
                   .subtract(const Duration(days: 1))
+                  .millisecondsSinceEpoch,
+              deliveryState: DeliveryState.accepted.name,
+            ),
+          );
+      // `L-design-002`'s carried-forward closure (E08-T08, narrowly scoped
+      // to exactly this one seed): this fixture seeded zero group
+      // conversations across two prior tasks (E07-T08, E07-B01), leaving the
+      // design gate structurally blind to `design/screens/conversations.md`'s
+      // own `Groups` section (`GAP-006`). One group, one member, one
+      // message — mirroring the two Personal rows above, real device
+      // ids/timestamps and (no session established here) an undecryptable
+      // preview stay a real, expected finding (`GAP-003`), same precedent as
+      // the Personal rows.
+      await _insertGroup(db, id: 'g:probe-group', name: 'Family');
+      await _insertMember(db, groupId: 'g:probe-group', deviceId: 'self-probe-device');
+      await _insertMember(db, groupId: 'g:probe-group', deviceId: 'device-trusted');
+      await db.into(db.messages).insert(
+            MessagesCompanion.insert(
+              id: 'probe-group-message-1',
+              conversationId: 'g:probe-group',
+              senderDeviceId: 'device-trusted',
+              sequenceNumber: 1,
+              ciphertext: Uint8List.fromList(List<int>.filled(32, 11)),
+              createdAt: DateTime.now()
+                  .subtract(const Duration(hours: 2))
                   .millisecondsSinceEpoch,
               deliveryState: DeliveryState.accepted.name,
             ),
@@ -320,6 +404,22 @@ void main() {
         LinkQualityFeed(transport: stack.transport, routing: stack.routingEngine),
         permanent: true,
       );
+      // `L-design-002` (E08-T08): this screen's displayed data shape widened
+      // to include real storage figures, so the fixture seeds a real
+      // `StorageManager` and runs one plan-only pass -- otherwise the gate
+      // stays structurally blind to the Local Storage card's new content,
+      // exactly the failure this rule exists to prevent. `app/bindings.dart`
+      // registers this same permanent singleton in production; this probe
+      // does the same so `DashboardBinding`'s own `Get.find<StorageManager>()`
+      // resolves.
+      final storage = _newStorageManager(db);
+      // Default Smart Mode (`storage_policy_settings`'s own migration
+      // default) -- the real, shipped default state, not a contrived one.
+      await storage.runPass(
+        nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+        apply: false,
+      );
+      Get.put<StorageManager>(storage, permanent: true);
       DashboardBinding().dependencies();
     });
 

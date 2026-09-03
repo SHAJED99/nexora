@@ -6021,6 +6021,1347 @@ class GroupEventsCompanion extends UpdateCompanion<GroupEventRow> {
   }
 }
 
+class $StorageItemStatsTable extends StorageItemStats
+    with TableInfo<$StorageItemStatsTable, StorageItemStatRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StorageItemStatsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _itemKindMeta = const VerificationMeta(
+    'itemKind',
+  );
+  @override
+  late final GeneratedColumn<String> itemKind = GeneratedColumn<String>(
+    'item_kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _itemIdMeta = const VerificationMeta('itemId');
+  @override
+  late final GeneratedColumn<String> itemId = GeneratedColumn<String>(
+    'item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastAccessedAtMeta = const VerificationMeta(
+    'lastAccessedAt',
+  );
+  @override
+  late final GeneratedColumn<int> lastAccessedAt = GeneratedColumn<int>(
+    'last_accessed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _accessCountMeta = const VerificationMeta(
+    'accessCount',
+  );
+  @override
+  late final GeneratedColumn<int> accessCount = GeneratedColumn<int>(
+    'access_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    itemKind,
+    itemId,
+    lastAccessedAt,
+    accessCount,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'storage_item_stats';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StorageItemStatRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('item_kind')) {
+      context.handle(
+        _itemKindMeta,
+        itemKind.isAcceptableOrUnknown(data['item_kind']!, _itemKindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_itemKindMeta);
+    }
+    if (data.containsKey('item_id')) {
+      context.handle(
+        _itemIdMeta,
+        itemId.isAcceptableOrUnknown(data['item_id']!, _itemIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_itemIdMeta);
+    }
+    if (data.containsKey('last_accessed_at')) {
+      context.handle(
+        _lastAccessedAtMeta,
+        lastAccessedAt.isAcceptableOrUnknown(
+          data['last_accessed_at']!,
+          _lastAccessedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('access_count')) {
+      context.handle(
+        _accessCountMeta,
+        accessCount.isAcceptableOrUnknown(
+          data['access_count']!,
+          _accessCountMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {itemKind, itemId};
+  @override
+  StorageItemStatRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StorageItemStatRow(
+      itemKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}item_kind'],
+      )!,
+      itemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}item_id'],
+      )!,
+      lastAccessedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_accessed_at'],
+      ),
+      accessCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}access_count'],
+      )!,
+    );
+  }
+
+  @override
+  $StorageItemStatsTable createAlias(String alias) {
+    return $StorageItemStatsTable(attachedDatabase, alias);
+  }
+}
+
+class StorageItemStatRow extends DataClass
+    implements Insertable<StorageItemStatRow> {
+  final String itemKind;
+  final String itemId;
+
+  /// Epoch-ms; NULL = never observed, never 0 (task §5).
+  final int? lastAccessedAt;
+  final int accessCount;
+  const StorageItemStatRow({
+    required this.itemKind,
+    required this.itemId,
+    this.lastAccessedAt,
+    required this.accessCount,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['item_kind'] = Variable<String>(itemKind);
+    map['item_id'] = Variable<String>(itemId);
+    if (!nullToAbsent || lastAccessedAt != null) {
+      map['last_accessed_at'] = Variable<int>(lastAccessedAt);
+    }
+    map['access_count'] = Variable<int>(accessCount);
+    return map;
+  }
+
+  StorageItemStatsCompanion toCompanion(bool nullToAbsent) {
+    return StorageItemStatsCompanion(
+      itemKind: Value(itemKind),
+      itemId: Value(itemId),
+      lastAccessedAt: lastAccessedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastAccessedAt),
+      accessCount: Value(accessCount),
+    );
+  }
+
+  factory StorageItemStatRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StorageItemStatRow(
+      itemKind: serializer.fromJson<String>(json['itemKind']),
+      itemId: serializer.fromJson<String>(json['itemId']),
+      lastAccessedAt: serializer.fromJson<int?>(json['lastAccessedAt']),
+      accessCount: serializer.fromJson<int>(json['accessCount']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'itemKind': serializer.toJson<String>(itemKind),
+      'itemId': serializer.toJson<String>(itemId),
+      'lastAccessedAt': serializer.toJson<int?>(lastAccessedAt),
+      'accessCount': serializer.toJson<int>(accessCount),
+    };
+  }
+
+  StorageItemStatRow copyWith({
+    String? itemKind,
+    String? itemId,
+    Value<int?> lastAccessedAt = const Value.absent(),
+    int? accessCount,
+  }) => StorageItemStatRow(
+    itemKind: itemKind ?? this.itemKind,
+    itemId: itemId ?? this.itemId,
+    lastAccessedAt: lastAccessedAt.present
+        ? lastAccessedAt.value
+        : this.lastAccessedAt,
+    accessCount: accessCount ?? this.accessCount,
+  );
+  StorageItemStatRow copyWithCompanion(StorageItemStatsCompanion data) {
+    return StorageItemStatRow(
+      itemKind: data.itemKind.present ? data.itemKind.value : this.itemKind,
+      itemId: data.itemId.present ? data.itemId.value : this.itemId,
+      lastAccessedAt: data.lastAccessedAt.present
+          ? data.lastAccessedAt.value
+          : this.lastAccessedAt,
+      accessCount: data.accessCount.present
+          ? data.accessCount.value
+          : this.accessCount,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StorageItemStatRow(')
+          ..write('itemKind: $itemKind, ')
+          ..write('itemId: $itemId, ')
+          ..write('lastAccessedAt: $lastAccessedAt, ')
+          ..write('accessCount: $accessCount')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(itemKind, itemId, lastAccessedAt, accessCount);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StorageItemStatRow &&
+          other.itemKind == this.itemKind &&
+          other.itemId == this.itemId &&
+          other.lastAccessedAt == this.lastAccessedAt &&
+          other.accessCount == this.accessCount);
+}
+
+class StorageItemStatsCompanion extends UpdateCompanion<StorageItemStatRow> {
+  final Value<String> itemKind;
+  final Value<String> itemId;
+  final Value<int?> lastAccessedAt;
+  final Value<int> accessCount;
+  final Value<int> rowid;
+  const StorageItemStatsCompanion({
+    this.itemKind = const Value.absent(),
+    this.itemId = const Value.absent(),
+    this.lastAccessedAt = const Value.absent(),
+    this.accessCount = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StorageItemStatsCompanion.insert({
+    required String itemKind,
+    required String itemId,
+    this.lastAccessedAt = const Value.absent(),
+    this.accessCount = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : itemKind = Value(itemKind),
+       itemId = Value(itemId);
+  static Insertable<StorageItemStatRow> custom({
+    Expression<String>? itemKind,
+    Expression<String>? itemId,
+    Expression<int>? lastAccessedAt,
+    Expression<int>? accessCount,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (itemKind != null) 'item_kind': itemKind,
+      if (itemId != null) 'item_id': itemId,
+      if (lastAccessedAt != null) 'last_accessed_at': lastAccessedAt,
+      if (accessCount != null) 'access_count': accessCount,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StorageItemStatsCompanion copyWith({
+    Value<String>? itemKind,
+    Value<String>? itemId,
+    Value<int?>? lastAccessedAt,
+    Value<int>? accessCount,
+    Value<int>? rowid,
+  }) {
+    return StorageItemStatsCompanion(
+      itemKind: itemKind ?? this.itemKind,
+      itemId: itemId ?? this.itemId,
+      lastAccessedAt: lastAccessedAt ?? this.lastAccessedAt,
+      accessCount: accessCount ?? this.accessCount,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (itemKind.present) {
+      map['item_kind'] = Variable<String>(itemKind.value);
+    }
+    if (itemId.present) {
+      map['item_id'] = Variable<String>(itemId.value);
+    }
+    if (lastAccessedAt.present) {
+      map['last_accessed_at'] = Variable<int>(lastAccessedAt.value);
+    }
+    if (accessCount.present) {
+      map['access_count'] = Variable<int>(accessCount.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StorageItemStatsCompanion(')
+          ..write('itemKind: $itemKind, ')
+          ..write('itemId: $itemId, ')
+          ..write('lastAccessedAt: $lastAccessedAt, ')
+          ..write('accessCount: $accessCount, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoragePolicySettingsTable extends StoragePolicySettings
+    with TableInfo<$StoragePolicySettingsTable, StoragePolicySettingRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoragePolicySettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _modeMeta = const VerificationMeta('mode');
+  @override
+  late final GeneratedColumn<String> mode = GeneratedColumn<String>(
+    'mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _olderThanDaysMeta = const VerificationMeta(
+    'olderThanDays',
+  );
+  @override
+  late final GeneratedColumn<int> olderThanDays = GeneratedColumn<int>(
+    'older_than_days',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _maxBytesMeta = const VerificationMeta(
+    'maxBytes',
+  );
+  @override
+  late final GeneratedColumn<int> maxBytes = GeneratedColumn<int>(
+    'max_bytes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _budgetBytesMeta = const VerificationMeta(
+    'budgetBytes',
+  );
+  @override
+  late final GeneratedColumn<int> budgetBytes = GeneratedColumn<int>(
+    'budget_bytes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    mode,
+    olderThanDays,
+    maxBytes,
+    budgetBytes,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'storage_policy_settings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoragePolicySettingRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('mode')) {
+      context.handle(
+        _modeMeta,
+        mode.isAcceptableOrUnknown(data['mode']!, _modeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_modeMeta);
+    }
+    if (data.containsKey('older_than_days')) {
+      context.handle(
+        _olderThanDaysMeta,
+        olderThanDays.isAcceptableOrUnknown(
+          data['older_than_days']!,
+          _olderThanDaysMeta,
+        ),
+      );
+    }
+    if (data.containsKey('max_bytes')) {
+      context.handle(
+        _maxBytesMeta,
+        maxBytes.isAcceptableOrUnknown(data['max_bytes']!, _maxBytesMeta),
+      );
+    }
+    if (data.containsKey('budget_bytes')) {
+      context.handle(
+        _budgetBytesMeta,
+        budgetBytes.isAcceptableOrUnknown(
+          data['budget_bytes']!,
+          _budgetBytesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StoragePolicySettingRow map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoragePolicySettingRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      mode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mode'],
+      )!,
+      olderThanDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}older_than_days'],
+      ),
+      maxBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}max_bytes'],
+      ),
+      budgetBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}budget_bytes'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $StoragePolicySettingsTable createAlias(String alias) {
+    return $StoragePolicySettingsTable(attachedDatabase, alias);
+  }
+}
+
+class StoragePolicySettingRow extends DataClass
+    implements Insertable<StoragePolicySettingRow> {
+  final int id;
+
+  /// A `StorageMode.name`: `smart` | `olderThanDays` | `overSizeMb`
+  /// (docs/conventions.md "Enums" -- never an integer index).
+  final String mode;
+
+  /// NULL unless `mode == olderThanDays`.
+  final int? olderThanDays;
+
+  /// NULL unless `mode == overSizeMb`.
+  final int? maxBytes;
+
+  /// The denominator; stays NULL until `OQ-E08-1` is answered (task §2).
+  final int? budgetBytes;
+  final int updatedAt;
+  const StoragePolicySettingRow({
+    required this.id,
+    required this.mode,
+    this.olderThanDays,
+    this.maxBytes,
+    this.budgetBytes,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['mode'] = Variable<String>(mode);
+    if (!nullToAbsent || olderThanDays != null) {
+      map['older_than_days'] = Variable<int>(olderThanDays);
+    }
+    if (!nullToAbsent || maxBytes != null) {
+      map['max_bytes'] = Variable<int>(maxBytes);
+    }
+    if (!nullToAbsent || budgetBytes != null) {
+      map['budget_bytes'] = Variable<int>(budgetBytes);
+    }
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  StoragePolicySettingsCompanion toCompanion(bool nullToAbsent) {
+    return StoragePolicySettingsCompanion(
+      id: Value(id),
+      mode: Value(mode),
+      olderThanDays: olderThanDays == null && nullToAbsent
+          ? const Value.absent()
+          : Value(olderThanDays),
+      maxBytes: maxBytes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(maxBytes),
+      budgetBytes: budgetBytes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(budgetBytes),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory StoragePolicySettingRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoragePolicySettingRow(
+      id: serializer.fromJson<int>(json['id']),
+      mode: serializer.fromJson<String>(json['mode']),
+      olderThanDays: serializer.fromJson<int?>(json['olderThanDays']),
+      maxBytes: serializer.fromJson<int?>(json['maxBytes']),
+      budgetBytes: serializer.fromJson<int?>(json['budgetBytes']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'mode': serializer.toJson<String>(mode),
+      'olderThanDays': serializer.toJson<int?>(olderThanDays),
+      'maxBytes': serializer.toJson<int?>(maxBytes),
+      'budgetBytes': serializer.toJson<int?>(budgetBytes),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  StoragePolicySettingRow copyWith({
+    int? id,
+    String? mode,
+    Value<int?> olderThanDays = const Value.absent(),
+    Value<int?> maxBytes = const Value.absent(),
+    Value<int?> budgetBytes = const Value.absent(),
+    int? updatedAt,
+  }) => StoragePolicySettingRow(
+    id: id ?? this.id,
+    mode: mode ?? this.mode,
+    olderThanDays: olderThanDays.present
+        ? olderThanDays.value
+        : this.olderThanDays,
+    maxBytes: maxBytes.present ? maxBytes.value : this.maxBytes,
+    budgetBytes: budgetBytes.present ? budgetBytes.value : this.budgetBytes,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  StoragePolicySettingRow copyWithCompanion(
+    StoragePolicySettingsCompanion data,
+  ) {
+    return StoragePolicySettingRow(
+      id: data.id.present ? data.id.value : this.id,
+      mode: data.mode.present ? data.mode.value : this.mode,
+      olderThanDays: data.olderThanDays.present
+          ? data.olderThanDays.value
+          : this.olderThanDays,
+      maxBytes: data.maxBytes.present ? data.maxBytes.value : this.maxBytes,
+      budgetBytes: data.budgetBytes.present
+          ? data.budgetBytes.value
+          : this.budgetBytes,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoragePolicySettingRow(')
+          ..write('id: $id, ')
+          ..write('mode: $mode, ')
+          ..write('olderThanDays: $olderThanDays, ')
+          ..write('maxBytes: $maxBytes, ')
+          ..write('budgetBytes: $budgetBytes, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, mode, olderThanDays, maxBytes, budgetBytes, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoragePolicySettingRow &&
+          other.id == this.id &&
+          other.mode == this.mode &&
+          other.olderThanDays == this.olderThanDays &&
+          other.maxBytes == this.maxBytes &&
+          other.budgetBytes == this.budgetBytes &&
+          other.updatedAt == this.updatedAt);
+}
+
+class StoragePolicySettingsCompanion
+    extends UpdateCompanion<StoragePolicySettingRow> {
+  final Value<int> id;
+  final Value<String> mode;
+  final Value<int?> olderThanDays;
+  final Value<int?> maxBytes;
+  final Value<int?> budgetBytes;
+  final Value<int> updatedAt;
+  const StoragePolicySettingsCompanion({
+    this.id = const Value.absent(),
+    this.mode = const Value.absent(),
+    this.olderThanDays = const Value.absent(),
+    this.maxBytes = const Value.absent(),
+    this.budgetBytes = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  StoragePolicySettingsCompanion.insert({
+    this.id = const Value.absent(),
+    required String mode,
+    this.olderThanDays = const Value.absent(),
+    this.maxBytes = const Value.absent(),
+    this.budgetBytes = const Value.absent(),
+    required int updatedAt,
+  }) : mode = Value(mode),
+       updatedAt = Value(updatedAt);
+  static Insertable<StoragePolicySettingRow> custom({
+    Expression<int>? id,
+    Expression<String>? mode,
+    Expression<int>? olderThanDays,
+    Expression<int>? maxBytes,
+    Expression<int>? budgetBytes,
+    Expression<int>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (mode != null) 'mode': mode,
+      if (olderThanDays != null) 'older_than_days': olderThanDays,
+      if (maxBytes != null) 'max_bytes': maxBytes,
+      if (budgetBytes != null) 'budget_bytes': budgetBytes,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  StoragePolicySettingsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? mode,
+    Value<int?>? olderThanDays,
+    Value<int?>? maxBytes,
+    Value<int?>? budgetBytes,
+    Value<int>? updatedAt,
+  }) {
+    return StoragePolicySettingsCompanion(
+      id: id ?? this.id,
+      mode: mode ?? this.mode,
+      olderThanDays: olderThanDays ?? this.olderThanDays,
+      maxBytes: maxBytes ?? this.maxBytes,
+      budgetBytes: budgetBytes ?? this.budgetBytes,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (mode.present) {
+      map['mode'] = Variable<String>(mode.value);
+    }
+    if (olderThanDays.present) {
+      map['older_than_days'] = Variable<int>(olderThanDays.value);
+    }
+    if (maxBytes.present) {
+      map['max_bytes'] = Variable<int>(maxBytes.value);
+    }
+    if (budgetBytes.present) {
+      map['budget_bytes'] = Variable<int>(budgetBytes.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoragePolicySettingsCompanion(')
+          ..write('id: $id, ')
+          ..write('mode: $mode, ')
+          ..write('olderThanDays: $olderThanDays, ')
+          ..write('maxBytes: $maxBytes, ')
+          ..write('budgetBytes: $budgetBytes, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StorageDecisionsTable extends StorageDecisions
+    with TableInfo<$StorageDecisionsTable, StorageDecisionRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StorageDecisionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _decidedAtMeta = const VerificationMeta(
+    'decidedAt',
+  );
+  @override
+  late final GeneratedColumn<int> decidedAt = GeneratedColumn<int>(
+    'decided_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _modeMeta = const VerificationMeta('mode');
+  @override
+  late final GeneratedColumn<String> mode = GeneratedColumn<String>(
+    'mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _categoryKeyMeta = const VerificationMeta(
+    'categoryKey',
+  );
+  @override
+  late final GeneratedColumn<String> categoryKey = GeneratedColumn<String>(
+    'category_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _itemCountMeta = const VerificationMeta(
+    'itemCount',
+  );
+  @override
+  late final GeneratedColumn<int> itemCount = GeneratedColumn<int>(
+    'item_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bytesMeta = const VerificationMeta('bytes');
+  @override
+  late final GeneratedColumn<int> bytes = GeneratedColumn<int>(
+    'bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _reasonCodeMeta = const VerificationMeta(
+    'reasonCode',
+  );
+  @override
+  late final GeneratedColumn<String> reasonCode = GeneratedColumn<String>(
+    'reason_code',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _reasonDetailMeta = const VerificationMeta(
+    'reasonDetail',
+  );
+  @override
+  late final GeneratedColumn<String> reasonDetail = GeneratedColumn<String>(
+    'reason_detail',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _outcomeMeta = const VerificationMeta(
+    'outcome',
+  );
+  @override
+  late final GeneratedColumn<String> outcome = GeneratedColumn<String>(
+    'outcome',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    decidedAt,
+    mode,
+    categoryKey,
+    itemCount,
+    bytes,
+    reasonCode,
+    reasonDetail,
+    outcome,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'storage_decisions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StorageDecisionRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('decided_at')) {
+      context.handle(
+        _decidedAtMeta,
+        decidedAt.isAcceptableOrUnknown(data['decided_at']!, _decidedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_decidedAtMeta);
+    }
+    if (data.containsKey('mode')) {
+      context.handle(
+        _modeMeta,
+        mode.isAcceptableOrUnknown(data['mode']!, _modeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_modeMeta);
+    }
+    if (data.containsKey('category_key')) {
+      context.handle(
+        _categoryKeyMeta,
+        categoryKey.isAcceptableOrUnknown(
+          data['category_key']!,
+          _categoryKeyMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryKeyMeta);
+    }
+    if (data.containsKey('item_count')) {
+      context.handle(
+        _itemCountMeta,
+        itemCount.isAcceptableOrUnknown(data['item_count']!, _itemCountMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_itemCountMeta);
+    }
+    if (data.containsKey('bytes')) {
+      context.handle(
+        _bytesMeta,
+        bytes.isAcceptableOrUnknown(data['bytes']!, _bytesMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bytesMeta);
+    }
+    if (data.containsKey('reason_code')) {
+      context.handle(
+        _reasonCodeMeta,
+        reasonCode.isAcceptableOrUnknown(data['reason_code']!, _reasonCodeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reasonCodeMeta);
+    }
+    if (data.containsKey('reason_detail')) {
+      context.handle(
+        _reasonDetailMeta,
+        reasonDetail.isAcceptableOrUnknown(
+          data['reason_detail']!,
+          _reasonDetailMeta,
+        ),
+      );
+    }
+    if (data.containsKey('outcome')) {
+      context.handle(
+        _outcomeMeta,
+        outcome.isAcceptableOrUnknown(data['outcome']!, _outcomeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_outcomeMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StorageDecisionRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StorageDecisionRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      decidedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}decided_at'],
+      )!,
+      mode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mode'],
+      )!,
+      categoryKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category_key'],
+      )!,
+      itemCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}item_count'],
+      )!,
+      bytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bytes'],
+      )!,
+      reasonCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason_code'],
+      )!,
+      reasonDetail: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason_detail'],
+      ),
+      outcome: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}outcome'],
+      )!,
+    );
+  }
+
+  @override
+  $StorageDecisionsTable createAlias(String alias) {
+    return $StorageDecisionsTable(attachedDatabase, alias);
+  }
+}
+
+class StorageDecisionRow extends DataClass
+    implements Insertable<StorageDecisionRow> {
+  final String id;
+  final int decidedAt;
+
+  /// The `StorageMode.name` in force when the decision was made.
+  final String mode;
+
+  /// A stable machine key (e.g. `relayCache`, `messages`) -- not display
+  /// copy.
+  final String categoryKey;
+  final int itemCount;
+
+  /// Real measured bytes, never estimated.
+  final int bytes;
+
+  /// A `RetentionReason.name` (E08-T04 owns the enum).
+  final String reasonCode;
+
+  /// The reason's parameter as text (e.g. `45` for "older than 45 days").
+  final String? reasonDetail;
+
+  /// A `DecisionOutcome.name`: `planned` | `applied` | `skipped`.
+  final String outcome;
+  const StorageDecisionRow({
+    required this.id,
+    required this.decidedAt,
+    required this.mode,
+    required this.categoryKey,
+    required this.itemCount,
+    required this.bytes,
+    required this.reasonCode,
+    this.reasonDetail,
+    required this.outcome,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['decided_at'] = Variable<int>(decidedAt);
+    map['mode'] = Variable<String>(mode);
+    map['category_key'] = Variable<String>(categoryKey);
+    map['item_count'] = Variable<int>(itemCount);
+    map['bytes'] = Variable<int>(bytes);
+    map['reason_code'] = Variable<String>(reasonCode);
+    if (!nullToAbsent || reasonDetail != null) {
+      map['reason_detail'] = Variable<String>(reasonDetail);
+    }
+    map['outcome'] = Variable<String>(outcome);
+    return map;
+  }
+
+  StorageDecisionsCompanion toCompanion(bool nullToAbsent) {
+    return StorageDecisionsCompanion(
+      id: Value(id),
+      decidedAt: Value(decidedAt),
+      mode: Value(mode),
+      categoryKey: Value(categoryKey),
+      itemCount: Value(itemCount),
+      bytes: Value(bytes),
+      reasonCode: Value(reasonCode),
+      reasonDetail: reasonDetail == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reasonDetail),
+      outcome: Value(outcome),
+    );
+  }
+
+  factory StorageDecisionRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StorageDecisionRow(
+      id: serializer.fromJson<String>(json['id']),
+      decidedAt: serializer.fromJson<int>(json['decidedAt']),
+      mode: serializer.fromJson<String>(json['mode']),
+      categoryKey: serializer.fromJson<String>(json['categoryKey']),
+      itemCount: serializer.fromJson<int>(json['itemCount']),
+      bytes: serializer.fromJson<int>(json['bytes']),
+      reasonCode: serializer.fromJson<String>(json['reasonCode']),
+      reasonDetail: serializer.fromJson<String?>(json['reasonDetail']),
+      outcome: serializer.fromJson<String>(json['outcome']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'decidedAt': serializer.toJson<int>(decidedAt),
+      'mode': serializer.toJson<String>(mode),
+      'categoryKey': serializer.toJson<String>(categoryKey),
+      'itemCount': serializer.toJson<int>(itemCount),
+      'bytes': serializer.toJson<int>(bytes),
+      'reasonCode': serializer.toJson<String>(reasonCode),
+      'reasonDetail': serializer.toJson<String?>(reasonDetail),
+      'outcome': serializer.toJson<String>(outcome),
+    };
+  }
+
+  StorageDecisionRow copyWith({
+    String? id,
+    int? decidedAt,
+    String? mode,
+    String? categoryKey,
+    int? itemCount,
+    int? bytes,
+    String? reasonCode,
+    Value<String?> reasonDetail = const Value.absent(),
+    String? outcome,
+  }) => StorageDecisionRow(
+    id: id ?? this.id,
+    decidedAt: decidedAt ?? this.decidedAt,
+    mode: mode ?? this.mode,
+    categoryKey: categoryKey ?? this.categoryKey,
+    itemCount: itemCount ?? this.itemCount,
+    bytes: bytes ?? this.bytes,
+    reasonCode: reasonCode ?? this.reasonCode,
+    reasonDetail: reasonDetail.present ? reasonDetail.value : this.reasonDetail,
+    outcome: outcome ?? this.outcome,
+  );
+  StorageDecisionRow copyWithCompanion(StorageDecisionsCompanion data) {
+    return StorageDecisionRow(
+      id: data.id.present ? data.id.value : this.id,
+      decidedAt: data.decidedAt.present ? data.decidedAt.value : this.decidedAt,
+      mode: data.mode.present ? data.mode.value : this.mode,
+      categoryKey: data.categoryKey.present
+          ? data.categoryKey.value
+          : this.categoryKey,
+      itemCount: data.itemCount.present ? data.itemCount.value : this.itemCount,
+      bytes: data.bytes.present ? data.bytes.value : this.bytes,
+      reasonCode: data.reasonCode.present
+          ? data.reasonCode.value
+          : this.reasonCode,
+      reasonDetail: data.reasonDetail.present
+          ? data.reasonDetail.value
+          : this.reasonDetail,
+      outcome: data.outcome.present ? data.outcome.value : this.outcome,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StorageDecisionRow(')
+          ..write('id: $id, ')
+          ..write('decidedAt: $decidedAt, ')
+          ..write('mode: $mode, ')
+          ..write('categoryKey: $categoryKey, ')
+          ..write('itemCount: $itemCount, ')
+          ..write('bytes: $bytes, ')
+          ..write('reasonCode: $reasonCode, ')
+          ..write('reasonDetail: $reasonDetail, ')
+          ..write('outcome: $outcome')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    decidedAt,
+    mode,
+    categoryKey,
+    itemCount,
+    bytes,
+    reasonCode,
+    reasonDetail,
+    outcome,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StorageDecisionRow &&
+          other.id == this.id &&
+          other.decidedAt == this.decidedAt &&
+          other.mode == this.mode &&
+          other.categoryKey == this.categoryKey &&
+          other.itemCount == this.itemCount &&
+          other.bytes == this.bytes &&
+          other.reasonCode == this.reasonCode &&
+          other.reasonDetail == this.reasonDetail &&
+          other.outcome == this.outcome);
+}
+
+class StorageDecisionsCompanion extends UpdateCompanion<StorageDecisionRow> {
+  final Value<String> id;
+  final Value<int> decidedAt;
+  final Value<String> mode;
+  final Value<String> categoryKey;
+  final Value<int> itemCount;
+  final Value<int> bytes;
+  final Value<String> reasonCode;
+  final Value<String?> reasonDetail;
+  final Value<String> outcome;
+  final Value<int> rowid;
+  const StorageDecisionsCompanion({
+    this.id = const Value.absent(),
+    this.decidedAt = const Value.absent(),
+    this.mode = const Value.absent(),
+    this.categoryKey = const Value.absent(),
+    this.itemCount = const Value.absent(),
+    this.bytes = const Value.absent(),
+    this.reasonCode = const Value.absent(),
+    this.reasonDetail = const Value.absent(),
+    this.outcome = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StorageDecisionsCompanion.insert({
+    required String id,
+    required int decidedAt,
+    required String mode,
+    required String categoryKey,
+    required int itemCount,
+    required int bytes,
+    required String reasonCode,
+    this.reasonDetail = const Value.absent(),
+    required String outcome,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       decidedAt = Value(decidedAt),
+       mode = Value(mode),
+       categoryKey = Value(categoryKey),
+       itemCount = Value(itemCount),
+       bytes = Value(bytes),
+       reasonCode = Value(reasonCode),
+       outcome = Value(outcome);
+  static Insertable<StorageDecisionRow> custom({
+    Expression<String>? id,
+    Expression<int>? decidedAt,
+    Expression<String>? mode,
+    Expression<String>? categoryKey,
+    Expression<int>? itemCount,
+    Expression<int>? bytes,
+    Expression<String>? reasonCode,
+    Expression<String>? reasonDetail,
+    Expression<String>? outcome,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (decidedAt != null) 'decided_at': decidedAt,
+      if (mode != null) 'mode': mode,
+      if (categoryKey != null) 'category_key': categoryKey,
+      if (itemCount != null) 'item_count': itemCount,
+      if (bytes != null) 'bytes': bytes,
+      if (reasonCode != null) 'reason_code': reasonCode,
+      if (reasonDetail != null) 'reason_detail': reasonDetail,
+      if (outcome != null) 'outcome': outcome,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StorageDecisionsCompanion copyWith({
+    Value<String>? id,
+    Value<int>? decidedAt,
+    Value<String>? mode,
+    Value<String>? categoryKey,
+    Value<int>? itemCount,
+    Value<int>? bytes,
+    Value<String>? reasonCode,
+    Value<String?>? reasonDetail,
+    Value<String>? outcome,
+    Value<int>? rowid,
+  }) {
+    return StorageDecisionsCompanion(
+      id: id ?? this.id,
+      decidedAt: decidedAt ?? this.decidedAt,
+      mode: mode ?? this.mode,
+      categoryKey: categoryKey ?? this.categoryKey,
+      itemCount: itemCount ?? this.itemCount,
+      bytes: bytes ?? this.bytes,
+      reasonCode: reasonCode ?? this.reasonCode,
+      reasonDetail: reasonDetail ?? this.reasonDetail,
+      outcome: outcome ?? this.outcome,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (decidedAt.present) {
+      map['decided_at'] = Variable<int>(decidedAt.value);
+    }
+    if (mode.present) {
+      map['mode'] = Variable<String>(mode.value);
+    }
+    if (categoryKey.present) {
+      map['category_key'] = Variable<String>(categoryKey.value);
+    }
+    if (itemCount.present) {
+      map['item_count'] = Variable<int>(itemCount.value);
+    }
+    if (bytes.present) {
+      map['bytes'] = Variable<int>(bytes.value);
+    }
+    if (reasonCode.present) {
+      map['reason_code'] = Variable<String>(reasonCode.value);
+    }
+    if (reasonDetail.present) {
+      map['reason_detail'] = Variable<String>(reasonDetail.value);
+    }
+    if (outcome.present) {
+      map['outcome'] = Variable<String>(outcome.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StorageDecisionsCompanion(')
+          ..write('id: $id, ')
+          ..write('decidedAt: $decidedAt, ')
+          ..write('mode: $mode, ')
+          ..write('categoryKey: $categoryKey, ')
+          ..write('itemCount: $itemCount, ')
+          ..write('bytes: $bytes, ')
+          ..write('reasonCode: $reasonCode, ')
+          ..write('reasonDetail: $reasonDetail, ')
+          ..write('outcome: $outcome, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -6048,6 +7389,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this,
   );
   late final $GroupEventsTable groupEvents = $GroupEventsTable(this);
+  late final $StorageItemStatsTable storageItemStats = $StorageItemStatsTable(
+    this,
+  );
+  late final $StoragePolicySettingsTable storagePolicySettings =
+      $StoragePolicySettingsTable(this);
+  late final $StorageDecisionsTable storageDecisions = $StorageDecisionsTable(
+    this,
+  );
   late final Index idxMessagesConversationCreatedAt = Index(
     'idx_messages_conversation_created_at',
     'CREATE INDEX idx_messages_conversation_created_at ON messages (conversation_id, created_at)',
@@ -6063,6 +7412,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final Index idxGroupEventsGroupEpoch = Index(
     'idx_group_events_group_epoch',
     'CREATE INDEX idx_group_events_group_epoch ON group_events (group_id, epoch)',
+  );
+  late final Index idxStorageItemStatsLastAccessed = Index(
+    'idx_storage_item_stats_last_accessed',
+    'CREATE INDEX idx_storage_item_stats_last_accessed ON storage_item_stats (last_accessed_at)',
+  );
+  late final Index idxStorageDecisionsDecidedAt = Index(
+    'idx_storage_decisions_decided_at',
+    'CREATE INDEX idx_storage_decisions_decided_at ON storage_decisions (decided_at)',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -6086,10 +7443,15 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     groupMembers,
     groupSenderKeys,
     groupEvents,
+    storageItemStats,
+    storagePolicySettings,
+    storageDecisions,
     idxMessagesConversationCreatedAt,
     idxGroupMembersCurrent,
     idxGroupSingleOwner,
     idxGroupEventsGroupEpoch,
+    idxStorageItemStatsLastAccessed,
+    idxStorageDecisionsDecidedAt,
   ];
 }
 
@@ -9411,6 +10773,729 @@ typedef $$GroupEventsTableProcessedTableManager =
       GroupEventRow,
       PrefetchHooks Function()
     >;
+typedef $$StorageItemStatsTableCreateCompanionBuilder =
+    StorageItemStatsCompanion Function({
+      required String itemKind,
+      required String itemId,
+      Value<int?> lastAccessedAt,
+      Value<int> accessCount,
+      Value<int> rowid,
+    });
+typedef $$StorageItemStatsTableUpdateCompanionBuilder =
+    StorageItemStatsCompanion Function({
+      Value<String> itemKind,
+      Value<String> itemId,
+      Value<int?> lastAccessedAt,
+      Value<int> accessCount,
+      Value<int> rowid,
+    });
+
+class $$StorageItemStatsTableFilterComposer
+    extends Composer<_$AppDatabase, $StorageItemStatsTable> {
+  $$StorageItemStatsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get itemKind => $composableBuilder(
+    column: $table.itemKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get itemId => $composableBuilder(
+    column: $table.itemId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastAccessedAt => $composableBuilder(
+    column: $table.lastAccessedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get accessCount => $composableBuilder(
+    column: $table.accessCount,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StorageItemStatsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StorageItemStatsTable> {
+  $$StorageItemStatsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get itemKind => $composableBuilder(
+    column: $table.itemKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get itemId => $composableBuilder(
+    column: $table.itemId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastAccessedAt => $composableBuilder(
+    column: $table.lastAccessedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get accessCount => $composableBuilder(
+    column: $table.accessCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StorageItemStatsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StorageItemStatsTable> {
+  $$StorageItemStatsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get itemKind =>
+      $composableBuilder(column: $table.itemKind, builder: (column) => column);
+
+  GeneratedColumn<String> get itemId =>
+      $composableBuilder(column: $table.itemId, builder: (column) => column);
+
+  GeneratedColumn<int> get lastAccessedAt => $composableBuilder(
+    column: $table.lastAccessedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get accessCount => $composableBuilder(
+    column: $table.accessCount,
+    builder: (column) => column,
+  );
+}
+
+class $$StorageItemStatsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StorageItemStatsTable,
+          StorageItemStatRow,
+          $$StorageItemStatsTableFilterComposer,
+          $$StorageItemStatsTableOrderingComposer,
+          $$StorageItemStatsTableAnnotationComposer,
+          $$StorageItemStatsTableCreateCompanionBuilder,
+          $$StorageItemStatsTableUpdateCompanionBuilder,
+          (
+            StorageItemStatRow,
+            BaseReferences<
+              _$AppDatabase,
+              $StorageItemStatsTable,
+              StorageItemStatRow
+            >,
+          ),
+          StorageItemStatRow,
+          PrefetchHooks Function()
+        > {
+  $$StorageItemStatsTableTableManager(
+    _$AppDatabase db,
+    $StorageItemStatsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$StorageItemStatsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$StorageItemStatsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$StorageItemStatsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> itemKind = const Value.absent(),
+                Value<String> itemId = const Value.absent(),
+                Value<int?> lastAccessedAt = const Value.absent(),
+                Value<int> accessCount = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StorageItemStatsCompanion(
+                itemKind: itemKind,
+                itemId: itemId,
+                lastAccessedAt: lastAccessedAt,
+                accessCount: accessCount,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String itemKind,
+                required String itemId,
+                Value<int?> lastAccessedAt = const Value.absent(),
+                Value<int> accessCount = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StorageItemStatsCompanion.insert(
+                itemKind: itemKind,
+                itemId: itemId,
+                lastAccessedAt: lastAccessedAt,
+                accessCount: accessCount,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StorageItemStatsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StorageItemStatsTable,
+      StorageItemStatRow,
+      $$StorageItemStatsTableFilterComposer,
+      $$StorageItemStatsTableOrderingComposer,
+      $$StorageItemStatsTableAnnotationComposer,
+      $$StorageItemStatsTableCreateCompanionBuilder,
+      $$StorageItemStatsTableUpdateCompanionBuilder,
+      (
+        StorageItemStatRow,
+        BaseReferences<
+          _$AppDatabase,
+          $StorageItemStatsTable,
+          StorageItemStatRow
+        >,
+      ),
+      StorageItemStatRow,
+      PrefetchHooks Function()
+    >;
+typedef $$StoragePolicySettingsTableCreateCompanionBuilder =
+    StoragePolicySettingsCompanion Function({
+      Value<int> id,
+      required String mode,
+      Value<int?> olderThanDays,
+      Value<int?> maxBytes,
+      Value<int?> budgetBytes,
+      required int updatedAt,
+    });
+typedef $$StoragePolicySettingsTableUpdateCompanionBuilder =
+    StoragePolicySettingsCompanion Function({
+      Value<int> id,
+      Value<String> mode,
+      Value<int?> olderThanDays,
+      Value<int?> maxBytes,
+      Value<int?> budgetBytes,
+      Value<int> updatedAt,
+    });
+
+class $$StoragePolicySettingsTableFilterComposer
+    extends Composer<_$AppDatabase, $StoragePolicySettingsTable> {
+  $$StoragePolicySettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get olderThanDays => $composableBuilder(
+    column: $table.olderThanDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get maxBytes => $composableBuilder(
+    column: $table.maxBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get budgetBytes => $composableBuilder(
+    column: $table.budgetBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoragePolicySettingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoragePolicySettingsTable> {
+  $$StoragePolicySettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get olderThanDays => $composableBuilder(
+    column: $table.olderThanDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get maxBytes => $composableBuilder(
+    column: $table.maxBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get budgetBytes => $composableBuilder(
+    column: $table.budgetBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoragePolicySettingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoragePolicySettingsTable> {
+  $$StoragePolicySettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get mode =>
+      $composableBuilder(column: $table.mode, builder: (column) => column);
+
+  GeneratedColumn<int> get olderThanDays => $composableBuilder(
+    column: $table.olderThanDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get maxBytes =>
+      $composableBuilder(column: $table.maxBytes, builder: (column) => column);
+
+  GeneratedColumn<int> get budgetBytes => $composableBuilder(
+    column: $table.budgetBytes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$StoragePolicySettingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoragePolicySettingsTable,
+          StoragePolicySettingRow,
+          $$StoragePolicySettingsTableFilterComposer,
+          $$StoragePolicySettingsTableOrderingComposer,
+          $$StoragePolicySettingsTableAnnotationComposer,
+          $$StoragePolicySettingsTableCreateCompanionBuilder,
+          $$StoragePolicySettingsTableUpdateCompanionBuilder,
+          (
+            StoragePolicySettingRow,
+            BaseReferences<
+              _$AppDatabase,
+              $StoragePolicySettingsTable,
+              StoragePolicySettingRow
+            >,
+          ),
+          StoragePolicySettingRow,
+          PrefetchHooks Function()
+        > {
+  $$StoragePolicySettingsTableTableManager(
+    _$AppDatabase db,
+    $StoragePolicySettingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$StoragePolicySettingsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$StoragePolicySettingsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$StoragePolicySettingsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> mode = const Value.absent(),
+                Value<int?> olderThanDays = const Value.absent(),
+                Value<int?> maxBytes = const Value.absent(),
+                Value<int?> budgetBytes = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+              }) => StoragePolicySettingsCompanion(
+                id: id,
+                mode: mode,
+                olderThanDays: olderThanDays,
+                maxBytes: maxBytes,
+                budgetBytes: budgetBytes,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String mode,
+                Value<int?> olderThanDays = const Value.absent(),
+                Value<int?> maxBytes = const Value.absent(),
+                Value<int?> budgetBytes = const Value.absent(),
+                required int updatedAt,
+              }) => StoragePolicySettingsCompanion.insert(
+                id: id,
+                mode: mode,
+                olderThanDays: olderThanDays,
+                maxBytes: maxBytes,
+                budgetBytes: budgetBytes,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoragePolicySettingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoragePolicySettingsTable,
+      StoragePolicySettingRow,
+      $$StoragePolicySettingsTableFilterComposer,
+      $$StoragePolicySettingsTableOrderingComposer,
+      $$StoragePolicySettingsTableAnnotationComposer,
+      $$StoragePolicySettingsTableCreateCompanionBuilder,
+      $$StoragePolicySettingsTableUpdateCompanionBuilder,
+      (
+        StoragePolicySettingRow,
+        BaseReferences<
+          _$AppDatabase,
+          $StoragePolicySettingsTable,
+          StoragePolicySettingRow
+        >,
+      ),
+      StoragePolicySettingRow,
+      PrefetchHooks Function()
+    >;
+typedef $$StorageDecisionsTableCreateCompanionBuilder =
+    StorageDecisionsCompanion Function({
+      required String id,
+      required int decidedAt,
+      required String mode,
+      required String categoryKey,
+      required int itemCount,
+      required int bytes,
+      required String reasonCode,
+      Value<String?> reasonDetail,
+      required String outcome,
+      Value<int> rowid,
+    });
+typedef $$StorageDecisionsTableUpdateCompanionBuilder =
+    StorageDecisionsCompanion Function({
+      Value<String> id,
+      Value<int> decidedAt,
+      Value<String> mode,
+      Value<String> categoryKey,
+      Value<int> itemCount,
+      Value<int> bytes,
+      Value<String> reasonCode,
+      Value<String?> reasonDetail,
+      Value<String> outcome,
+      Value<int> rowid,
+    });
+
+class $$StorageDecisionsTableFilterComposer
+    extends Composer<_$AppDatabase, $StorageDecisionsTable> {
+  $$StorageDecisionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get decidedAt => $composableBuilder(
+    column: $table.decidedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get categoryKey => $composableBuilder(
+    column: $table.categoryKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get itemCount => $composableBuilder(
+    column: $table.itemCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get bytes => $composableBuilder(
+    column: $table.bytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reasonDetail => $composableBuilder(
+    column: $table.reasonDetail,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get outcome => $composableBuilder(
+    column: $table.outcome,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StorageDecisionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StorageDecisionsTable> {
+  $$StorageDecisionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get decidedAt => $composableBuilder(
+    column: $table.decidedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get categoryKey => $composableBuilder(
+    column: $table.categoryKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get itemCount => $composableBuilder(
+    column: $table.itemCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get bytes => $composableBuilder(
+    column: $table.bytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reasonDetail => $composableBuilder(
+    column: $table.reasonDetail,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get outcome => $composableBuilder(
+    column: $table.outcome,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StorageDecisionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StorageDecisionsTable> {
+  $$StorageDecisionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get decidedAt =>
+      $composableBuilder(column: $table.decidedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get mode =>
+      $composableBuilder(column: $table.mode, builder: (column) => column);
+
+  GeneratedColumn<String> get categoryKey => $composableBuilder(
+    column: $table.categoryKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get itemCount =>
+      $composableBuilder(column: $table.itemCount, builder: (column) => column);
+
+  GeneratedColumn<int> get bytes =>
+      $composableBuilder(column: $table.bytes, builder: (column) => column);
+
+  GeneratedColumn<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get reasonDetail => $composableBuilder(
+    column: $table.reasonDetail,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get outcome =>
+      $composableBuilder(column: $table.outcome, builder: (column) => column);
+}
+
+class $$StorageDecisionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StorageDecisionsTable,
+          StorageDecisionRow,
+          $$StorageDecisionsTableFilterComposer,
+          $$StorageDecisionsTableOrderingComposer,
+          $$StorageDecisionsTableAnnotationComposer,
+          $$StorageDecisionsTableCreateCompanionBuilder,
+          $$StorageDecisionsTableUpdateCompanionBuilder,
+          (
+            StorageDecisionRow,
+            BaseReferences<
+              _$AppDatabase,
+              $StorageDecisionsTable,
+              StorageDecisionRow
+            >,
+          ),
+          StorageDecisionRow,
+          PrefetchHooks Function()
+        > {
+  $$StorageDecisionsTableTableManager(
+    _$AppDatabase db,
+    $StorageDecisionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$StorageDecisionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$StorageDecisionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$StorageDecisionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int> decidedAt = const Value.absent(),
+                Value<String> mode = const Value.absent(),
+                Value<String> categoryKey = const Value.absent(),
+                Value<int> itemCount = const Value.absent(),
+                Value<int> bytes = const Value.absent(),
+                Value<String> reasonCode = const Value.absent(),
+                Value<String?> reasonDetail = const Value.absent(),
+                Value<String> outcome = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StorageDecisionsCompanion(
+                id: id,
+                decidedAt: decidedAt,
+                mode: mode,
+                categoryKey: categoryKey,
+                itemCount: itemCount,
+                bytes: bytes,
+                reasonCode: reasonCode,
+                reasonDetail: reasonDetail,
+                outcome: outcome,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required int decidedAt,
+                required String mode,
+                required String categoryKey,
+                required int itemCount,
+                required int bytes,
+                required String reasonCode,
+                Value<String?> reasonDetail = const Value.absent(),
+                required String outcome,
+                Value<int> rowid = const Value.absent(),
+              }) => StorageDecisionsCompanion.insert(
+                id: id,
+                decidedAt: decidedAt,
+                mode: mode,
+                categoryKey: categoryKey,
+                itemCount: itemCount,
+                bytes: bytes,
+                reasonCode: reasonCode,
+                reasonDetail: reasonDetail,
+                outcome: outcome,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StorageDecisionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StorageDecisionsTable,
+      StorageDecisionRow,
+      $$StorageDecisionsTableFilterComposer,
+      $$StorageDecisionsTableOrderingComposer,
+      $$StorageDecisionsTableAnnotationComposer,
+      $$StorageDecisionsTableCreateCompanionBuilder,
+      $$StorageDecisionsTableUpdateCompanionBuilder,
+      (
+        StorageDecisionRow,
+        BaseReferences<
+          _$AppDatabase,
+          $StorageDecisionsTable,
+          StorageDecisionRow
+        >,
+      ),
+      StorageDecisionRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -9452,4 +11537,10 @@ class $AppDatabaseManager {
       $$GroupSenderKeysTableTableManager(_db, _db.groupSenderKeys);
   $$GroupEventsTableTableManager get groupEvents =>
       $$GroupEventsTableTableManager(_db, _db.groupEvents);
+  $$StorageItemStatsTableTableManager get storageItemStats =>
+      $$StorageItemStatsTableTableManager(_db, _db.storageItemStats);
+  $$StoragePolicySettingsTableTableManager get storagePolicySettings =>
+      $$StoragePolicySettingsTableTableManager(_db, _db.storagePolicySettings);
+  $$StorageDecisionsTableTableManager get storageDecisions =>
+      $$StorageDecisionsTableTableManager(_db, _db.storageDecisions);
 }

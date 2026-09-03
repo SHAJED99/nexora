@@ -80,7 +80,7 @@ inference for one epic's retro to make alone. Consequence: §5's estimate
 calibration step has no data to run on, for any epic, and didn't for this
 one either.
 
-## Promotions this retro (🧍 `retro_promotions` — awaiting human)
+## Promotions this retro (🧍 `retro_promotions` — ✅ approved by the human, 2026-09-02)
 | Lesson | → | Where |
 |---|---|---|
 | `L-process-001` | hook | `agent/orchestrator/scheduler.py` — frontmatter parse failure is now a hard `--validate` error |

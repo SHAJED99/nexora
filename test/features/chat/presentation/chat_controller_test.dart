@@ -17,6 +17,8 @@ import 'package:nexora/core/crypto/identity_service.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/messaging/prekey_exchange.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/storage/storage_access_recorder.dart';
+import 'package:nexora/core/storage/storage_item.dart' show StorageItemKind;
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/chat/presentation/chat_controller.dart';
@@ -628,4 +630,148 @@ void main() {
     expect(await _markerPresentAnywhere(a.db, incomingText), isFalse);
     expect(await _markerPresentAnywhere(b.db, incomingText), isFalse);
   });
+
+  // E08-T03: access-frequency signals (FR-STORE-005). The recorder itself is
+  // unit-tested in `test/core/storage/storage_access_recorder_test.dart`;
+  // these tests prove the two `ChatController` call sites are actually
+  // wired (task §3) and that a recorder failure never disturbs the display
+  // path it rides along with (task §4).
+
+  test(
+    'test_EARS_STORE_7_opening_a_conversation_records_an_access',
+    () async {
+      final stack = await newStack('self-device', nextSuffix());
+      addTearDown(stack.dispose);
+      final recorder = StorageAccessRecorder(
+        db: stack.db,
+        flushInterval: const Duration(milliseconds: 20),
+      );
+      addTearDown(recorder.dispose);
+
+      final controller = ChatController(
+        conversationId: 'peer-device',
+        repo: ConversationRepository(stack.db, selfDeviceId: 'self-device'),
+        send: stack.sendMessage,
+        sessions: stack.prekeyExchange,
+        crypto: stack.cryptoService,
+        acks: stack.deliveryAckService,
+        recorder: recorder,
+      );
+      // No message was ever displayed -- opening the conversation alone
+      // (onInit) must still record the access (task §5 contract:
+      // `recordConversationOpened`).
+      controller.onInit();
+      addTearDown(controller.onClose);
+
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      final row = await (stack.db.select(stack.db.storageItemStats)
+            ..where((t) => t.itemId.equals('peer-device')))
+          .getSingleOrNull();
+      expect(row, isNotNull);
+      expect(row!.itemKind, StorageItemKind.message.name);
+      expect(row.accessCount, 1);
+      expect(row.lastAccessedAt, isNotNull);
+    },
+  );
+
+  test(
+    'test_EARS_STORE_7_displaying_a_message_records_an_access_via_controller',
+    () async {
+      final stack = await newStack('self-device', nextSuffix());
+      addTearDown(stack.dispose);
+      await _insertMessage(
+        stack.db,
+        id: 'm-displayed',
+        conversationId: 'peer-device',
+        senderDeviceId: 'peer-device',
+        sequenceNumber: 0,
+        ciphertext: Uint8List(0),
+        createdAt: 1000,
+      );
+      final recorder = StorageAccessRecorder(
+        db: stack.db,
+        flushInterval: const Duration(milliseconds: 20),
+      );
+      addTearDown(recorder.dispose);
+
+      final controller = ChatController(
+        conversationId: 'peer-device',
+        repo: ConversationRepository(stack.db, selfDeviceId: 'self-device'),
+        send: stack.sendMessage,
+        sessions: stack.prekeyExchange,
+        crypto: stack.cryptoService,
+        acks: stack.deliveryAckService,
+        recorder: recorder,
+      );
+      controller.onInit();
+      addTearDown(controller.onClose);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      controller.onMessageDisplayed('m-displayed');
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      final row = await (stack.db.select(stack.db.storageItemStats)
+            ..where((t) => t.itemId.equals('m-displayed')))
+          .getSingleOrNull();
+      expect(row, isNotNull);
+      expect(row!.accessCount, 1);
+      expect(row.lastAccessedAt, isNotNull);
+    },
+  );
+
+  test(
+    'test_EARS_STORE_8_recorder_failure_does_not_break_markRead',
+    () async {
+      final stack = await newStack('self-device', nextSuffix());
+      addTearDown(stack.dispose);
+      await _insertMessage(
+        stack.db,
+        id: 'm-broken-recorder',
+        conversationId: 'peer-device',
+        senderDeviceId: 'peer-device',
+        sequenceNumber: 0,
+        ciphertext: Uint8List(0),
+        createdAt: 1000,
+      );
+
+      // Break the recorder's own write target -- a real write failure, the
+      // same "failing write seam" convention this codebase already uses
+      // (`agent/memory/lessons/backend.md` L-backend-002), not a mock.
+      await stack.db.customStatement('DROP TABLE storage_item_stats');
+      final recorder = StorageAccessRecorder(db: stack.db);
+      addTearDown(recorder.dispose);
+
+      final controller = ChatController(
+        conversationId: 'peer-device',
+        repo: ConversationRepository(stack.db, selfDeviceId: 'self-device'),
+        send: stack.sendMessage,
+        sessions: stack.prekeyExchange,
+        crypto: stack.cryptoService,
+        acks: stack.deliveryAckService,
+        recorder: recorder,
+      );
+      controller.onInit();
+      addTearDown(controller.onClose);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      // The ack call (`_acks.markRead`, a no-op today while
+      // `kReadReceiptsEnabled == false`, but never throwing regardless --
+      // `delivery_ack.dart`) and the recorder call are both invoked from
+      // the same line (task §4: "additive and independent"). Neither may
+      // throw even though the recorder's underlying write is broken.
+      expect(
+        () => controller.onMessageDisplayed('m-broken-recorder'),
+        returnsNormally,
+      );
+      // The deferred write itself must not surface as an unhandled Future
+      // error either.
+      await expectLater(recorder.flush(), completes);
+
+      // The display path (message row, controller state) is completely
+      // unaffected by the recorder's failure.
+      expect(controller.messages.single.id, 'm-broken-recorder');
+      expect(controller.errorMessage.value, isEmpty);
+    },
+  );
 }
