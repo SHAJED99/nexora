@@ -12,10 +12,16 @@
 // instance it is handed — never construct a second one of either (task file
 // §2: two `AppDatabase`s, or two of anything `MessagingStack` owns, is the
 // exact defect this task exists to prevent, not a style preference).
+import 'dart:async';
 import 'dart:io';
 
 import 'package:get/get.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
+import 'package:nexora/core/notifications/notification_dispatcher.dart';
+import 'package:nexora/core/notifications/notification_policy.dart';
+import 'package:nexora/core/notifications/notification_service.dart';
+import 'package:nexora/core/notifications/notification_settings_repository.dart';
+import 'package:nexora/core/notifications/sources/message_notification_source.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/routing_engine/link_quality_feed.dart';
@@ -169,6 +175,58 @@ class AppBinding extends Bindings {
     );
     Get.put(storageManager, permanent: true);
     messagingStack.coordinator.storageManager = storageManager;
+
+    // E10-T03: the notification composition root. `NotificationService`
+    // itself is E10-T01's Pigeon-backed facade (never constructed a second
+    // time here — same "one instance of anything a task owns" discipline
+    // as `messagingStack` above); `NotificationSettingsRepository` is
+    // E10-T02's settings store, built from the already-registered `db`. The
+    // dispatcher is registered so a future screen/controller can reach it
+    // (`Get.find<NotificationDispatcher>()`), and `register()` is the
+    // extension point `E10-T04`-`E10-T07` use to add a notification class
+    // without editing this block (task file §3). `start()` is
+    // fire-and-forget for the same reason `messagingStack.coordinator
+    // .start()` above is: it suspends at its first `await`
+    // (`NotificationService.ensureReady()`), well before anything in this
+    // synchronous method could observe a partial result, and every source
+    // registered before that first `await` resolves is still subscribed
+    // once it does (`NotificationDispatcher.start()`'s own contract).
+    //
+    // `stop()` has no composition-root call site here, matching the
+    // standing gap already true of `messagingStack.dispose()` itself
+    // (never called anywhere in this app today, `messaging_stack.dart:607`)
+    // — this task does not invent app-lifecycle teardown that does not
+    // exist yet (`E10-T10`'s scope).
+    final notificationDispatcher = NotificationDispatcher(
+      service: NotificationService(),
+      policy: NotificationPolicy(
+        settings: NotificationSettingsRepository(db: db),
+      ),
+    );
+    notificationDispatcher.register(
+      MessageNotificationSource(
+        messagingStack.inbound.delivered,
+        selfDeviceId: messagingStack.selfDeviceId,
+      ),
+    );
+    // Fire-and-forget, guarded: a real device's native `NotificationApi`
+    // channel is always registered, so this never hides a production
+    // failure. A test harness with no platform-channel mock for it --
+    // `messaging_coordinator_test.dart` builds a full `AppBinding` to prove
+    // storage-manager wiring, not notification wiring -- would otherwise
+    // surface an unrelated `PlatformException` as an unhandled async error
+    // well after that test has already completed. `_measureDatabaseFileBytes`
+    // above guards the identical "platform channel unavailable in this
+    // test's zone" shape for the same reason.
+    unawaited(
+      notificationDispatcher.start().catchError((Object e) {
+        ObservabilityService.instance.logError(
+          'notification.dispatcher_start_failed',
+          cause: e,
+        );
+      }),
+    );
+    Get.put(notificationDispatcher, permanent: true);
   }
 
   /// The sqlite file's own on-disk size (`StorageInventory`'s own
