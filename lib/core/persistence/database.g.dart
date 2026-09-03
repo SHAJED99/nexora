@@ -8339,6 +8339,455 @@ class LocationFixesCompanion extends UpdateCompanion<LocationFixRow> {
   }
 }
 
+class $NotificationCategorySettingsTable extends NotificationCategorySettings
+    with
+        TableInfo<
+          $NotificationCategorySettingsTable,
+          NotificationCategorySettingRow
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $NotificationCategorySettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [category, enabled];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'notification_category_settings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<NotificationCategorySettingRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryMeta);
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {category};
+  @override
+  NotificationCategorySettingRow map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return NotificationCategorySettingRow(
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      )!,
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+    );
+  }
+
+  @override
+  $NotificationCategorySettingsTable createAlias(String alias) {
+    return $NotificationCategorySettingsTable(attachedDatabase, alias);
+  }
+}
+
+class NotificationCategorySettingRow extends DataClass
+    implements Insertable<NotificationCategorySettingRow> {
+  /// A `NotificationCategory.name` string. Never `backgroundService` (task
+  /// §2) -- that category is not user-switchable and no row is seeded for
+  /// it.
+  final String category;
+  final bool enabled;
+  const NotificationCategorySettingRow({
+    required this.category,
+    required this.enabled,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['category'] = Variable<String>(category);
+    map['enabled'] = Variable<bool>(enabled);
+    return map;
+  }
+
+  NotificationCategorySettingsCompanion toCompanion(bool nullToAbsent) {
+    return NotificationCategorySettingsCompanion(
+      category: Value(category),
+      enabled: Value(enabled),
+    );
+  }
+
+  factory NotificationCategorySettingRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return NotificationCategorySettingRow(
+      category: serializer.fromJson<String>(json['category']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'category': serializer.toJson<String>(category),
+      'enabled': serializer.toJson<bool>(enabled),
+    };
+  }
+
+  NotificationCategorySettingRow copyWith({String? category, bool? enabled}) =>
+      NotificationCategorySettingRow(
+        category: category ?? this.category,
+        enabled: enabled ?? this.enabled,
+      );
+  NotificationCategorySettingRow copyWithCompanion(
+    NotificationCategorySettingsCompanion data,
+  ) {
+    return NotificationCategorySettingRow(
+      category: data.category.present ? data.category.value : this.category,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotificationCategorySettingRow(')
+          ..write('category: $category, ')
+          ..write('enabled: $enabled')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(category, enabled);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is NotificationCategorySettingRow &&
+          other.category == this.category &&
+          other.enabled == this.enabled);
+}
+
+class NotificationCategorySettingsCompanion
+    extends UpdateCompanion<NotificationCategorySettingRow> {
+  final Value<String> category;
+  final Value<bool> enabled;
+  final Value<int> rowid;
+  const NotificationCategorySettingsCompanion({
+    this.category = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  NotificationCategorySettingsCompanion.insert({
+    required String category,
+    this.enabled = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : category = Value(category);
+  static Insertable<NotificationCategorySettingRow> custom({
+    Expression<String>? category,
+    Expression<bool>? enabled,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (category != null) 'category': category,
+      if (enabled != null) 'enabled': enabled,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  NotificationCategorySettingsCompanion copyWith({
+    Value<String>? category,
+    Value<bool>? enabled,
+    Value<int>? rowid,
+  }) {
+    return NotificationCategorySettingsCompanion(
+      category: category ?? this.category,
+      enabled: enabled ?? this.enabled,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotificationCategorySettingsCompanion(')
+          ..write('category: $category, ')
+          ..write('enabled: $enabled, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $NotificationPreferencesTable extends NotificationPreferences
+    with TableInfo<$NotificationPreferencesTable, NotificationPreferenceRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $NotificationPreferencesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _privacyLevelMeta = const VerificationMeta(
+    'privacyLevel',
+  );
+  @override
+  late final GeneratedColumn<String> privacyLevel = GeneratedColumn<String>(
+    'privacy_level',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('hidden'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, privacyLevel];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'notification_preferences';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<NotificationPreferenceRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('privacy_level')) {
+      context.handle(
+        _privacyLevelMeta,
+        privacyLevel.isAcceptableOrUnknown(
+          data['privacy_level']!,
+          _privacyLevelMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  NotificationPreferenceRow map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return NotificationPreferenceRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      privacyLevel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}privacy_level'],
+      )!,
+    );
+  }
+
+  @override
+  $NotificationPreferencesTable createAlias(String alias) {
+    return $NotificationPreferencesTable(attachedDatabase, alias);
+  }
+}
+
+class NotificationPreferenceRow extends DataClass
+    implements Insertable<NotificationPreferenceRow> {
+  final int id;
+  final String privacyLevel;
+  const NotificationPreferenceRow({
+    required this.id,
+    required this.privacyLevel,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['privacy_level'] = Variable<String>(privacyLevel);
+    return map;
+  }
+
+  NotificationPreferencesCompanion toCompanion(bool nullToAbsent) {
+    return NotificationPreferencesCompanion(
+      id: Value(id),
+      privacyLevel: Value(privacyLevel),
+    );
+  }
+
+  factory NotificationPreferenceRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return NotificationPreferenceRow(
+      id: serializer.fromJson<int>(json['id']),
+      privacyLevel: serializer.fromJson<String>(json['privacyLevel']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'privacyLevel': serializer.toJson<String>(privacyLevel),
+    };
+  }
+
+  NotificationPreferenceRow copyWith({int? id, String? privacyLevel}) =>
+      NotificationPreferenceRow(
+        id: id ?? this.id,
+        privacyLevel: privacyLevel ?? this.privacyLevel,
+      );
+  NotificationPreferenceRow copyWithCompanion(
+    NotificationPreferencesCompanion data,
+  ) {
+    return NotificationPreferenceRow(
+      id: data.id.present ? data.id.value : this.id,
+      privacyLevel: data.privacyLevel.present
+          ? data.privacyLevel.value
+          : this.privacyLevel,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotificationPreferenceRow(')
+          ..write('id: $id, ')
+          ..write('privacyLevel: $privacyLevel')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, privacyLevel);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is NotificationPreferenceRow &&
+          other.id == this.id &&
+          other.privacyLevel == this.privacyLevel);
+}
+
+class NotificationPreferencesCompanion
+    extends UpdateCompanion<NotificationPreferenceRow> {
+  final Value<int> id;
+  final Value<String> privacyLevel;
+  const NotificationPreferencesCompanion({
+    this.id = const Value.absent(),
+    this.privacyLevel = const Value.absent(),
+  });
+  NotificationPreferencesCompanion.insert({
+    this.id = const Value.absent(),
+    this.privacyLevel = const Value.absent(),
+  });
+  static Insertable<NotificationPreferenceRow> custom({
+    Expression<int>? id,
+    Expression<String>? privacyLevel,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (privacyLevel != null) 'privacy_level': privacyLevel,
+    });
+  }
+
+  NotificationPreferencesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? privacyLevel,
+  }) {
+    return NotificationPreferencesCompanion(
+      id: id ?? this.id,
+      privacyLevel: privacyLevel ?? this.privacyLevel,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (privacyLevel.present) {
+      map['privacy_level'] = Variable<String>(privacyLevel.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotificationPreferencesCompanion(')
+          ..write('id: $id, ')
+          ..write('privacyLevel: $privacyLevel')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -8380,6 +8829,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $LocationPeerSettingsTable locationPeerSettings =
       $LocationPeerSettingsTable(this);
   late final $LocationFixesTable locationFixes = $LocationFixesTable(this);
+  late final $NotificationCategorySettingsTable notificationCategorySettings =
+      $NotificationCategorySettingsTable(this);
+  late final $NotificationPreferencesTable notificationPreferences =
+      $NotificationPreferencesTable(this);
   late final Index idxMessagesConversationCreatedAt = Index(
     'idx_messages_conversation_created_at',
     'CREATE INDEX idx_messages_conversation_created_at ON messages (conversation_id, created_at)',
@@ -8436,6 +8889,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     locationSettings,
     locationPeerSettings,
     locationFixes,
+    notificationCategorySettings,
+    notificationPreferences,
     idxMessagesConversationCreatedAt,
     idxGroupMembersCurrent,
     idxGroupSingleOwner,
@@ -13060,6 +13515,326 @@ typedef $$LocationFixesTableProcessedTableManager =
       LocationFixRow,
       PrefetchHooks Function()
     >;
+typedef $$NotificationCategorySettingsTableCreateCompanionBuilder =
+    NotificationCategorySettingsCompanion Function({
+      required String category,
+      Value<bool> enabled,
+      Value<int> rowid,
+    });
+typedef $$NotificationCategorySettingsTableUpdateCompanionBuilder =
+    NotificationCategorySettingsCompanion Function({
+      Value<String> category,
+      Value<bool> enabled,
+      Value<int> rowid,
+    });
+
+class $$NotificationCategorySettingsTableFilterComposer
+    extends Composer<_$AppDatabase, $NotificationCategorySettingsTable> {
+  $$NotificationCategorySettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$NotificationCategorySettingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $NotificationCategorySettingsTable> {
+  $$NotificationCategorySettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$NotificationCategorySettingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $NotificationCategorySettingsTable> {
+  $$NotificationCategorySettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+}
+
+class $$NotificationCategorySettingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $NotificationCategorySettingsTable,
+          NotificationCategorySettingRow,
+          $$NotificationCategorySettingsTableFilterComposer,
+          $$NotificationCategorySettingsTableOrderingComposer,
+          $$NotificationCategorySettingsTableAnnotationComposer,
+          $$NotificationCategorySettingsTableCreateCompanionBuilder,
+          $$NotificationCategorySettingsTableUpdateCompanionBuilder,
+          (
+            NotificationCategorySettingRow,
+            BaseReferences<
+              _$AppDatabase,
+              $NotificationCategorySettingsTable,
+              NotificationCategorySettingRow
+            >,
+          ),
+          NotificationCategorySettingRow,
+          PrefetchHooks Function()
+        > {
+  $$NotificationCategorySettingsTableTableManager(
+    _$AppDatabase db,
+    $NotificationCategorySettingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$NotificationCategorySettingsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$NotificationCategorySettingsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$NotificationCategorySettingsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> category = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => NotificationCategorySettingsCompanion(
+                category: category,
+                enabled: enabled,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String category,
+                Value<bool> enabled = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => NotificationCategorySettingsCompanion.insert(
+                category: category,
+                enabled: enabled,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$NotificationCategorySettingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $NotificationCategorySettingsTable,
+      NotificationCategorySettingRow,
+      $$NotificationCategorySettingsTableFilterComposer,
+      $$NotificationCategorySettingsTableOrderingComposer,
+      $$NotificationCategorySettingsTableAnnotationComposer,
+      $$NotificationCategorySettingsTableCreateCompanionBuilder,
+      $$NotificationCategorySettingsTableUpdateCompanionBuilder,
+      (
+        NotificationCategorySettingRow,
+        BaseReferences<
+          _$AppDatabase,
+          $NotificationCategorySettingsTable,
+          NotificationCategorySettingRow
+        >,
+      ),
+      NotificationCategorySettingRow,
+      PrefetchHooks Function()
+    >;
+typedef $$NotificationPreferencesTableCreateCompanionBuilder =
+    NotificationPreferencesCompanion Function({
+      Value<int> id,
+      Value<String> privacyLevel,
+    });
+typedef $$NotificationPreferencesTableUpdateCompanionBuilder =
+    NotificationPreferencesCompanion Function({
+      Value<int> id,
+      Value<String> privacyLevel,
+    });
+
+class $$NotificationPreferencesTableFilterComposer
+    extends Composer<_$AppDatabase, $NotificationPreferencesTable> {
+  $$NotificationPreferencesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get privacyLevel => $composableBuilder(
+    column: $table.privacyLevel,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$NotificationPreferencesTableOrderingComposer
+    extends Composer<_$AppDatabase, $NotificationPreferencesTable> {
+  $$NotificationPreferencesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get privacyLevel => $composableBuilder(
+    column: $table.privacyLevel,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$NotificationPreferencesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $NotificationPreferencesTable> {
+  $$NotificationPreferencesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get privacyLevel => $composableBuilder(
+    column: $table.privacyLevel,
+    builder: (column) => column,
+  );
+}
+
+class $$NotificationPreferencesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $NotificationPreferencesTable,
+          NotificationPreferenceRow,
+          $$NotificationPreferencesTableFilterComposer,
+          $$NotificationPreferencesTableOrderingComposer,
+          $$NotificationPreferencesTableAnnotationComposer,
+          $$NotificationPreferencesTableCreateCompanionBuilder,
+          $$NotificationPreferencesTableUpdateCompanionBuilder,
+          (
+            NotificationPreferenceRow,
+            BaseReferences<
+              _$AppDatabase,
+              $NotificationPreferencesTable,
+              NotificationPreferenceRow
+            >,
+          ),
+          NotificationPreferenceRow,
+          PrefetchHooks Function()
+        > {
+  $$NotificationPreferencesTableTableManager(
+    _$AppDatabase db,
+    $NotificationPreferencesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$NotificationPreferencesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$NotificationPreferencesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$NotificationPreferencesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> privacyLevel = const Value.absent(),
+              }) => NotificationPreferencesCompanion(
+                id: id,
+                privacyLevel: privacyLevel,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> privacyLevel = const Value.absent(),
+              }) => NotificationPreferencesCompanion.insert(
+                id: id,
+                privacyLevel: privacyLevel,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$NotificationPreferencesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $NotificationPreferencesTable,
+      NotificationPreferenceRow,
+      $$NotificationPreferencesTableFilterComposer,
+      $$NotificationPreferencesTableOrderingComposer,
+      $$NotificationPreferencesTableAnnotationComposer,
+      $$NotificationPreferencesTableCreateCompanionBuilder,
+      $$NotificationPreferencesTableUpdateCompanionBuilder,
+      (
+        NotificationPreferenceRow,
+        BaseReferences<
+          _$AppDatabase,
+          $NotificationPreferencesTable,
+          NotificationPreferenceRow
+        >,
+      ),
+      NotificationPreferenceRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -13113,4 +13888,15 @@ class $AppDatabaseManager {
       $$LocationPeerSettingsTableTableManager(_db, _db.locationPeerSettings);
   $$LocationFixesTableTableManager get locationFixes =>
       $$LocationFixesTableTableManager(_db, _db.locationFixes);
+  $$NotificationCategorySettingsTableTableManager
+  get notificationCategorySettings =>
+      $$NotificationCategorySettingsTableTableManager(
+        _db,
+        _db.notificationCategorySettings,
+      );
+  $$NotificationPreferencesTableTableManager get notificationPreferences =>
+      $$NotificationPreferencesTableTableManager(
+        _db,
+        _db.notificationPreferences,
+      );
 }

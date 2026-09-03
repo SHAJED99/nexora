@@ -449,6 +449,10 @@ void main() {
       // total isolation from the step that came after it. The next task to
       // bump `schemaVersion` inherits the same widening and should extend
       // these sets the same way.
+      //
+      // E10-T02 note: same widening again -- current `schemaVersion` is now
+      // 16, so opening this v13 handle also runs the `from < 16` step,
+      // adding the two notification-preference tables to the diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -459,12 +463,17 @@ void main() {
           'location_settings',
           'location_peer_settings',
           'location_fixes',
+          'notification_category_settings',
+          'notification_preferences',
         },
         reason: 'the v13->current-version upgrade must add exactly these '
-            'tables (storage from v13->v14, location from v14->v15)',
+            'tables (storage from v13->v14, location from v14->v15, '
+            'notifications from v15->v16)',
       );
 
-      // Same exact-set treatment for the declared indexes.
+      // Same exact-set treatment for the declared indexes. Neither
+      // notification table declares an index (notification_tables.dart),
+      // so the v15->v16 step adds none here.
       final postMigrationIndexes = await _namedIndexNames(db);
       expect(
         postMigrationIndexes.difference(preMigrationIndexes),
@@ -610,11 +619,24 @@ void main() {
       // Exact set equality (this task's §3/§8): the tables added by this
       // step are *exactly* the three declared in §5, not a superset or
       // subset.
+      //
+      // E10-T02 note: same widening `test_EARS_STORE_3_...` above already
+      // documents -- `AppDatabase.forTesting` migrates this v14 handle all
+      // the way to the current `schemaVersion` (16), so the `from < 16`
+      // step's two notification-preference tables legitimately appear in
+      // this diff too.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
-        {'location_settings', 'location_peer_settings', 'location_fixes'},
-        reason: 'the v14->v15 step must add exactly these three tables',
+        {
+          'location_settings',
+          'location_peer_settings',
+          'location_fixes',
+          'notification_category_settings',
+          'notification_preferences',
+        },
+        reason: 'the v14->current-version upgrade must add exactly these '
+            'tables (location from v14->v15, notifications from v15->v16)',
       );
 
       // Same exact-set treatment for the one declared index.
