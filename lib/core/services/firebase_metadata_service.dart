@@ -21,6 +21,8 @@
 // offline-first local sign-in flow — see `registerDevice`.
 import 'package:firebase_database/firebase_database.dart';
 import 'package:nexora/core/observability/observability_service.dart';
+import 'package:nexora/core/services/firebase_boundary.dart';
+import 'package:nexora/core/services/firebase_paths.dart';
 
 class FirebaseMetadataService {
   FirebaseMetadataService({FirebaseDatabase? database, Duration? timeout})
@@ -50,14 +52,22 @@ class FirebaseMetadataService {
   /// propagated, since this must never block local-first sign-in
   /// (offline-first constitution). Fire-and-forget only — no retry queue
   /// (task §4).
+  ///
+  /// EARS-FB-2 (E11-T01): the payload is checked against
+  /// [FirebaseBoundary.assertAllowedFields] *before* the `try` below, not
+  /// inside it — a boundary violation is a programming error and must
+  /// propagate, not get caught and logged as "just another Firebase error"
+  /// (task §6 Risks).
   Future<void> registerDevice(String uid, String deviceId) async {
+    final data = {
+      'deviceId': deviceId,
+      'createdAt': ServerValue.timestamp,
+      'lastSeenAt': ServerValue.timestamp,
+      'platform': 'android',
+    };
+    FirebaseBoundary.assertAllowedFields(FirebaseNodeKind.device, data);
     try {
-      await writeDeviceMetadata(uid, deviceId, {
-        'deviceId': deviceId,
-        'createdAt': ServerValue.timestamp,
-        'lastSeenAt': ServerValue.timestamp,
-        'platform': 'android',
-      }).timeout(_timeout);
+      await writeDeviceMetadata(uid, deviceId, data).timeout(_timeout);
     } catch (e) {
       ObservabilityService.instance.logError(
         'firebase.device_registration_failed',
@@ -72,11 +82,14 @@ class FirebaseMetadataService {
   /// tests seam here instead (mirrors
   /// `GoogleAuthService.signInAndGetAccountUid` — see that file's comments
   /// for the same reasoning).
+  ///
+  /// Path from [FirebasePaths.device] (E11-T01) — byte-identical to the
+  /// inline `'users/$uid/devices/$deviceId'` this replaced (EARS-FB-3).
   Future<void> writeDeviceMetadata(
     String uid,
     String deviceId,
     Map<String, dynamic> data,
   ) {
-    return _database.ref('users/$uid/devices/$deviceId').set(data);
+    return _database.ref(FirebasePaths.device(uid, deviceId)).set(data);
   }
 }

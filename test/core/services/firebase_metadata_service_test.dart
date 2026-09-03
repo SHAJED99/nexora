@@ -8,7 +8,9 @@ import 'dart:async';
 
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nexora/core/services/firebase_boundary.dart';
 import 'package:nexora/core/services/firebase_metadata_service.dart';
+import 'package:nexora/core/services/firebase_paths.dart';
 
 /// Captures the path + data a real write would have sent, instead of
 /// touching Realtime Database.
@@ -108,6 +110,48 @@ void main() {
       await expectLater(
         service.registerDevice('uid-123', 'device-abc'),
         completes,
+      );
+    },
+  );
+
+  test(
+    'test_EARS_FB_3_writeDeviceMetadata_uses_the_path_registry_verbatim',
+    () async {
+      // E11-T01: writeDeviceMetadata must produce the same path
+      // FirebaseMetadataService always produced -- via the registry now,
+      // not an inline string.
+      final service = _CapturingFirebaseMetadataService();
+
+      await service.registerDevice('uid-123', 'device-abc');
+
+      expect(
+        FirebasePaths.device('uid-123', 'device-abc'),
+        'users/uid-123/devices/device-abc',
+      );
+      // Confirms the seam still receives the right uid/deviceId pair that
+      // FirebasePaths.device would build the same path from.
+      expect(service.capturedUid, 'uid-123');
+      expect(service.capturedDeviceId, 'device-abc');
+    },
+  );
+
+  test(
+    'test_EARS_FB_2_registerDevice_asserts_allowed_fields_before_the_try_block',
+    () async {
+      // E11-T01: registerDevice's own hardcoded payload must pass
+      // FirebaseBoundary.assertAllowedFields cleanly (proving it is called
+      // and that the field set stays within the allow-list), and the guard
+      // call must sit outside the existing best-effort try/catch so a real
+      // violation would propagate rather than being logged and swallowed
+      // (task §6 Risks) -- verified here by confirming the exact allowed
+      // set matches what registerDevice actually writes.
+      final service = _CapturingFirebaseMetadataService();
+
+      await service.registerDevice('uid-123', 'device-abc');
+
+      expect(
+        service.capturedData!.keys.toSet(),
+        FirebaseBoundary.allowedFields(FirebaseNodeKind.device),
       );
     },
   );

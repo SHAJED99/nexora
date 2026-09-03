@@ -21,6 +21,8 @@ import 'package:drift/drift.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/services/firebase_boundary.dart';
+import 'package:nexora/core/services/firebase_paths.dart';
 
 /// Immutable value object mirroring a `sync_cursors` row in domain terms.
 class SyncCursor {
@@ -200,15 +202,23 @@ class SyncCursorService {
   /// FR-FB-002). Never throws: any Realtime Database error (including being
   /// offline) is caught and logged via [ObservabilityService], same pattern
   /// as `FirebaseMetadataService.registerDevice`.
+  ///
+  /// EARS-FB-2 (E11-T01): the payload is checked against
+  /// [FirebaseBoundary.assertAllowedFields] *before* the `try` below, not
+  /// inside it -- a boundary violation is a programming error and must
+  /// propagate, not get caught and logged as "just another Firebase error"
+  /// (task §6 Risks, same reasoning as `FirebaseMetadataService.registerDevice`).
   Future<void> writeCursorToFirebase(String uid, SyncCursor cursor) async {
+    final data = {
+      'localDeviceId': cursor.localDeviceId,
+      'remoteDeviceId': cursor.remoteDeviceId,
+      'conversationId': cursor.conversationId,
+      'lastConfirmedSequenceNumber': cursor.lastConfirmedSequenceNumber,
+      'updatedAt': cursor.updatedAt,
+    };
+    FirebaseBoundary.assertAllowedFields(FirebaseNodeKind.syncCursor, data);
     try {
-      await writeCursorData(uid, cursor, {
-        'localDeviceId': cursor.localDeviceId,
-        'remoteDeviceId': cursor.remoteDeviceId,
-        'conversationId': cursor.conversationId,
-        'lastConfirmedSequenceNumber': cursor.lastConfirmedSequenceNumber,
-        'updatedAt': cursor.updatedAt,
-      }).timeout(_timeout);
+      await writeCursorData(uid, cursor, data).timeout(_timeout);
     } catch (e) {
       ObservabilityService.instance.logError(
         'firebase.sync_cursor_write_failed',
@@ -222,14 +232,17 @@ class SyncCursorService {
   /// `DatabaseReference` need a live platform-channel test harness to
   /// construct in tests, so tests seam here instead (mirrors
   /// `FirebaseMetadataService.writeDeviceMetadata`).
+  ///
+  /// Path from [FirebasePaths.syncCursor] (E11-T01) -- byte-identical to
+  /// the inline `_cursorPath` this replaced (EARS-FB-3).
   Future<void> writeCursorData(
     String uid,
     SyncCursor cursor,
     Map<String, dynamic> data,
   ) {
     return _firebaseDatabase
-        .ref(_cursorPath(uid, cursor.localDeviceId, cursor.conversationId,
-            cursor.remoteDeviceId))
+        .ref(FirebasePaths.syncCursor(uid, cursor.localDeviceId,
+            cursor.conversationId, cursor.remoteDeviceId))
         .set(data);
   }
 
@@ -261,27 +274,18 @@ class SyncCursorService {
   /// [localDeviceId] as *its* remote device. Split out from
   /// [readRemoteCursorFromFirebase] for the same test-seam reason as
   /// [writeCursorData].
+  ///
+  /// Path from [FirebasePaths.syncCursor] (E11-T01) -- byte-identical to
+  /// the inline `_cursorPath` this replaced (EARS-FB-3).
   Future<Object?> readCursorData(
     String uid,
     String remoteDeviceId,
     String conversationId,
   ) async {
     final snapshot = await _firebaseDatabase
-        .ref(_cursorPath(uid, remoteDeviceId, conversationId, localDeviceId))
+        .ref(FirebasePaths.syncCursor(
+            uid, remoteDeviceId, conversationId, localDeviceId))
         .get();
     return snapshot.value;
   }
-
-  /// `users/$uid/sync_cursors/$writerDeviceId/$conversationId/$aboutDeviceId`
-  /// -- consistent with the existing `users/$uid/devices/$deviceId`
-  /// convention (`FirebaseMetadataService`). [writerDeviceId] is whichever
-  /// device produced this cursor entry; [aboutDeviceId] is the device that
-  /// entry's `last_confirmed_sequence_number` is tracking progress against.
-  String _cursorPath(
-    String uid,
-    String writerDeviceId,
-    String conversationId,
-    String aboutDeviceId,
-  ) =>
-      'users/$uid/sync_cursors/$writerDeviceId/$conversationId/$aboutDeviceId';
 }
