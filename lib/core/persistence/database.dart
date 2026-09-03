@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'crypto_tables.dart';
 import 'group_tables.dart';
+import 'location_tables.dart';
 import 'message_tables.dart';
 import 'relationships_table.dart';
 import 'relay_tables.dart';
@@ -62,6 +63,9 @@ class DeviceIdentities extends Table {
   StorageItemStats,
   StoragePolicySettings,
   StorageDecisions,
+  LocationSettings,
+  LocationPeerSettings,
+  LocationFixes,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -70,7 +74,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -85,6 +89,19 @@ class AppDatabase extends _$AppDatabase {
             StoragePolicySettingsCompanion.insert(
               id: const Value(1),
               mode: 'smart',
+              updatedAt: DateTime.now().millisecondsSinceEpoch,
+            ),
+            mode: InsertMode.insertOrIgnore,
+          );
+          // E09-T01: a fresh install must have the same single default
+          // `location_settings` row (`globalEnabled == false`) that the
+          // `from < 15` upgrade step inserts below -- the app never has to
+          // cope with an absent settings row on either path (task §5, §6
+          // risk note, same reasoning as `storage_policy_settings` above).
+          await into(locationSettings).insert(
+            LocationSettingsCompanion.insert(
+              id: const Value(1),
+              globalEnabled: const Value(false),
               updatedAt: DateTime.now().millisecondsSinceEpoch,
             ),
             mode: InsertMode.insertOrIgnore,
@@ -368,6 +385,56 @@ class AppDatabase extends _$AppDatabase {
                     StoragePolicySettingsCompanion.insert(
                       id: const Value(1),
                       mode: 'smart',
+                      updatedAt: DateTime.now().millisecondsSinceEpoch,
+                    ),
+                    mode: InsertMode.insertOrIgnore,
+                  );
+            });
+          }
+          if (from < 15) {
+            // E09-T01: location-sharing tables -- `location_settings`,
+            // `location_peer_settings`, `location_fixes` -- additive only,
+            // no changes to any pre-existing table (task §3,
+            // docs/conventions.md "Schema migrations").
+            //
+            // As with `from < 11`/`from < 13`/`from < 14` above:
+            // `createTable` only issues the CREATE TABLE statement, never
+            // any `@TableIndex`-declared index -- those are separate
+            // `DatabaseSchemaEntity`s only created via `create`/`createAll`.
+            // This step's one declared index is therefore also created
+            // explicitly here, with `IF NOT EXISTS` (not `m.createIndex`,
+            // whose generated statement in `database.g.dart` has no such
+            // guard and is not retry-safe across a failed-then-retried
+            // migration).
+            //
+            // Wrapped in a transaction, the same precedent the `from < 14`
+            // step set for a step that inserts (task §2): this step also
+            // inserts the single default `location_settings` row, and that
+            // insert must be atomic with the `createTable` calls -- without
+            // the wrap, a crash/kill between "tables created" and "default
+            // row inserted" would leave `location_settings` created but
+            // empty on a failed-then-retried migration, breaking the "the
+            // app must never have to cope with an absent settings row"
+            // invariant (task §5).
+            await m.database.transaction(() async {
+              await m.createTable(locationSettings);
+              await m.createTable(locationPeerSettings);
+              await m.createTable(locationFixes);
+              await m.database.customStatement(
+                'CREATE INDEX IF NOT EXISTS '
+                'idx_location_fixes_captured_at ON location_fixes '
+                '(captured_at);',
+              );
+              // insertOrIgnore: drift stamps user_version AFTER onUpgrade
+              // returns, so a process crash between this transaction's
+              // COMMIT and that PRAGMA write makes the next open re-run
+              // this whole step against a DB that already has the row.
+              // createTable/createIndex are already retry-safe (IF NOT
+              // EXISTS); this insert needed the same property.
+              await into(locationSettings).insert(
+                    LocationSettingsCompanion.insert(
+                      id: const Value(1),
+                      globalEnabled: const Value(false),
                       updatedAt: DateTime.now().millisecondsSinceEpoch,
                     ),
                     mode: InsertMode.insertOrIgnore,
