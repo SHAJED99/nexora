@@ -15,6 +15,9 @@
 // tables and indexes (not merely that the expected ones exist), retiring the
 // migration-test-completeness advisory the E07 tracker carried forward
 // (E07 tracker §Carried-forward observations, 2026-08-31, S4).
+//
+// E09-T01 extends this file with the v14->v15 location-tables step, in the
+// same hand-built-prior-schema, exact-set-equality shape (task §3, §8).
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -244,6 +247,81 @@ void _seedV13Data(sqlite3.Database raw) {
   );
 }
 
+/// The full v14 schema -- everything E01-E08 created, in the exact shape
+/// each table has as of schema version 14 (the version immediately before
+/// this task's `location_settings`/`location_peer_settings`/
+/// `location_fixes` step). Built as v13 (`_createV13Tables`) plus E08-T01's
+/// three storage tables, for the same reason `_createV13Tables` needs the
+/// full v13 shape: `AppDatabase`'s `onUpgrade` guards every earlier step with
+/// `from < N`, so opening a raw database at `userVersion = 14` skips every
+/// step up to and including the storage-tables one (`from < 14`) and runs
+/// only the new `from < 15` step.
+void _createV14Tables(sqlite3.Database raw) {
+  _createV13Tables(raw);
+  raw.execute('''
+    CREATE TABLE storage_item_stats (
+      item_kind TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      last_accessed_at INTEGER NULL,
+      access_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (item_kind, item_id)
+    );
+  ''');
+  raw.execute(
+    'CREATE INDEX idx_storage_item_stats_last_accessed ON storage_item_stats '
+    '(last_accessed_at);',
+  );
+  raw.execute('''
+    CREATE TABLE storage_policy_settings (
+      id INTEGER NOT NULL,
+      mode TEXT NOT NULL,
+      older_than_days INTEGER NULL,
+      max_bytes INTEGER NULL,
+      budget_bytes INTEGER NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (id)
+    );
+  ''');
+  raw.execute('''
+    CREATE TABLE storage_decisions (
+      id TEXT NOT NULL,
+      decided_at INTEGER NOT NULL,
+      mode TEXT NOT NULL,
+      category_key TEXT NOT NULL,
+      item_count INTEGER NOT NULL,
+      bytes INTEGER NOT NULL,
+      reason_code TEXT NOT NULL,
+      reason_detail TEXT NULL,
+      outcome TEXT NOT NULL,
+      PRIMARY KEY (id)
+    );
+  ''');
+  raw.execute(
+    'CREATE INDEX idx_storage_decisions_decided_at ON storage_decisions '
+    '(decided_at);',
+  );
+}
+
+/// Every table name that must exist pre-migration for the v14->v15 test --
+/// `_preExistingTables` (the v13 set) plus E08-T01's three storage tables.
+final _preExistingTablesV14 = [
+  ..._preExistingTables,
+  'storage_item_stats',
+  'storage_policy_settings',
+  'storage_decisions',
+];
+
+/// Rows this test seeds to prove the v14->v15 step touches nothing outside
+/// the three new tables -- same pre-existing rows as `_seedV13Data` plus one
+/// row in a v14-only table.
+void _seedV14Data(sqlite3.Database raw) {
+  _seedV13Data(raw);
+  raw.execute(
+    "INSERT INTO storage_policy_settings (id, mode, updated_at) "
+    "VALUES (1, 'smart', 1000);",
+  );
+}
+
 /// All `sqlite_master` table names, as a set.
 Future<Set<String>> _tableNames(AppDatabase db) async {
   final rows = await db
@@ -359,22 +437,44 @@ void main() {
       // or subset. A stray extra table (or a missing one) fails this
       // assertion even though every individually-named `expect(...isTrue)`
       // style check in E07-T01's own test would have missed it.
+      //
+      // E09-T01 note: `AppDatabase.forTesting` always migrates a raw
+      // database up to the *current* `schemaVersion` (15 as of this task,
+      // not 14) -- there is no way to stop `onUpgrade` at an intermediate
+      // version through the public API. Opening this v13 handle therefore
+      // also runs the `from < 15` step, so the exact-set diff below
+      // legitimately includes E09-T01's three location tables/one index too.
+      // This still proves what it always proved (no stray table, no altered
+      // pre-existing DDL) -- it is no longer proof of the v13->v14 step in
+      // total isolation from the step that came after it. The next task to
+      // bump `schemaVersion` inherits the same widening and should extend
+      // these sets the same way.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
-        {'storage_item_stats', 'storage_policy_settings', 'storage_decisions'},
-        reason: 'the v13->v14 step must add exactly these three tables',
+        {
+          'storage_item_stats',
+          'storage_policy_settings',
+          'storage_decisions',
+          'location_settings',
+          'location_peer_settings',
+          'location_fixes',
+        },
+        reason: 'the v13->current-version upgrade must add exactly these '
+            'tables (storage from v13->v14, location from v14->v15)',
       );
 
-      // Same exact-set treatment for the two declared indexes.
+      // Same exact-set treatment for the declared indexes.
       final postMigrationIndexes = await _namedIndexNames(db);
       expect(
         postMigrationIndexes.difference(preMigrationIndexes),
         {
           'idx_storage_item_stats_last_accessed',
           'idx_storage_decisions_decided_at',
+          'idx_location_fixes_captured_at',
         },
-        reason: 'the v13->v14 step must add exactly these two indexes',
+        reason: 'the v13->current-version upgrade must add exactly these '
+            'indexes',
       );
 
       // The three new tables are usable through the real Dart definitions.
@@ -454,6 +554,158 @@ void main() {
       expect(rows.single.id, 1);
       expect(rows.single.mode, 'smart');
       expect(rows.single.budgetBytes, isNull);
+    },
+  );
+
+  test(
+    'test_EARS_LOC_6_v14_upgrades_to_v15_additively',
+    () async {
+      final raw = sqlite3.sqlite3.openInMemory();
+      _createV14Tables(raw);
+      _seedV14Data(raw);
+
+      // Snapshot each pre-existing table's exact `CREATE TABLE` DDL text
+      // from `sqlite_master` while still on the raw v14 handle -- this is
+      // what makes the post-migration comparison below prove the DDL is
+      // byte-identical, not merely that a same-named table still exists
+      // (task §4: not a column, not an index, not a comment).
+      final preMigrationSql = <String, String>{
+        for (final tableName in _preExistingTablesV14)
+          tableName: raw
+                  .select(
+                    "SELECT sql FROM sqlite_master WHERE type='table' "
+                    'AND name = ?',
+                    [tableName],
+                  )
+                  .single['sql']
+              as String,
+      };
+      // Queried from `sqlite_master` (not just `_preExistingTablesV14`'s
+      // hard-coded list) because `_seedV14Data` inserts into the
+      // AUTOINCREMENT `device_identities` table, which lazily creates
+      // SQLite's own `sqlite_sequence` bookkeeping table on first insert --
+      // that table exists before this step's migration ever runs, so it
+      // must be part of the "before" snapshot or the exact-set diff below
+      // would wrongly blame this migration step for it.
+      final preMigrationTables = {
+        for (final row
+            in raw.select("SELECT name FROM sqlite_master WHERE type='table'"))
+          row['name'] as String,
+      };
+      final preMigrationIndexes = {
+        for (final row in raw.select(
+          "SELECT name FROM sqlite_master WHERE type='index' "
+          "AND name NOT LIKE 'sqlite_autoindex%'",
+        ))
+          row['name'] as String,
+      };
+
+      raw.userVersion = 14;
+      final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+      addTearDown(db.close);
+
+      // Force the lazy migration to run before inspecting sqlite_master.
+      await db.customSelect('SELECT 1').get();
+
+      // Exact set equality (this task's §3/§8): the tables added by this
+      // step are *exactly* the three declared in §5, not a superset or
+      // subset.
+      final postMigrationTables = await _tableNames(db);
+      expect(
+        postMigrationTables.difference(preMigrationTables),
+        {'location_settings', 'location_peer_settings', 'location_fixes'},
+        reason: 'the v14->v15 step must add exactly these three tables',
+      );
+
+      // Same exact-set treatment for the one declared index.
+      final postMigrationIndexes = await _namedIndexNames(db);
+      expect(
+        postMigrationIndexes.difference(preMigrationIndexes),
+        {'idx_location_fixes_captured_at'},
+        reason: 'the v14->v15 step must add exactly this one index',
+      );
+
+      // The three new tables are usable through the real Dart definitions.
+      expect(await db.select(db.locationPeerSettings).get(), isEmpty);
+      expect(await db.select(db.locationFixes).get(), isEmpty);
+      final settingsRows = await db.select(db.locationSettings).get();
+      expect(settingsRows, hasLength(1));
+      expect(settingsRows.single.globalEnabled, isFalse);
+
+      await db.into(db.locationFixes).insert(
+            LocationFixesCompanion.insert(
+              peerDeviceId: 'peer-1',
+              latitude: 1.0,
+              longitude: 1.0,
+              capturedAt: 1000,
+              receivedAt: 1000,
+            ),
+          );
+      final fix = await db.select(db.locationFixes).getSingle();
+      expect(fix.peerDeviceId, 'peer-1');
+      expect(fix.accuracyM, isNull);
+
+      // Pre-existing tables + their pre-existing rows are untouched by this
+      // step.
+      final identities = await db.select(db.deviceIdentities).get();
+      expect(identities.single.deviceId, 'v13-device');
+      final messageRows = await db.select(db.messages).get();
+      expect(messageRows, hasLength(1));
+      expect(messageRows.single.id, 'msg-1');
+      final storageSettingsRows =
+          await db.select(db.storagePolicySettings).get();
+      expect(storageSettingsRows, hasLength(1));
+      expect(storageSettingsRows.single.mode, 'smart');
+
+      // Byte-identical schema check on every pre-existing table: the CREATE
+      // TABLE SQL captured by sqlite_master for each must be exactly what it
+      // was pre-migration (no altered/renamed/dropped column, per this
+      // task's §4). Compares the actual DDL text against the pre-migration
+      // snapshot taken above -- not just that a same-named table exists.
+      for (final tableName in _preExistingTablesV14) {
+        final rows = await db
+            .customSelect(
+              "SELECT sql FROM sqlite_master WHERE type='table' "
+              "AND name='$tableName'",
+            )
+            .get();
+        expect(rows, hasLength(1), reason: '$tableName should still exist');
+        expect(
+          rows.single.read<String>('sql'),
+          preMigrationSql[tableName],
+          reason: '$tableName DDL should be byte-identical after migration',
+        );
+      }
+    },
+  );
+
+  test(
+    'test_EARS_LOC_3_default_settings_row_on_upgrade',
+    () async {
+      final raw = sqlite3.sqlite3.openInMemory();
+      _createV14Tables(raw);
+      _seedV14Data(raw);
+      raw.userVersion = 14;
+      final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+      addTearDown(db.close);
+
+      final rows = await db.select(db.locationSettings).get();
+      expect(rows, hasLength(1));
+      expect(rows.single.id, 1);
+      expect(rows.single.globalEnabled, isFalse);
+    },
+  );
+
+  test(
+    'test_EARS_LOC_3_default_settings_row_on_fresh_create',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+
+      final rows = await db.select(db.locationSettings).get();
+      expect(rows, hasLength(1));
+      expect(rows.single.id, 1);
+      expect(rows.single.globalEnabled, isFalse);
     },
   );
 }
