@@ -13,15 +13,21 @@ Project: `nexora-b3a97` · Realtime Database instance:
 
 ## Tree
 
-| Path | Status | Fields | `FR-FB-001` clause | Owner |
-|---|---|---|---|---|
-| `users/$uid/devices/$deviceId` | live | `deviceId:String`, `createdAt:int(ServerValue)`, `lastSeenAt:int(ServerValue)`, `platform:String` | device registry metadata | `E01-T02` |
-| `users/$uid/sync_cursors/$writerDeviceId/$conversationId/$aboutDeviceId` | live | `localDeviceId:String`, `remoteDeviceId:String`, `conversationId:String`, `lastConfirmedSequenceNumber:int`, `updatedAt:int` | synchronization metadata (`NFR-PRIV-001`) | `E05-T04` |
-| `users/$uid/devices/$deviceId/revocation` | reserved | — declared by `E11-T04` | revocation information | `E11-T04` |
-| `users/$uid/relationships/$peerDeviceId` | reserved | — declared by `E11-T05` | trust metadata, block metadata | `E11-T05` |
-| `users/$uid/push/$deviceId` | reserved (no owner) | — | push notification information | ⏳ `OQ-E11-2` |
-| `config/version_policy` | reserved (no owner) | — | application version policy | ⏳ `OQ-E11-2` |
-| `directory/$deviceId` | reserved | — declared by `E11-T06` | device public identity information | `E11-T06` (`ADR-0008` accepted, option 2) |
+| Path | Status | Fields | `FR-FB-001` clause | Owner | Rules enforcement |
+|---|---|---|---|---|---|
+| `users/$uid/devices/$deviceId` | live | `deviceId:String`, `createdAt:int(ServerValue)`, `lastSeenAt:int(ServerValue)`, `platform:String` | device registry metadata | `E01-T02` | structural (`.validate` + `$other` deny) — `E11-T02` |
+| `users/$uid/sync_cursors/$writerDeviceId/$conversationId/$aboutDeviceId` | live | `localDeviceId:String`, `remoteDeviceId:String`, `conversationId:String`, `lastConfirmedSequenceNumber:int`, `updatedAt:int` | synchronization metadata (`NFR-PRIV-001`) | `E05-T04` | structural (`.validate` + `$other` deny) — `E11-T02` |
+| `users/$uid/devices/$deviceId/revocation` | reserved | — declared by `E11-T04` | revocation information | `E11-T04` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
+| `users/$uid/relationships/$peerDeviceId` | reserved | — declared by `E11-T05` | trust metadata, block metadata | `E11-T05` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
+| `users/$uid/push/$deviceId` | reserved (no owner) | — | push notification information | ⏳ `OQ-E11-2` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
+| `config/version_policy` | reserved (no owner) | — | application version policy | ⏳ `OQ-E11-2` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
+| `directory/$deviceId` | reserved | — declared by `E11-T06` | device public identity information | `E11-T06` (`ADR-0008` accepted, option 2) | client guard only (no rule yet — reserved node, `E11-T02` §4) |
+
+`users/$uid`'s own `$other` child (any subtree not named `devices` or
+`sync_cursors`) is also denied structurally (`.validate: false`) —
+`E11-T02`, `EARS-FB-5`. The owner-only `.read`/`.write` at `users/$uid`
+itself (`auth.uid === $uid`) is `E11-T02`, `EARS-FB-6`, unchanged in shape
+from before this task.
 
 Both `live` rows above are pre-existing (`E01-T02`, `E05-T04`); this task
 centralised their path strings and allowed-field sets without changing a
@@ -59,9 +65,15 @@ these, in any node, ever.
 
 ## What this schema does not cover
 
-- **Security rules** (`.validate`/`.read`/`.write` enforcement of this
-  table) — `E11-T02`, deliberately separate so the schema is agreed before
-  rules are written against it.
+- **Behavioural proof that the Realtime Database server enforces these
+  rules** — `E11-T02`'s structural Dart test
+  (`test/core/services/firebase_rules_test.dart`) proves the rules FILE says
+  the right thing; only the Firebase emulator + `@firebase/rules-unit-testing`
+  (`OQ-E11-T02-1`, deferred to land with `E11-T05`/`E11-T06`) proves the
+  server actually does it.
+- **Deployment** — `database.rules.json` is not published by any task;
+  `firebase deploy --only database` is a human step at the merge gate
+  (`E11-T02` §4).
 - **The reserved rows' actual fields, rules, or code** — each is built (or
   left permanently unowned, in the push/version-policy case) by its own
   named task. This document only reserves the slot.
