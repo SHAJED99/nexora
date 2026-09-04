@@ -18,6 +18,7 @@ import 'package:nexora/core/crypto/crypto_stub.dart';
 import 'package:nexora/core/crypto/drift_signal_store.dart';
 import 'package:nexora/core/crypto/identity_service.dart';
 import 'package:nexora/core/messaging/ciphertext_codec.dart';
+import 'package:nexora/core/messaging/location_share.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/messaging/relay_packet_frame.dart';
 import 'package:nexora/core/persistence/database.dart';
@@ -27,6 +28,7 @@ import 'package:nexora/core/routing_engine/routing_engine.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/groups/data/group_repository.dart';
+import 'package:nexora/features/location/domain/location_share_service.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/messaging/domain/receive_message_use_case.dart';
 import 'package:nexora/features/messaging/domain/send_message_use_case.dart';
@@ -576,6 +578,40 @@ void main() {
       expect(
         identical(stack.sendGroupMessage, stack.sendGroupMessage),
         isTrue,
+      );
+
+      await stack.dispose();
+    },
+  );
+
+  // --- E09-T03: location-share registration (control kind 7) -----------
+
+  test(
+    'test_location_share_is_registered_exactly_once_on_control_kind_7',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'device-a',
+        transport: newTransport(),
+      );
+      expect(stack.status, const MessagingStackStatus.ready());
+
+      expect(stack.locationShareService, isA<LocationShareService>());
+      expect(
+        identical(stack.locationShareService, stack.locationShareService),
+        isTrue,
+      );
+
+      // A second registration on the SAME control kind must throw --
+      // `InboundPipeline.registerControlHandler`'s own duplicate guard
+      // (task file §6 risk note).
+      expect(
+        () => stack.inbound.registerControlHandler(
+          kControlKindLocationShare,
+          stack.locationShareService.handleWireFrame,
+        ),
+        throwsA(isA<StateError>()),
       );
 
       await stack.dispose();

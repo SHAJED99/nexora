@@ -135,12 +135,17 @@ import '../transport/transport_service.dart';
 import '../../features/groups/data/group_repository.dart';
 import '../../features/groups/domain/group_membership_service.dart';
 import '../../features/groups/domain/send_group_message_use_case.dart';
+import '../../features/location/data/location_fix_repository.dart';
+import '../../features/location/data/location_settings_repository.dart';
+import '../../features/location/domain/location_share_service.dart';
+import '../../features/location/domain/location_source.dart';
 import '../../features/trust/data/relationship_repository.dart';
 import '../../features/trust/domain/evaluate_connection_request_use_case.dart';
 import 'ciphertext_codec.dart';
 import 'delivery_ack.dart';
 import 'group_control.dart';
 import 'inbound_pipeline.dart';
+import 'location_share.dart';
 import 'messaging_coordinator.dart';
 import 'prekey_exchange.dart';
 import 'relay_packet_frame.dart';
@@ -178,6 +183,22 @@ const Duration _defaultTtl = Duration(days: 3);
 /// `MessagingCoordinator` itself (task file §5's contract: "injected, never
 /// hard-coded at a call site") — a test or a future caller can override it.
 const Duration _defaultCoordinatorTickInterval = Duration(seconds: 60);
+
+/// The composition root's placeholder [LocationSource] until `E09-T05`
+/// wires a real device implementation — this task's own §4 forbids adding
+/// `geolocator`/a platform channel/a runtime permission here. Always
+/// reports "no fix available," never a fabricated position — the same
+/// honest-null-object shape `call_signaling.dart`'s own
+/// `NullCallMediaTransport` already establishes for an unimplemented seam.
+/// [LocationShareService.locationSource] is a `required` constructor
+/// parameter (task file §5's contract), so composing the stack needs SOME
+/// concrete value even before a real one exists; this is that value.
+class _UnavailableLocationSource implements LocationSource {
+  const _UnavailableLocationSource();
+
+  @override
+  Future<LocationFix?> currentFix() async => null;
+}
 
 /// `ready`, or `unavailable` with a human-readable (never secret, never
 /// device-id- or key-bearing) reason — task file §3/§5. A screen reads this
@@ -373,6 +394,28 @@ class MessagingStack {
       kControlKindCallSignaling,
       callSignaling.handleWireFrame,
     );
+
+    // E09-T03: same "needs a fully-constructed `this`" reasoning as every
+    // other control sub-protocol above. Registered onto its own
+    // `controlKind` slot (`kControlKindLocationShare == 7`, the next unused
+    // value after T07's `1`, T08's `2`, T03's `3`, T04's `4`, T09's `5` and
+    // `kControlKindGroupMessage`'s `6`) -- see `location_share.dart`'s
+    // header for why this sub-protocol's payload is ciphertext through the
+    // pairwise session, matching `group_control.dart`/`call_signaling.dart`
+    // rather than `PrekeyExchange`/`DeliveryAck`'s cleartext one.
+    // `locationSource` is `_UnavailableLocationSource` until `E09-T05`
+    // wires a real device implementation (this file's own header, above).
+    locationShareService = LocationShareService(
+      stack: this,
+      settings: LocationSettingsRepository(db: db),
+      fixes: LocationFixRepository(db: db),
+      relationships: RelationshipRepository(db),
+      locationSource: const _UnavailableLocationSource(),
+    );
+    inbound.registerControlHandler(
+      kControlKindLocationShare,
+      locationShareService.handleWireFrame,
+    );
   }
 
   /// The single app-wide `AppDatabase` — passed in, never constructed here
@@ -448,6 +491,13 @@ class MessagingStack {
   /// `controlKind == 5` slot. Does NOT touch audio/media -- see
   /// `call_signaling.dart`'s header.
   late final CallSignaling callSignaling;
+
+  /// E09-T03: encrypted location share (control kind 7) — gated send +
+  /// gated receive. Constructed here, registered on `inbound`'s
+  /// `controlKind == 7` slot. Built with a placeholder
+  /// [_UnavailableLocationSource] until `E09-T05` wires a real device
+  /// location provider — see this file's header comment on that class.
+  late final LocationShareService locationShareService;
 
   /// This device's own local identity (ADR-0005: local, not Firebase-
   /// derived) — from `DeviceIdentityRepository`. May be `''` if no local
