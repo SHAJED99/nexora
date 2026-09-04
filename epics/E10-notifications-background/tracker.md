@@ -1,12 +1,14 @@
 # E10 · Notifications & Background Operation · Progress
 
-**Status:** **build-complete 2026-09-04 — all 10 tasks merged, cross-model
-reviewed, P1/P2=0 on every task. Ready for the end-of-epic bug sweep.**
-`ADR-0007` accepted (option 1, connectedDevice, boot-restart in scope)
+**Status:** **bug sweep complete 2026-09-04 — 7 bugs filed (`E10-B01`..`B07`),
+`E10-B01` is P1 and `B02`/`B03`/`B04`/`B05` are P2, so P1/P2 = 5 ≠ 0 and the
+epic→`development` PR does NOT open yet** (`skills/release`). All 10 tasks
+merged and cross-model reviewed; 913/913 tests green, `flutter analyze`
+clean. `ADR-0007` accepted (option 1, connectedDevice, boot-restart in scope)
 unblocked T08/T09/T10 earlier this session. **Backend/native only** — this
 epic ships no screen; see §Why there is no frontend task. ·
 **Started:** 2026-09-04 · **Completed (build):** 2026-09-04 ·
-**Progress:** 10/10
+**Swept:** 2026-09-04 · **Progress:** 10/10 tasks, 0/7 bugs
 
 ## Tasks
 
@@ -318,3 +320,325 @@ rather than presented as approved design.
   `_applyPlan` call issues an unbidden `startDiscovery()` before any real
   power-state signal has been read — likely harmless (discovery starting
   is the natural default) but worth a name if this file is next touched.
+
+## Bug sweep — 2026-09-04 (reviewer: `claude-opus-5`, independent worktree)
+
+**Baseline verified before starting:** `epic_10` @ `0f48d16`, fetched fresh
+from origin into an isolated worktree (`../sweep-e10`), never the shared
+working directory. **`flutter test` (full suite): 913/913 passed, exit 0.**
+`flutter analyze`: **1 issue**, an `annotate_overrides` info in
+`test/core/calls/call_migration_controller_test.dart:177` — pre-existing E07
+test code, not touched by any E10 task, not an E10 finding. GitHub Actions CI
+is down (billing); this local run is the primary verification and it is
+clean.
+
+**Design gate: n/a.** Zero `layer: frontend` tasks, no `design_contract:`
+claimed by any of the ten (`epic.md` §Analyze gate checks, Design row). No
+screen was touched, so no contract could drift. `OQ-E10-1` (no design source
+for any notification surface, including the mandatory foreground-service
+string) remains open and human-owned — it is the reason there is nothing to
+verify, not a thing this sweep can close.
+
+**Scope audit: clean.** Every one of the ten tasks touched **only** the files
+in its declared `files:` list — no stray file, no lockfile drift, no
+undeclared `.g.dart`. Every fence held under direct check: T07 touched zero
+E08 files; T08/T09/T10 contain no `Timer`, `WorkManager`, `AlarmManager` or
+isolate anywhere in `lib/core/background/` or `android/.../background/`; T09
+added no manifest line; T10's `messaging_coordinator.dart` diff is comments +
+one `final` removal + `setTickInterval` and nothing else; the T04/T05/T06
+seam files are **+114/-0, +80/-0, +158/-0** — literally zero lines removed,
+so "no behavioural line moved" is provable, not asserted. No Pigeon method
+exists outside its owning task's §5 schema. Deviations are disclosed in every
+case bar one (see CF-2 below). Minor undeclared *public surface* inside
+declared files (`NotificationSink`, `stableNotificationId`,
+`BackgroundControl`, `BackgroundStub`, `allClearPowerState`) is recorded as
+an observation, not a violation — nothing invented an API, a field or a path.
+
+### Seven defects found
+
+| id | severity | priority | what | reachable today? |
+|---|---|---|---|---|
+| `E10-B01` | **S2** | **P1** | `BootReceiver` is `android:exported="false"`, so the system can never deliver `BOOT_COMPLETED` — EARS-PLAT-10 / ADR-0007 §S3 is dead code on every device. Also has **zero** tests. | **yes** — every device, every reboot |
+| `E10-B02` | S3 | P2 | Discovery runs during Doze/Battery Saver by two routes: the `stoppedBySystem` short-circuit, and a power state never seeded at startup. The seam that applies the plan has no test at all. | **yes** — any cold start in Doze |
+| `E10-B03` | S3 | P2 | Four of the five shipped notification classes post identical `NEXORA`/`Notification` copy; each owning task's §5 copy never reached the file that renders it. | **yes** — every non-message notification |
+| `E10-B04` | S3 | P2 | Each app close/reopen while the service runs leaks a `PowerStateMonitor`, 4 broadcast receivers, 2 Pigeon hosts and a destroyed `Activity`. Unbounded, in the process this epic made permanent. | **yes** — every reopen |
+| `E10-B05` | S3 | P2 | After a process kill or reboot the service revives and permanently claims to be "relaying messages" with no Dart isolate behind it. **`blocked`, `owner_agent: planner`.** | **yes** — the expected path on MIUI |
+| `E10-B06` | S4 | P4 | Six `dispose()`/`stop()` methods with no caller in `lib/`. **Assessed as inert, not a leak** — see CF-1. | n/a |
+| `E10-B07` | S4 | P3 | Five EARS criteria green on tests that cannot fail; mutations to the guarded lines survive the whole suite. | n/a |
+
+**Two reviewer-written probes, quoted in the bug files:**
+- Deleted `notification_policy.dart:91` (the `full` → `senderOnly` privacy
+  downgrade). `flutter test test/core/notifications/` → **49/49 passed.**
+  The guard is currently a behavioural no-op and no test protects it —
+  `E10-B07` F2, and a hard prerequisite of `E10-B03`'s fix.
+- Static mutation of `storage_notification_source.dart:100` to
+  `{ _wasOverThreshold = false; return; }` leaves the whole suite green while
+  making `over → null → over` double-notify — `E10-B07` F1, confirming T07's
+  own carried-forward suspicion.
+
+🧍 **HUMAN GATE (`bug_priorities`).** Severity above is the reviewer's own
+call throughout. **Priority was set under the decision authority explicitly
+delegated by the human for this session** — the same convention used at every
+other gate this session — applying the judgement a human would: cheap fix +
+dead accepted feature = P1; real but bounded and non-user-visible = P2;
+evidence quality on a security guarantee = P3; hygiene with no growth = P4.
+Each bug file carries its own priority rationale under §Priority.
+
+**`E10-B05` is `blocked` with `owner_agent: planner`**, handled the same way
+`E09-B11` and `E11-B01` were: it needs an architecture decision (does NEXORA
+get a headless Dart entrypoint, or does the service stop claiming to relay?)
+that is rule-3 territory and was not made by ADR-0007. Three costed options
+and a non-binding advisory are in the bug file. **No agent decides this.**
+
+**P1/P2 = 5.** Per `skills/release` and `skills/bug-sweep`, the
+epic→`development` PR does not open until that is zero.
+
+### Dispositions — every carried-forward observation, none dropped
+
+The tracker's §Carried-forward observations held **15 bullets** across
+T04-T10's reviews (the hand-off named 12; all 15 are disposed here rather
+than only the counted ones). Each is confirmed-and-filed, or confirmed
+non-blocking with the reason stated.
+
+**CF-1 · The five (now six) unwired `dispose()` instances**
+— `CallSignaling` (T04), `PrekeyExchange` (T05), `GroupMembershipService`
+(T06), `StorageNotificationSource` (T07), plus
+`NotificationDispatcher.stop()` / `MessagingStack.dispose()`.
+→ **Filed as `E10-B06` (S4, P4) — and the tracker's own framing is
+falsified.** Four entries described a growing resource-leak pattern with an
+increasingly urgent tone. At epic close, with nowhere left to hide behind a
+task boundary, the honest finding is that **it is not a leak and is not
+becoming one**: every one of these is a `Get.put(..., permanent: true)`
+singleton built exactly once in `AppBinding`, `AppBinding` runs from `main()`,
+and `main()` runs once per isolate. T08's engine retention means the isolate
+now *outlives* the Activity rather than being rebuilt with it
+(`MainActivity.provideFlutterEngine` returns the cached engine; `main()` is
+not re-entered), so the count of each object is one, forever, and never
+grows. Each task's decline was a correct rule-6 scope read, not five people
+dodging.
+**T10 added a sixth** (`BackgroundLifecycleObserver.stop()`) and did not
+mention teardown in its §4 at all, after T07 had named T10 as the owner — so
+the buck was genuinely passed to a task that never picked it up. That is the
+process defect worth a retro lesson, and it is why this is filed rather than
+carried an eighth time. Sequenced **after** `E10-B05`: if that resolves
+toward a headless entrypoint, wire them; otherwise deleting them is the more
+honest fix.
+**The genuinely unbounded leak this epic did introduce is native, and is
+`E10-B04`** — see CF-9/CF-11.
+
+**CF-2 · Generic notification copy still shipping**
+→ **Confirmed still true at epic close, and worse than recorded. Filed as
+`E10-B03` (S3, P2).** Read directly at `notification_policy.dart:112-122`:
+the `default:` arm returns `('NEXORA', 'Notification')` for **four** classes,
+not one — `incomingCall`, `connectionRequest`, `groupEvent` and
+`storageWarning`. Only `message` has copy. Each owning task contracted its
+own strings in its own §5 (T04:108, T05:105, T06:108, T07:107) and none could
+reach `notification_policy.dart`, which is inside T03's fence. **New finding:
+T04 and T06 disclosed the non-delivery in their §Deviations; T05 and T07 did
+not** — a minor undisclosed contract non-delivery, transitively covered by
+T04/T06's carry-forward but never stated in those two files.
+
+**CF-3 · `PrekeyExchange`'s per-peer dedup evaluated inside `.where()`, never
+reset on `blocked → unblocked → unknown`**
+→ **Confirmed non-blocking, no bug filed.** T05's reviewer already recorded
+this as "matches the task's contract as written, not a defect", and that
+still holds: EARS-NOTIFY-10/11 say one notification per peer while `unknown`
+and none while `blocked`/`trusted`/`allowed`, and the code does exactly that
+(both proven — `connection_request_notification_source_test.dart:31,57,89,113`).
+"Notify again after re-becoming unknown" is a **product** question nobody has
+asked for; inventing it would be scope creep. Left as a note for whoever
+first wants that behaviour.
+
+**CF-4 · `_emitGroupEventNotice` called unawaited inside
+`handleControlFrame`'s success branch** (`group_membership_service.dart:621`)
+→ **Confirmed non-blocking, no bug filed.** Still fire-and-forget, still
+theoretically re-orderable. It stays unobservable for the same reason T06's
+reviewer gave, and `E10-B03` **strengthens** rather than weakens that: even
+once per-class copy lands, `groupEvent` renders the single generic
+`Group activity` string (`NotificationFacts` carries no
+`GroupEventNotice.kind`, `E10-T06.md:209`, and B03 explicitly forbids adding
+one), so no copy differentiates event order. Re-evaluate only if a future
+task gives group notifications per-kind copy — recorded in `E10-B03`'s
+§What this fix does NOT do so that task will read it.
+
+**CF-5 · `test_EARS_NOTIFY_14_null_plan_posts_nothing` proves less than its
+name**
+→ **Confirmed by the sweep's own mutation probe. Filed as `E10-B07` F1
+(S4, P3).** Mutating `storage_notification_source.dart:100` to
+`{ _wasOverThreshold = false; return; }` leaves the **entire 913-test suite**
+green while making an `over → null → over` sequence double-notify, violating
+EARS-NOTIFY-15. Production code is correct; the evidence is not.
+
+**CF-6 · The headless-revive gap** (process kill + boot restart revives the
+service but not the Dart isolate/tick until the app reopens)
+→ **Confirmed, escalated from S3-with-a-shrug to a blocking planner
+decision. Filed as `E10-B05` (S3, P2, `blocked`, `owner_agent: planner`).**
+**Yes, it materially undermines FR-PLAT-001's background-operation goal** —
+that is the sweep's requested judgement, and three things that were separate
+at T08's review are now one:
+1. `E10-B01` means the boot half was latent; fixing B01 makes it live.
+2. ADR-0007's own constraint 4 says any answer assuming stock-Android
+   behaviour is wrong on the only hardware this project has, and three MIUI
+   restrictions are on record. **Process kill is the expected path there, not
+   the rare one**, and `START_STICKY` revival is exactly what follows it.
+3. **ADR-0007 chose option 1 on the argument that it needs "no new Dart code
+   path at all".** That is true while the process lives and false the moment
+   it dies — reviving headlessly requires precisely the second composition
+   root options 2 and 3 were rejected for. The decision was made on a
+   comparison that did not price this in.
+Concretely: nothing relays, **`reclaimPayloads()` does not run so NFR-SEC-001's
+retention guarantee is unhonoured**, `eventsApi` is null so EARS-PLAT-8's
+"SHALL report its state to Dart" is unreachable by construction, and a
+permanent notification asserts "relaying messages" on a device where nothing
+is. It is self-perpetuating — nothing in that state will ever start an engine.
+Severity stays **S3** only because opening the app is a real and complete
+workaround. It is a high S3.
+
+**CF-7 · `TransportApiHost`/`NotificationApiHost` constructed with the
+Activity and left attached after it is destroyed**
+→ **Confirmed, mechanism established, folded into `E10-B04` (S3, P2).** Not
+left as "assess with real hardware": the cause is statically determinable.
+`MainActivity.cleanUpFlutterEngine:84-94` deliberately skips `detach()` while
+the service runs (correct — the hosts must keep working), so the *stale*
+host holding the destroyed Activity remains the live Pigeon handler until the
+app is reopened. Every background notification is therefore built with
+`NotificationManagerCompat.from(destroyedActivity)`, which **works** (a
+destroyed `Activity` is still a usable `Context` for the notification
+manager) — that is why nothing has been observed. `requestPermission()` on
+that same object would call `ActivityCompat.requestPermissions` on a
+destroyed Activity. The real cost is retention, not a crash: see CF-9.
+
+**CF-8 · `EARS-PLAT-10` has no test while the task's own DoD demands one**
+→ **Confirmed, and a second defect found underneath it. Folded into
+`E10-B01`.** A repo-wide grep of `test/` for
+`BOOT_COMPLETED|BootReceiver|messaging_active` returns exactly one hit — a
+prose comment at `background_service_test.dart:9`. Nothing would fail if
+`BootReceiver.onReceive` were emptied or its guard inverted. **The new
+finding: `EARS-PLAT-10` is defined twice with different text** —
+`E10-T08.md:236` (boot restart) and `E10-T09.md:157` (power-state emission) —
+and `epic.md:62` lists "PLAT-10, 11" as T09's, so the boot criterion is
+effectively un-indexed and the epic's EARS-trace row looked green because
+**T09's** tests cover **T09's** PLAT-10. That is how a `must`-graded,
+ADR-accepted feature shipped statically broken (`E10-B01`) with zero tests
+and a clean analyze gate. **Renumbering one of the two ids is a planner call
+at this epic's retro**, recorded in `E10-B01` §Second, related defect.
+
+**CF-9 · `PowerStateMonitor` / 4-receiver leak on Flutter engine recreation**
+→ **Confirmed, generalised, and promoted from a routed-onward note to a
+filed bug: `E10-B04` (S3, P2).** T09's reviewer had the mechanism right.
+`PowerStateMonitor.register()`'s `if (registered) return` guard
+(`PowerStateMonitor.kt:92`) is an **instance** field, and
+`configureFlutterEngine` builds a brand-new `BackgroundApiHost` — and so a
+brand-new monitor — on every Activity attach, including onto the cached
+engine. Per close/reopen cycle while the service runs: one monitor, four
+receivers, two Activity-holding Pigeon hosts (CF-7) and one retained
+destroyed `Activity`, none ever released. **This, not CF-1, is the epic's
+real leak**, and it exists precisely because `E10-T08` removed the bound that
+used to contain it — before this epic, closing the app destroyed the engine,
+the isolate and the process. `MainActivity.kt` was outside T09's and T10's
+fences, so neither could close it; at the sweep it belongs to the epic.
+
+**CF-10 · Android publishes no broadcast for `isBackgroundRestricted`**
+→ **Confirmed accurate, and confirmed already acted on. No bug filed.** T09's
+reviewer's instruction — that T10 must re-read `powerState()` on resume
+rather than trusting the stream — **was followed**:
+`BackgroundLifecycleObserver.didChangeAppLifecycleState` calls
+`_refreshPowerStateOnResume()` on `AppLifecycleState.resumed`, with a
+citation to this very carry-forward in the code comment. This is a
+carry-forward that worked as designed. **However**, the same reasoning
+applies to *startup* and was not applied there — `start()` subscribes without
+ever reading `powerState()` once, so a cold start inside Doze never learns
+about it. That gap is route (b) of **`E10-B02`**, and the fix reuses
+`_refreshPowerStateOnResume()` rather than writing a second reader.
+
+**CF-11 · `test_EARS_PLAT_11_missing_signal_reads_false` asserts a value it
+mocks in**
+→ **Confirmed. Filed as `E10-B07` F3 (S4, P3).** The test installs a mock
+returning `allClearPowerState()` (`power_state_test.dart:186-193`) then
+asserts every field is `false` (`:198-202`). The real guard — the API-level
+fallbacks at `PowerStateMonitor.kt:55-74` — is Kotlin, unexercised, and could
+be inverted without this test noticing. The sibling dedup test at `:136` is
+genuinely real; only the missing-signal half is hollow.
+
+**CF-12 · `EARS-PLAT-13`'s own §5 table contradicts itself on
+`stoppedBySystem` + Doze**
+→ **Confirmed, decided, and filed as `E10-B02` (S3, P2). The requested
+decision: fix the CODE, and correct the table to match.** The reasoning, since
+the hand-off asked for a call rather than a re-description:
+the criterion is law (rule 1) and says *"WHILE the device is in Doze or
+Battery Saver, the system SHALL NOT start peer discovery"*. The §5 table is a
+task-file proposal, which does not outrank it. And the table's stated
+rationale — *"nothing is running anyway"* — is **factually false**:
+`stoppedBySystem` means the foreground *service* died, not the process. The
+observer can only see that event because the Dart isolate is alive to receive
+it, so the tick is still firing and `transport.startDiscovery()` really does
+turn the radio on — at the worst possible moment, since the likeliest reason
+the system just killed the service is Doze or an OEM battery killer. The app's
+response to being throttled must not be to start scanning. So: reorder the
+power check ahead of the short-circuit, correct the table row **and its
+rationale sentence** in `E10-T10.md`, and note the correction under the
+already-open `OQ-E10-T10-2` **without** changing any of the six unmeasured
+interval numbers. `background_policy_test.dart:156-174` currently asserts the
+wrong behaviour as correct and must be inverted.
+
+**CF-13 · The discovery-gating seam has no composition-level test**
+→ **Confirmed and materially upgraded from S4. Folded into `E10-B02`.** Not
+merely a coverage gap: every hit for `discoveryAllowed` in `test/` is in
+`background_policy_test.dart`, asserting the pure function's return value.
+**Deleting the entire `if/else` block in `_applyPlan` that actually calls
+`startDiscovery()`/`stopDiscovery()` fails no test.** EARS-PLAT-13 says "the
+system SHALL NOT start peer discovery"; what is proven is that a `bool` has
+the right value. That is precisely why CF-12's two live violations went
+uncaught, and it is why `E10-B02`'s regression test is specified at the
+composition level rather than against the pure function.
+
+**CF-14 · `_discoveryAllowed` starts `null`, so the first `_applyPlan` issues
+an unbidden `startDiscovery()`**
+→ **Confirmed, and it is not harmless. Folded into `E10-B02` route (b).**
+T10's reviewer judged it "likely harmless (discovery starting is the natural
+default)". Combined with CF-10's startup gap that judgement does not hold: on
+a cold start inside Doze, `_powerState` is `allClearPowerState()`,
+`plan.discoveryAllowed` is `true`, `_discoveryAllowed` is `null` so nothing
+suppresses it, and discovery starts — with a 60 s tick — for as long as Doze
+lasts. Seeding the power state largely moots it; `E10-B02` also asks whether
+the field should start `false`.
+
+**CF-15 · Bookkeeping** — `E10-T09.md:31` carries `status: done` with an
+empty `completed_at:`.
+→ **Confirmed, trivial, no bug filed.** Recorded here so the retro or the
+next docs commit fixes it. Not worth a bug file.
+
+### Scope creep, invented APIs, undisclosed deviations — the audit
+
+**None found at the level that matters.** No task wrote outside its `files:`
+list; no Pigeon method exists outside a §5 schema; no fence was breached. Two
+things are recorded as observations rather than violations:
+1. **Undeclared public surface inside declared files** — `NotificationSink`
+   (`notification_service.dart:27`), `stableNotificationId`
+   (`notification_policy.dart:56`), `BackgroundControl` +
+   `BackgroundStub`'s whole surface (`background_service.dart:31`,
+   `background_stub.dart`), `allClearPowerState()` (`power_state.dart:29`),
+   `NotificationStub.cancelled`/`ensureReadyCallCount`. Each is a helper or
+   test seam inside a file the task owns; none invents an API a caller
+   outside the epic depends on. Worth naming at retro as a §5-completeness
+   habit, not a defect.
+2. **T05 and T07 did not disclose that their §5 copy never shipped** — see
+   CF-2. The only undisclosed contract non-delivery in the epic.
+
+### Not swept, and why
+
+- **On-device verification of anything native.** No installable device
+  (`E04-T03b` §Run log: three `INSTALL_FAILED_USER_RESTRICTED`
+  confirmations). `E10-B01` and `E10-B04` are therefore argued statically
+  from the manifest and from Android's documented dispatch behaviour, and
+  each bug file says so rather than implying a measurement.
+- **NFR-BATT-001.** Still never measured by anyone, in any epic
+  (`E06-T06.md:528-534`). E10 is the epic that makes the app run
+  continuously and it closes without a number. `E10-T10` §5's six cadence
+  values remain unmeasured defaults under `OQ-E10-T10-2`; `E10-B02`
+  explicitly forbids changing them.
+- **`OQ-E10-8`** (an open RFCOMM socket and its blocking read thread during
+  Doze) — still unowned, still unverifiable here, untouched by this sweep.
+- **The ten `OQ-E10-*` open questions** — all still human-owned and none
+  closed by this sweep. `OQ-E10-1` in particular is now load-bearing for
+  `E10-B03` and `E10-B05`.

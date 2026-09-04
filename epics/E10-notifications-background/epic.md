@@ -312,5 +312,56 @@ knowing *before* you approve rather than after.
     (`E06-T06.md:528-534`), and E10 is the epic that makes the app run
     continuously.
 
+## Bug sweep — 2026-09-04
+
+**Gate:** 🧍 `bug_priorities` — severity is the reviewer's; **priority was set
+under the decision authority explicitly delegated by the human for this
+session** (same convention as this session's other gates). Full report,
+evidence and the disposition of all 15 carried-forward observations:
+`tracker.md` §Bug sweep.
+
+Run in an isolated worktree off `epic_10`@`0f48d16`. **913/913 tests green,
+`flutter analyze` clean** (one pre-existing E07 test-file info, not E10's).
+Design gate n/a — zero frontend tasks, no contract to drift. **Scope audit
+clean**: no task wrote outside its `files:` list, no Pigeon method exists
+outside its §5 schema, every fence held under direct check.
+
+**Seven defects. P1/P2 = 5, so the epic→`development` PR does not open yet.**
+
+| id | sev | pri | what | status |
+|---|---|---|---|---|
+| `E10-B01` | **S2** | **P1** | `BootReceiver` is `android:exported="false"` → the system can never deliver `BOOT_COMPLETED`. **EARS-PLAT-10 / ADR-0007 §S3 is dead code on every device**, and has zero tests. | todo |
+| `E10-B02` | S3 | P2 | Discovery runs in Doze/Battery Saver two ways (the `stoppedBySystem` short-circuit; power state never seeded at startup). The seam that applies the plan has no test. | todo |
+| `E10-B03` | S3 | P2 | Four of five shipped notification classes post identical `NEXORA`/`Notification` copy; each owning task's §5 copy never reached the file that renders it. | todo |
+| `E10-B04` | S3 | P2 | Every app reopen while the service runs leaks a `PowerStateMonitor`, 4 receivers, 2 Pigeon hosts and a destroyed `Activity` — unbounded, in the process this epic made permanent. | todo |
+| `E10-B05` | S3 | P2 | After a process kill/reboot the service revives claiming to relay with no Dart isolate behind it. **`blocked`, `owner_agent: planner`** — needs a rule-3 decision ADR-0007 did not make. | blocked |
+| `E10-B06` | S4 | P4 | Six unwired `dispose()`/`stop()`. **Assessed as inert, not a leak** — the tracker's four-entry "growing leak" framing is falsified. | todo |
+| `E10-B07` | S4 | P3 | Five EARS criteria green on tests that cannot fail; mutations to the guarded lines survive the whole suite. | todo |
+
+**Three findings the sweep produced that no task review could have:**
+1. **`EARS-PLAT-10` is defined twice with different text** (`E10-T08.md:236`
+   boot restart, `E10-T09.md:157` power-state emission), and `epic.md`'s task
+   table above lists "PLAT-10, 11" as T09's. The boot criterion was
+   effectively un-indexed, so the EARS-trace row looked green because **T09's**
+   tests cover **T09's** PLAT-10. That is how a `must`-graded, ADR-accepted
+   feature shipped statically broken with zero tests. **Renumbering is a
+   planner call at retro.**
+2. **The epic's real resource leak is native, not Dart.** Four tracker entries
+   escalated the unwired `dispose()` pattern; at the sweep it is inert
+   (`Get.put(permanent: true)` singletons, one per isolate, never regrown —
+   T08's engine retention means `main()` is not re-entered). The unbounded
+   leak `E10-T08` genuinely introduced is `MainActivity`'s re-attach path.
+3. **Two reviewer probes falsified two green tests**: deleting the
+   `full` → `senderOnly` privacy downgrade (`notification_policy.dart:91`)
+   passes 49/49 notification tests, and mutating
+   `storage_notification_source.dart:100` passes all 913 while introducing a
+   double-notify.
+
+**ADR-0007 note for the planner.** Option 1 was chosen on the argument that it
+needs "no new Dart code path at all". True while the process lives; false the
+moment it dies — `E10-B05` is exactly the second composition root options 2
+and 3 were rejected for. The main decision stands; the comparison did not
+price this in.
+
 ## Retro
-<pending — after the bug sweep>
+<pending — after the P1/P2 bugs are fixed and re-verified>
