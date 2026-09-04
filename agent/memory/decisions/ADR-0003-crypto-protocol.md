@@ -96,6 +96,10 @@ not close this (it only costs the attacker one extra frame) and additionally
 breaks legitimate first-time location sharing between two already-trusted
 peers with no prior Signal session.
 
+**Decided by:** human (delegated: "do what is best" after reviewing a
+plain-language walkthrough of options a/b/c and a recommendation),
+2026-09-04.
+
 **Decision.** ✅ **Accept TOFU's risk profile app-wide, as-is — the same
 posture the reference Signal app itself ships with by default.** No
 authenticated first-contact mechanism (safety-number comparison, QR-code
@@ -123,7 +127,8 @@ used) is preferable to blocking the epic on an unscoped redesign, or shipping
 a per-feature patch that provably does not close the hole it targets.
 
 **Consequences.**
-- `E09-B09`'s fix is reverted in `lib/core/location/location_share_service.dart`.
+- `E09-B09`'s fix is reverted in
+  `lib/features/location/domain/location_share_service.dart`.
 - No code change to `DriftSignalProtocolStore.isTrustedIdentity` or any of the
   four sibling decrypt call sites `E09-B11` named.
 - `E09-B11` and `E09-B09` are both closed by this addendum, not by a code fix
