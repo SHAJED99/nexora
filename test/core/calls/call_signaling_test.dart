@@ -663,4 +663,148 @@ void main() {
       expect(signaling.counters.callUnauthenticated, 1);
     });
   });
+
+  group('E10-T04: CallSignaling.notices (EARS-NOTIFY-8/9)', () {
+    // New coverage only -- every group above this one is untouched, proving
+    // (together with a full, unmodified `flutter test` run) this task's own
+    // "additive, changes no call behaviour" contract (task file §2/§4).
+    late MessagingStack stack;
+
+    setUp(() async {
+      final suffix = nextSuffix();
+      stack = await newStack('device-a', suffix);
+      mockSendAlwaysSucceeds(suffix);
+    });
+
+    tearDown(() => stack.dispose());
+
+    Uint8List frame(CallSignalKind kind, String callId, String fromDeviceId) =>
+        CallSignalingFrame(
+          kind: kind,
+          callId: callId,
+          fromDeviceId: fromDeviceId,
+          createdAtMs: 1,
+        ).serialize();
+
+    test('test_EARS_NOTIFY_8_invite_posts_incoming_call_notification',
+        () async {
+      final signaling = stack.callSignaling;
+      final notices = <CallNotice>[];
+      signaling.notices.listen(notices.add);
+
+      await signaling.handleControlFrame(
+        'device-x',
+        frame(CallSignalKind.invite, 'call-1', 'device-x'),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(notices, hasLength(1));
+      expect(notices.single.kind, CallNoticeKind.invite);
+      expect(notices.single.callId, 'call-1');
+      expect(notices.single.peerDeviceId, 'device-x');
+    });
+
+    test('test_EARS_NOTIFY_9_answer_cancels_notification', () async {
+      final signaling = stack.callSignaling;
+      final notices = <CallNotice>[];
+      signaling.notices.listen(notices.add);
+
+      await signaling.handleControlFrame(
+        'device-x',
+        frame(CallSignalKind.invite, 'call-1', 'device-x'),
+      );
+      final callId = signaling.currentSession!.callId;
+      final acceptFailure = await signaling.accept(callId);
+      expect(acceptFailure, isNull);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(notices.map((n) => n.kind).toList(), [
+        CallNoticeKind.invite,
+        CallNoticeKind.answered,
+      ]);
+    });
+
+    test('test_EARS_NOTIFY_9_decline_cancels_notification', () async {
+      final signaling = stack.callSignaling;
+      final notices = <CallNotice>[];
+      signaling.notices.listen(notices.add);
+
+      await signaling.handleControlFrame(
+        'device-x',
+        frame(CallSignalKind.invite, 'call-1', 'device-x'),
+      );
+      final callId = signaling.currentSession!.callId;
+      final declineFailure = await signaling.decline(callId);
+      expect(declineFailure, isNull);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(notices.map((n) => n.kind).toList(), [
+        CallNoticeKind.invite,
+        CallNoticeKind.declined,
+      ]);
+    });
+
+    test('test_EARS_NOTIFY_9_remote_cancel_cancels_notification', () async {
+      final signaling = stack.callSignaling;
+      final notices = <CallNotice>[];
+      signaling.notices.listen(notices.add);
+
+      await signaling.handleControlFrame(
+        'device-x',
+        frame(CallSignalKind.invite, 'call-1', 'device-x'),
+      );
+      await signaling.handleControlFrame(
+        'device-x',
+        frame(CallSignalKind.cancel, 'call-1', 'device-x'),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(notices.map((n) => n.kind).toList(), [
+        CallNoticeKind.invite,
+        CallNoticeKind.remoteCancelled,
+      ]);
+    });
+
+    test('test_EARS_NOTIFY_9_ring_timeout_cancels_notification', () async {
+      // A dedicated `CallSignaling` with a short ring timeout, same
+      // construction technique used directly (never through `stack
+      // .callSignaling`) since this test needs a non-default timeout and
+      // this class's constructor is public -- `handleControlFrame` is called
+      // directly, exactly like every other test in this file's "local
+      // business logic" group, so this instance never needs to be wired
+      // onto `stack.inbound` at all.
+      final signaling = CallSignaling(
+        stack: stack,
+        relationshipRepository: RelationshipRepository(stack.db),
+        ringTimeout: const Duration(milliseconds: 10),
+      );
+      final notices = <CallNotice>[];
+      signaling.notices.listen(notices.add);
+
+      await signaling.handleControlFrame(
+        'device-x',
+        frame(CallSignalKind.invite, 'call-1', 'device-x'),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      expect(notices.map((n) => n.kind).toList(), [
+        CallNoticeKind.invite,
+        CallNoticeKind.timedOut,
+      ]);
+    });
+
+    test('dispose closes the notices stream without throwing', () async {
+      final signaling = CallSignaling(
+        stack: stack,
+        relationshipRepository: RelationshipRepository(stack.db),
+      );
+      var done = false;
+      signaling.notices.listen(null, onDone: () => done = true);
+
+      await signaling.dispose();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(done, isTrue);
+    });
+  });
 }
