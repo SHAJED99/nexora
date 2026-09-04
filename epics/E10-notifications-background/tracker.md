@@ -1,28 +1,27 @@
 # E10 · Notifications & Background Operation · Progress
 
-**Status:** **sharded 2026-09-04 — 10 tasks, awaiting the 🧍 `analyze_report`
-gate before any dispatch.** `E10-T01` and `E10-T02` are dispatchable the
-moment that gate clears (T02 additionally fires 🧍 `db_schema_migration` and
-carries a cross-epic dependency on `E09-T01` for the schema version).
-`E10-T08` is **`blocked`** on `ADR-0007` (background execution architecture,
-`⏳ AWAITING HUMAN`) and takes `E10-T09`/`E10-T10` with it. **Backend/native
-only** — this epic ships no screen; see §Why there is no frontend task. ·
-**Started:** — · **Completed:** — · **Progress:** 0/10
+**Status:** **build-complete 2026-09-04 — all 10 tasks merged, cross-model
+reviewed, P1/P2=0 on every task. Ready for the end-of-epic bug sweep.**
+`ADR-0007` accepted (option 1, connectedDevice, boot-restart in scope)
+unblocked T08/T09/T10 earlier this session. **Backend/native only** — this
+epic ships no screen; see §Why there is no frontend task. ·
+**Started:** 2026-09-04 · **Completed (build):** 2026-09-04 ·
+**Progress:** 10/10
 
 ## Tasks
 
 | Task | Title | Layer | Size | MoSCoW | Status | depends_on |
 |---|---|---|---|---|---|---|
-| E10-T01 | Native notification boundary — Pigeon `NotificationApi`, channels, POST_NOTIFICATIONS | cross-cutting | M | must | todo | — |
-| E10-T02 | Notification preferences — Drift migration v16 + repository | backend | M | must | todo | E09-T01 |
-| E10-T03 | Notification policy + dispatcher; new-message notifications | backend | M | must | todo | T01, T02 |
-| E10-T04 | Incoming-call notifications — `CallSignaling` seam | backend | S | should | todo | T03 |
-| E10-T05 | Connection-request notifications — `PrekeyExchange` seam | backend | S | should | todo | T04 |
-| E10-T06 | Group-event notifications — `GroupMembershipService` seam | backend | S | should | todo | T05 |
-| E10-T07 | Storage-warning notifications — `StorageManager.latestPlan` observer | backend | S | should | todo | T06 |
-| E10-T08 | Android foreground service — retained engine, persistent notification | cross-cutting | M | must | **blocked** | T01 |
-| E10-T09 | Power-state signals — Doze, Battery Saver, screen lock, restriction | cross-cutting | S | should | todo | T08 |
-| E10-T10 | Adaptive background policy — one tick, cadence + discovery | backend | M | should | todo | T07, T09 |
+| E10-T01 | Native notification boundary — Pigeon `NotificationApi`, channels, POST_NOTIFICATIONS | cross-cutting | M | must | done | — |
+| E10-T02 | Notification preferences — Drift migration v16 + repository | backend | M | must | done | E09-T01 |
+| E10-T03 | Notification policy + dispatcher; new-message notifications | backend | M | must | done | T01, T02 |
+| E10-T04 | Incoming-call notifications — `CallSignaling` seam | backend | S | should | done | T03 |
+| E10-T05 | Connection-request notifications — `PrekeyExchange` seam | backend | S | should | done | T04 |
+| E10-T06 | Group-event notifications — `GroupMembershipService` seam | backend | S | should | done | T05 |
+| E10-T07 | Storage-warning notifications — `StorageManager.latestPlan` observer | backend | S | should | done | T06 |
+| E10-T08 | Android foreground service — retained engine, persistent notification | cross-cutting | M | must | done | T01 |
+| E10-T09 | Power-state signals — Doze, Battery Saver, screen lock, restriction | cross-cutting | S | should | done | T08 |
+| E10-T10 | Adaptive background policy — one tick, cadence + discovery | backend | M | should | done | T07, T09 |
 
 ## State machine
 
@@ -299,3 +298,23 @@ rather than presented as approved design.
   were ever broken. In-contract per the task's own §8, and not a defect —
   just a test that proves less than its name implies. Worth tightening
   if this file is next touched.
+- **2026-09-04 · `E10-T10`'s cross-model review · S3, non-blocking:
+  `EARS-PLAT-13`'s own §5 table contradicts itself, not the code that
+  implements it.** The reviewer confirmed `background_policy.dart:85`
+  short-circuits on `stoppedBySystem` BEFORE evaluating the power-state
+  signals, producing `discoveryAllowed: true` under Doze +
+  `stoppedBySystem` — which reads as a violation of EARS-PLAT-13's letter,
+  until checked against the task's own §5 table, which the builder
+  implemented exactly and deliberately tested for this combination
+  (`background_policy_test.dart:156-174`). **The table itself is wrong,
+  not the implementation.** Folds into the already-open `OQ-E10-T10-2`.
+  Owner: planner, at this epic's retro or sweep.
+- **2026-09-04 · same review · two S4s, non-blocking.** (1) The
+  discovery-gating seam (`_discoveryAllowed`/`startDiscovery()`/
+  `stopDiscovery()` wiring) has no test at the composition level — only
+  `BackgroundPolicy.plan`'s pure logic is unit-tested; nothing proves the
+  plan is actually *applied* correctly to the real discovery calls. (2)
+  `_discoveryAllowed` starts `null`, which means the very first
+  `_applyPlan` call issues an unbidden `startDiscovery()` before any real
+  power-state signal has been read — likely harmless (discovery starting
+  is the natural default) but worth a name if this file is next touched.
