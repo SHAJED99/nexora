@@ -25,11 +25,13 @@ import 'package:nexora/core/notifications/sources/call_notification_source.dart'
 import 'package:nexora/core/notifications/sources/connection_request_notification_source.dart';
 import 'package:nexora/core/notifications/sources/group_notification_source.dart';
 import 'package:nexora/core/notifications/sources/message_notification_source.dart';
+import 'package:nexora/core/notifications/sources/storage_notification_source.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/routing_engine/link_quality_feed.dart';
 import 'package:nexora/core/storage/retention_executor.dart';
-import 'package:nexora/core/storage/retention_plan.dart' show SmartModeThresholds;
+import 'package:nexora/core/storage/retention_plan.dart'
+    show RetentionPlan, SmartModeThresholds;
 import 'package:nexora/core/storage/smart_mode_policy.dart';
 import 'package:nexora/core/storage/storage_decision_log.dart';
 import 'package:nexora/core/storage/storage_inventory.dart';
@@ -255,6 +257,36 @@ class AppBinding extends Bindings {
         selfDeviceId: messagingStack.selfDeviceId,
       ),
     );
+    // E10-T07: the `storageWarning` category producer. Observes
+    // `storageManager.latestPlan` (the SAME instance registered above at
+    // line ~178, never a second `StorageManager`) -- no new E08 seam, per
+    // that source's own header. `isOverThreshold` is built here, not in the
+    // source file, from `RetentionPlan.groups.isNotEmpty` -- the exact same
+    // "would remove something" condition `DashboardController
+    // ._loadStorageUsage`'s own `warningActive: decisions.isNotEmpty`
+    // (`dashboard_controller.dart:418`) uses for its warning glyph, just
+    // read off the live plan (this task's required seam) instead of the
+    // durable decision log (that controller's own seam, for its own
+    // documented reason). No new threshold number is introduced anywhere in
+    // this composition.
+    final storageNotificationSource = StorageNotificationSource(
+      storageManager.latestPlan,
+      isOverThreshold: (RetentionPlan plan) => plan.groups.isNotEmpty,
+    );
+    notificationDispatcher.register(storageNotificationSource);
+    // Registered so a future app-lifecycle teardown call can resolve and
+    // dispose it (`storage_notification_source.dart`'s own `dispose()`
+    // contract, task file §5/§6: "Rx workers leak if not disposed"). No
+    // such teardown call site exists anywhere in this method today --
+    // matches the identical, already-documented standing gap just below
+    // for `notificationDispatcher.stop()`/`messagingStack.dispose()`
+    // (neither has a caller either); inventing one here would be
+    // app-lifecycle scaffolding this task's own `files:` fence does not
+    // authorise, and this exact gap is `E10-T10`'s scope, not this task's
+    // (task file §4: "does not add ... a second periodic timer, isolate or
+    // background service" -- the same "not this task's seam" discipline
+    // extends to teardown wiring that does not exist yet either).
+    Get.put(storageNotificationSource, permanent: true);
     // Fire-and-forget, guarded: a real device's native `NotificationApi`
     // channel is always registered, so this never hides a production
     // failure. A test harness with no platform-channel mock for it --
