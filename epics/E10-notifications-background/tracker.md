@@ -211,3 +211,21 @@ rather than presented as approved design.
   transition — matches the task's contract as written, not a defect, but
   worth a second look if this epic's sweep ever needs "notify again after
   re-becoming unknown" behaviour.
+- **2026-09-04 · `E10-T06`'s cross-model review · `GroupMembershipService
+  .dispose()` is a FOURTH unwired instance of the same pattern.** Same
+  shape and same conclusion as the three above (inert — nothing in
+  `messaging_stack.dart` calls any of the four). **This is now the
+  concrete trigger to act, not just note**: whichever task next touches
+  `messaging_stack.dart`'s composition/teardown should wire all four
+  (`CallSignaling`, `PrekeyExchange`, `GroupMembershipService`, and
+  whatever E10-T07 adds if it follows the same pattern) in one pass rather
+  than four separate fast-follows.
+- **2026-09-04 · same review · CF-1 (S4, non-blocking): `_emitGroupEventNotice`
+  is called unawaited inside `handleControlFrame`'s success branch**
+  (`group_membership_service.dart:621`). Two group events processed in
+  quick succession could have their notifications observed out of order
+  relative to the underlying state changes, since the emit is fire-and-
+  forget. Unobservable today (no copy differentiates event order in the
+  posted notification), but should be revisited once `notification_policy
+  .dart`'s copy table is extended (the same fast-follow `OQ-E10-T04-2`/
+  `OQ-E10-T06-1` already name).
