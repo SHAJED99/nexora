@@ -274,3 +274,28 @@ rather than presented as approved design.
   the same shape `E09-B07`'s retro lesson already named (an acceptance
   criterion the task's own contract can't actually satisfy). Flagged for
   the planner at E10's retro, not a builder defect.
+- **2026-09-04 · `E10-T09`'s cross-model review · S3, non-blocking: a
+  `PowerStateMonitor`/4-receiver leak on Flutter engine recreation.**
+  `MainActivity.cleanUpFlutterEngine` skips `detach()` while the
+  foreground service is running (by design, per `E10-T08`), so a later
+  `configureFlutterEngine` call constructs a SECOND `PowerStateMonitor`
+  and registers 4 more broadcast receivers without ever unregistering the
+  first set. Dart-side dedup neutralises the observable behaviour (no
+  duplicate events reach the app), so this is a resource leak only, not a
+  functional defect. `MainActivity.kt` is outside `E10-T09`'s own
+  `files:` fence — routed to whichever task next touches engine
+  lifecycle (`E10-T10` is the natural owner) or the end-of-epic sweep.
+- **2026-09-04 · same review · Android publishes no broadcast for
+  `isBackgroundRestricted`.** Unlike the other four power-state signals,
+  there is no `ACTION_*_CHANGED` intent for background-restriction status
+  — it can only be read via `powerState()`'s poll, never observed as a
+  push event. `E10-T10` (the adaptive background policy, the natural
+  consumer of these signals) must re-read `powerState()` on resume rather
+  than assuming the stream alone is authoritative for this one signal.
+- **2026-09-04 · same review · S4, non-blocking test-coverage note:
+  `test_EARS_PLAT_11_missing_signal_reads_false` asserts a value the test
+  itself mocks in**, so it cannot actually fail if the real Kotlin guard
+  it's meant to prove (an older-API-level signal defaulting to `false`)
+  were ever broken. In-contract per the task's own §8, and not a defect —
+  just a test that proves less than its name implies. Worth tightening
+  if this file is next touched.
