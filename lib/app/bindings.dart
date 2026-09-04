@@ -456,6 +456,23 @@ class BackgroundLifecycleObserver extends WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _serviceStateSubscription = _service.state.listen(_onServiceStateChanged);
     _powerStateSubscription = _service.powerStates.listen(_onPowerStateChanged);
+    // E10-B02, route (b): the `PowerState` stream is fed by broadcast
+    // receivers that fire on TRANSITIONS only. A cold start while the
+    // device is ALREADY in Doze/Battery Saver happened after that
+    // transition, so no event would ever arrive and `_powerState` would
+    // stay optimistically all-clear for as long as Doze lasts. Reuse the
+    // SAME one-shot `_service.powerState()` read the resume path already
+    // performs (`_refreshPowerStateOnResume`) rather than writing a second
+    // implementation of it. Deliberately NOT followed by an immediate,
+    // synchronous `_applyPlan()` call here: that would compute (and could
+    // apply) a plan against the still-stale `allClearPowerState()` default
+    // before this read resolves, which is exactly the "unbidden
+    // `startDiscovery()`" T10's own review already flagged as a risk
+    // (task file §6 / this bug's §Fix direction). `_applyPlan` only ever
+    // runs, for the very first time after a cold start, once this read's
+    // result reaches `_onPowerStateChanged` below -- so it always reflects
+    // a real reading, never the optimistic default.
+    unawaited(_refreshPowerStateOnResume());
   }
 
   /// Detaches the observer and cancels both subscriptions. Test-only in

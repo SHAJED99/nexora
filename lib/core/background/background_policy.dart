@@ -18,9 +18,20 @@
 //   Battery Saver on                              -> 300s / discovery NO
 //   Doze (deviceIdle)                             -> 300s / discovery NO
 //   background restricted                         -> 300s / discovery NO
-//   service stoppedBySystem                       -> foreground value
-//                                                     (nothing is running
-//                                                     anyway) / discovery yes
+//   service stoppedBySystem                       -> foreground value / NO
+//                                                     if Battery
+//                                                     Saver/Doze/restricted
+//                                                     also holds, else yes
+//                                                     (E10-B02: corrected --
+//                                                     `stoppedBySystem` means
+//                                                     the foreground service
+//                                                     died, NOT that the
+//                                                     process/tick stopped;
+//                                                     the Dart isolate and
+//                                                     its tick survive, so
+//                                                     discovery must still
+//                                                     honour the restricted
+//                                                     band)
 import 'package:flutter/widgets.dart' show AppLifecycleState;
 
 import 'generated/background_api.g.dart' show ServiceState;
@@ -77,22 +88,35 @@ class BackgroundPolicy {
     required ServiceState service,
     required AppLifecycleState lifecycle,
   }) {
-    // "service stoppedBySystem -> foreground value (nothing is running
-    // anyway) -> yes" (task file §5 table) -- checked first because it
-    // overrides every other condition: there is no service left to throttle,
-    // so proposing a restrictive interval here would only slow down the
-    // in-process foreground timer for no reason.
+    // Battery Saver / Doze / background-restricted -- the most restrictive
+    // band for DISCOVERY, evaluated up front so it can never be bypassed by
+    // the `stoppedBySystem` branch below (E10-B02, route (a)):
+    // `stoppedBySystem` means the *foreground service* died -- the Dart
+    // isolate, and the tick that fires inside it, are still alive (that is
+    // the only reason this observer can ever see the event at all:
+    // `ForegroundMeshService.onDestroy` -> `emitState` -> `eventsApi` ->
+    // `BackgroundLifecycleObserver._onServiceStateChanged`). The system is
+    // most likely to have killed the service BECAUSE Doze/Battery Saver/an
+    // OEM background restriction is active, so this is precisely the moment
+    // discovery must not turn the radio on.
+    final bool restricted =
+        power.powerSaveMode || power.deviceIdle || power.backgroundRestricted;
+
+    // "service stoppedBySystem -> foreground value" (task file §5 table) --
+    // checked next because it overrides the *interval* decided by every
+    // other condition: there is no foreground service left to throttle, so
+    // proposing a slower interval here would only slow down the in-process
+    // foreground timer for no reason. `discoveryAllowed` is NOT
+    // unconditional, though (E10-B02) -- it still honours the restricted
+    // band computed above.
     if (service == ServiceState.stoppedBySystem) {
-      return const BackgroundPlan(
+      return BackgroundPlan(
         tickInterval: foregroundInterval,
-        discoveryAllowed: true,
+        discoveryAllowed: !restricted,
       );
     }
 
-    // Battery Saver / Doze / background-restricted -- the most restrictive
-    // band, and it wins regardless of foreground/background or screen state
-    // (task file §5: "Most-restrictive condition wins when several hold").
-    if (power.powerSaveMode || power.deviceIdle || power.backgroundRestricted) {
+    if (restricted) {
       return const BackgroundPlan(
         tickInterval: restrictedInterval,
         discoveryAllowed: false,
