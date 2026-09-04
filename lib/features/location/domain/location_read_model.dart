@@ -233,48 +233,64 @@ class LocationReadModel {
   /// rather than papered over with a timer (`OQ-E09-T04-2`): the caller
   /// re-reads when it renders (using [LocationAvailable.staleAt] to
   /// schedule that rebuild), and [read] is always authoritative.
+  ///
+  /// Built on [Stream.multi] rather than a single shared
+  /// `StreamController.broadcast()`: a broadcast controller has exactly one
+  /// `onListen`/`onCancel` pair for the whole stream, so every prior attempt
+  /// at this method shared one mutable `subscriptions` list across ALL
+  /// listeners. That shape has two independent failure modes, both found in
+  /// PR #41 review (round 2, cross-model): (1) cancel-then-re-listen races
+  /// `onCancel`'s `subscriptions.clear()` against the new listener's
+  /// `onListen` appending to the same list — `ConcurrentModificationError`,
+  /// deterministic, plus the orphaned first listener's Drift subscriptions
+  /// never got cancelled; (2) a second listener joining a `broadcast()`
+  /// stream that has already fired its one-time `onListen` never gets a
+  /// fresh emit-on-listen at all, silently breaking this method's own "emits
+  /// immediately on listen" contract for every listener but the first.
+  /// `Stream.multi(..., isBroadcast: true)` runs its callback once PER
+  /// listener, each with its own local `subscriptions` list and its own
+  /// emit-on-listen call — independent state, so neither failure mode has
+  /// anything shared left to race or skip.
   Stream<LocationReading> watch(String peerDeviceId) {
-    late StreamController<LocationReading> controller;
-    final subscriptions = <StreamSubscription<void>>[];
+    return Stream<LocationReading>.multi((controller) {
+      final subscriptions = <StreamSubscription<void>>[];
 
-    Future<void> emitCurrent() async {
-      if (controller.isClosed) return;
-      controller.add(await read(peerDeviceId));
-    }
+      Future<void> emitCurrent() async {
+        if (controller.isClosed) return;
+        controller.add(await read(peerDeviceId));
+      }
 
-    controller = StreamController<LocationReading>.broadcast(
-      onListen: () {
-        // Emits the current reading immediately on listen (task file §5).
-        unawaited(emitCurrent());
+      // Emits the current reading immediately on listen (task file §5) --
+      // for THIS listener, independent of any other listener already
+      // attached to this stream.
+      unawaited(emitCurrent());
 
-        // Each underlying stream already emits-on-listen (the same
-        // established shape); `skip(1)` drops that redundant first event
-        // so only real subsequent changes trigger a recompute.
-        subscriptions
-          ..add(
-            _fixes.watchFix(peerDeviceId).skip(1).listen((_) {
-              unawaited(emitCurrent());
-            }),
-          )
-          ..add(
-            _settings.watchGlobalEnabled().skip(1).listen((_) {
-              unawaited(emitCurrent());
-            }),
-          )
-          ..add(
-            _settings.watchPeerEnabled(peerDeviceId).skip(1).listen((_) {
-              unawaited(emitCurrent());
-            }),
-          );
-      },
-      onCancel: () async {
+      // Each underlying stream already emits-on-listen (the same
+      // established shape); `skip(1)` drops that redundant first event so
+      // only real subsequent changes trigger a recompute.
+      subscriptions
+        ..add(
+          _fixes.watchFix(peerDeviceId).skip(1).listen((_) {
+            unawaited(emitCurrent());
+          }),
+        )
+        ..add(
+          _settings.watchGlobalEnabled().skip(1).listen((_) {
+            unawaited(emitCurrent());
+          }),
+        )
+        ..add(
+          _settings.watchPeerEnabled(peerDeviceId).skip(1).listen((_) {
+            unawaited(emitCurrent());
+          }),
+        );
+
+      controller.onCancel = () async {
         for (final subscription in subscriptions) {
           await subscription.cancel();
         }
         subscriptions.clear();
-      },
-    );
-
-    return controller.stream;
+      };
+    }, isBroadcast: true);
   }
 }

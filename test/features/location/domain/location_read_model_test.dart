@@ -293,4 +293,110 @@ void main() {
 
     await sub.cancel();
   });
+
+  test(
+      'test_EARS_LOC_15_watch_cancel_then_relisten_does_not_throw',
+      () async {
+    // Regression for PR #41 round-2 (Opus review, S2): a shared mutable
+    // subscription list across onListen/onCancel on one broadcast
+    // controller made this sequence throw ConcurrentModificationError and
+    // orphan the second listener's Drift subscriptions. Reproduced 3/3 by
+    // the reviewer; falsification: swap the fix back to a single
+    // `StreamController.broadcast()` with a shared `subscriptions` list and
+    // this test throws.
+    await allowPeer();
+    final model = buildModel();
+    // The SAME stream instance, reused across cancel/re-listen cycles --
+    // this is what a widget holding onto `watch(peer)` across rebuilds (or
+    // a GetX controller caching the stream field) actually does. Calling
+    // `model.watch(peer)` fresh each iteration would build a brand-new
+    // controller every time and never touch the shared-state bug at all.
+    final stream = model.watch(peer);
+
+    for (var i = 0; i < 3; i++) {
+      final events = <LocationReading>[];
+      final sub = stream.listen(events.add);
+      await Future<void>.delayed(Duration.zero);
+      expect(events, isNotEmpty);
+      await sub.cancel();
+    }
+  });
+
+  test(
+      'test_EARS_LOC_15_watch_second_independent_listener_gets_immediate_emit',
+      () async {
+    // Regression for PR #41 round-2 (Opus review, S3): a second listener on
+    // the old shared-broadcast-controller implementation never received an
+    // emit-on-listen at all (the reviewer's probe: subscriber A got 1
+    // event, subscriber B got []), contradicting this method's own §5
+    // contract that emit-on-listen applies to every listener.
+    await allowPeer();
+    final capturedAt = fixedNow.subtract(const Duration(minutes: 1));
+    await fixes.upsertFix(
+      peerDeviceId: peer,
+      latitude: 1.0,
+      longitude: 2.0,
+      capturedAtMs: capturedAt.millisecondsSinceEpoch,
+      receivedAtMs: fixedNow.millisecondsSinceEpoch,
+    );
+    final model = buildModel();
+    final stream = model.watch(peer);
+
+    final eventsA = <LocationReading>[];
+    final subA = stream.listen(eventsA.add);
+    await Future<void>.delayed(Duration.zero);
+
+    final eventsB = <LocationReading>[];
+    final subB = stream.listen(eventsB.add);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(eventsA, isNotEmpty);
+    expect(
+      eventsB,
+      isNotEmpty,
+      reason: 'a second, independent listener must also get an immediate '
+          'emit on listen, per this method\'s own doc contract',
+    );
+    expect(eventsB.first, isA<LocationAvailable>());
+
+    await subA.cancel();
+    await subB.cancel();
+  });
+
+  test(
+      'test_EARS_LOC_13_read_respects_injected_live_window_not_default',
+      () async {
+    // OQ-E09-T04-2 / task file §5: liveWindow is "injectable so tests pin
+    // the boundary" -- but every other test in this file passes the
+    // default `kLocationLiveWindow`, so a bug that hardcoded the constant
+    // inside `read()`/`watch()` instead of using `this.liveWindow` would
+    // leave the whole suite green. This test pins a non-default window
+    // (30s) and proves the boundary actually moves.
+    await allowPeer();
+    const customWindow = Duration(seconds: 30);
+    final capturedAt = fixedNow.subtract(const Duration(seconds: 45));
+    await fixes.upsertFix(
+      peerDeviceId: peer,
+      latitude: 1.0,
+      longitude: 2.0,
+      capturedAtMs: capturedAt.millisecondsSinceEpoch,
+      receivedAtMs: fixedNow.millisecondsSinceEpoch,
+    );
+
+    // 45s stale is within the 2-minute default -- would report `live` if
+    // the implementation ignored the injected window.
+    final defaultReading =
+        await buildModel().read(peer) as LocationAvailable;
+    expect(defaultReading.freshness, LocationFreshness.live);
+
+    // Same fix, 30s custom window: 45s old is now past the boundary.
+    final customReading =
+        await buildModel(liveWindow: customWindow).read(peer)
+            as LocationAvailable;
+    expect(customReading.freshness, LocationFreshness.lastKnown);
+    expect(
+      customReading.staleAt.millisecondsSinceEpoch,
+      capturedAt.add(customWindow).millisecondsSinceEpoch,
+    );
+  });
 }
