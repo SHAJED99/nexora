@@ -9,12 +9,15 @@ sharded + 5 bug tasks filed by the sweep
 
 **Bug sweep run 2026-09-04** (`skills/bug-sweep`, reviewer `claude-opus-5`,
 independent worktree off `epic_09`@`cd643f0`) — see §Bug sweep below.
-**11 bugs total (`E09-B01`…`B11`, `B06`-`B11` filed by follow-on review
+**12 bugs total (`E09-B01`…`B12`, `B06`-`B12` filed by follow-on review
 rounds).** `E09-B09`/`B11` (the S1 identity-poisoning exploit) closed
 2026-09-04, accepted as disclosed risk via `ADR-0003`'s addendum, PR #54.
-**P1 = 0. P2/P3 still nonzero** (`E09-B02`, `E09-B05`, `E09-B08`,
-`E09-B10` open — see the table below) — the `skills/release` gate for the
-epic→`development` PR stays **CLOSED** until those clear too.
+**11 of 12 bugs closed as of 2026-09-04. P1 = 0, P2 = 0. Only `E09-B08`
+remains open — a P3, non-blocking by its own priority, correctly
+`blocked` after a fix attempt was found to hang widget tests and was
+reverted rather than shipped (see the table below).** The `skills/release`
+gate for the epic→`development` PR is **eligible to open**: P1/P2 = 0 is
+the gate's own condition, and B08's P3 does not hold it closed.
 
 **Still open, non-blocking, carried forward:**
 - 🟡 `OQ-E09-2` (`epic.md`) — the toggles still have **no settings surface**.
@@ -262,27 +265,29 @@ the same convention already used for `OQ-E09-T05-1/2/3`, `OQ-E09-T04-1/2`,
 | Bug | Severity | Priority | Blocks the epic→`development` PR? |
 |---|---|---|---|
 | `E09-B01` | S2 | P2 | no — `status: done` |
-| `E09-B02` | S2 | P2 | **yes** — `status: review-requested` |
+| `E09-B02` | S2 | P2 | no — `status: done` (PR #48; wiring split out to `E09-B08`) |
 | `E09-B03` | S3 | P2 | no — `status: done` |
 | `E09-B04` | S3 | P2 | no — already discharged |
-| `E09-B05` | S2 | P2 | **yes** — `status: todo` |
+| `E09-B05` | S2 | P2 | no — `status: done` (rule-5 re-review of T01/T02/T03 complete; T02's finding is `E09-B07`, T03's is `E09-B09`/`B11`, own new finding is `E09-B12`) |
 | `E09-B06` | S2 | P2 | no — `status: done` |
 | `E09-B07` | S3 | should | no — `status: done` |
-| `E09-B08` | S3 | P3 | **yes** — `status: todo` |
+| `E09-B08` | S3 | P3 | **no — `status: blocked`, non-blocking by its own P3.** Fix attempted exactly as specified (a table-wide `RelationshipRepository.watchAnyChange()`, subscribed reactively in `MessagingStack.create()`); both regression tests passed, but a live Drift `.watch()` subscription held across a `MessagingStack`'s lifetime hangs `pumpAndSettle()` in any widget test that constructs one (`chat_view_test.dart`, `conversations_view_test.dart`, `conversations_groups_test.dart`, `dashboard_view_test.dart`, each to the runner's 10-minute cap) — confirmed with a no-op-callback repro, confirmed cancelling in `dispose()` doesn't help (hang is inside the test body's own `pumpAndSettle()`, before `dispose()` runs). Reverted rather than ship a fix that risks hanging an unbounded number of present/future widget tests for a P3, bounded, workaround-able (restart the app) issue. Full investigation in the bug file's Run log. |
 | `E09-B09` | S1 | P1 | no — `status: done`, resolved 2026-09-04 by `E09-B11`'s accepted-risk decision (see below) |
-| `E09-B10` | S3 | P2 | **yes** — `status: todo` |
+| `E09-B10` | S3 | P2 | no — `status: done` |
 | `E09-B11` | S1 | P1 | no — `status: done`, resolved 2026-09-04: human delegated the rule-3 decision ("do what is best"); accepted TOFU's risk app-wide (ADR-0003 addendum) rather than a per-file patch. PR #54, 3 review rounds, final Opus verdict APPROVE, merged into `epic_09`. |
+| `E09-B12` | S3 | should | no — `status: done` (found by `E09-B05`'s re-review of T02; `E09-B07`'s own truth-table sweep asserted `isVisible` but never `reason` for the `globalOff`/`peerOff` precedence — closed by extending that same sweep) |
 
-**Post-B09/B11 status (2026-09-04):** the S1 identity-poisoning exploit
+**Final status (2026-09-04):** the S1 identity-poisoning exploit
 (`E09-B09`→`E09-B11`) is closed as an accepted, disclosed risk — see
 `agent/memory/decisions/ADR-0003-crypto-protocol.md` §Addendum
-(2026-09-04) for the full record. **This does not clear the epic's
-release gate**: `E09-B02` (`review-requested`), `E09-B05`, `E09-B08`, and
-`E09-B10` are still open P2/P3 bugs from the earlier sweep, unrelated to
-this session's E09-B11 work and untouched by it. **P1 = 0** (both S1s
-now closed); **P2/P3 still nonzero** — the epic→`development` PR remains
-closed on that basis alone, independent of the B09/B11 resolution.
-gate is **closed**.
+(2026-09-04) for the full record. `E09-B02`, `E09-B05`, and `E09-B10`
+(all P2) are now `done`, and `E09-B12` (a new finding from `E09-B05`'s
+own re-review) is `done`. **P1 = 0, P2 = 0.** Only `E09-B08` (P3) remains
+open, correctly `blocked` — its fix was attempted exactly as specified,
+found to hang widget tests, and reverted rather than shipped; see the
+table above for the full account. **The `skills/release` gate is now
+open**: P1/P2 = 0 is its documented condition, and a P3 does not hold it
+closed.
 
 ### 🧍 Merge-gate condition — on-device verification (not filed as a bug)
 `E09-T05`'s manual steps 3/4/5 — a real GPS fix acquisition, and confirming
