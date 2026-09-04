@@ -224,6 +224,31 @@ class DeviceDirectoryService {
           PreKeyBundleCodec.deserialize(base64Decode(prekeyBundleRaw));
       final identityPublicKey =
           IdentityKey.fromBytes(base64Decode(identityPublicKeyRaw), 0);
+
+      // E11-B02: `identityPublicKey` and the identity key embedded inside
+      // `prekeyBundle` are written from the SAME bundle by `publish`, so an
+      // honest entry is always self-consistent. This node is cross-account
+      // readable AND writable by design (`ADR-0008` option 2), so a forged
+      // entry could otherwise assert two different identities to this
+      // file's two different future consumers (E07's TOFU check would read
+      // `identityPublicKey`; E06-T07's fallback would read `preKeyBundle`).
+      // Treat a mismatch exactly like a malformed entry -- log and return
+      // null. Constant-time comparison is not required: both values are
+      // public.
+      if (!_bytesEqual(
+        identityPublicKey.serialize(),
+        preKeyBundle.getIdentityKey().serialize(),
+      )) {
+        ObservabilityService.instance.logError(
+          'firebase.device_directory_lookup_identity_mismatch',
+          cause: StateError(
+            'directory/$deviceId: identityPublicKey field disagrees with '
+            'the identity key embedded in prekeyBundle',
+          ),
+        );
+        return null;
+      }
+
       final revokedAtRaw = raw['revokedAt'];
       final revokedAt = revokedAtRaw is int
           ? DateTime.fromMillisecondsSinceEpoch(revokedAtRaw)
@@ -253,4 +278,18 @@ class DeviceDirectoryService {
         await _firebaseDatabase.ref(FirebasePaths.directoryEntry(deviceId)).get();
     return snapshot.value;
   }
+}
+
+/// Byte-for-byte comparison used by [DeviceDirectoryService.lookupDevice]'s
+/// E11-B02 identity-binding check. Mirrors
+/// `lib/features/messaging/domain/message.dart`'s own `_listEquals` --
+/// both values compared here are public key material, so constant-time
+/// comparison is unnecessary.
+bool _bytesEqual(List<int> a, List<int> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }
