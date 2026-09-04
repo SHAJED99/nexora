@@ -359,11 +359,26 @@ void main() {
       // or subset. A stray extra table (or a missing one) fails this
       // assertion even though every individually-named `expect(...isTrue)`
       // style check in E07-T01's own test would have missed it.
+      //
+      // `device_revocations` is also present here because opening
+      // `AppDatabase` always upgrades to its *current* `schemaVersion`
+      // (E11-T04 bumped that to 15), so a raw v13 handle runs the `from <
+      // 14` step under test AND the later `from < 15` step in the same
+      // open -- not because this step itself creates that table (it does
+      // not; see `revocation_migration_test.dart` for that step's own
+      // exact-set assertion).
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
-        {'storage_item_stats', 'storage_policy_settings', 'storage_decisions'},
-        reason: 'the v13->v14 step must add exactly these three tables',
+        {
+          'storage_item_stats',
+          'storage_policy_settings',
+          'storage_decisions',
+          'device_revocations',
+        },
+        reason: 'the v13->v14 step must add exactly these three tables '
+            '(plus device_revocations from the later v14->v15 step that '
+            'also runs when opening at the current schemaVersion)',
       );
 
       // Same exact-set treatment for the two declared indexes.

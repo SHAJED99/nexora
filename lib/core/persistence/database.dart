@@ -15,6 +15,7 @@ import 'group_tables.dart';
 import 'message_tables.dart';
 import 'relationships_table.dart';
 import 'relay_tables.dart';
+import 'revocation_table.dart';
 import 'routing_tables.dart';
 import 'storage_tables.dart';
 import 'sync_tables.dart';
@@ -62,6 +63,7 @@ class DeviceIdentities extends Table {
   StorageItemStats,
   StoragePolicySettings,
   StorageDecisions,
+  DeviceRevocations,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -70,7 +72,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -373,6 +375,17 @@ class AppDatabase extends _$AppDatabase {
                     mode: InsertMode.insertOrIgnore,
                   );
             });
+          }
+          if (from < 15) {
+            // E11-T04: new `device_revocations` table -- additive only, no
+            // changes to any pre-existing table (task §5, docs/conventions.md
+            // "Schema migrations"). No index needed: the only local access
+            // pattern is a point lookup by `deviceId`, which the PK's own
+            // implicit index already serves (same reasoning as
+            // `sync_tables.dart`'s "no @TableIndex" comment). No backfill --
+            // a fresh device has no revocation history to seed from (task
+            // §3).
+            await m.createTable(deviceRevocations);
           }
         },
       );

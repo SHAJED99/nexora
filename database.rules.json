@@ -19,6 +19,18 @@
             "platform": {
               ".validate": "newData.isString() && newData.val().length <= 32"
             },
+            "revocation": {
+              ".validate": "newData.hasChildren(['revokedAt', 'revokedByDeviceId'])",
+              "revokedAt": {
+                ".validate": "newData.isNumber()"
+              },
+              "revokedByDeviceId": {
+                ".validate": "newData.isString() && newData.val().length <= 128"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
             "$other": {
               ".validate": false
             }

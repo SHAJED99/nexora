@@ -100,6 +100,33 @@ Set<String> _declaredFieldKeys(Map<String, dynamic> node) => node.keys
     .where((k) => !k.startsWith('.') && k != r'$other')
     .toSet();
 
+/// The literal (non-wildcard) child segment names of [parentPath] that are
+/// themselves documented as their own `live` schema row (e.g. `revocation`
+/// under `users/$uid/devices/$deviceId`, `E11-T04`) -- a whole separate
+/// documented sub-node, not one of [parentPath]'s own scalar fields. The
+/// generic per-node field-set check below must not mistake a child node's
+/// name for a missing/undocumented field of its parent.
+Set<String> _nestedLiveNodeNames(
+  List<_SchemaRow> allRows,
+  List<String> parentPath,
+) {
+  final names = <String>{};
+  for (final row in allRows) {
+    if (row.path.length != parentPath.length + 1) continue;
+    var isChildOfParent = true;
+    for (var i = 0; i < parentPath.length; i++) {
+      if (row.path[i] != parentPath[i]) {
+        isChildOfParent = false;
+        break;
+      }
+    }
+    if (!isChildOfParent) continue;
+    final lastSegment = row.path.last;
+    if (!lastSegment.startsWith(r'$')) names.add(lastSegment);
+  }
+  return names;
+}
+
 /// Recursively collects every `.read` / `.write` string (or bool) value
 /// anywhere under [node], as `"<jsonPath> => <value>"` pairs for reporting.
 void _collectReadWriteRules(
@@ -151,9 +178,15 @@ void main() {
         'allow-list, and unknown children are denied', () {
       for (final row in liveRows) {
         final node = _navigate(rules, row.path);
+        // A child key that is itself a separately documented `live` node
+        // (e.g. `revocation` under the `devices/$deviceId` row, E11-T04) is
+        // a whole sub-node, not one of this row's own scalar fields -- its
+        // own field set is checked when its own row is visited in this
+        // same loop.
+        final nestedNodeNames = _nestedLiveNodeNames(liveRows, row.path);
 
         expect(
-          _declaredFieldKeys(node),
+          _declaredFieldKeys(node).difference(nestedNodeNames),
           row.fields,
           reason: 'node at "${row.path.join('/')}" declares a different '
               'field set than docs/firebase-schema.md',
@@ -203,6 +236,43 @@ void main() {
             '(devices/sync_cursors siblings)',
       );
       expect((uidNode[r'$other'] as Map<String, dynamic>)['.validate'], isFalse);
+    });
+  });
+
+  group('test_EARS_FB_13_revocation_node_rules', () {
+    late Map<String, dynamic> rules;
+    late Map<String, dynamic> revocationNode;
+
+    setUpAll(() {
+      rules = jsonDecode(rulesFile.readAsStringSync()) as Map<String, dynamic>;
+      revocationNode = _navigate(
+        rules,
+        ['users', r'$uid', 'devices', r'$deviceId', 'revocation'],
+      );
+    });
+
+    test('carries only revokedAt and revokedByDeviceId', () {
+      expect(
+        _declaredFieldKeys(revocationNode),
+        {'revokedAt', 'revokedByDeviceId'},
+      );
+    });
+
+    test('rejects any other field via \$other.validate == false', () {
+      expect(revocationNode.containsKey(r'$other'), isTrue);
+      expect(
+        (revocationNode[r'$other'] as Map<String, dynamic>)['.validate'],
+        isFalse,
+      );
+    });
+
+    test('the parent devices/\$deviceId node names revocation explicitly '
+        '(not swallowed by its own \$other deny)', () {
+      final deviceNode = _navigate(
+        rules,
+        ['users', r'$uid', 'devices', r'$deviceId'],
+      );
+      expect(deviceNode.containsKey('revocation'), isTrue);
     });
   });
 
