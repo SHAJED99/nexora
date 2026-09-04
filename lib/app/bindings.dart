@@ -23,6 +23,7 @@ import 'package:nexora/core/notifications/notification_service.dart';
 import 'package:nexora/core/notifications/notification_settings_repository.dart';
 import 'package:nexora/core/notifications/sources/call_notification_source.dart';
 import 'package:nexora/core/notifications/sources/connection_request_notification_source.dart';
+import 'package:nexora/core/notifications/sources/group_notification_source.dart';
 import 'package:nexora/core/notifications/sources/message_notification_source.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
@@ -237,6 +238,21 @@ class AppBinding extends Bindings {
     notificationDispatcher.register(
       ConnectionRequestNotificationSource(
         messagingStack.prekeyExchange.connectionRequests,
+      ),
+    );
+    // E10-T06: the `groupEvent` category producer.
+    // `GroupMembershipService.groupEvents` is this task's own addition to
+    // an E07-owned file (`group_membership_service.dart`) -- observation
+    // only, emitted from the inbound control-frame path alone, see that
+    // file's own header. Like `ConnectionRequestNotificationSource` above
+    // (and unlike `CallNotificationSource`), a group event is never
+    // withdrawn, so no `sink` is passed -- every post goes through
+    // `NotificationDispatcher`/`NotificationPolicy` via `facts` alone (task
+    // file §5 signature).
+    notificationDispatcher.register(
+      GroupNotificationSource(
+        messagingStack.groupMembershipService.groupEvents,
+        selfDeviceId: messagingStack.selfDeviceId,
       ),
     );
     // Fire-and-forget, guarded: a real device's native `NotificationApi`

@@ -57,6 +57,31 @@
 // `CryptoService`/`PrekeyExchange`'s already-public API. Does NOT build any
 // UI, controller or route (task file §4).
 //
+// **E10-T06's observation seam (task file §3, EARS-NOTIFY-12/13).** [groupEvents]
+// emits ONLY from [handleControlFrame]'s already-existing success branch
+// (`result == null`, immediately after `_repository.applyEvent(frame)` has
+// durably committed) -- never from [_perform]/[createGroup] or any of their
+// callers. That is the whole mechanism behind "a user who renamed a group is
+// never told they renamed it": the emission point is structurally reachable
+// only for an INBOUND frame, so it cannot drift out of sync with that rule
+// the way a per-caller flag could. Key rotation ([_rotation]) is a side
+// effect of the SAME epoch bump, fired from the same success branch, but
+// through its own, entirely separate call -- it never re-enters
+// [handleControlFrame] and therefore never produces a second [GroupEventNotice]
+// for one applied frame (task file §6 risk).
+//
+// **`GroupEventKind` naming collision (disclosed deviation, §9).** The task
+// file's own §5 contract names the new enum `GroupEventKind` -- but that
+// name is already taken by `group_tables.dart`'s wire-level enum (`created`,
+// `renamed`, `memberAdded`, ...), imported unqualified into this very file
+// via `group_control.dart` and used throughout (`frame.kind`, `_kindFor`,
+// the switch below). Reusing the name here would be a same-file ambiguous
+// import, not merely a style clash -- `group_membership_service_test.dart`
+// already imports both `group_control.dart` and this file together, so it
+// would fail to compile. The notification-domain enum is therefore named
+// [GroupNotificationEventKind] instead; every other detail (the eight-value
+// closed set, field names) matches §5 exactly.
+//
 // `prefer_initializing_formals` is intentionally not applied to this file's
 // constructor, matching the same documented exclusion already used by
 // `relay_engine.dart`/`inbound_pipeline.dart`/`prekey_exchange.dart`: the
@@ -119,6 +144,43 @@ class GroupMembershipCounters {
   int groupUnauthenticated = 0;
 }
 
+/// The closed set of group-event notification kinds (E10-T06, task file §5)
+/// -- named [GroupNotificationEventKind], not `GroupEventKind`, to avoid the
+/// same-file ambiguous import documented in this file's header. Matched
+/// one-for-one to the operations [GroupMembershipService] already performs;
+/// no value here is inventable independently of that closed set.
+enum GroupNotificationEventKind {
+  addedToGroup,
+  removedFromGroup,
+  memberJoined,
+  memberLeft,
+  renamed,
+  adminChanged,
+  ownershipTransferred,
+  groupDeleted,
+}
+
+/// One inbound, already-applied group change (E10-T06, task file §3/§5).
+/// [groupName] is `null` only when the group row itself could not be read
+/// back after a successful apply (defensive -- every kind currently leaves
+/// the row readable, including `groupDeleted`, which only flips
+/// `isDeleted`, per `group_repository.dart`'s own `_mutateMembers`); a
+/// `null` here degrades to "Group" at the notification-copy layer, never a
+/// crash (task file §6 risk).
+class GroupEventNotice {
+  const GroupEventNotice({
+    required this.kind,
+    required this.groupId,
+    required this.groupName,
+    required this.actorDeviceId,
+  });
+
+  final GroupNotificationEventKind kind;
+  final String groupId;
+  final String? groupName;
+  final String actorDeviceId;
+}
+
 /// The six FR-GROUP-002 actions (plus `leave` and `createGroup`), each:
 /// permission check -> local transaction -> best-effort fan-out over
 /// pairwise sessions (task file §3). Exactly one instance per
@@ -145,6 +207,20 @@ class GroupMembershipService {
   final Duration _fanOutSessionTimeout;
 
   final GroupMembershipCounters counters = GroupMembershipCounters();
+
+  /// E10-T06's own observation seam (task file §3) — broadcast so a
+  /// notification producer registering after this device has already
+  /// applied inbound frames, or a second listener, never steals events from
+  /// the other. Closed by [dispose]. Mirrors `PrekeyExchange
+  /// ._connectionRequests` (E10-T05) and `CallSignaling`'s own controller
+  /// (E10-T04) exactly.
+  final StreamController<GroupEventNotice> _groupEvents =
+      StreamController<GroupEventNotice>.broadcast();
+
+  /// Broadcast stream of inbound, already-applied group changes (E10-T06,
+  /// task file §3) — emitted ONLY from [handleControlFrame]'s success
+  /// branch, never from [_perform]/[createGroup] (see this file's header).
+  Stream<GroupEventNotice> get groupEvents => _groupEvents.stream;
 
   int _packetIdCounter = 0;
   String _nextPacketId() =>
@@ -542,6 +618,17 @@ class GroupMembershipService {
 
     final result = await _repository.applyEvent(frame);
     if (result == null) {
+      // E10-T06: emitted here, and ONLY here — after `applyEvent` has
+      // already committed the change (task file §6 risk: "emitting before
+      // the change is persisted means a notification for a change a later
+      // failure rolls back"), and only on the INBOUND path (task file §2:
+      // a local actor's own change never reaches this method at all). One
+      // notice per successful `applyEvent` call, regardless of whether that
+      // same success also drives a key rotation below — rotation is a
+      // separate, non-notifying side effect of the same epoch bump (task
+      // file §2/§6), never a second reason to emit here.
+      _emitGroupEventNotice(frame);
+
       // E07-T05: this device just applied someone else's membership
       // frame -- it rotates its own outbound chain too. Every device
       // rotates on an epoch change; rotation is not the acting device's
@@ -574,5 +661,76 @@ class GroupMembershipService {
         // named counters.
         break;
     }
+  }
+
+  /// Builds and publishes one [GroupEventNotice] for [frame] on
+  /// [groupEvents] (E10-T06). Called ONLY from [handleControlFrame]'s
+  /// success branch, immediately after `_repository.applyEvent(frame)` has
+  /// returned `null` — the group row is therefore already durably updated,
+  /// so the [_repository.groupRow] read below sees the post-apply name (the
+  /// new name for `renamed`, the still-present name for `deleted`, since
+  /// `_mutateMembers` never clears it — task file §6 risk).
+  Future<void> _emitGroupEventNotice(GroupControlFrame frame) async {
+    if (_groupEvents.isClosed) return;
+    final groupRow = await _repository.groupRow(frame.groupId);
+    _groupEvents.add(
+      GroupEventNotice(
+        kind: _notificationKindFor(frame),
+        groupId: frame.groupId,
+        groupName: groupRow?.name,
+        actorDeviceId: frame.actorDeviceId,
+      ),
+    );
+  }
+
+  /// Maps a wire-level [GroupControlFrame] to the closed notification-kind
+  /// set (task file §5). `memberAdded`/`memberRemoved` split on whether
+  /// [_stack.selfDeviceId] is the subject — the same distinction
+  /// `group_repository.dart`'s own `_checkPermission` makes for
+  /// `memberRemoved` vs `leave` (this file's header) — so a change TO this
+  /// device reads "you were added/removed" and a change to a co-member
+  /// reads "a member joined/left". `adminGranted`/`adminRevoked` both
+  /// collapse to `adminChanged` (task file §5's copy table has one string,
+  /// "Admins changed", for both).
+  GroupNotificationEventKind _notificationKindFor(GroupControlFrame frame) {
+    switch (frame.kind) {
+      case GroupEventKind.created:
+        // Only ever reached via `_applyCreatedBootstrap` (task file §2) --
+        // this device's own first hearing of a group it was just invited
+        // into.
+        return GroupNotificationEventKind.addedToGroup;
+      case GroupEventKind.renamed:
+        return GroupNotificationEventKind.renamed;
+      case GroupEventKind.memberAdded:
+        return frame.subjectDeviceId == _stack.selfDeviceId
+            ? GroupNotificationEventKind.addedToGroup
+            : GroupNotificationEventKind.memberJoined;
+      case GroupEventKind.memberRemoved:
+        return frame.subjectDeviceId == _stack.selfDeviceId
+            ? GroupNotificationEventKind.removedFromGroup
+            : GroupNotificationEventKind.memberLeft;
+      case GroupEventKind.adminGranted:
+      case GroupEventKind.adminRevoked:
+        return GroupNotificationEventKind.adminChanged;
+      case GroupEventKind.ownershipTransferred:
+        return GroupNotificationEventKind.ownershipTransferred;
+      case GroupEventKind.deleted:
+        return GroupNotificationEventKind.groupDeleted;
+    }
+  }
+
+  /// Closes [_groupEvents] (E10-T06, task file §7: "controller closed in
+  /// the existing teardown"). `GroupMembershipService` had no dispose
+  /// method of its own before this task — mirrors `CallSignaling
+  /// .dispose()`/`PrekeyExchange.dispose()`'s identical "no
+  /// composition-root call site yet" gap (E10-T04/E10-T05, both files' own
+  /// doc comments, and this epic's tracker "Carried-forward observations"):
+  /// `MessagingStack.dispose()` never calls anything on
+  /// `groupMembershipService` today, and wiring that cross-file call site
+  /// is outside this task's own `files:` fence (`messaging_stack.dart` is
+  /// not listed), so it is not wired here — disclosed as a Deviation in
+  /// this task's own self-review, same disclosure shape as E10-T04/T05's.
+  Future<void> dispose() async {
+    await _groupEvents.close();
   }
 }
