@@ -8,6 +8,7 @@ import com.nexora.nexora.transport.TransportApiHost
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
+import io.flutter.plugin.common.BinaryMessenger
 
 /**
  * E04-T03a/T03b: wires the Pigeon transport host (ADR-0004) into the
@@ -33,8 +34,52 @@ import io.flutter.embedding.engine.FlutterEngineCache
  * (`TransportApiHost.send` in particular) — the whole point of ADR-0007's
  * chosen option is that nothing about the messaging path changes between
  * foreground and background.
+ *
+ * E10-B04 fix: because `cleanUpFlutterEngine` deliberately skips `detach()`
+ * while the service is running (the paragraph above), a later
+ * `configureFlutterEngine` call that reattaches onto that same cached
+ * engine cannot rely on this Activity instance's own fields to know a
+ * previous host set is still live — the previous instance that owned them
+ * was already destroyed. [attachedHosts] survives across `MainActivity`
+ * instances for exactly that reason: it lets `configureFlutterEngine`
+ * find and retire whatever host set is still attached to the engine
+ * being reused, via the existing `detach()` methods, before constructing a
+ * new one. Without this, every close/reopen cycle while the service runs
+ * leaked a `PowerStateMonitor` + 4 broadcast receivers (instance-scoped
+ * `registered` guard, useless across instances) and the destroyed
+ * Activity itself (retained via `TransportApiHost`/`NotificationApiHost`'s
+ * strong `Activity` references).
  */
 class MainActivity : FlutterActivity() {
+  /**
+   * One Pigeon host of each kind, attached together and detached together.
+   * Captures its own `BinaryMessenger` so a later retirement always detaches
+   * against the messenger it was actually attached to.
+   */
+  private class HostSet(
+      val messenger: BinaryMessenger,
+      val transportApiHost: TransportApiHost,
+      val notificationApiHost: NotificationApiHost,
+      val backgroundApiHost: BackgroundApiHost,
+  ) {
+    fun detach() {
+      transportApiHost.detach(messenger)
+      notificationApiHost.detach(messenger)
+      backgroundApiHost.detach(messenger)
+    }
+  }
+
+  companion object {
+    /**
+     * The host set currently attached to the cached engine, if any. Lives on
+     * the companion object (not an Activity field) so it survives the
+     * Activity destruction that `cleanUpFlutterEngine`'s `isRunning` guard
+     * deliberately leaves the engine attached through — see this class's
+     * header (E10-B04).
+     */
+    private var attachedHosts: HostSet? = null
+  }
+
   private var transportApiHost: TransportApiHost? = null
   private var notificationApiHost: NotificationApiHost? = null
   private var backgroundApiHost: BackgroundApiHost? = null
@@ -56,6 +101,20 @@ class MainActivity : FlutterActivity() {
 
     val messenger = flutterEngine.dartExecutor.binaryMessenger
 
+    // E10-B04: retire whatever host set is still attached (from a previous,
+    // already-destroyed Activity instance that reused this same cached
+    // engine) before constructing a new one. cleanUpFlutterEngine skips
+    // detach() while the service is running, precisely so this engine and
+    // its hosts keep driving MessagingCoordinator's tick -- which means this
+    // is the only place a stale set can ever be retired. Detaching first and
+    // reattaching immediately after, both synchronously on this thread,
+    // means ForegroundMeshService.eventsApi (set inside BackgroundApiHost
+    // .attach/.detach) is never visibly null to any other thread: no
+    // suspension point separates the detach() below from the attach() a few
+    // lines later.
+    attachedHosts?.detach()
+    attachedHosts = null
+
     val host = TransportApiHost(messenger, this)
     host.attach(messenger)
     transportApiHost = host
@@ -67,6 +126,8 @@ class MainActivity : FlutterActivity() {
     val backgroundHost = BackgroundApiHost(messenger, applicationContext)
     backgroundHost.attach(messenger)
     backgroundApiHost = backgroundHost
+
+    attachedHosts = HostSet(messenger, host, notificationHost, backgroundHost)
 
     // Cache under a known id (task §3) so ForegroundMeshService can find
     // this same engine, and so a later provideFlutterEngine call above
@@ -98,6 +159,11 @@ class MainActivity : FlutterActivity() {
     notificationApiHost = null
     backgroundApiHost?.detach(flutterEngine.dartExecutor.binaryMessenger)
     backgroundApiHost = null
+    // E10-B04: this Activity's own set (if it is still the one recorded as
+    // attached) is now fully detached above -- clear the companion-object
+    // record so a later configureFlutterEngine on a freshly created engine
+    // never tries to detach an already-detached set.
+    attachedHosts = null
     FlutterEngineCache.getInstance().remove(ForegroundMeshService.ENGINE_ID)
     super.cleanUpFlutterEngine(flutterEngine)
   }
