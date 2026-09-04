@@ -141,8 +141,11 @@ final class LocationShareOutcomeBlockedByPolicy extends LocationShareOutcome {
   String toString() => 'LocationShareOutcome.blockedByPolicy($reason)';
 }
 
-/// The gate held, but [LocationSource.currentFix] returned `null` (task
-/// file §5 step 4).
+/// The gate held, but either [LocationSource.currentFix] returned `null`
+/// (task file §5 step 4), or it returned a fix this device cannot encode —
+/// an out-of-range or non-finite coordinate (`E09-B10`). Both collapse to
+/// the same outcome: no usable position, nothing sent, no peer/network
+/// cause involved (contrast [LocationShareOutcomeTransportFailed]).
 final class LocationShareOutcomeNoFix extends LocationShareOutcome {
   const LocationShareOutcomeNoFix();
 
@@ -243,14 +246,28 @@ class LocationShareService {
       return const LocationShareOutcome.noFix();
     }
 
-    final plaintext = LocationShareFrame(
-      latitudeE7: (fix.latitude * 1e7).round(),
-      longitudeE7: (fix.longitude * 1e7).round(),
-      accuracyMmm: fix.accuracyM == null
-          ? null
-          : (fix.accuracyM! * 1000).round(),
-      capturedAtMs: fix.capturedAtMs,
-    ).serialize();
+    // E09-B10: a fix this device cannot even encode (out-of-range or
+    // non-finite lat/lng -- `.round()` throws `UnsupportedError` on NaN/
+    // infinite, `serialize()` throws `AppFailure` on an out-of-range
+    // coordinate) is treated as `noFix`, not `transportFailed` -- nothing
+    // was sent, and nothing about the network or peer session was even
+    // attempted yet, so `transportFailed` (a send-path failure) would
+    // misattribute the cause. Kept in its own try, separate from the
+    // send-path try below, precisely so this distinction survives rather
+    // than collapsing into that try's broad `catch (_)`.
+    final Uint8List plaintext;
+    try {
+      plaintext = LocationShareFrame(
+        latitudeE7: (fix.latitude * 1e7).round(),
+        longitudeE7: (fix.longitude * 1e7).round(),
+        accuracyMmm: fix.accuracyM == null
+            ? null
+            : (fix.accuracyM! * 1000).round(),
+        capturedAtMs: fix.capturedAtMs,
+      ).serialize();
+    } catch (_) {
+      return const LocationShareOutcome.noFix();
+    }
 
     try {
       await _stack.prekeyExchange.ensureSession(peerDeviceId);

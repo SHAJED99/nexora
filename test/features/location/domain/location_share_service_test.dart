@@ -194,6 +194,55 @@ void main() {
       expect(outcome, const LocationShareOutcomeNoFix());
       expect(fake.callCount, 1);
     });
+
+    test(
+      'test_share_returns_rather_than_throws_on_unencodable_fix',
+      () async {
+        // E09-B10 reviewer repro, verbatim: an out-of-range latitude (91.0
+        // degrees -- there is no such latitude) makes `LocationShareFrame
+        // .serialize()`'s `_requireInRange` throw `AppFailure`. Pre-fix,
+        // that throw happened above `share()`'s try block and crossed
+        // `share()`'s own boundary uncaught, breaking task file §5's
+        // "returns, never throws" contract.
+        final stack = await newStack('device-a', nextSuffix());
+        addTearDown(stack.dispose);
+        await allowVisibility(stack, 'device-b');
+
+        final fake = _FakeLocationSource(
+          const LocationFix(latitude: 91.0, longitude: 0, capturedAtMs: 1),
+        );
+        final service = buildService(stack, locationSource: fake);
+
+        final outcome = await service.share('device-b');
+
+        expect(outcome, const LocationShareOutcomeNoFix());
+      },
+    );
+
+    test(
+      'test_share_returns_rather_than_throws_on_non_finite_fix',
+      () async {
+        // Companion case: `.round()` on a non-finite double throws
+        // `UnsupportedError`, not `AppFailure` -- a different exception
+        // type, same "must not escape share()" contract.
+        final stack = await newStack('device-a', nextSuffix());
+        addTearDown(stack.dispose);
+        await allowVisibility(stack, 'device-b');
+
+        final fake = _FakeLocationSource(
+          const LocationFix(
+            latitude: double.nan,
+            longitude: 0,
+            capturedAtMs: 1,
+          ),
+        );
+        final service = buildService(stack, locationSource: fake);
+
+        final outcome = await service.share('device-b');
+
+        expect(outcome, const LocationShareOutcomeNoFix());
+      },
+    );
   });
 
   group('full round trip (EARS-LOC-8)', () {
