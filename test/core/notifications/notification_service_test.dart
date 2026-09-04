@@ -148,6 +148,73 @@ void main() {
   });
 
   test(
+    'test_EARS_PLAT_5_ensureReady_returns_false_not_throws_when_the_host_'
+    'channel_is_unavailable',
+    () async {
+      // E10-B08: with NO mock handler registered for ensureChannels, the
+      // real Pigeon codec throws a PlatformException/MissingPluginException
+      // rather than returning -- confirmed reachable in production the
+      // instant this host isn't attached yet. ensureReady()'s own doc
+      // comment promises Future<bool>, never a throw; before this fix it
+      // propagated the exception uncaught.
+      const String suffix = 'nohostchannel';
+      final NotificationService service = NotificationService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: suffix,
+      );
+      addTearDown(service.dispose);
+
+      final bool result = await service.ensureReady();
+
+      expect(result, isFalse);
+    },
+  );
+
+  test(
+    'test_EARS_PLAT_5_ensureReady_returns_false_rather_than_hanging_when_'
+    'the_permission_result_never_arrives',
+    () async {
+      // E10-B08: hasPermission() reports false (not yet granted) and
+      // requestPermission() completes normally, but the OS never delivers
+      // onPermissionResult -- reachable in production when the host
+      // Activity is destroyed between the request and the callback
+      // (NotificationApiHost.requestPermission against a destroyed
+      // Activity while ForegroundMeshService keeps the engine alive, the
+      // same shape E10-B05 already found on the neighboring
+      // service-notification path). Before this fix, permissionResults
+      // .first had no bound and hung forever.
+      const String suffix = 'neverresolves';
+      final NotificationService service = NotificationService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: suffix,
+        readyTimeout: const Duration(milliseconds: 50),
+      );
+      addTearDown(service.dispose);
+
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.NotificationApi.ensureChannels.$suffix',
+        (ByteData? message) async =>
+            NotificationApi.pigeonChannelCodec.encodeMessage(<Object?>[null]),
+      );
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.NotificationApi.hasPermission.$suffix',
+        (ByteData? message) async =>
+            NotificationApi.pigeonChannelCodec.encodeMessage(<Object?>[false]),
+      );
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.NotificationApi.requestPermission.$suffix',
+        (ByteData? message) async =>
+            NotificationApi.pigeonChannelCodec.encodeMessage(<Object?>[null]),
+      );
+      // Deliberately no onPermissionResult event ever sent.
+
+      final bool result = await service.ensureReady();
+
+      expect(result, isFalse);
+    },
+  );
+
+  test(
     'test_notification_service_permission_result_stream_emits_native_event',
     () async {
       // Proves the events half of the boundary: a native
