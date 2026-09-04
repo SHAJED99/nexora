@@ -141,8 +141,11 @@ final class LocationShareOutcomeBlockedByPolicy extends LocationShareOutcome {
   String toString() => 'LocationShareOutcome.blockedByPolicy($reason)';
 }
 
-/// The gate held, but [LocationSource.currentFix] returned `null` (task
-/// file §5 step 4).
+/// The gate held, but either [LocationSource.currentFix] returned `null`
+/// (task file §5 step 4), or it returned a fix this device cannot encode —
+/// an out-of-range or non-finite coordinate (`E09-B10`). Both collapse to
+/// the same outcome: no usable position, nothing sent, no peer/network
+/// cause involved (contrast [LocationShareOutcomeTransportFailed]).
 final class LocationShareOutcomeNoFix extends LocationShareOutcome {
   const LocationShareOutcomeNoFix();
 
