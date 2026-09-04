@@ -40,10 +40,13 @@ void main() {
     );
     addTearDown(service.dispose);
 
+    bool startServiceCalled = false;
     messenger.setMockMessageHandler(
       'dev.flutter.pigeon.nexora.BackgroundApi.startService.$suffix',
-      (ByteData? message) async =>
-          BackgroundApi.pigeonChannelCodec.encodeMessage(<Object?>[true]),
+      (ByteData? message) async {
+        startServiceCalled = true;
+        return BackgroundApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+      },
     );
 
     final Future<ServiceState> runningFuture = service.state.first;
@@ -59,6 +62,7 @@ void main() {
       (ByteData? _) {},
     );
 
+    expect(startServiceCalled, isTrue);
     expect(started, isTrue);
     expect(await runningFuture, ServiceState.running);
   });
