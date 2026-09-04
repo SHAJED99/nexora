@@ -577,17 +577,21 @@ void main() {
     });
 
     test(
-      'test_EARS_LOC_12_prekey_message_with_forged_source_dropped',
+      'test_EARS_LOC_12_prekey_message_with_forged_source_accepted_as_TOFU_risk',
       () async {
-        // Reviewer repro, verbatim (bug file E09-B09 "Repro"). Bob has a
-        // `trusted` relationship + full visibility for alice, but has NEVER
-        // exchanged a Signal session with her -- `getIdentity` for alice's
-        // address is unset on bob's store. Mallory (a stranger to bob)
-        // forges a `PreKeySignalMessage` under her OWN identity, then wraps
-        // it in a frame claiming `source: 'alice'`. Trust-on-first-use
-        // (`isTrustedIdentity`, `drift_signal_store.dart:144-148`) would let
-        // `SessionBuilder.process` accept it and silently attribute the
-        // result to alice's identity -- E09-B09's exact exploit.
+        // E09-B11 (ADR-0003 addendum, 2026-09-04): this test used to assert
+        // E09-B09's gate dropped this forgery and left alice's identity
+        // slot untouched. That gate is gone -- proven not to close the
+        // exploit (four sibling decrypt call sites share the same
+        // unguarded identity store) and shown to regress legitimate
+        // first-time location sharing between already-trusted peers. The
+        // human accepted TOFU's risk app-wide instead of patching this one
+        // call site. This test now documents that accepted outcome instead
+        // of a prevention that never actually worked: bob's session with
+        // "alice" gets silently established using mallory's identity key,
+        // and the forged fix IS stored. This is intentional, tracked risk,
+        // not a regression -- do not "fix" this test back without revisiting
+        // the ADR-0003 addendum decision first.
         final bob = await newStack('bob', nextSuffix());
         final mallory = await newStack('mallory', nextSuffix());
         addTearDown(bob.dispose);
@@ -637,19 +641,26 @@ void main() {
 
         await bob.locationShareService.handleWireFrame(wireFrame);
 
-        // Nothing was stored under alice's name...
-        expect(
-          await LocationFixRepository(db: bob.db).readFix('alice'),
-          isNull,
+        // The forged fix IS stored under alice's name -- TOFU accepted the
+        // ciphertext as a legitimate first contact from "alice".
+        final storedFix = await LocationFixRepository(
+          db: bob.db,
+        ).readFix('alice');
+        expect(storedFix, isNotNull);
+        expect(storedFix!.latitude, closeTo(51.1111111, 1e-6));
+
+        // ...and alice's identity slot IS now poisoned with mallory's key --
+        // the exact accepted risk. Any genuine future contact from the real
+        // alice will decrypt under mallory's identity, not her own, until
+        // something out-of-band (not built for v1) catches the mismatch.
+        final poisonedIdentity = await bob.signalStore.getIdentity(
+          SignalProtocolAddress('alice', 1),
         );
-        // ...and alice's identity was never poisoned with mallory's key --
-        // a genuine future session with the real alice must still be
-        // possible (bug file "Second-order damage").
-        expect(
-          await bob.signalStore
-              .getIdentity(SignalProtocolAddress('alice', 1)),
-          isNull,
-        );
+        final malloryIdentity = (await mallory.signalStore
+                .getIdentityKeyPair())
+            .getPublicKey();
+        expect(poisonedIdentity, isNotNull);
+        expect(poisonedIdentity!.serialize(), malloryIdentity.serialize());
       },
     );
 

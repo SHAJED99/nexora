@@ -82,3 +82,52 @@ rotation-on-membership-change requirement.**
 - Multi-device key distribution (FR-MSG-005) and account recovery's
   "unrecoverable if all keys lost" property (FR-RECOVER-002) are designed
   against this protocol family.
+
+## Addendum (2026-09-04) — first-contact trust model: TOFU accepted app-wide
+
+**Context.** `E09-B11` (escalated from `E09-B09`'s round-2 review) found that
+`DriftSignalProtocolStore.isTrustedIdentity`'s unconditional trust-on-first-use
+(TOFU) — implicit in choosing Signal Protocol, never separately decided — lets
+an attacker plant a forged identity on any peer's first contact via any of
+four decrypt call sites (messages, calls, group membership, group messages),
+then walk that poisoned identity through anything gated only on "an identity
+record exists." `E09-B09`'s location-specific `getIdentity != null` gate does
+not close this (it only costs the attacker one extra frame) and additionally
+breaks legitimate first-time location sharing between two already-trusted
+peers with no prior Signal session.
+
+**Decision.** ✅ **Accept TOFU's risk profile app-wide, as-is — the same
+posture the reference Signal app itself ships with by default.** No
+authenticated first-contact mechanism (safety-number comparison, QR-code
+verification, or treating `E11`'s device directory as an authoritative
+identity source) is built for v1.
+- `E09-B09`'s location-specific gate is reverted — it doesn't close anything
+  it was meant to close, and does regress the legitimate flow described
+  above.
+- The risk is documented, not silently accepted: any peer's *first* contact
+  with another peer, on any feature, can have its identity key silently
+  substituted by an on-path or co-present attacker who wins the race to send
+  first. Subsequent messages on that session are protected by the Double
+  Ratchet as designed; the exposure is strictly first-contact.
+- Real authenticated first-contact (option (a) in `E09-B11`) is a legitimate
+  future improvement — out-of-band verification UX, or leaning on `E11`'s
+  device directory (`ADR-0008`) as an authoritative identity source — but is
+  its own scoped epic, not a blocker for this one. Track as a follow-up, not
+  an open question against a shipped feature.
+
+**Rationale.** Building real first-contact authentication is a UX project in
+its own right (a verification flow every pair of users would need to
+complete), and BRD does not mandate it. Shipping with a documented, industry-
+precedented risk (this is TOFU's known and accepted shape everywhere it is
+used) is preferable to blocking the epic on an unscoped redesign, or shipping
+a per-feature patch that provably does not close the hole it targets.
+
+**Consequences.**
+- `E09-B09`'s fix is reverted in `lib/core/location/location_share_service.dart`.
+- No code change to `DriftSignalProtocolStore.isTrustedIdentity` or any of the
+  four sibling decrypt call sites `E09-B11` named.
+- `E09-B11` and `E09-B09` are both closed by this addendum, not by a code fix
+  that closes the exploit — the exploit is accepted, not eliminated.
+- If a future epic builds authenticated first-contact, this addendum is
+  superseded by a fresh ADR-0003 addendum (or a new ADR) at that time, not by
+  editing this entry after the fact.
