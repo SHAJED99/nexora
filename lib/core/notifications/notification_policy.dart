@@ -101,21 +101,61 @@ class NotificationPolicy {
     );
   }
 
-  /// Copy per task file §5's table. Only `message` is implemented by this
-  /// task — `full` is already folded into `senderOnly` by [resolve] before
-  /// this is reached, so this method only ever sees `hidden` or
-  /// `senderOnly`. Every other category is a future task's own class
-  /// (T04-T07, none of which is wired to this policy by this task, and none
-  /// of which has approved copy — `OQ-E10-1`); an unrecognised category
-  /// degrades to the same content-free shape rather than throwing or
-  /// inventing a class-specific string this task does not own.
+  /// Copy per each owning task's own §5, verbatim — **provisional**, exactly
+  /// as ADR-0007 §S4 and `NotificationChannels.kt` already mark theirs:
+  /// `OQ-E10-1` (no design-approved copy anywhere in this epic) is still
+  /// open. `full` is already folded into `senderOnly` by [resolve] before
+  /// this is reached — the [assert] below is the one place that invariant
+  /// is enforced, so a caller that skips the downgrade fails loudly here
+  /// instead of silently reaching a decrypt-adjacent shape
+  /// (`E06-T09.md:64-68`, `OQ-E10-2`). The four categories E10 does not ship
+  /// a source for (`voiceMessage`, `ptt`, `trustRequest`, `securityEvent` —
+  /// `OQ-E10-3`/`OQ-E10-6`/`OQ-E10-7`) keep falling through to the
+  /// content-free `default:` rather than inventing copy this task does not
+  /// own.
   _Copy _copyFor(NotificationFacts facts, NotificationPrivacyLevel level) {
+    assert(
+      level != NotificationPrivacyLevel.full,
+      '_copyFor must never see NotificationPrivacyLevel.full — resolve() is '
+      'required to downgrade it to senderOnly first (E10-B03 defect #2).',
+    );
+    final bool hidden = level == NotificationPrivacyLevel.hidden;
     switch (facts.category) {
       case NotificationCategory.message:
-        if (level == NotificationPrivacyLevel.hidden) {
+        if (hidden) {
           return const _Copy('NEXORA', 'New message');
         }
         return _Copy(facts.peerDisplayName ?? 'NEXORA', 'New message');
+      case NotificationCategory.incomingCall:
+        // E10-T04.md:108. Title never carries a peer name; only the body
+        // degrades under `hidden`.
+        if (hidden) {
+          return const _Copy('Incoming call', 'Someone is calling');
+        }
+        return _Copy(
+          'Incoming call',
+          facts.peerDisplayName ?? 'Unknown device',
+        );
+      case NotificationCategory.connectionRequest:
+        // E10-T05.md:105. An unknown peer has no display name by
+        // definition, so this class reads the same at every privacy level.
+        return const _Copy(
+          'Connection request',
+          'An unknown device wants to connect',
+        );
+      case NotificationCategory.groupEvent:
+        // E10-T06.md:108's `hidden` shape. `NotificationFacts` carries
+        // neither a group name nor `GroupEventNotice.kind` (E10-T06.md:209),
+        // so only the generic string is renderable, at every privacy level
+        // — this task does not add a field to chase the per-kind copy.
+        return const _Copy('NEXORA', 'Group activity');
+      case NotificationCategory.storageWarning:
+        // E10-T07.md:107 — no personal content at any privacy level, so
+        // this class also reads the same under `hidden` and `senderOnly`.
+        return const _Copy(
+          'Storage almost full',
+          'NEXORA is running low on local storage',
+        );
       default:
         return const _Copy('NEXORA', 'Notification');
     }
