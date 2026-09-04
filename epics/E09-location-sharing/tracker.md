@@ -315,3 +315,21 @@ done.
   pre-release security sweep, whichever comes first.** Do not let this
   drift unread the way `E09-T04`'s false E08-ownership claim did
   (`E09-B02`).
+- **2026-09-04 · `E09-B07`'s fix review (opus) · a bug's own §Regression
+  test / §Fix direction asserted an acceptance criterion that is
+  mathematically unfalsifiable, and nobody noticed until the fix was
+  reviewed.** `E09-B07` demanded a test proving `LocationVisibilityPolicy`
+  "delegates, not re-derives" `ConflictResolver.resolveLocationSharing`,
+  with the acceptance shape "inlining `globalEnabled && peerEnabled` must
+  fail." But `resolveLocationSharing(a, b)` is literally defined as
+  `a && b` — delegating and inlining are the same total function on
+  `bool × bool`, indistinguishable by any output-comparison test, full
+  stop. The fix delivered everything actually testable (a real
+  divergence-mutant sweep proving the guard isn't vacuous) but could not
+  and cannot deliver the literal claim as written. **Retro candidate: when
+  a bug/task's acceptance criterion names a specific code substitution as
+  "must fail," check whether that substitution is provably
+  output-equivalent to the correct code before finalizing the criterion —
+  not just plausible-sounding.** No action needed on `E09-B07` itself
+  (closed correctly, reviewer's own judgment call); this is a
+  process-authoring lesson, not a code defect.
