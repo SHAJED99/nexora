@@ -205,10 +205,11 @@ class SyncCursorService {
   /// as `FirebaseMetadataService.registerDevice`.
   ///
   /// EARS-FB-2 (E11-T01): the payload is checked against
-  /// [FirebaseBoundary.assertAllowedFields] *before* the `try` below, not
-  /// inside it -- a boundary violation is a programming error and must
-  /// propagate, not get caught and logged as "just another Firebase error"
-  /// (task §6 Risks, same reasoning as `FirebaseMetadataService.registerDevice`).
+  /// [FirebaseBoundary.assertAllowedFields] *before* the `try` inside
+  /// [guardedWriteCursorData] below -- a boundary violation is a
+  /// programming error and must propagate, not get caught and logged as
+  /// "just another Firebase error" (task §6 Risks, same reasoning as
+  /// `FirebaseMetadataService.registerDevice`).
   Future<void> writeCursorToFirebase(String uid, SyncCursor cursor) async {
     final data = {
       'localDeviceId': cursor.localDeviceId,

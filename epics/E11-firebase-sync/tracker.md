@@ -9,9 +9,10 @@ rules gap), `E11-B06` (S2, filed, priority left `TBD`).** **P1/P2 = 0 for
 every priority-stamped bug; `E11-B06` (S2, severity only — no human
 priority stamp yet) is the one open item before the epic→`development`
 gate can honestly be called clear.** `E11-B01` reached a similar
-"unreachable without a real caller" shape, but only after the human's own
-`bug_priorities` pass stamped it P3 — `E11-B06` has not yet been through
-that gate, so its eventual priority is the human's call, not assumed here.
+"unreachable without a real caller" shape, but only after the
+delegated-authority `bug_priorities` pass stamped it P3 — `E11-B06` has
+not yet been through that gate, so its eventual priority is the human's
+call, not assumed here.
 · **Started:** 2026-09-04 · **Completed:** 2026-09-04 ·
 **Progress:** 6/6 tasks done
 
@@ -264,14 +265,17 @@ is BLOCKED on that one bug alone.**
   on `E11-B06`** — not assumed clear ahead of it, unlike the tracker's
   earlier draft of this entry.
 - 2026-09-04 Round 2 (Opus re-review of PR #78): found `E11-B04`'s
-  `SyncCursorService` fix had silently inverted the exact property it was
-  meant to protect -- moving the guard call outside the `try` also moved
-  the WRITE call's exception handling outside it, since both were bundled
-  in one non-`try`-wrapped seam. A genuine write-layer failure (thrown
-  synchronously, as this repo's own `_ThrowingWriteSyncCursorService` test
-  fixture does) would have escaped uncaught in production. Fixed by moving
-  the `try`/`catch` inside `guardedWriteCursorData` itself, wrapping only
-  the write call -- the guard's synchronous throw now precedes the `try`'s
-  own dynamic extent even though the enclosing method is `async`, so both
-  halves of the contract (guard violations propagate, write failures are
-  caught) hold simultaneously. Full suite re-confirmed: 899/899.
+  `SyncCursorService` fix had reintroduced its own defect via a different
+  mechanism than first recorded here. Round 3 (a further Opus pass)
+  corrected the mechanism: round 1's `guardedWriteCursorData` was `async`,
+  so `assertAllowedFields`'s synchronous throw converted into a rejected
+  `Future` rather than propagating to the call site; `writeCursorToFirebase`
+  then awaited that Future inside ITS OWN `try`/`catch`, silently catching
+  and logging the guard violation as "just another Firebase error" -- the
+  exact defect `E11-B04` exists to fix. Write-layer failures were never at
+  risk in round 1. Fixed by moving the `try`/`catch` inside
+  `guardedWriteCursorData` itself, with the guard call preceding that
+  `try` in the same method body -- a throw ahead of a `try`, inside one
+  `async` function, is never caught by that same function's own later
+  `try`. Full suite re-confirmed: 899/899. See `E11-B04.md`'s own Run log
+  for the full corrected account.
