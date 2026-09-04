@@ -33,4 +33,16 @@ class FirebasePaths {
     String aboutDeviceId,
   ) =>
       'users/$uid/sync_cursors/$writerDeviceId/$conversationId/$aboutDeviceId';
+
+  /// `users/<uid>/devices` — the parent node this account's device nodes
+  /// live under. Used by `DeviceRevocationService.pullRevocations`
+  /// (E11-T04) to enumerate every one of the account's devices and their
+  /// `revocation` child in a single read, rather than one read per device.
+  static String devices(String uid) => 'users/$uid/devices';
+
+  /// `users/<uid>/devices/<deviceId>/revocation` — the revocation-info
+  /// child node (E11-T04, `FR-FB-001` "revocation information"). A new leaf
+  /// under the pre-existing [device] node, not a new top-level path.
+  static String deviceRevocation(String uid, String deviceId) =>
+      'users/$uid/devices/$deviceId/revocation';
 }

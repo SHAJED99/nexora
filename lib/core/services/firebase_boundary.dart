@@ -13,7 +13,7 @@
 // §Enums (diffable, doesn't break silently on reordering — irrelevant to an
 // in-memory enum today, but keeps the convention consistent everywhere Dart
 // enums appear in this codebase).
-enum FirebaseNodeKind { device, syncCursor }
+enum FirebaseNodeKind { device, syncCursor, deviceRevocation }
 
 /// Thrown by [FirebaseBoundary.assertAllowedFields] when a payload carries a
 /// key outside its node kind's allow-list. A programming error (extends
@@ -58,6 +58,12 @@ class FirebaseBoundary {
       'conversationId',
       'lastConfirmedSequenceNumber',
       'updatedAt',
+    },
+    // `users/$uid/devices/$deviceId/revocation` — revocation information
+    // (DeviceRevocationService.revoke, E11-T04).
+    FirebaseNodeKind.deviceRevocation: {
+      'revokedAt',
+      'revokedByDeviceId',
     },
   };
 
