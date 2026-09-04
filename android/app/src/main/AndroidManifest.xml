@@ -24,8 +24,13 @@
          API 31+ (it relies on BLUETOOTH_SCAN's own `neverForLocation` flag
          below, unchanged) -- this permission now simply also existing on
          API 31+ for a DIFFERENT feature (location sharing) does not change
-         what that scan itself asserts or needs. Re-verified per manual
-         steps 4/5 (task file §8); recorded honestly, not assumed, in §9. -->
+         what that scan itself asserts or needs. This reasoning is a static
+         source-level argument, NOT an on-device verification: task file §8
+         manual steps 4/5 (confirming E04's Bluetooth discovery actually
+         still works on a real API <=30 device and a real API 31+ device
+         after this change) were NOT performed -- no physical device or
+         emulator was available when this was built (task file §9, E09-B03).
+         This remains an open verification obligation, not a completed one. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
