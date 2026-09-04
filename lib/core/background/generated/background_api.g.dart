@@ -44,6 +44,68 @@ List<Object?> wrapResponse({Object? result, PlatformException? error, bool empty
   }
   return <Object?>[error.code, error.message, error.details];
 }
+bool _deepEquals(Object? a, Object? b) {
+  if (identical(a, b)) {
+    return true;
+  }
+  if (a is double && b is double) {
+    if (a.isNaN && b.isNaN) {
+      return true;
+    }
+    return a == b;
+  }
+  if (a is List && b is List) {
+    return a.length == b.length &&
+        a.indexed
+            .every(((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]));
+  }
+  if (a is Map && b is Map) {
+    if (a.length != b.length) {
+      return false;
+    }
+    for (final MapEntry<Object?, Object?> entryA in a.entries) {
+      bool found = false;
+      for (final MapEntry<Object?, Object?> entryB in b.entries) {
+        if (_deepEquals(entryA.key, entryB.key)) {
+          if (_deepEquals(entryA.value, entryB.value)) {
+            found = true;
+            break;
+          } else {
+            return false;
+          }
+        }
+      }
+      if (!found) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return a == b;
+}
+
+int _deepHash(Object? value) {
+  if (value is List) {
+    return Object.hashAll(value.map(_deepHash));
+  }
+  if (value is Map) {
+    int result = 0;
+    for (final MapEntry<Object?, Object?> entry in value.entries) {
+      result += (_deepHash(entry.key) * 31) ^ _deepHash(entry.value);
+    }
+    return result;
+  }
+  if (value is double && value.isNaN) {
+    // Normalize NaN to a consistent hash.
+    return 0x7FF8000000000000.hashCode;
+  }
+  if (value is double && value == 0.0) {
+    // Normalize -0.0 to 0.0 so they have the same hash code.
+    return 0.0.hashCode;
+  }
+  return value.hashCode;
+}
+
 
 /// Lifecycle state of the Android foreground service that keeps the process
 /// (and therefore `MessagingCoordinator`'s existing `Timer.periodic`, task
@@ -53,6 +115,86 @@ enum ServiceState {
   starting,
   running,
   stoppedBySystem,
+}
+
+/// E10-T09 (FR-PLAT-002, FR-PLAT-003): a snapshot of the Android power
+/// environment the app is running in. Reports facts only — nothing reacts
+/// to this yet (`E10-T10`, task §2/§4). A field unavailable on the running
+/// API level reads `false`, never `null` (task §5/§6 — the permissive
+/// reading, so a missing signal never masquerades as an active
+/// restriction).
+class PowerState {
+  PowerState({
+    required this.deviceIdle,
+    required this.powerSaveMode,
+    required this.backgroundRestricted,
+    required this.ignoringBatteryOptimizations,
+    required this.screenLocked,
+  });
+
+  /// `PowerManager.isDeviceIdleMode` — Doze.
+  bool deviceIdle;
+
+  /// `PowerManager.isPowerSaveMode` — Battery Saver.
+  bool powerSaveMode;
+
+  /// `ActivityManager.isBackgroundRestricted` — per-app background
+  /// restriction (Android puts this on an app the user has restricted from
+  /// Settings, independent of Doze/Battery Saver).
+  bool backgroundRestricted;
+
+  /// `PowerManager.isIgnoringBatteryOptimizations` — a query, never a
+  /// prompt (ADR-0007 §S2 / `OQ-E10-4`: this task does not request the
+  /// exemption).
+  bool ignoringBatteryOptimizations;
+
+  /// `KeyguardManager.isKeyguardLocked` — screen lock.
+  bool screenLocked;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      deviceIdle,
+      powerSaveMode,
+      backgroundRestricted,
+      ignoringBatteryOptimizations,
+      screenLocked,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static PowerState decode(Object result) {
+    result as List<Object?>;
+    return PowerState(
+      deviceIdle: result[0]! as bool,
+      powerSaveMode: result[1]! as bool,
+      backgroundRestricted: result[2]! as bool,
+      ignoringBatteryOptimizations: result[3]! as bool,
+      screenLocked: result[4]! as bool,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! PowerState || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(deviceIdle, other.deviceIdle) && _deepEquals(powerSaveMode, other.powerSaveMode) && _deepEquals(backgroundRestricted, other.backgroundRestricted) && _deepEquals(ignoringBatteryOptimizations, other.ignoringBatteryOptimizations) && _deepEquals(screenLocked, other.screenLocked);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'PowerState(deviceIdle: $deviceIdle, powerSaveMode: $powerSaveMode, backgroundRestricted: $backgroundRestricted, ignoringBatteryOptimizations: $ignoringBatteryOptimizations, screenLocked: $screenLocked)';
+  }
 }
 
 
@@ -66,6 +208,9 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is ServiceState) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
+    }    else if (value is PowerState) {
+      buffer.putUint8(130);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -77,6 +222,8 @@ class _PigeonCodec extends StandardMessageCodec {
       case 129:
         final value = readValue(buffer) as int?;
         return value == null ? null : ServiceState.values[value];
+      case 130:
+        return PowerState.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -156,6 +303,27 @@ class BackgroundApi {
     ;
     return pigeonVar_replyValue! as bool;
   }
+
+  /// E10-T09: a one-shot snapshot of the current power state. Never throws
+  /// — an unreadable signal on this API level reads `false` (task §5/§6).
+  Future<PowerState> powerState() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.nexora.BackgroundApi.powerState$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as PowerState;
+  }
 }
 
 /// Flutter-side API: native Kotlin calls into Dart.
@@ -163,6 +331,11 @@ abstract class BackgroundEventsApi {
   static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
 
   void onServiceStateChanged(ServiceState state);
+
+  /// E10-T09: emitted on every observed transition of a Doze / Battery
+  /// Saver / background-restriction / screen-lock signal, de-duplicated on
+  /// equal consecutive states (task §5/§6).
+  void onPowerStateChanged(PowerState state);
 
   static void setUp(BackgroundEventsApi? api, {BinaryMessenger? binaryMessenger, String messageChannelSuffix = '',}) {
     messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
@@ -178,6 +351,27 @@ abstract class BackgroundEventsApi {
           final ServiceState arg_state = args[0]! as ServiceState;
           try {
             api.onServiceStateChanged(arg_state);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.nexora.BackgroundEventsApi.onPowerStateChanged$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final PowerState arg_state = args[0]! as PowerState;
+          try {
+            api.onPowerStateChanged(arg_state);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

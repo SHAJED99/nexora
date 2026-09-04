@@ -21,6 +21,7 @@ import 'package:flutter/services.dart';
 import 'generated/background_api.g.dart';
 
 export 'generated/background_api.g.dart' show ServiceState;
+export 'power_state.dart' show PowerState;
 
 /// The shape `E10-T10`'s lifecycle-trigger logic depends on — shared by the
 /// real [BackgroundService] and the in-memory [BackgroundStub]
@@ -32,6 +33,15 @@ abstract class BackgroundControl {
   Future<void> stop();
   Future<bool> isRunning();
   Stream<ServiceState> get state;
+
+  /// E10-T09: a one-shot snapshot for startup. Never throws — a signal
+  /// unavailable on the running API level reads `false` (task §5/§6).
+  Future<PowerState> powerState();
+
+  /// E10-T09: what `E10-T10` subscribes to. Broadcast; emits on every
+  /// observed transition, de-duplicated on equal consecutive states
+  /// (task §5/§6, EARS-PLAT-11).
+  Stream<PowerState> get powerStates;
 }
 
 /// Dart-idiomatic facade over the generated `BackgroundApi` (host calls) and
@@ -60,6 +70,15 @@ class BackgroundService implements BackgroundControl {
   final StreamController<ServiceState> _stateController =
       StreamController<ServiceState>.broadcast();
 
+  final StreamController<PowerState> _powerStateController =
+      StreamController<PowerState>.broadcast();
+
+  /// The last `PowerState` this facade emitted — de-duplication happens
+  /// here too, not only on the Kotlin side, so this Dart-side contract
+  /// (EARS-PLAT-11) holds regardless of what the platform channel actually
+  /// delivered (task §5/§6).
+  PowerState? _lastPowerState;
+
   /// So `E10-T10` can react to `stoppedBySystem` instead of assuming it
   /// never happens (task §5).
   @override
@@ -78,16 +97,29 @@ class BackgroundService implements BackgroundControl {
   @override
   Future<bool> isRunning() => _api.isServiceRunning();
 
+  @override
+  Future<PowerState> powerState() => _api.powerState();
+
+  @override
+  Stream<PowerState> get powerStates => _powerStateController.stream;
+
   void _handleServiceStateChanged(ServiceState newState) =>
       _stateController.add(newState);
 
-  /// Releases the stream controller. Does not tear down the Pigeon
+  void _handlePowerStateChanged(PowerState newState) {
+    if (newState == _lastPowerState) return;
+    _lastPowerState = newState;
+    _powerStateController.add(newState);
+  }
+
+  /// Releases the stream controllers. Does not tear down the Pigeon
   /// `BackgroundEventsApi` handler registration — same caveat as
   /// `TransportService.dispose`/`NotificationService.dispose`: callers that
   /// create throwaway instances (e.g. tests) should pass a distinct
   /// `messageChannelSuffix` per instance.
   Future<void> dispose() async {
     await _stateController.close();
+    await _powerStateController.close();
   }
 }
 
@@ -98,4 +130,8 @@ class _EventsHandler extends BackgroundEventsApi {
   @override
   void onServiceStateChanged(ServiceState state) =>
       _service._handleServiceStateChanged(state);
+
+  @override
+  void onPowerStateChanged(PowerState state) =>
+      _service._handlePowerStateChanged(state);
 }

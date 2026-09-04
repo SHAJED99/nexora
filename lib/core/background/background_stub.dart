@@ -8,6 +8,7 @@
 import 'dart:async';
 
 import 'background_service.dart';
+import 'power_state.dart';
 
 /// An in-memory [BackgroundControl] that tracks the simulated service state
 /// and never touches a platform channel. Configure [canStart] to simulate
@@ -31,8 +32,32 @@ class BackgroundStub implements BackgroundControl {
   /// service to inspect.
   int startCallCount = 0;
 
+  /// E10-T09: the simulated power state, all-clear until a test calls
+  /// [emitPowerState]. This is the lever `E10-T10`'s hardware-free tests
+  /// depend on (task §5).
+  PowerState _powerState = allClearPowerState();
+
+  final StreamController<PowerState> _powerStateController =
+      StreamController<PowerState>.broadcast();
+
   @override
   Stream<ServiceState> get state => _stateController.stream;
+
+  @override
+  Future<PowerState> powerState() async => _powerState;
+
+  @override
+  Stream<PowerState> get powerStates => _powerStateController.stream;
+
+  /// Test-only: simulate the platform observing a new [PowerState] (task
+  /// §5). De-duplicated on equal consecutive states, mirroring the real
+  /// [BackgroundService]'s contract (EARS-PLAT-11) so a test written
+  /// against this stub still holds against the real service.
+  void emitPowerState(PowerState state) {
+    if (state == _powerState) return;
+    _powerState = state;
+    _powerStateController.add(state);
+  }
 
   @override
   Future<bool> start() async {
@@ -72,5 +97,6 @@ class BackgroundStub implements BackgroundControl {
 
   Future<void> dispose() async {
     await _stateController.close();
+    await _powerStateController.close();
   }
 }
