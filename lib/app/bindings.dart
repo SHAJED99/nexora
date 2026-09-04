@@ -15,7 +15,12 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
+import 'package:nexora/core/background/background_policy.dart';
+import 'package:nexora/core/background/background_service.dart';
+import 'package:nexora/core/background/power_state.dart';
+import 'package:nexora/core/messaging/messaging_coordinator.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/notifications/notification_dispatcher.dart';
 import 'package:nexora/core/notifications/notification_policy.dart';
@@ -37,6 +42,7 @@ import 'package:nexora/core/storage/storage_decision_log.dart';
 import 'package:nexora/core/storage/storage_inventory.dart';
 import 'package:nexora/core/storage/storage_manager.dart';
 import 'package:nexora/core/storage/storage_settings_repository.dart';
+import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/home/presentation/home_controller.dart';
 import 'package:nexora/features/login/data/device_identity_repository.dart';
 import 'package:nexora/features/login/domain/sign_in_use_case.dart';
@@ -48,7 +54,17 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 class AppBinding extends Bindings {
-  AppBinding({required this.db, required this.messagingStack});
+  // `prefer_initializing_formals` doesn't apply here: the public parameter
+  // name (`backgroundControl`) is deliberately different from the private
+  // field it fills (`_backgroundControl`) -- same documented exclusion
+  // `messaging_coordinator.dart`'s own header already uses for its
+  // constructor.
+  AppBinding({
+    required this.db,
+    required this.messagingStack,
+    BackgroundControl? backgroundControl,
+  }) : _backgroundControl = // ignore: prefer_initializing_formals
+      backgroundControl;
 
   /// The single app-wide `AppDatabase`, already constructed in `main.dart`
   /// before `runApp` — never constructed here (see file header).
@@ -59,6 +75,13 @@ class AppBinding extends Bindings {
   /// `MessagingStack.create`'s own contract: construction never throws, a
   /// degraded device is reported via `messagingStack.status` instead.
   final MessagingStack messagingStack;
+
+  /// E10-T10: test-only override for the real, Pigeon-backed
+  /// `BackgroundService` -- mirrors `MessagingStack.create`'s own `transport`
+  /// override (same reasoning: a test needs a `BackgroundStub` it can drive
+  /// without a platform channel). `null` in production, where
+  /// `dependencies()` constructs the real service.
+  final BackgroundControl? _backgroundControl;
 
   @override
   void dependencies() {
@@ -180,6 +203,25 @@ class AppBinding extends Bindings {
     );
     Get.put(storageManager, permanent: true);
     messagingStack.coordinator.storageManager = storageManager;
+
+    // E10-T10: the adaptive-background composition root -- the join point
+    // between the notification line (T01-T07, above) and the background
+    // line (T01->T08->T09). Real `BackgroundService` in production; a
+    // caller-supplied `BackgroundControl` (a `BackgroundStub`, see
+    // `_backgroundControl` above) in tests, mirroring `transport`'s own
+    // override pattern in `MessagingStack.create`. `start()` only attaches
+    // listeners (task file §3) -- it creates no Timer/Isolate/WorkManager of
+    // its own; the ONLY thing it drives is `messagingStack.coordinator
+    // .setTickInterval` (this epic's one, pre-existing periodic driver) and
+    // `messagingStack.transport.startDiscovery/stopDiscovery` (already
+    // Get.put above).
+    final backgroundObserver = BackgroundLifecycleObserver(
+      coordinator: messagingStack.coordinator,
+      transport: messagingStack.transport,
+      service: _backgroundControl ?? BackgroundService(),
+    );
+    Get.put(backgroundObserver, permanent: true);
+    backgroundObserver.start();
 
     // E10-T03: the notification composition root. `NotificationService`
     // itself is E10-T01's Pigeon-backed facade (never constructed a second
@@ -339,6 +381,180 @@ class AppBinding extends Bindings {
         cause: e,
       );
       return 0;
+    }
+  }
+}
+
+/// E10-T10: the composition-root wiring named in the task file's own §3 —
+/// "lifecycle -> service start/stop -> policy -> interval + discovery". This
+/// class owns NO Timer/Isolate/WorkManager of its own (task file §4, and the
+/// grep-for-`Timer(` check in every prior E10 task's own self-review) — it
+/// only ever calls [MessagingCoordinator.setTickInterval] (rescheduling the
+/// ONE existing `Timer.periodic` `MessagingCoordinator.start()` already set
+/// up) and [TransportService.startDiscovery]/[stopDiscovery] (already-Pigeon
+/// calls E10-T01/E04 wired, never new native surface).
+///
+/// `BackgroundPolicy.plan` (`background_policy.dart`) is the only place that
+/// decides WHAT the interval/discovery values should be — this class is
+/// purely mechanical: track the three signals, recompute the plan, apply it.
+class BackgroundLifecycleObserver extends WidgetsBindingObserver {
+  // Same documented exclusion as `AppBinding`'s constructor above: the
+  // public parameter name (`service`) is deliberately different from the
+  // private field it fills (`_service`).
+  BackgroundLifecycleObserver({
+    required this.coordinator,
+    required this.transport,
+    required BackgroundControl service,
+  }) : _service = service; // ignore: prefer_initializing_formals
+
+  final MessagingCoordinator coordinator;
+  final TransportService transport;
+  final BackgroundControl _service;
+
+  /// Defaults to `resumed` — this observer is constructed and [start]ed
+  /// during app startup, before the first `didChangeAppLifecycleState`
+  /// callback could possibly fire, and a fresh launch is a foreground launch
+  /// (task file §5 table: "foreground" is the default row).
+  AppLifecycleState _lifecycle = AppLifecycleState.resumed;
+
+  /// Defaults to `stopped` — the foreground service is not started until
+  /// this observer's first backgrounding transition (task file §3).
+  ServiceState _serviceState = ServiceState.stopped;
+
+  /// Defaults all-clear — mirrors `BackgroundStub`'s own choice of initial
+  /// value (`power_state.dart`'s header: "a stub that starts by claiming
+  /// Doze is already active would be a lie no test intends"); the real
+  /// [BackgroundService] emits its first genuine reading as soon as the
+  /// native side observes one, or this observer requests one explicitly
+  /// (see [_refreshPowerStateOnResume]).
+  PowerState _powerState = allClearPowerState();
+
+  /// Tracks whether this observer has already told [_service] to be
+  /// running, so a lifecycle callback that fires more than once for the
+  /// same logical transition (task file §6 risk: "paused -> resumed ->
+  /// paused in quick succession must not leave two starts outstanding")
+  /// does not call `start()`/`stop()` redundantly — belt-and-braces on top
+  /// of `BackgroundService`/`BackgroundStub`'s own idempotent `start()`
+  /// contract, not a replacement for it (task file §6: "the observer should
+  /// not rely on that alone").
+  bool? _desiredRunning;
+
+  /// The discovery gate this observer last actually applied — avoids
+  /// calling `startDiscovery()`/`stopDiscovery()` again for a `BackgroundPlan`
+  /// that recomputed to the same `discoveryAllowed` value (e.g. two power
+  /// -state events that both land in the same restricted band).
+  bool? _discoveryAllowed;
+
+  StreamSubscription<ServiceState>? _serviceStateSubscription;
+  StreamSubscription<PowerState>? _powerStateSubscription;
+
+  /// Attaches the lifecycle observer and subscribes to [_service]'s two
+  /// streams. Does not itself start the foreground service — that only
+  /// happens on the first backgrounding transition
+  /// ([didChangeAppLifecycleState]).
+  void start() {
+    WidgetsBinding.instance.addObserver(this);
+    _serviceStateSubscription = _service.state.listen(_onServiceStateChanged);
+    _powerStateSubscription = _service.powerStates.listen(_onPowerStateChanged);
+  }
+
+  /// Detaches the observer and cancels both subscriptions. Test-only in
+  /// spirit — mirrors `MessagingCoordinator.stop()`'s own "harmless to call
+  /// from a real lifecycle teardown too" note — but the app process today
+  /// has no caller for this (same standing gap this file already documents
+  /// for `messagingStack.dispose()`/`notificationDispatcher.stop()`; not
+  /// this task's contract to close — see this task's Run log).
+  void stop() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_serviceStateSubscription?.cancel());
+    _serviceStateSubscription = null;
+    unawaited(_powerStateSubscription?.cancel());
+    _powerStateSubscription = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _lifecycle = state;
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      _setDesiredRunning(true);
+    } else if (state == AppLifecycleState.resumed) {
+      _setDesiredRunning(false);
+      // E10-T09 review carry-forward: `isBackgroundRestricted` (and every
+      // other `PowerState` field) has no broadcast of its own beyond what
+      // `PowerStateMonitor.kt` chooses to emit -- re-read explicitly on
+      // resume rather than trusting the stream alone to have delivered
+      // every transition that happened while backgrounded.
+      unawaited(_refreshPowerStateOnResume());
+    }
+    // `inactive`/`detached` are transitional on Android (task file §3 names
+    // only "backgrounded"/"returns to the foreground") -- no service
+    // start/stop decision is made for them, but the plan is still
+    // recomputed below since `lifecycle` itself changed.
+    _applyPlan();
+  }
+
+  void _setDesiredRunning(bool running) {
+    if (_desiredRunning == running) return;
+    _desiredRunning = running;
+    if (running) {
+      unawaited(_service.start());
+    } else {
+      unawaited(_service.stop());
+    }
+  }
+
+  Future<void> _refreshPowerStateOnResume() async {
+    try {
+      final PowerState fresh = await _service.powerState();
+      _onPowerStateChanged(fresh);
+    } catch (_) {
+      // A one-shot platform read failing on resume must not crash the
+      // lifecycle callback -- the stream subscription remains the fallback
+      // source of truth (same "never take down the app" posture as every
+      // other peripheral read in this file, e.g. `_measureDatabaseFileBytes`).
+    }
+  }
+
+  void _onServiceStateChanged(ServiceState state) {
+    final ServiceState previous = _serviceState;
+    _serviceState = state;
+    if (state == ServiceState.stoppedBySystem && previous != ServiceState.stoppedBySystem) {
+      // Task file §3/§6: reconcile once after the system kills the service
+      // out from under the app while the process itself survives (a cold
+      // restart's own reconcile is already `MessagingCoordinator.start()`'s
+      // job — see that method — so this is the ONE case this observer must
+      // add: no new cold start happened, so no other call site will ever
+      // reconcile this crash window). `reconcileQueuedMessages()` is itself
+      // idempotent (`messaging_coordinator.dart`'s own contract), so a
+      // duplicate event guarded above is defence in depth, not the only
+      // thing making this safe.
+      unawaited(coordinator.reconcileQueuedMessages());
+    }
+    _applyPlan();
+  }
+
+  void _onPowerStateChanged(PowerState state) {
+    _powerState = state;
+    _applyPlan();
+  }
+
+  /// Recomputes `BackgroundPolicy.plan` from the three tracked signals and
+  /// applies it: reschedules the coordinator's existing timer, and gates
+  /// discovery only when the allowed value actually changed.
+  void _applyPlan() {
+    final BackgroundPlan plan = BackgroundPolicy.plan(
+      power: _powerState,
+      service: _serviceState,
+      lifecycle: _lifecycle,
+    );
+    coordinator.setTickInterval(plan.tickInterval);
+
+    if (_discoveryAllowed == plan.discoveryAllowed) return;
+    _discoveryAllowed = plan.discoveryAllowed;
+    if (plan.discoveryAllowed) {
+      unawaited(transport.startDiscovery().catchError((Object _) {}));
+    } else {
+      unawaited(transport.stopDiscovery().catchError((Object _) {}));
     }
   }
 }

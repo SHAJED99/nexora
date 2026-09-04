@@ -147,6 +147,17 @@
 // deferred). Does NOT retry, back off, or re-order the relay queue —
 // `processQueue()` owns queue semantics; this file owns only *when* it runs.
 //
+// **E10-T10 addition: `setTickInterval` reschedules the SAME
+// `Timer.periodic`, and is the only change this task makes to this file**
+// (task file §3/§5). `_tickInterval` is therefore no longer `final` --
+// nothing else about `start()`/`tick()`/`stop()` changes shape: no
+// reordering of `processQueue`/`sweepExpired`/`reclaimPayloads`, no new
+// state, no second driver (`E08-T06.md:119-120`'s refusal, and this file's
+// own header above, both still hold). Rescheduling never cancels or awaits
+// whichever pass is currently in flight -- `_inFlightTick`'s re-entrancy
+// coalescing (this file's header, "Tick order is fixed") is completely
+// unaffected by which interval the NEXT timer firing uses.
+//
 // `prefer_initializing_formals` is intentionally not applied to this file's
 // constructor, matching the same documented exclusion already used by
 // `relay_engine.dart` and `inbound_pipeline.dart`: the fields are private
@@ -218,7 +229,12 @@ class MessagingCoordinator {
 
   final MessagingStack _stack;
   final InboundPipeline _inbound;
-  final Duration _tickInterval;
+
+  /// The current floor between ticks -- mutable ONLY via [setTickInterval]
+  /// (E10-T10's whole contribution to this file). Everything else in this
+  /// class treats it exactly as before: read once, when `start()` builds the
+  /// `Timer.periodic`.
+  Duration _tickInterval;
   final DateTime Function() _clock;
 
   bool _started = false;
@@ -301,6 +317,34 @@ class MessagingCoordinator {
     await _inFlightTick;
 
     await _inbound.stop();
+  }
+
+  /// E10-T10: the ONLY change this task makes to this file (task file §3/§5)
+  /// -- reschedules the SAME `Timer.periodic` `start()` set up, onto
+  /// [interval]. Never adds a second timer, never touches `tick()`'s own
+  /// body, ordering or re-entrancy guard. A tick already in flight when this
+  /// is called keeps running to completion under the OLD interval's own
+  /// firing that started it -- only the NEXT scheduled firing uses the new
+  /// interval (task file §5: "a tick in flight is not cancelled").
+  ///
+  /// A no-op if [interval] already equals the current one (nothing to
+  /// reschedule) or if `start()` has not been called yet / `stop()` already
+  /// ran (there is no live `Timer` to reschedule -- the value is still
+  /// recorded for whenever `start()` next runs).
+  void setTickInterval(Duration interval) {
+    if (interval <= Duration.zero) {
+      throw ArgumentError.value(
+        interval,
+        'interval',
+        'must be greater than Duration.zero',
+      );
+    }
+    if (interval == _tickInterval) return;
+    _tickInterval = interval;
+
+    if (_timer == null) return;
+    _timer!.cancel();
+    _timer = Timer.periodic(_tickInterval, (_) => unawaited(tick()));
   }
 
   void _onDeviceDiscovered(TransportDevice device) {
