@@ -576,6 +576,83 @@ void main() {
       expect(await LocationFixRepository(db: bob.db).readFix('mallory'), isNull);
     });
 
+    test(
+      'test_EARS_LOC_12_prekey_message_with_forged_source_dropped',
+      () async {
+        // Reviewer repro, verbatim (bug file E09-B09 "Repro"). Bob has a
+        // `trusted` relationship + full visibility for alice, but has NEVER
+        // exchanged a Signal session with her -- `getIdentity` for alice's
+        // address is unset on bob's store. Mallory (a stranger to bob)
+        // forges a `PreKeySignalMessage` under her OWN identity, then wraps
+        // it in a frame claiming `source: 'alice'`. Trust-on-first-use
+        // (`isTrustedIdentity`, `drift_signal_store.dart:144-148`) would let
+        // `SessionBuilder.process` accept it and silently attribute the
+        // result to alice's identity -- E09-B09's exact exploit.
+        final bob = await newStack('bob', nextSuffix());
+        final mallory = await newStack('mallory', nextSuffix());
+        addTearDown(bob.dispose);
+        addTearDown(mallory.dispose);
+
+        await allowVisibility(bob, 'alice');
+
+        // Bob has no prior session (and no stored identity) for alice.
+        expect(
+          await bob.signalStore
+              .getIdentity(SignalProtocolAddress('alice', 1)),
+          isNull,
+        );
+
+        // Mallory establishes a session claiming to be talking to "bob" and
+        // encrypts a fabricated location fix. Since bob has never confirmed
+        // a session back to mallory, this ciphertext is a fresh
+        // `PreKeySignalMessage` (the X3DH responder path bob would have to
+        // run on receipt).
+        await mallory.cryptoService.establishSession(
+          SignalProtocolAddress('bob', 1),
+          await bob.identityService.getLocalPreKeyBundle(),
+        );
+        final forgedFrame = LocationShareFrame(
+          latitudeE7: 511111111,
+          longitudeE7: -1111111,
+          capturedAtMs: 1000,
+        ).serialize();
+        final maliciousCiphertext = await mallory.cryptoService.encrypt(
+          SignalProtocolAddress('bob', 1),
+          forgedFrame,
+        );
+        expect(maliciousCiphertext, isA<PreKeySignalMessage>());
+
+        // Wrapped with `source` spoofed to alice -- a trusted contact bob
+        // has never actually talked to over Signal.
+        final wireFrame = RelayPacketFrame(
+          payloadType: PayloadType.control,
+          packetId: 'pkt-forged',
+          destination: 'bob',
+          source: 'alice',
+          priority: 0,
+          createdAtMs: 0,
+          expiresAtMs: 999999999999,
+          payload: encodeCiphertextControlBody(maliciousCiphertext),
+        );
+
+        await bob.locationShareService.handleWireFrame(wireFrame);
+
+        // Nothing was stored under alice's name...
+        expect(
+          await LocationFixRepository(db: bob.db).readFix('alice'),
+          isNull,
+        );
+        // ...and alice's identity was never poisoned with mallory's key --
+        // a genuine future session with the real alice must still be
+        // possible (bug file "Second-order damage").
+        expect(
+          await bob.signalStore
+              .getIdentity(SignalProtocolAddress('alice', 1)),
+          isNull,
+        );
+      },
+    );
+
     test('test_EARS_LOC_12_malformed_frame_dropped', () async {
       final alice = await newStack('alice', nextSuffix());
       final bob = await newStack('bob', nextSuffix());

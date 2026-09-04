@@ -331,6 +331,28 @@ class LocationShareService {
     // this file trusts from here on (E06-B04's lesson).
     final address =
         SignalProtocolAddress(wireFrame.source, _remoteSignalDeviceId);
+
+    // E09-B09: a `PreKeySignalMessage` does NOT decrypt under an existing
+    // session bound to `address` -- it CREATES one from the identity key
+    // carried inside the ciphertext itself (`SessionBuilder.process`),
+    // gated only by `isTrustedIdentity`'s trust-on-first-use, which returns
+    // `true` whenever this store has no identity recorded yet for
+    // `address`. Left unchecked, `decrypt` below would succeed for a
+    // forged ciphertext from ANYONE claiming `wireFrame.source`, and that
+    // forged identity would then be persisted as `wireFrame.source`'s own
+    // (E09-B09 "Second-order damage": a permanent DoS against the real
+    // peer). A location share is never a legitimate first-ever contact
+    // with a peer whose relationship is already `trusted`/`allowed`
+    // (E09-T02's visibility policy requires that before a share is even
+    // sent), so requiring a pre-existing, previously-authenticated
+    // identity here cannot regress any real use case -- it only closes the
+    // forged-first-contact injection path. Fix direction (a), bug file
+    // Feedback log. Silent drop, same convention as every other
+    // undecryptable-frame outcome on this path (`OQ-E09-T03-2`).
+    if (await _stack.signalStore.getIdentity(address) == null) {
+      return;
+    }
+
     final Uint8List plaintext;
     try {
       plaintext = await _stack.cryptoService.decrypt(address, ciphertext);
