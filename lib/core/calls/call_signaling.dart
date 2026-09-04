@@ -329,6 +329,42 @@ class CallSignalingFrame {
 /// Current, and so far only, [CallSignalingFrame] wire layout version.
 const int callSignalingFrameVersion = 1;
 
+/// One observable call-lifecycle event on [CallSignaling.notices] (E10-T04,
+/// task file §3) -- the only new public surface this task adds to this
+/// E07-owned class, and observation only: nothing that reads this stream can
+/// influence [CallSignaling]'s own state machine. Carries nothing beyond
+/// identification -- no display name, no wire bytes, no [CallSession]
+/// reference -- a listener (`CallNotificationSource`) reads only what it
+/// needs to post/cancel a notification.
+class CallNotice {
+  const CallNotice({
+    required this.kind,
+    required this.callId,
+    required this.peerDeviceId,
+  });
+
+  final CallNoticeKind kind;
+  final String callId;
+  final String peerDeviceId;
+}
+
+/// Closed set (task file §5: "a new kind is a new decision, not an
+/// implementation detail"). Maps exactly onto the four ways a
+/// [CallState.incomingRinging] session can leave that state --
+/// [CallSession.onEvent]'s own transition table only allows `accept`,
+/// `decline`, `cancel`, or the internal ring timer's own `endLocally(timeout)`
+/// call from `incomingRinging` -- plus [invite], the moment a ring
+/// notification first becomes warranted. Every other [CallEndReason]
+/// (`busy`/`hangup`/`failed`/`unreachable`) either never applies to an
+/// `incomingRinging` session at all (`busy` only ever ends an outgoing
+/// session; `hangup` only ever ends an `active` one) or arrives strictly
+/// after [answered] already withdrew the ring notification (`failed` is
+/// always a post-`active` media failure) -- see [CallSignaling]'s own
+/// emission sites (`_track`/`_emitTerminalNotice`) for the exhaustive
+/// enumeration task file §6's risk asks for ("verify by enumerating the
+/// exits, not by testing the happy one").
+enum CallNoticeKind { invite, answered, declined, timedOut, remoteCancelled }
+
 /// The health of the active call's media path — the seam
 /// [CallMediaTransport.health] exposes. [NullCallMediaTransport] only ever
 /// produces [unavailable] (task file §3): there is no real transport yet,
@@ -462,6 +498,18 @@ class CallSignaling {
   final CallMediaTransport _mediaTransport;
 
   final CallSignalingCounters counters = CallSignalingCounters();
+
+  /// E10-T04's own observation seam (task file §3) -- broadcast so a
+  /// notification producer registering after this device already has calls
+  /// in flight, or a second listener (a future call UI), never steals events
+  /// from the other. Closed by [dispose].
+  final StreamController<CallNotice> _notices =
+      StreamController<CallNotice>.broadcast();
+
+  /// Broadcast stream of call-lifecycle events for a notification producer
+  /// to observe (E10-T04, task file §3) -- observation only, never control.
+  /// See [CallNoticeKind] for the closed set of values ever emitted here.
+  Stream<CallNotice> get notices => _notices.stream;
 
   /// At most one call at a time (task file §2: "one active call per
   /// device") — there is no roster, no per-peer map.
@@ -756,6 +804,15 @@ class CallSignaling {
     );
     session.onEvent(CallSignalKind.invite);
     _track(session);
+    // E10-T04: emitted AFTER `_track` has adopted the session as
+    // `_currentSession` and its state transition has already completed --
+    // never from inside a lock/critical section (task file §6 risk: a
+    // synchronous listener re-entering while this device is still mid-
+    // transition). This is the ONLY emission site for [CallNoticeKind.invite]
+    // -- an outbound call placed via [invite] above never reaches here and
+    // never emits one, since there is nothing to ring a notification for on
+    // the caller's own device.
+    _emitNotice(CallNoticeKind.invite, session);
     await _sendFrameBestEffort(sourceDeviceId, CallSignalKind.ringing, signal.callId);
   }
 
@@ -798,16 +855,59 @@ class CallSignaling {
     session.states.listen((state) {
       if (state == CallState.active) {
         unawaited(_attachInitialMedia(session));
+        // E10-T04: reached from BOTH `outgoingPending/outgoingRinging` and
+        // `incomingRinging` (see `CallSession.onEvent`'s `accept` row) --
+        // emitted unconditionally rather than gated on `!session.isOutgoing`
+        // to keep this diff to an emission only, no new branching on top of
+        // the existing `if` (task file §6 risk: "do not restructure"). The
+        // caller's own session never had an [invite] notice posted for it in
+        // the first place, so the resulting cancel is a harmless no-op --
+        // see `CallNotificationSource`'s own header for why.
+        _emitNotice(CallNoticeKind.answered, session);
       } else if (state == CallState.ended) {
         if (session.endReason == CallEndReason.timeout) {
           counters.callTimeout++;
         }
+        _emitTerminalNotice(session);
         if (identical(_currentSession, session)) {
           _currentSession = null;
         }
         session.dispose();
       }
     });
+  }
+
+  /// Publishes one [CallNotice] on [notices] (E10-T04). A closed controller
+  /// (post-[dispose]) silently drops the event rather than throwing --
+  /// mirrors [CallSession.recordMigrationEvent]'s own "closed controller ->
+  /// no-op" discipline in the sibling file. A run with no notification
+  /// producer registered at all (every pre-existing test in this suite)
+  /// simply has no listener, which is equally silent -- this task's own
+  /// "additive, changes no call behaviour" contract (task file §2) is
+  /// satisfied either way.
+  void _emitNotice(CallNoticeKind kind, CallSession session) {
+    if (_notices.isClosed) return;
+    _notices.add(
+      CallNotice(
+        kind: kind,
+        callId: session.callId,
+        peerDeviceId: session.peerDeviceId,
+      ),
+    );
+  }
+
+  /// Maps [session]'s [CallSession.endReason] onto [CallNoticeKind] where one
+  /// exists (task file §5's closed set) -- see [CallNoticeKind]'s own doc
+  /// comment for why `busy`/`hangup`/`failed`/`unreachable` intentionally map
+  /// to nothing here.
+  void _emitTerminalNotice(CallSession session) {
+    final CallNoticeKind? kind = switch (session.endReason) {
+      CallEndReason.declined => CallNoticeKind.declined,
+      CallEndReason.timeout => CallNoticeKind.timedOut,
+      CallEndReason.cancelled => CallNoticeKind.remoteCancelled,
+      _ => null,
+    };
+    if (kind != null) _emitNotice(kind, session);
   }
 
   /// The *initial* media attach on [CallState.active] (task file §3,
@@ -978,5 +1078,19 @@ class CallSignaling {
     } catch (_) {
       // Best-effort -- see this method's own doc comment.
     }
+  }
+
+  /// Closes [_notices] (E10-T04, task file §7: "controller closed in the
+  /// existing dispose/teardown path"). `CallSignaling` had no dispose method
+  /// of its own before this task -- `MessagingStack.dispose()`
+  /// (`messaging_stack.dart`) is test-only and never calls anything on
+  /// `callSignaling` today, and wiring that cross-file call site is outside
+  /// this task's own `files:` fence. Mirrors `CallSession.dispose()`'s own
+  /// "safe to call more than once" discipline in this file's sibling class,
+  /// and `NotificationDispatcher.stop()`'s identical "no composition-root
+  /// call site yet" gap already accepted in `bindings.dart` by `E10-T03` --
+  /// see this task's own Deviations for the same disclosure.
+  Future<void> dispose() async {
+    await _notices.close();
   }
 }

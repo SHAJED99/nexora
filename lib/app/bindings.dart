@@ -21,6 +21,7 @@ import 'package:nexora/core/notifications/notification_dispatcher.dart';
 import 'package:nexora/core/notifications/notification_policy.dart';
 import 'package:nexora/core/notifications/notification_service.dart';
 import 'package:nexora/core/notifications/notification_settings_repository.dart';
+import 'package:nexora/core/notifications/sources/call_notification_source.dart';
 import 'package:nexora/core/notifications/sources/message_notification_source.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
@@ -207,6 +208,21 @@ class AppBinding extends Bindings {
       MessageNotificationSource(
         messagingStack.inbound.delivered,
         selfDeviceId: messagingStack.selfDeviceId,
+      ),
+    );
+    // E10-T04: the `incomingCall` category producer. `CallSignaling.notices`
+    // is this task's own addition to an E07-owned file
+    // (`call_signaling.dart`) -- observation only, see that file's header.
+    // `sink: notificationDispatcher.service` reuses the SAME `NotificationService`
+    // instance constructed just above (never a second one, same "one
+    // instance of anything a task owns" discipline as `messagingStack`) --
+    // `CallNotificationSource` needs it to issue a cancel directly, bypassing
+    // `NotificationPolicy` entirely (see that source's own header for why a
+    // withdrawal is not a privacy/enablement decision).
+    notificationDispatcher.register(
+      CallNotificationSource(
+        messagingStack.callSignaling.notices,
+        sink: notificationDispatcher.service,
       ),
     );
     // Fire-and-forget, guarded: a real device's native `NotificationApi`
