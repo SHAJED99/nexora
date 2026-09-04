@@ -23,6 +23,8 @@ import 'package:nexora/core/crypto/crypto_stub.dart';
 import 'package:nexora/core/crypto/drift_signal_store.dart';
 import 'package:nexora/core/crypto/prekey_bundle_codec.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
+import 'package:nexora/core/messaging/prekey_exchange.dart'
+    show ConnectionRequestNotice;
 import 'package:nexora/core/messaging/relay_packet_frame.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
@@ -400,6 +402,102 @@ void main() {
     // Does NOT retry forever (task file §4) -- a second explicit call is
     // free to try again; nothing here launches a hidden retry loop for the
     // first call.
+  });
+
+  group('E10-T05: PrekeyExchange.connectionRequests', () {
+    // Proves the emission side (both evaluation sites) against the real
+    // control-frame path -- `connection_request_notification_source_test
+    // .dart` proves the filter/de-dup/mapping side against a hand-built
+    // stream in isolation, mirroring `call_signaling_test.dart`/
+    // `call_notification_source_test.dart`'s own split (E10-T04).
+
+    test(
+      'test_EARS_NOTIFY_10_ensure_session_emits_unknown_for_first_contact',
+      () async {
+        final aSuffix = nextSuffix();
+        final bSuffix = nextSuffix();
+        final a = await newStack('device-a', aSuffix);
+        final b = await newStack('device-b', bSuffix);
+        addTearDown(a.dispose);
+        addTearDown(b.dispose);
+
+        await wireStacks(a, aSuffix, b, bSuffix);
+
+        final notices = <ConnectionRequestNotice>[];
+        final subscription =
+            a.prekeyExchange.connectionRequests.listen(notices.add);
+        addTearDown(subscription.cancel);
+
+        // A has no stored relationship for device-b -- the ordinary
+        // first-contact case, evaluated `unknown`
+        // (`evaluate_connection_request_use_case.dart`).
+        await a.prekeyExchange.ensureSession('device-b');
+
+        expect(notices, hasLength(1));
+        expect(notices.single.peerDeviceId, 'device-b');
+        expect(notices.single.state, RelationshipState.unknown);
+      },
+    );
+
+    test(
+      'test_EARS_NOTIFY_11_inbound_bundle_request_emits_blocked_for_a_'
+      'blocked_peer',
+      () async {
+        final aSuffix = nextSuffix();
+        final bSuffix = nextSuffix();
+        final a = await newStack('device-a', aSuffix);
+        final b = await newStack('device-b', bSuffix);
+        addTearDown(a.dispose);
+        addTearDown(b.dispose);
+
+        // B has independently evaluated A as blocked (mirrors
+        // `test_EARS_COMM_15_blocked_peer_gets_no_bundle` above).
+        await RelationshipRepository(b.db)
+            .upsert('device-a', RelationshipState.blocked);
+
+        await wireStacks(a, aSuffix, b, bSuffix);
+
+        final notices = <ConnectionRequestNotice>[];
+        final subscription =
+            b.prekeyExchange.connectionRequests.listen(notices.add);
+        addTearDown(subscription.cancel);
+
+        await expectLater(
+          a.prekeyExchange.ensureSession(
+            'device-b',
+            timeout: const Duration(milliseconds: 500),
+          ),
+          throwsA(isA<TimeoutException>()),
+        );
+
+        // The stream itself emits for EVERY state -- including `blocked` --
+        // so the "never notify a blocked peer" rule is asserted on
+        // `ConnectionRequestNotificationSource`, not by silently never
+        // producing the event at all (task file §6 risk).
+        expect(notices, hasLength(1));
+        expect(notices.single.peerDeviceId, 'device-a');
+        expect(notices.single.state, RelationshipState.blocked);
+      },
+    );
+
+    test(
+      'connectionRequests is closed by PrekeyExchange.dispose()',
+      () async {
+        final aSuffix = nextSuffix();
+        final a = await newStack('device-a', aSuffix);
+
+        var closed = false;
+        a.prekeyExchange.connectionRequests.listen(
+          null,
+          onDone: () => closed = true,
+        );
+
+        await a.prekeyExchange.dispose();
+        await a.dispose();
+
+        expect(closed, isTrue);
+      },
+    );
   });
 }
 

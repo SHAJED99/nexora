@@ -22,6 +22,7 @@ import 'package:nexora/core/notifications/notification_policy.dart';
 import 'package:nexora/core/notifications/notification_service.dart';
 import 'package:nexora/core/notifications/notification_settings_repository.dart';
 import 'package:nexora/core/notifications/sources/call_notification_source.dart';
+import 'package:nexora/core/notifications/sources/connection_request_notification_source.dart';
 import 'package:nexora/core/notifications/sources/message_notification_source.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
@@ -223,6 +224,19 @@ class AppBinding extends Bindings {
       CallNotificationSource(
         messagingStack.callSignaling.notices,
         sink: notificationDispatcher.service,
+      ),
+    );
+    // E10-T05: the `connectionRequest` category producer.
+    // `PrekeyExchange.connectionRequests` is this task's own addition to an
+    // E06-owned file (`prekey_exchange.dart`) -- observation only, see that
+    // file's own doc comment on `ConnectionRequestNotice`. Unlike
+    // `CallNotificationSource` above, this source needs no `sink` -- it has
+    // no cancel concept (a connection request is not withdrawn), so every
+    // post still goes through `NotificationDispatcher`/`NotificationPolicy`
+    // via `facts` alone (task file §5 signature).
+    notificationDispatcher.register(
+      ConnectionRequestNotificationSource(
+        messagingStack.prekeyExchange.connectionRequests,
       ),
     );
     // Fire-and-forget, guarded: a real device's native `NotificationApi`
