@@ -380,4 +380,40 @@ class LocationShareService {
       receivedAtMs: _clock().millisecondsSinceEpoch,
     );
   }
+
+  /// `E09-B02`'s fix (fix direction (b), `EARS-LOC-5`): [handleWireFrame]'s
+  /// delete-on-not-visible branch (above) fires only when a NEW frame
+  /// arrives from the peer — but the event that matters most, blocking a
+  /// peer (or turning sharing off, or a relationship dropping to
+  /// `unknown`), is precisely the event that stops that peer from ever
+  /// sending another frame. A fix stored while the relationship still
+  /// permitted it would otherwise survive on disk indefinitely.
+  ///
+  /// This sweeps every row currently in `location_fixes`, re-evaluates the
+  /// SAME `LocationVisibilityPolicy` [_evaluateVisibility] already uses for
+  /// both send and receive, and deletes the rows that no longer pass —
+  /// reusing the one gate rather than re-deriving a second block rule
+  /// (bug file, fix direction (b)). Bounded by peer count, the same bound
+  /// `LocationSettingsRepository.readAllPeerEnabled` already relies on.
+  ///
+  /// Deliberately does NOT delete a *stale* fix — only a fix whose policy no
+  /// longer holds (`E09-T04` §4's other clause stands: staleness is a
+  /// reader-side judgement, not a retention decision).
+  ///
+  /// **Not wired to any caller by this fix.** The bug file names two
+  /// plausible call sites — the composition root's startup path, and
+  /// `E09-B01`'s new relationship-state watch stream (`RelationshipRepository`)
+  /// once it lands — but both call sites live outside this file, and this
+  /// task's `files:` fence is confined to this file and its test (bug file
+  /// §Fix direction). Wiring a caller is left as a fast-follow; see this PR's
+  /// Open Questions.
+  Future<void> pruneFixesForNonVisiblePeers() async {
+    final rows = await _stack.db.select(_stack.db.locationFixes).get();
+    for (final row in rows) {
+      final visibility = await _evaluateVisibility(row.peerDeviceId);
+      if (!visibility.isVisible) {
+        await _fixes.deleteFix(row.peerDeviceId);
+      }
+    }
+  }
 }
