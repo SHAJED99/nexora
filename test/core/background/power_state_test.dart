@@ -224,6 +224,58 @@ void main() {
     expect(await stub.powerState(), doze);
   });
 
+  test('test_E10_B04_reattach_duplicate_state_not_reemitted', () async {
+    // E10-B04 (native, MainActivity.kt): before the fix, every app
+    // close/reopen while ForegroundMeshService ran left the previous
+    // PowerStateMonitor + its 4 broadcast receivers registered alongside
+    // the new ones -- an unbounded set of live monitors, all observing the
+    // same signals and all pushing onto this exact channel name (there is
+    // one BackgroundEventsApi.onPowerStateChanged channel, not one per
+    // host). Two leaked monitors reacting to the same broadcast would
+    // therefore both emit here in quick succession with an identical
+    // PowerState. This is the honest boundary this fix's own regression
+    // test note commits to (`E10-B04.md` §Regression test, option b): no
+    // Kotlin unit-test harness exists in this project
+    // (`E04-T03b`'s no-mock-Kotlin rule, carried forward by every prior
+    // E10 test touching this boundary -- see this file's header), so the
+    // actual object-count claim (one monitor/host set, not N, after N
+    // reopens) is UNVERIFIED IN THIS ENVIRONMENT: no installable device
+    // (the standing E04 limitation). What is verified here, through the
+    // real generated codec exactly as `test_EARS_PLAT_11_duplicate_state_
+    // not_reemitted` above does, is that this Dart-side safety net would
+    // still hold even if the native leak this fix closes had not been
+    // closed -- a second identical event on this channel is coalesced away,
+    // not delivered twice to the app.
+    const String suffix = 'e10_b04_reattach';
+    final BackgroundService service = BackgroundService(
+      binaryMessenger: messenger,
+      messageChannelSuffix: suffix,
+    );
+    addTearDown(service.dispose);
+
+    final List<PowerState> received = <PowerState>[];
+    final StreamSubscription<PowerState> sub = service.powerStates.listen(
+      received.add,
+    );
+    addTearDown(sub.cancel);
+
+    final PowerState doze = PowerState(
+      deviceIdle: true,
+      powerSaveMode: false,
+      backgroundRestricted: false,
+      ignoringBatteryOptimizations: false,
+      screenLocked: false,
+    );
+    // Simulates the same broadcast reaching two still-registered monitors
+    // (the pre-fix leak scenario) by sending the identical state twice.
+    sendPowerStateEvent(suffix, doze);
+    sendPowerStateEvent(suffix, doze);
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(received, <PowerState>[doze]);
+  });
+
   test(
     'test_background_stub_duplicate_power_state_not_reemitted',
     () async {
