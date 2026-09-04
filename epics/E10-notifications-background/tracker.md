@@ -229,3 +229,21 @@ rather than presented as approved design.
   posted notification), but should be revisited once `notification_policy
   .dart`'s copy table is extended (the same fast-follow `OQ-E10-T04-2`/
   `OQ-E10-T06-1` already name).
+- **2026-09-04 · `E10-T07`'s cross-model review · `StorageNotificationSource
+  .dispose()` is a FIFTH unwired instance of the same pattern** (`Get.put(...,
+  permanent: true)` with no teardown caller). Confirmed inert, same as the
+  other four. Five separate sources now share the identical gap — strong
+  signal that whichever task first builds real app-lifecycle teardown
+  (most plausibly `E10-T10`, which already owns the adaptive background
+  policy) should wire all five (`CallSignaling`, `PrekeyExchange`,
+  `GroupMembershipService`, `StorageNotificationSource`, and
+  `NotificationDispatcher.stop()`/`MessagingStack.dispose()` themselves) in
+  one composition-root pass, not five fast-follows.
+- **2026-09-04 · same review · S4, non-blocking: `test_EARS_NOTIFY_14_
+  null_plan_posts_nothing` doesn't actually prove the §6-named risk it's
+  named for.** The reviewer's own probe (flipping the null-plan guard to
+  disarm rather than ignore) still passed all six of the builder's tests,
+  but failed a new probe testing the `over -> null -> over` sequence (must
+  stay at one post, not re-post). The production code is correct -- this is
+  a test-coverage gap, not a defect. Fold in an `over -> null -> over`
+  regression test the next time this file is touched.
