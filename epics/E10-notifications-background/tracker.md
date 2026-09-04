@@ -1,20 +1,21 @@
 # E10 · Notifications & Background Operation · Progress
 
-**Status:** **bug sweep complete 2026-09-04 — 8 bugs total
+**Status:** **all 8 bugs closed as of 2026-09-04**
 (`E10-B01`..`B08`, `B08` discovered post-sweep during `B04`'s fix review).
 `E10-B01`, `B02`, `B03`, `B04`, `B08` fixed, cross-model (Opus) reviewed —
 APPROVE on every one — and merged. `B06`/`B07` assessed non-blocking
-(tracking-only). Only `E10-B05` remains open, correctly `blocked` on
-`owner_agent: planner` — a rule-3 architecture decision no agent can make.
-P1/P2 = 1, so the epic→`development` PR still does NOT open**
-(`skills/release`). All 10 tasks merged and cross-model reviewed; full suite
-green after every fix (see individual bug files for exact counts —
-928/928 as of the last merge, PR #62). `ADR-0007` accepted (option 1,
-connectedDevice, boot-restart in scope) unblocked T08/T09/T10 earlier this
-session. **Backend/native only** — this epic ships no screen; see §Why
-there is no frontend task. ·
+(tracking-only). **`E10-B05`'s rule-3 decision was delegated by the human
+("do what is best") — option (b)(ii) chosen and implemented, PR #66,
+2 review rounds (round 1 REQUEST_CHANGES on a stale-notification race,
+round 2 APPROVE), merged.** **P1/P2 = 0 — epic is now eligible for its
+epic→`development` PR** (`skills/release`; the merge itself is still a
+rule-5 human gate). All 10 tasks + all 8 bugs merged and cross-model
+reviewed; full suite green after every fix (see individual bug files for
+exact counts). `ADR-0007` accepted (option 1, connectedDevice, boot-restart
+in scope) unblocked T08/T09/T10 earlier this session. **Backend/native
+only** — this epic ships no screen; see §Why there is no frontend task. ·
 **Started:** 2026-09-04 · **Completed (build):** 2026-09-04 ·
-**Swept:** 2026-09-04 · **Progress:** 10/10 tasks, 7/8 bugs done (B05 blocked)
+**Swept:** 2026-09-04 · **Progress:** 10/10 tasks, 8/8 bugs done
 
 ## Tasks
 
@@ -368,7 +369,7 @@ an observation, not a violation — nothing invented an API, a field or a path.
 | `E10-B02` | S3 | P2 | Discovery runs during Doze/Battery Saver by two routes: the `stoppedBySystem` short-circuit, and a power state never seeded at startup. The seam that applies the plan has no test at all. | **yes** — any cold start in Doze |
 | `E10-B03` | S3 | P2 | Four of the five shipped notification classes post identical `NEXORA`/`Notification` copy; each owning task's §5 copy never reached the file that renders it. | **yes** — every non-message notification |
 | `E10-B04` | S3 | P2 | Each app close/reopen while the service runs leaks a `PowerStateMonitor`, 4 broadcast receivers, 2 Pigeon hosts and a destroyed `Activity`. Unbounded, in the process this epic made permanent. | **yes** — every reopen |
-| `E10-B05` | S3 | P2 | After a process kill or reboot the service revives and permanently claims to be "relaying messages" with no Dart isolate behind it. **`blocked`, `owner_agent: planner`.** | **yes** — the expected path on MIUI |
+| `E10-B05` | S3 | P2 | After a process kill or reboot the service revives and permanently claims to be "relaying messages" with no Dart isolate behind it. **`done`** — human delegated the decision, option (b)(ii) implemented, PR #66 merged. | resolved |
 | `E10-B06` | S4 | P4 | Six `dispose()`/`stop()` methods with no caller in `lib/`. **Assessed as inert, not a leak** — see CF-1. | n/a |
 | `E10-B07` | S4 | P3 | Five EARS criteria green on tests that cannot fail; mutations to the guarded lines survive the whole suite. | n/a |
 | `E10-B08` | S2 | P1 | `E10-B01`'s own fix commit introduced an illegal `--` inside an `AndroidManifest.xml` comment, breaking Gradle's manifest merge for the whole app since. **Done, merged.** | **yes** — every `flutter build apk` since `e62f91f` |
@@ -378,9 +379,10 @@ an observation, not a violation — nothing invented an API, a field or a path.
 all three — and merged (PRs #64, #62, #63). `E10-B08` (discovered during
 `E10-B04`'s build as a pre-existing regression from the already-merged
 `E10-B01` commit) fixed, reviewed — **APPROVE** — and merged (PR #65).
-**P1/P2 now 1** (`E10-B05`, correctly `blocked`/`owner_agent: planner` — a
-rule-3 architecture decision, not resolvable by an agent). The
-epic→`development` PR still does not open until that is zero
+`E10-B05` resolved 2026-09-04: human delegated the rule-3 decision ("do
+what is best") after reviewing options (a)/(b)/(c); option (b)(ii) chosen
+and implemented (PR #66, 2 review rounds, APPROVE), merged into `epic_10`.
+**P1/P2 now 0.** The epic→`development` PR is now eligible to open
 (`skills/release`).
 
 **Two reviewer-written probes, quoted in the bug files:**
@@ -695,3 +697,22 @@ next dispatch won't see it.
   Found by the `E10-B04` reviewer (PR #63). Recommend logging as a new bug
   the next time any task or bug touches `BluetoothTransport.kt` or
   `TransportApiHost.kt` — do not expand `E10-B04`'s own fence to cover it.
+- **CF-18 · The recovery path E10-B05 built never reports `RUNNING` back to
+  Dart** — `ForegroundMeshService.watchForEngineAttach()` (added by
+  `E10-B05`'s fix) re-reads `FlutterEngineCache` and calls
+  `startAsForeground()` the moment an engine attaches after a process-kill
+  revival, but does not also call `emitState(ServiceState.RUNNING)`. Dart's
+  `_serviceState` (`lib/app/bindings.dart:422`) is seeded `stopped` at
+  startup and never independently queries `isRunning()`, so after recovery
+  completes Dart still believes the service is stopped even though it is
+  genuinely running. Not a regression — this is the same pre-existing
+  "cannot report state to a Dart side that does not exist yet" limitation
+  `ForegroundMeshService.kt:44-48` already documents, and `onCreate`'s own
+  `emitState(RUNNING)` at startup is dropped for the identical reason when
+  the cache is empty. Found by the `E10-B05` round-2 reviewer (PR #66), who
+  notes this diff creates the one moment where `eventsApi` is guaranteed
+  non-null and an engine has just attached — a one-line `emitState` there
+  would close `EARS-PLAT-8`'s "SHALL report its state to Dart" gap in
+  exactly the scenario it was written for. Recommend as a small follow-up
+  fix the next time `ForegroundMeshService.kt` is touched, not a reopen of
+  `E10-B05`.
