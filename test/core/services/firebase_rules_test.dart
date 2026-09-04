@@ -276,6 +276,62 @@ void main() {
     });
   });
 
+  group('test_EARS_FB_16_relationship_node_rules', () {
+    late Map<String, dynamic> rules;
+    late Map<String, dynamic> relationshipNode;
+
+    setUpAll(() {
+      rules = jsonDecode(rulesFile.readAsStringSync()) as Map<String, dynamic>;
+      relationshipNode = _navigate(
+        rules,
+        ['users', r'$uid', 'relationships', r'$peerDeviceId'],
+      );
+    });
+
+    test('carries only state and updatedAt', () {
+      expect(
+        _declaredFieldKeys(relationshipNode),
+        {'state', 'updatedAt'},
+      );
+    });
+
+    test('state is restricted to the four known enum-name strings', () {
+      final stateValidate =
+          (relationshipNode['state'] as Map<String, dynamic>)['.validate']
+              as String;
+      for (final name in ['trusted', 'allowed', 'unknown', 'blocked']) {
+        expect(stateValidate.contains("'$name'"), isTrue,
+            reason: 'state .validate does not mention "$name"');
+      }
+    });
+
+    test('rejects any other field via \$other.validate == false', () {
+      expect(relationshipNode.containsKey(r'$other'), isTrue);
+      expect(
+        (relationshipNode[r'$other'] as Map<String, dynamic>)['.validate'],
+        isFalse,
+      );
+    });
+
+    test('own-uid read/write is inherited from the users/\$uid rule -- no '
+        'narrower .read/.write is declared at this node (it would have to '
+        'be at least as restrictive, and the parent rule already is)', () {
+      expect(relationshipNode.containsKey('.read'), isFalse);
+      expect(relationshipNode.containsKey('.write'), isFalse);
+    });
+
+    test('a foreign uid cannot read or write this node -- the only '
+        '.read/.write in the whole file scoped to this subtree is '
+        'users/\$uid\'s own auth.uid === \$uid rule (EARS-FB-16)', () {
+      final root = rules['rules'] as Map<String, dynamic>;
+      final users = root['users'] as Map<String, dynamic>;
+      final uidKey = users.keys.firstWhere((k) => k.startsWith(r'$'));
+      final uidNode = users[uidKey] as Map<String, dynamic>;
+      expect(uidNode['.read'], 'auth != null && auth.uid === \$uid');
+      expect(uidNode['.write'], 'auth != null && auth.uid === \$uid');
+    });
+  });
+
   group('test_EARS_FB_6_no_cross_account_access', () {
     test('every .read/.write in the file is either false or scoped to '
         'auth.uid === \$uid; none is the literal true', () {

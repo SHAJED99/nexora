@@ -45,4 +45,20 @@ class FirebasePaths {
   /// under the pre-existing [device] node, not a new top-level path.
   static String deviceRevocation(String uid, String deviceId) =>
       'users/$uid/devices/$deviceId/revocation';
+
+  /// `users/<uid>/relationships` — the parent node this account's own
+  /// trust/block relationship entries live under. Used by
+  /// `RelationshipSyncService.pull` (E11-T05) to enumerate every peer
+  /// device this account has a relationship node for in a single read,
+  /// same shape as [devices]/`DeviceRevocationService.pullRevocations`.
+  static String relationships(String uid) => 'users/$uid/relationships';
+
+  /// `users/<uid>/relationships/<peerDeviceId>` — this account's own
+  /// trust/block state for [peerDeviceId] (E11-T05, `FR-TRUST-007`
+  /// "relevant relationship configuration shall synchronize", read
+  /// narrowly per `ADR-0008` as a user's own devices agreeing with each
+  /// other). `$peerDeviceId` is the remote device id this relationship is
+  /// about, never a foreign account's uid.
+  static String relationship(String uid, String peerDeviceId) =>
+      'users/$uid/relationships/$peerDeviceId';
 }

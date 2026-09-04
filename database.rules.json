@@ -36,6 +36,20 @@
             }
           }
         },
+        "relationships": {
+          "$peerDeviceId": {
+            ".validate": "newData.hasChildren(['state', 'updatedAt'])",
+            "state": {
+              ".validate": "newData.isString() && (newData.val() === 'trusted' || newData.val() === 'allowed' || newData.val() === 'unknown' || newData.val() === 'blocked')"
+            },
+            "updatedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
         "sync_cursors": {
           "$writer": {
             "$conversation": {
