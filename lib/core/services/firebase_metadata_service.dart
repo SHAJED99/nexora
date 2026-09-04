@@ -87,15 +87,34 @@ class FirebaseMetadataService {
   Future<void> _registerDevice(String uid, String deviceId) async {
     bool isFirstRegistration;
     try {
-      isFirstRegistration = await readDeviceMetadata(uid, deviceId) == null;
+      final existing = await readDeviceMetadata(uid, deviceId);
+      // "First registration" means "this node needs createdAt": either the
+      // node does not exist yet, or it exists but is missing createdAt (a
+      // prior first-registration whose existence read failed/threw, back
+      // when this branch unconditionally treated a failed read as "not
+      // first" and never backfilled it -- E11-T03 round-2, per review).
+      // Both cases are safe to include createdAt for: `.update()` merges,
+      // so a node that already has a real createdAt is simply left alone
+      // by the `existing == null` case above and never reaches here.
+      isFirstRegistration =
+          existing == null || (existing is Map && !existing.containsKey('createdAt'));
     } catch (_) {
-      // Existence unknown (the read itself failed/threw): default to "not
-      // first" so `createdAt` is left out rather than risking exactly the
-      // clobber this task exists to fix. Two devices cannot race on the
-      // same node; the same device racing itself would at worst skip
-      // re-stamping `createdAt` once and pick it up on the next successful
-      // registration (task §5).
-      isFirstRegistration = false;
+      // The read itself failed/threw: existence is unknown, so treat this
+      // as a first registration -- the safer of the two wrong guesses.
+      // Guessing "not first" (the pre-fix behavior) was safe for an
+      // *existing* device (`.update()` merges, createdAt survives) but
+      // catastrophic for a genuinely first-ever registration: it would
+      // create a node with no createdAt at all, and every later
+      // registration would then see a non-null node and repeat the same
+      // omission forever, permanently losing createdAt (E11-T03 round-2,
+      // per review). Guessing "first" here trades that permanent loss for
+      // a narrow, self-correcting cost: if the node actually already
+      // exists and this happened to be the one registration whose read
+      // failed, createdAt gets re-stamped with a fresh timestamp instead
+      // of preserved -- a one-time "first seen" inaccuracy, not a stuck
+      // node, and it cannot recur for that device once the read succeeds
+      // again.
+      isFirstRegistration = true;
     }
     final data = {
       'deviceId': deviceId,

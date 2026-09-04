@@ -93,6 +93,33 @@ class _ReadFailureFirebaseMetadataService extends FirebaseMetadataService {
   }
 }
 
+/// Reports an existing device node that is missing `createdAt` — the
+/// leftover shape of a first registration whose existence read once
+/// failed/threw, back when a failed read was treated as "not first" and
+/// never backfilled (E11-T03 round-2, per cross-model review). Proves this
+/// incomplete node is still treated as needing `createdAt`, not as "already
+/// registered".
+class _IncompleteExistingDeviceFirebaseMetadataService
+    extends FirebaseMetadataService {
+  Map<String, dynamic>? capturedData;
+
+  @override
+  Future<Object?> readDeviceMetadata(String uid, String deviceId) async => {
+        'deviceId': deviceId,
+        'lastSeenAt': 1000,
+        'platform': 'android',
+      };
+
+  @override
+  Future<void> writeDeviceMetadata(
+    String uid,
+    String deviceId,
+    Map<String, dynamic> data,
+  ) async {
+    capturedData = data;
+  }
+}
+
 /// Always throws from the write seam, to prove `registerDevice` swallows
 /// and logs rather than propagating (EARS-FB-2 boundary, service level).
 /// `readDeviceMetadata` reports "no existing node" deterministically —
@@ -226,8 +253,18 @@ void main() {
       // out, or the device is offline, THEN the system SHALL log the
       // failure and complete normally without throwing. The existence
       // read throws; registration still completes and lastSeenAt is still
-      // written (existence treated as "unknown", so createdAt is safely
-      // omitted rather than risking an overwrite).
+      // written.
+      //
+      // E11-T03 round-2 (cross-model review, PR #43): a failed read is now
+      // treated as "first registration" (createdAt included), NOT "not
+      // first" (createdAt omitted). The old omit-on-failure behavior was
+      // only safe for an *already-registered* device; for a genuinely
+      // first-ever registration it created a node with no createdAt at
+      // all, and every later registration then saw a non-null node and
+      // repeated the same omission forever -- permanently losing
+      // createdAt. This test falsifies against the pre-fix code: reverting
+      // `isFirstRegistration = true` (in the catch block) back to `= false`
+      // makes this assertion fail.
       final service = _ReadFailureFirebaseMetadataService();
 
       await expectLater(
@@ -236,7 +273,38 @@ void main() {
       );
       final data = service.capturedData!;
       expect(data['lastSeenAt'], ServerValue.timestamp);
-      expect(data.containsKey('createdAt'), isFalse);
+      expect(
+        data.containsKey('createdAt'),
+        isTrue,
+        reason:
+            'a failed existence read must be treated as "first registration" '
+            'so createdAt is never permanently lost',
+      );
+    },
+  );
+
+  test(
+    'test_EARS_FB_8_incomplete_existing_node_still_gets_created_at',
+    () async {
+      // E11-T03 round-2 (cross-model review, PR #43): a node that already
+      // exists but is missing createdAt (the durable leftover of a first
+      // registration whose existence read once failed, before this fix)
+      // must be treated as "first registration" and backfilled -- not as
+      // "already registered" (which would skip createdAt forever). This is
+      // the self-healing path the failed-read case above relies on.
+      final service = _IncompleteExistingDeviceFirebaseMetadataService();
+
+      await service.registerDevice('uid-123', 'device-abc');
+
+      final data = service.capturedData!;
+      expect(
+        data.containsKey('createdAt'),
+        isTrue,
+        reason: 'an existing node missing createdAt must be backfilled, '
+            'not treated as already fully registered',
+      );
+      expect(data['createdAt'], ServerValue.timestamp);
+      expect(data['lastSeenAt'], ServerValue.timestamp);
     },
   );
 
