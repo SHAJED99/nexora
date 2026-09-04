@@ -419,4 +419,98 @@ void main() {
       expect(await lookup.lookupDevice('device-1'), isNull);
     });
   });
+
+  group('test_E11_B02_lookupDevice_identity_binding', () {
+    // Reviewer's exact probe (E11-B02): a directory entry whose
+    // `identityPublicKey` field and the identity key embedded inside its
+    // `prekeyBundle` field name two DIFFERENT identities must be rejected
+    // exactly like a malformed entry -- log and return null. Two
+    // independent identities (A, B) are built via IdentityService against
+    // two separate in-memory AppDatabases so the identity keys are
+    // guaranteed to differ, then a forged raw node is assembled by hand
+    // (never through `publish`, which is always self-consistent).
+    late AppDatabase dbA;
+    late AppDatabase dbB;
+    late IdentityService identityServiceA;
+    late IdentityService identityServiceB;
+
+    setUp(() async {
+      dbA = AppDatabase.forTesting(NativeDatabase.memory());
+      dbB = AppDatabase.forTesting(NativeDatabase.memory());
+      identityServiceA = IdentityService(dbA, DriftSignalProtocolStore(dbA));
+      identityServiceB = IdentityService(dbB, DriftSignalProtocolStore(dbB));
+      await identityServiceA.ensureLocalIdentity();
+      await identityServiceA.ensureSignedPreKey();
+      await identityServiceA.replenishOneTimePreKeys();
+      await identityServiceB.ensureLocalIdentity();
+      await identityServiceB.ensureSignedPreKey();
+      await identityServiceB.replenishOneTimePreKeys();
+    });
+
+    tearDown(() async {
+      await dbA.close();
+      await dbB.close();
+    });
+
+    test(
+      'rejects an entry whose identityPublicKey field disagrees with the '
+      'identity key embedded in its prekeyBundle field',
+      () async {
+        final bundleA = await identityServiceA.getLocalPreKeyBundle();
+        final bundleB = await identityServiceB.getLocalPreKeyBundle();
+
+        // Sanity: the two identities really are different -- otherwise
+        // this test would prove nothing.
+        expect(
+          bundleA.getIdentityKey().serialize(),
+          isNot(equals(bundleB.getIdentityKey().serialize())),
+        );
+
+        final forgedEntry = <String, Object?>{
+          'identityPublicKey': base64Encode(bundleA.getIdentityKey().serialize()),
+          'prekeyBundle': base64Encode(PreKeyBundleCodec.serialize(bundleB)),
+          'ownerUid': 'attacker-uid',
+        };
+
+        final lookup = _RespondingReadDeviceDirectoryService(
+          identityService: identityServiceA,
+          database: dbA,
+          response: forgedEntry,
+        );
+
+        expect(await lookup.lookupDevice('victim-device-id'), isNull);
+      },
+    );
+
+    test(
+      'falsification control: a genuinely consistent entry (both fields '
+      'derived from the SAME bundle) still returns a populated '
+      'DirectoryEntry -- the mismatch check must not reject everything',
+      () async {
+        final bundleA = await identityServiceA.getLocalPreKeyBundle();
+
+        final consistentEntry = <String, Object?>{
+          'identityPublicKey': base64Encode(bundleA.getIdentityKey().serialize()),
+          'prekeyBundle': base64Encode(PreKeyBundleCodec.serialize(bundleA)),
+          'ownerUid': 'uid-1',
+        };
+
+        final lookup = _RespondingReadDeviceDirectoryService(
+          identityService: identityServiceA,
+          database: dbA,
+          response: consistentEntry,
+        );
+
+        final entry = await lookup.lookupDevice('device-a');
+
+        expect(entry, isNotNull);
+        expect(entry!.identityPublicKey, isA<IdentityKey>());
+        expect(entry.preKeyBundle, isA<PreKeyBundle>());
+        expect(
+          entry.identityPublicKey.serialize(),
+          bundleA.getIdentityKey().serialize(),
+        );
+      },
+    );
+  });
 }
