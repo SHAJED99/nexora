@@ -306,6 +306,50 @@ void main() {
     );
 
     test(
+      'test_EARS_FB_2_a_forbidden_field_never_reaches_the_real_write_seam',
+      () async {
+        // E11-B04: the test above proves writeCursorToFirebase's own
+        // hardcoded payload is always allow-list-safe -- it cannot prove
+        // the GUARD is what's keeping it safe, since that payload can
+        // never actually violate the allow-list. This drives the real
+        // guard-then-write sequence (guardedWriteCursorData, called by
+        // production code exactly as writeCursorToFirebase calls it) with
+        // a payload that DOES violate the allow-list, confirming both that
+        // FirebaseBoundaryViolation is thrown AND that the real write seam
+        // (writeCursorData) was never reached.
+        final db = _openTestDatabase();
+        addTearDown(db.close);
+        final service = _CapturingSyncCursorService(
+          localDeviceId: 'device-A',
+          database: db,
+        );
+        const cursor = SyncCursor(
+          localDeviceId: 'device-A',
+          remoteDeviceId: 'device-B',
+          conversationId: 'conv-1',
+          lastConfirmedSequenceNumber: 1,
+          updatedAt: 0,
+        );
+
+        await expectLater(
+          () => service.guardedWriteCursorData(
+            'uid-123',
+            cursor,
+            {'localDeviceId': 'device-A', 'plaintext': 'leak'},
+          ),
+          throwsA(isA<FirebaseBoundaryViolation>()),
+        );
+
+        expect(
+          service.capturedData,
+          isNull,
+          reason: 'writeCursorData must never be reached when the guard '
+              'throws',
+        );
+      },
+    );
+
+    test(
       'test_EARS_MSG_6_firebase_write_failure_caught_not_thrown',
       () async {
         final db = _openTestDatabase();

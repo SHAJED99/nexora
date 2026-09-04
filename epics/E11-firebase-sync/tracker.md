@@ -1,6 +1,20 @@
 # E11 · Firebase Metadata Sync · Progress
 
-**Status:** bug-sweep-clean, all 3 findings resolved 2026-09-04 (`E11-B01` won't-fix, `E11-B02` fixed + cross-model reviewed, `E11-B03` docs-fixed) — **P1/P2=0, ready for epic→development merge** · **Started:** 2026-09-04 · **Completed:** 2026-09-04 · **Progress:** 6/6 tasks done
+**Status:** original bug sweep clean (`E11-B01` won't-fix, `E11-B02` fixed +
+cross-model reviewed, `E11-B03` docs-fixed). **A second pass — a
+retroactive rule-5 re-review of `T01`/`T02` (same pattern found in E09/E10
+this session, since both were same-model reviewed) — then found 3 more
+real bugs: `E11-B04` (S3, fixed), `E11-B05` (S3, fixed — a real Firebase
+rules gap), `E11-B06` (S2, filed, priority left `TBD`).** **P1/P2 = 0 for
+every priority-stamped bug; `E11-B06` (S2, severity only — no human
+priority stamp yet) is the one open item before the epic→`development`
+gate can honestly be called clear.** `E11-B01` reached a similar
+"unreachable without a real caller" shape, but only after the
+delegated-authority `bug_priorities` pass stamped it P3 — `E11-B06` has
+not yet been through that gate, so its eventual priority is the human's
+call, not assumed here.
+· **Started:** 2026-09-04 · **Completed:** 2026-09-04 ·
+**Progress:** 6/6 tasks done
 
 ## Tasks
 
@@ -20,6 +34,9 @@
 | E11-B01 | **done — resolved won't-fix-in-E11** | S2 | P3 (was P2) | planner — took the bug's own named "defensible human override"; EARS-FB-17 amended, wiring deferred to first real consumer |
 | E11-B02 | **done** | S2 | P2 | builder — fixed, cross-model reviewed (PR #57) |
 | E11-B03 | **done** | S4 | P3 | planner (docs-only) — `files:` fence corrected |
+| E11-B04 | **done** | S3 | TBD | builder — `T01`'s EARS-FB-2 guard tests were tautological (exercised a self-authored fake, or compared payload shape); rewritten to drive the real guarded write path with a forbidden key |
+| E11-B05 | **done** | S3 | TBD | builder — `T02`'s rules had no `.validate` on any documented container node (`users/$uid`, `devices`, `relationships`, `sync_cursors` + wildcards), allowing a leaf-value overwrite of a whole container. Rules never deployed, so not exploited in production; fixed and falsified before this |
+| E11-B06 | **blocked, deferred** | S2/S3 | TBD | planner — `directory/$deviceId`'s first-writer-wins ownership + cross-account-readable `ownerUid`, both real but unreachable until `E11-B01`'s wiring gap closes (same precedent) |
 
 ## DAG
 
@@ -231,3 +248,34 @@ is BLOCKED on that one bug alone.**
   (IdentityKey.fromBytes tolerates trailing bytes) -- unexploitable via the
   fixed comparison but worth a note for E07/E06-T07's own eventual reads
   of this field.
+- 2026-09-04 A second, retroactive rule-5 re-review of `T01`/`T02` (found
+  same-model reviewed, the exact pattern `E09-B05` documented for E09) was
+  run cross-model by a genuinely independent Opus session. Found 3 more
+  real defects: `E11-B04` (S3, `T01`'s EARS-FB-2 guard tests were
+  tautological -- fixed by extracting a `@visibleForTesting`
+  guard-then-write seam both real call sites now go through), `E11-B05`
+  (S3, `T02`'s rules had no container-level `.validate`, letting an
+  authenticated user overwrite a whole documented container with a leaf
+  value -- fixed, falsified by stashing and re-running), `E11-B06` (S2/S3,
+  `T06`'s `directory` node has a first-writer-wins squatting risk plus a
+  cross-account-readable `ownerUid` -- filed `blocked`, priority left
+  `TBD` for the human). `T01`/`T02`'s `reviewed_by` restamped to the real
+  cross-model pass. Full suite: 899/899. `flutter analyze`: clean.
+  **The epic→`development` gate awaits the human's `bug_priorities` stamp
+  on `E11-B06`** — not assumed clear ahead of it, unlike the tracker's
+  earlier draft of this entry.
+- 2026-09-04 Round 2 (Opus re-review of PR #78): found `E11-B04`'s
+  `SyncCursorService` fix had reintroduced its own defect via a different
+  mechanism than first recorded here. Round 3 (a further Opus pass)
+  corrected the mechanism: round 1's `guardedWriteCursorData` was `async`,
+  so `assertAllowedFields`'s synchronous throw converted into a rejected
+  `Future` rather than propagating to the call site; `writeCursorToFirebase`
+  then awaited that Future inside ITS OWN `try`/`catch`, silently catching
+  and logging the guard violation as "just another Firebase error" -- the
+  exact defect `E11-B04` exists to fix. Write-layer failures were never at
+  risk in round 1. Fixed by moving the `try`/`catch` inside
+  `guardedWriteCursorData` itself, with the guard call preceding that
+  `try` in the same method body -- a throw ahead of a `try`, inside one
+  `async` function, is never caught by that same function's own later
+  `try`. Full suite re-confirmed: 899/899. See `E11-B04.md`'s own Run log
+  for the full corrected account.

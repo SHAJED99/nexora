@@ -4,7 +4,9 @@
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren()",
         "devices": {
+          ".validate": "newData.hasChildren()",
           "$deviceId": {
             ".validate": "newData.hasChildren(['deviceId', 'createdAt', 'lastSeenAt', 'platform'])",
             "deviceId": {
@@ -37,6 +39,7 @@
           }
         },
         "relationships": {
+          ".validate": "newData.hasChildren()",
           "$peerDeviceId": {
             ".validate": "newData.hasChildren(['state', 'updatedAt'])",
             "state": {
@@ -51,8 +54,11 @@
           }
         },
         "sync_cursors": {
+          ".validate": "newData.hasChildren()",
           "$writer": {
+            ".validate": "newData.hasChildren()",
             "$conversation": {
+              ".validate": "newData.hasChildren()",
               "$about": {
                 ".validate": "newData.hasChildren(['localDeviceId', 'remoteDeviceId', 'conversationId', 'lastConfirmedSequenceNumber', 'updatedAt'])",
                 "localDeviceId": {

@@ -1,7 +1,7 @@
 ---
 id: E11
 title: Firebase Metadata Sync
-status: bug-sweep-clean (2026-09-04; all 3 sweep bugs resolved, P1/P2=0 — ready for epic→development merge)
+status: done (2026-09-04; original sweep clean, retroactive rule-5 re-review found + fixed E11-B04/B05; E11-B06 (S2) filed with priority left TBD for the human bug_priorities gate — epic→development merge should wait on that stamp, not assume P1/P2=0 ahead of it)
 type: feature
 priority: { moscow: should, wsjf: 3.5 }
 depends_on: [E01, E02]

@@ -403,4 +403,37 @@ void main() {
       );
     },
   );
+
+  test(
+    'test_EARS_FB_2_a_forbidden_field_never_reaches_the_real_write_seam',
+    () async {
+      // E11-B04: the two tests above prove registerDevice's own hardcoded
+      // payload is always allow-list-safe -- they cannot prove the GUARD
+      // itself is what's keeping it safe, since that payload can never
+      // actually violate the allow-list. This test drives the real
+      // guard-then-write sequence (guardedWriteDeviceMetadata, called by
+      // production code exactly as registerDevice calls it) with a
+      // payload that DOES violate the allow-list, and confirms both that
+      // FirebaseBoundaryViolation is thrown AND that the real write seam
+      // (writeDeviceMetadata) was never reached -- deleting either the
+      // guard call or moving it after the write would fail this test.
+      final service = _CapturingFirebaseMetadataService();
+
+      await expectLater(
+        () => service.guardedWriteDeviceMetadata(
+          'uid-123',
+          'device-abc',
+          {'deviceId': 'device-abc', 'plaintext': 'leak'},
+        ),
+        throwsA(isA<FirebaseBoundaryViolation>()),
+      );
+
+      expect(
+        service.capturedData,
+        isNull,
+        reason: 'writeDeviceMetadata must never be reached when the guard '
+            'throws',
+      );
+    },
+  );
 }
