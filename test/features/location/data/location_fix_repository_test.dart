@@ -111,4 +111,56 @@ void main() {
     expect(await repo.readFix('peer-1'), isNull);
     expect(await repo.readFix('peer-2'), isNotNull);
   });
+
+  // E09-T04's added reactive read (task file §5, §7): the same
+  // emit-on-listen shape `StorageSettingsRepository.watch()` established.
+  group('watchFix', () {
+    test('emits null on listen when no row exists', () async {
+      expect(repo.watchFix('peer-1'), emits(isNull));
+    });
+
+    test('emits the row after an upsert', () async {
+      final events = <LocationFixRow?>[];
+      final sub = repo.watchFix('peer-1').listen(events.add);
+      await Future<void>.delayed(Duration.zero);
+      expect(events, [isNull]);
+
+      await repo.upsertFix(
+        peerDeviceId: 'peer-1',
+        latitude: 1.0,
+        longitude: 2.0,
+        capturedAtMs: 100,
+        receivedAtMs: 200,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events.length, greaterThanOrEqualTo(2));
+      expect(events.last, isNotNull);
+      expect(events.last!.latitude, 1.0);
+
+      await sub.cancel();
+    });
+
+    test('emits null after a delete', () async {
+      await repo.upsertFix(
+        peerDeviceId: 'peer-1',
+        latitude: 1.0,
+        longitude: 2.0,
+        capturedAtMs: 100,
+        receivedAtMs: 200,
+      );
+
+      final events = <LocationFixRow?>[];
+      final sub = repo.watchFix('peer-1').listen(events.add);
+      await Future<void>.delayed(Duration.zero);
+      expect(events.last, isNotNull);
+
+      await repo.deleteFix('peer-1');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events.last, isNull);
+
+      await sub.cancel();
+    });
+  });
 }
