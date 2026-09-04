@@ -123,6 +123,27 @@ void main() {
         );
       },
     );
+
+    test(
+      'test_no_manifest_comment_contains_a_literal_double_hyphen',
+      () {
+        // E10-B08: XML 1.0 forbids "--" anywhere inside a comment body (only
+        // the closing "-->" may contain it). An em-dash typo introduced by
+        // E10-B01 broke Gradle's manifest merge for the whole app -- this
+        // guards against that class of typo recurring in any future comment.
+        final RegExp commentPattern = RegExp('<!--(.*?)-->', dotAll: true);
+        for (final RegExpMatch match
+            in commentPattern.allMatches(manifestText)) {
+          final String body = match.group(1)!;
+          expect(
+            body.contains('--'),
+            isFalse,
+            reason: 'comment body contains an illegal "--": '
+                '${body.substring(0, body.length.clamp(0, 80))}...',
+          );
+        }
+      },
+    );
   });
 
   final TestDefaultBinaryMessenger messenger =
