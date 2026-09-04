@@ -295,7 +295,7 @@ void main() {
   });
 
   test(
-      'test_EARS_LOC_15_watch_cancel_then_relisten_does_not_throw',
+      'test_watch_cancel_then_relisten_does_not_throw',
       () async {
     // Regression for PR #41 round-2 (Opus review, S2): a shared mutable
     // subscription list across onListen/onCancel on one broadcast
@@ -323,7 +323,7 @@ void main() {
   });
 
   test(
-      'test_EARS_LOC_15_watch_second_independent_listener_gets_immediate_emit',
+      'test_watch_second_independent_listener_gets_immediate_emit',
       () async {
     // Regression for PR #41 round-2 (Opus review, S3): a second listener on
     // the old shared-broadcast-controller implementation never received an
