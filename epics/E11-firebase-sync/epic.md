@@ -1,7 +1,7 @@
 ---
 id: E11
 title: Firebase Metadata Sync
-status: build-complete (bug sweep run 2026-09-04; 3 bugs open, P2×2 — epic→development blocked)
+status: bug-sweep-clean (2026-09-04; all 3 sweep bugs resolved, P1/P2=0 — ready for epic→development merge)
 type: feature
 priority: { moscow: should, wsjf: 3.5 }
 depends_on: [E01, E02]
@@ -101,8 +101,8 @@ with, and extends, that wrapper rather than replacing it.
 | Bug | Title | Severity | Priority | Status |
 |---|---|---|---|---|
 | E11-B01 | `directory/$deviceId` is never published by the running app (EARS-FB-17 holds only in tests) | S2 | P2→P3 | **resolved: won't-fix-in-E11** — EARS-FB-17 amended to match what shipped; wiring deferred to the first real consumer (E07/E06-T07) |
-| E11-B02 | `lookupDevice` accepts an entry whose `identityPublicKey` disagrees with its own `prekeyBundle` | S2 | P2 | todo |
-| E11-B03 | `E11-T06` edited two files outside its `files:` fence with no §Deviations entry | S4 | P3 | todo |
+| E11-B02 | `lookupDevice` accepts an entry whose `identityPublicKey` disagrees with its own `prekeyBundle` | S2 | P2 | **done** — fixed and cross-model reviewed (PR #57) |
+| E11-B03 | `E11-T06` edited two files outside its `files:` fence with no §Deviations entry | S4 | P3 | **done** — `files:` fence corrected, deviation was already disclosed in prose |
 
 DAG, collision matrix and the reconciliation rationale: `tracker.md`.
 
@@ -244,10 +244,20 @@ inside one payload. Worth recording as a recurrence: the failure mode is not
 "which field carries the identity" but "two fields that must agree, and no
 code that checks".
 
-**Merge status: BLOCKED on `E11-B02` alone.** `E11-B01` resolved (see above,
-now P3, won't-fix-in-E11) — P1 = 0, **P2 = 1** (`E11-B02`). Per
-`skills/release`, the epic→`development` PR opens only when P1/P2 = 0.
-`E11-B03` (S4/P3) does not block.
+**Merge status: CLEAR.** `E11-B01` resolved (won't-fix-in-E11, EARS-FB-17
+amended). `E11-B02` fixed and cross-model reviewed (PR #57, merged) —
+byte-for-byte identity binding check added to `lookupDevice`, independently
+re-derived exploit + fix verification, including a trailing-garbage-bypass
+probe. `E11-B03` fixed (`files:` fence corrected). **P1 = 0, P2 = 0.** Per
+`skills/release`, the epic→`development` PR may now open.
+
+**Non-blocking observation carried forward from `E11-B02`'s round-2
+review**: `identityPublicKey` is not length-canonical —
+`IdentityKey.fromBytes` tolerates trailing bytes past the 33-byte key.
+Unexploitable via the fixed comparison (which operates on the *decoded*
+key), but a future consumer that compares the raw base64 field instead of
+the decoded key could reintroduce a related gap. Flag for whoever builds
+`E07`'s TOFU consumer or `E06-T07`'s fallback.
 
 ## Retro
-<pending — after the bugs are fixed and the epic closes>
+<pending — after the epic merges to development>

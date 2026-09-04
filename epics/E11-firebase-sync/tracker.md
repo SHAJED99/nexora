@@ -1,6 +1,6 @@
 # E11 · Firebase Metadata Sync · Progress
 
-**Status:** build-complete, bug sweep run 2026-09-04 — `E11-B01` resolved (won't-fix-in-E11, EARS-FB-17 amended), `E11-B02` (P2) is the sole merge-blocking bug, `E11-B03` (P3) non-blocking · **Started:** 2026-09-04 · **Completed (build):** 2026-09-04 · **Progress:** 6/6 tasks done
+**Status:** bug-sweep-clean, all 3 findings resolved 2026-09-04 (`E11-B01` won't-fix, `E11-B02` fixed + cross-model reviewed, `E11-B03` docs-fixed) — **P1/P2=0, ready for epic→development merge** · **Started:** 2026-09-04 · **Completed:** 2026-09-04 · **Progress:** 6/6 tasks done
 
 ## Tasks
 
@@ -18,8 +18,8 @@
 | Bug | Status | Severity | Priority | Owner |
 |---|---|---|---|---|
 | E11-B01 | **done — resolved won't-fix-in-E11** | S2 | P3 (was P2) | planner — took the bug's own named "defensible human override"; EARS-FB-17 amended, wiring deferred to first real consumer |
-| E11-B02 | todo | S2 | P2 | builder |
-| E11-B03 | todo | S4 | P3 | planner (docs-only) |
+| E11-B02 | **done** | S2 | P2 | builder — fixed, cross-model reviewed (PR #57) |
+| E11-B03 | **done** | S4 | P3 | planner (docs-only) — `files:` fence corrected |
 
 ## DAG
 
@@ -217,3 +217,17 @@ is BLOCKED on that one bug alone.**
   `E11-B02` (S2/P2: `lookupDevice` accepts a self-inconsistent identity),
   `E11-B03` (S4/P3: T06 fence breach, docs-only). Epic→`development` PR
   blocked until P1/P2 = 0.
+- 2026-09-04 All three sweep findings resolved. `E11-B01`: took the bug's
+  own named "defensible human override" -- EARS-FB-17 amended to describe
+  the proven-but-unwired capability actually shipped, wiring deferred to
+  the directory's first real consumer (E07 TOFU / E06-T07 fallback).
+  `E11-B02`: fixed with a byte-for-byte identity binding check in
+  lookupDevice, cross-model reviewed (PR #57) with independent exploit
+  re-derivation, mutation testing of the fix, and a trailing-garbage-bypass
+  probe. `E11-B03`: E11-T06's files: fence corrected retroactively; the
+  deviation disclosure the sweep's grep missed was already present in
+  prose under section 9. **P1/P2 = 0. Epic->development merge is CLEAR.**
+  Non-blocking carry-forward: `identityPublicKey` is not length-canonical
+  (IdentityKey.fromBytes tolerates trailing bytes) -- unexploitable via the
+  fixed comparison but worth a note for E07/E06-T07's own eventual reads
+  of this field.
