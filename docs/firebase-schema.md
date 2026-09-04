@@ -18,7 +18,7 @@ Project: `nexora-b3a97` · Realtime Database instance:
 | `users/$uid/devices/$deviceId` | live | `deviceId:String`, `createdAt:int(ServerValue)`, `lastSeenAt:int(ServerValue)`, `platform:String` | device registry metadata | `E01-T02` | structural (`.validate` + `$other` deny) — `E11-T02` |
 | `users/$uid/sync_cursors/$writerDeviceId/$conversationId/$aboutDeviceId` | live | `localDeviceId:String`, `remoteDeviceId:String`, `conversationId:String`, `lastConfirmedSequenceNumber:int`, `updatedAt:int` | synchronization metadata (`NFR-PRIV-001`) | `E05-T04` | structural (`.validate` + `$other` deny) — `E11-T02` |
 | `users/$uid/devices/$deviceId/revocation` | live | `revokedAt:int(ServerValue)`, `revokedByDeviceId:String` | revocation information | `E11-T04` | structural (`.validate` + `$other` deny) — `E11-T04` |
-| `users/$uid/relationships/$peerDeviceId` | reserved | — declared by `E11-T05` | trust metadata, block metadata | `E11-T05` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
+| `users/$uid/relationships/$peerDeviceId` | live | `state:String` (one of `trusted`/`allowed`/`unknown`/`blocked`), `updatedAt:int(ServerValue)` | trust metadata, block metadata | `E11-T05` | structural (`.validate` + `$other` deny) — `E11-T05` |
 | `users/$uid/push/$deviceId` | reserved (no owner) | — | push notification information | ⏳ `OQ-E11-2` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
 | `config/version_policy` | reserved (no owner) | — | application version policy | ⏳ `OQ-E11-2` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
 | `directory/$deviceId` | reserved | — declared by `E11-T06` | device public identity information | `E11-T06` (`ADR-0008` accepted, option 2) | client guard only (no rule yet — reserved node, `E11-T02` §4) |
@@ -34,7 +34,11 @@ The first two `live` rows above are pre-existing (`E01-T02`, `E05-T04`);
 changing a single field, path, or the paths' argument order (task §6 Risks).
 The third `live` row (`.../revocation`) is new — `E11-T04`'s own deliverable,
 a child node under the pre-existing `devices/$deviceId` node rather than a
-new top-level path. The remaining `reserved` rows are declared here as
+new top-level path. The fourth `live` row (`relationships/$peerDeviceId`) is
+`E11-T05`'s own deliverable — a new top-level-under-`$uid` node, own-account
+only (`ADR-0008`'s declined-option-3 boundary): `$peerDeviceId` is always a
+remote device id, never a foreign account's uid, and this row does not
+change that. The remaining `reserved` rows are declared here as
 placeholders their owning task flips to `live` — this is the anti-collision
 mechanism for this shared doc, not a promise of behaviour (see
 `epics/E11-firebase-sync/epic.md` §Analyze gate, "Contract sanity").
@@ -44,24 +48,28 @@ mechanism for this shared doc, not a promise of behaviour (see
 - Paths: `lib/core/services/firebase_paths.dart` — `FirebasePaths.device`,
   `FirebasePaths.syncCursor`, `FirebasePaths.devices` (the parent
   `users/$uid/devices` node, used to enumerate every device's revocation
-  flag in one read) and `FirebasePaths.deviceRevocation` (E11-T04). Pure
-  functions, no I/O.
+  flag in one read), `FirebasePaths.deviceRevocation` (E11-T04),
+  `FirebasePaths.relationships` (the parent `users/$uid/relationships`
+  node, used to enumerate every peer relationship in one read) and
+  `FirebasePaths.relationship` (E11-T05). Pure functions, no I/O.
 - Allowed fields: `lib/core/services/firebase_boundary.dart` —
   `FirebaseBoundary.allowedFields(FirebaseNodeKind)` and
   `FirebaseBoundary.assertAllowedFields(FirebaseNodeKind, Map<String, Object?>)`,
   which throws `FirebaseBoundaryViolation` (naming the offending key(s),
   never their values) before any write reaches `.set()`.
-- The three existing wrappers — `FirebaseMetadataService.registerDevice`
+- The four existing wrappers — `FirebaseMetadataService.registerDevice`
   (`lib/core/services/firebase_metadata_service.dart`),
   `SyncCursorService.writeCursorToFirebase`
-  (`lib/features/messaging/domain/sync_cursor_service.dart`) and
+  (`lib/features/messaging/domain/sync_cursor_service.dart`),
   `DeviceRevocationService.revoke`
-  (`lib/core/services/device_revocation_service.dart`, E11-T04) — build their
-  payload, call `assertAllowedFields` **before** entering their existing
-  best-effort `try`/`catch`, then call the path-registry function for the
-  actual `.ref(...)` call. This ordering matters: a boundary violation must
-  propagate as a programming error, not get swallowed and logged as "just
-  another Firebase error" (task §6 Risks).
+  (`lib/core/services/device_revocation_service.dart`, E11-T04) and
+  `RelationshipSyncService.push`
+  (`lib/core/services/relationship_sync_service.dart`, E11-T05) — build
+  their payload, call `assertAllowedFields` **before** entering their
+  existing best-effort `try`/`catch`, then call the path-registry function
+  for the actual `.ref(...)` call. This ordering matters: a boundary
+  violation must propagate as a programming error, not get swallowed and
+  logged as "just another Firebase error" (task §6 Risks).
 
 ## Forbidden anywhere in the tree
 
