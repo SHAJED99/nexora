@@ -13,7 +13,13 @@
 // §Enums (diffable, doesn't break silently on reordering — irrelevant to an
 // in-memory enum today, but keeps the convention consistent everywhere Dart
 // enums appear in this codebase).
-enum FirebaseNodeKind { device, syncCursor, deviceRevocation, relationship }
+enum FirebaseNodeKind {
+  device,
+  syncCursor,
+  deviceRevocation,
+  relationship,
+  directory,
+}
 
 /// Thrown by [FirebaseBoundary.assertAllowedFields] when a payload carries a
 /// key outside its node kind's allow-list. A programming error (extends
@@ -70,6 +76,19 @@ class FirebaseBoundary {
     FirebaseNodeKind.relationship: {
       'state',
       'updatedAt',
+    },
+    // `directory/$deviceId` — public device identity information: a
+    // device's public identity key, its current (public) prekey bundle,
+    // and its revocation flag (`DeviceDirectoryService.publish`, E11-T06,
+    // `ADR-0008` option 2). `ownerUid` is the write-ownership marker the
+    // rules file checks — never a private key, session key, or session
+    // state; only public-by-construction material may ever reach this set
+    // (task §2, non-negotiable).
+    FirebaseNodeKind.directory: {
+      'identityPublicKey',
+      'prekeyBundle',
+      'revokedAt',
+      'ownerUid',
     },
   };
 

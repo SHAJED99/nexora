@@ -28,6 +28,7 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/services/device_directory_service.dart';
 import 'package:nexora/core/services/firebase_boundary.dart';
 import 'package:nexora/core/services/firebase_paths.dart';
 import 'package:nexora/features/messaging/domain/conflict_resolver.dart';
@@ -44,6 +45,7 @@ class DeviceRevocationService {
     FirebaseDatabase? firebaseDatabase,
     Duration? timeout,
     DateTime Function() clock = DateTime.now,
+    DeviceDirectoryService? directoryService,
   })  : // Named params (`database`) are public API; the private field below
         // can't share that name, so `prefer_initializing_formals` doesn't
         // apply here despite the trivial assignment -- same reasoning as
@@ -56,7 +58,10 @@ class DeviceRevocationService {
         // just another failure mode, caught below like any other Realtime
         // Database error.
         _timeout = timeout ?? const Duration(seconds: 10),
-        _clock = clock; // ignore: prefer_initializing_formals
+        _clock = clock, // ignore: prefer_initializing_formals
+        // E11-T06 (`ADR-0008` option 2): optional -- `null` (the default)
+        // is a pure no-op, so every existing caller/test is unaffected.
+        _directoryService = directoryService; // ignore: prefer_initializing_formals
 
   /// This device's own device id -- recorded as `revokedByDeviceId` when
   /// this device is the one issuing a revocation.
@@ -66,6 +71,7 @@ class DeviceRevocationService {
   final FirebaseDatabase? _firebaseDatabaseOverride;
   final Duration _timeout;
   final DateTime Function() _clock;
+  final DeviceDirectoryService? _directoryService;
 
   // Resolved lazily, mirroring FirebaseMetadataService._database /
   // SyncCursorService._firebaseDatabase -- so constructing a
@@ -111,6 +117,21 @@ class DeviceRevocationService {
         'firebase.device_revocation_write_failed',
         cause: e,
       );
+    }
+
+    // E11-T06 (`ADR-0008` option 2): republish this device's own directory
+    // entry so its `revokedAt` flag is current. Only when [deviceId] IS
+    // this device ([localDeviceId]) -- `DeviceDirectoryService.publish`
+    // assembles its `identityPublicKey`/`prekeyBundle` fields from THIS
+    // process's own `IdentityService`, which holds no key material for any
+    // *other* device on the account (FR-AUTH-004 lets [deviceId] name one
+    // of those). Publishing this device's own bundle under a different
+    // device's directory entry would corrupt that entry with the wrong
+    // identity key, so this call is skipped entirely for that case -- the
+    // other device republishes its own entry (with its own now-current
+    // `revokedAt`) the next time ITS `IdentityService`/`revoke` runs.
+    if (deviceId == localDeviceId) {
+      await _directoryService?.publish(uid, deviceId);
     }
   }
 
