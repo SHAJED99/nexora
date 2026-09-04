@@ -1,7 +1,7 @@
 ---
 id: E09
 title: Location Sharing
-status: in-progress
+status: done
 type: feature
 priority: { moscow: could, wsjf: 3.7 }
 depends_on: [E02, E03, E04]
