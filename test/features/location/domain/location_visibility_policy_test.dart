@@ -230,6 +230,29 @@ void main() {
                 "resolver's own verdict on the same two inputs, so the "
                 'delegation is proven rather than coincidental',
           );
+
+          // E09-B12: `isVisible` alone cannot distinguish `globalOff` from
+          // `peerOff` -- both make it `false`. This sweep's own coverage
+          // of `(false, false)` would otherwise pass identically whether
+          // the reason-precedence ternary in `location_visibility_policy
+          // .dart` reads `!globalEnabled ? globalOff : peerOff` (correct,
+          // task file §5) or the inverted `!peerEnabled ? peerOff :
+          // globalOff` -- a mutant E09-B05's re-review confirmed survives
+          // every other test in this file.
+          if (!result.isVisible) {
+            expect(
+              result.reason,
+              equals(
+                !globalEnabled
+                    ? LocationUnavailableReason.globalOff
+                    : LocationUnavailableReason.peerOff,
+              ),
+              reason:
+                  'globalEnabled=$globalEnabled peerEnabled=$peerEnabled: '
+                  'globalOff must outrank peerOff in the precedence order '
+                  '(task file §5) whenever both fail at once',
+            );
+          }
         }
       }
     });
