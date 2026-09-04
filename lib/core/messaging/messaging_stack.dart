@@ -137,8 +137,8 @@ import '../../features/groups/domain/group_membership_service.dart';
 import '../../features/groups/domain/send_group_message_use_case.dart';
 import '../../features/location/data/location_fix_repository.dart';
 import '../../features/location/data/location_settings_repository.dart';
+import '../../features/location/data/platform_location_source.dart';
 import '../../features/location/domain/location_share_service.dart';
-import '../../features/location/domain/location_source.dart';
 import '../../features/trust/data/relationship_repository.dart';
 import '../../features/trust/domain/evaluate_connection_request_use_case.dart';
 import 'ciphertext_codec.dart';
@@ -183,22 +183,6 @@ const Duration _defaultTtl = Duration(days: 3);
 /// `MessagingCoordinator` itself (task file §5's contract: "injected, never
 /// hard-coded at a call site") — a test or a future caller can override it.
 const Duration _defaultCoordinatorTickInterval = Duration(seconds: 60);
-
-/// The composition root's placeholder [LocationSource] until `E09-T05`
-/// wires a real device implementation — this task's own §4 forbids adding
-/// `geolocator`/a platform channel/a runtime permission here. Always
-/// reports "no fix available," never a fabricated position — the same
-/// honest-null-object shape `call_signaling.dart`'s own
-/// `NullCallMediaTransport` already establishes for an unimplemented seam.
-/// [LocationShareService.locationSource] is a `required` constructor
-/// parameter (task file §5's contract), so composing the stack needs SOME
-/// concrete value even before a real one exists; this is that value.
-class _UnavailableLocationSource implements LocationSource {
-  const _UnavailableLocationSource();
-
-  @override
-  Future<LocationFix?> currentFix() async => null;
-}
 
 /// `ready`, or `unavailable` with a human-readable (never secret, never
 /// device-id- or key-bearing) reason — task file §3/§5. A screen reads this
@@ -403,14 +387,17 @@ class MessagingStack {
     // header for why this sub-protocol's payload is ciphertext through the
     // pairwise session, matching `group_control.dart`/`call_signaling.dart`
     // rather than `PrekeyExchange`/`DeliveryAck`'s cleartext one.
-    // `locationSource` is `_UnavailableLocationSource` until `E09-T05`
-    // wires a real device implementation (this file's own header, above).
+    // `locationSource` is a real `PlatformLocationSource` as of E09-T05 --
+    // constructed exactly once, here, in this composition root (task file
+    // §3: "constructed exactly once, replacing whatever no-op/absent source
+    // that task left in place"). `E09-T03`'s own placeholder
+    // (`_UnavailableLocationSource`) is retired by this same change.
     locationShareService = LocationShareService(
       stack: this,
       settings: LocationSettingsRepository(db: db),
       fixes: LocationFixRepository(db: db),
       relationships: RelationshipRepository(db),
-      locationSource: const _UnavailableLocationSource(),
+      locationSource: PlatformLocationSource(),
     );
     inbound.registerControlHandler(
       kControlKindLocationShare,
@@ -494,9 +481,9 @@ class MessagingStack {
 
   /// E09-T03: encrypted location share (control kind 7) — gated send +
   /// gated receive. Constructed here, registered on `inbound`'s
-  /// `controlKind == 7` slot. Built with a placeholder
-  /// [_UnavailableLocationSource] until `E09-T05` wires a real device
-  /// location provider — see this file's header comment on that class.
+  /// `controlKind == 7` slot. Built with a real [PlatformLocationSource]
+  /// (E09-T05) — this device's own position is read only after
+  /// `LocationVisibilityPolicy` has already approved a share (task file §2).
   late final LocationShareService locationShareService;
 
   /// This device's own local identity (ADR-0005: local, not Firebase-

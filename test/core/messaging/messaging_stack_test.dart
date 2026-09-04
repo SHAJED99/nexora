@@ -28,11 +28,14 @@ import 'package:nexora/core/routing_engine/routing_engine.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/groups/data/group_repository.dart';
+import 'package:nexora/features/location/data/location_settings_repository.dart';
 import 'package:nexora/features/location/domain/location_share_service.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/messaging/domain/receive_message_use_case.dart';
 import 'package:nexora/features/messaging/domain/send_message_use_case.dart';
 import 'package:nexora/features/messaging/domain/sync_cursor_service.dart';
+import 'package:nexora/features/trust/data/relationship_repository.dart';
+import 'package:nexora/features/trust/domain/relationship.dart';
 
 Uint8List _plaintext(String s) => Uint8List.fromList(s.codeUnits);
 
@@ -615,6 +618,47 @@ void main() {
       );
 
       await stack.dispose();
+    },
+  );
+
+  // --- E09-T05: real PlatformLocationSource wiring ----------------------
+
+  test(
+    'test_composition_root_wires_a_real_platform_location_source_not_the_retired_placeholder',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'device-a',
+        transport: newTransport(),
+      );
+      addTearDown(stack.dispose);
+      expect(stack.status, const MessagingStackStatus.ready());
+
+      await RelationshipRepository(stack.db)
+          .upsert('device-b', RelationshipState.trusted);
+      final settings = LocationSettingsRepository(db: stack.db);
+      await settings.writeGlobalEnabled(true);
+      await settings.writePeerEnabled('device-b', true);
+
+      // Before E09-T05, `stack.locationShareService`'s source was
+      // `_UnavailableLocationSource` -- an unconditional, permanent
+      // no-fix that never touched a platform channel at all. This test
+      // environment has no real GPS/geolocator platform channel mocked
+      // either, so a genuinely wired `PlatformLocationSource` also
+      // resolves to `noFix` here -- the same OUTCOME, but for a different
+      // REASON (an actual acquisition attempt that fails, per
+      // EARS-LOC-16, not a source that never tries). What this test
+      // actually proves is the one thing a same-outcome check cannot:
+      // `share()` runs to completion without throwing through a real
+      // attempted permission/provider check with no platform channel
+      // present -- exactly the "does not crash the caller" contract
+      // `PlatformLocationSource.currentFix()` promises (task file §5),
+      // now exercised through the composition root end to end, not just
+      // in `platform_location_source_test.dart`'s own unit tests against
+      // injected seams.
+      final outcome = await stack.locationShareService.share('device-b');
+      expect(outcome, const LocationShareOutcomeNoFix());
     },
   );
 }

@@ -71,6 +71,14 @@ dependencies:
   # distribution model (see epic.md OQ-E03-1).
   libsignal_protocol_dart: ^0.8.2
 
+  # Device location acquisition — E09-T05, OQ-E09-T05-1 (resolved
+  # 2026-09-04, human-approved). Android only for this task; the
+  # ecosystem's de-facto Flutter location package, whose
+  # permission/timeout/last-known shape already matches this task's
+  # contract (task file §5). Pinned to an exact version, not a caret range,
+  # per the answered question.
+  geolocator: 14.0.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
