@@ -165,7 +165,8 @@ final class LocationShareOutcomeTransportFailed extends LocationShareOutcome {
   const LocationShareOutcomeTransportFailed();
 
   @override
-  bool operator ==(Object other) => other is LocationShareOutcomeTransportFailed;
+  bool operator ==(Object other) =>
+      other is LocationShareOutcomeTransportFailed;
 
   @override
   int get hashCode => (LocationShareOutcomeTransportFailed).hashCode;
@@ -184,12 +185,12 @@ class LocationShareService {
     required RelationshipRepository relationships,
     required LocationSource locationSource,
     DateTime Function() clock = DateTime.now,
-  })  : _stack = stack,
-        _settings = settings,
-        _fixes = fixes,
-        _relationships = relationships,
-        _locationSource = locationSource,
-        _clock = clock;
+  }) : _stack = stack,
+       _settings = settings,
+       _fixes = fixes,
+       _relationships = relationships,
+       _locationSource = locationSource,
+       _clock = clock;
 
   final MessagingStack _stack;
   final LocationSettingsRepository _settings;
@@ -245,15 +246,19 @@ class LocationShareService {
     final plaintext = LocationShareFrame(
       latitudeE7: (fix.latitude * 1e7).round(),
       longitudeE7: (fix.longitude * 1e7).round(),
-      accuracyMmm:
-          fix.accuracyM == null ? null : (fix.accuracyM! * 1000).round(),
+      accuracyMmm: fix.accuracyM == null
+          ? null
+          : (fix.accuracyM! * 1000).round(),
       capturedAtMs: fix.capturedAtMs,
     ).serialize();
 
     try {
       await _stack.prekeyExchange.ensureSession(peerDeviceId);
 
-      final address = SignalProtocolAddress(peerDeviceId, _remoteSignalDeviceId);
+      final address = SignalProtocolAddress(
+        peerDeviceId,
+        _remoteSignalDeviceId,
+      );
       final ciphertext = await _stack.cryptoService.encrypt(address, plaintext);
       final body = encodeCiphertextControlBody(ciphertext);
       final framedBody = Uint8List(body.length + 1);
@@ -291,7 +296,8 @@ class LocationShareService {
         );
         await _stack.relayEngine.processQueue();
         final state = await _stack.relayEngine.deliveryStateOf(packetId);
-        delivered = state == RelayDeliveryState.forwarding ||
+        delivered =
+            state == RelayDeliveryState.forwarding ||
             state == RelayDeliveryState.delivered;
       } else {
         delivered = await _stack.transport.send(peerDeviceId, serialized);
@@ -329,8 +335,22 @@ class LocationShareService {
     // attempt decryption under -- see this file's header for why a
     // successful decrypt under this address, not the claim itself, is what
     // this file trusts from here on (E06-B04's lesson).
-    final address =
-        SignalProtocolAddress(wireFrame.source, _remoteSignalDeviceId);
+    final address = SignalProtocolAddress(
+      wireFrame.source,
+      _remoteSignalDeviceId,
+    );
+
+    // E09-B11 (ADR-0003 addendum, 2026-09-04): TOFU's risk is accepted
+    // app-wide, not patched per-feature -- this file's own E09-B09 gate
+    // (an `isTrustedIdentity`/`getIdentity` check before allowing
+    // `SessionBuilder.process` to run) was proven not to close the
+    // exploit: four sibling decrypt call sites share the same unguarded
+    // identity store, so an attacker can pre-poison an identity slot
+    // through any of them before this gate is ever reached. The gate also
+    // regressed legitimate first-time location sharing between two
+    // already-trusted peers with no prior Signal session. No gate here;
+    // see the addendum for the accepted-risk rationale.
+
     final Uint8List plaintext;
     try {
       plaintext = await _stack.cryptoService.decrypt(address, ciphertext);

@@ -576,6 +576,94 @@ void main() {
       expect(await LocationFixRepository(db: bob.db).readFix('mallory'), isNull);
     });
 
+    test(
+      'test_EARS_LOC_12_prekey_message_with_forged_source_accepted_as_TOFU_risk',
+      () async {
+        // E09-B11 (ADR-0003 addendum, 2026-09-04): this test used to assert
+        // E09-B09's gate dropped this forgery and left alice's identity
+        // slot untouched. That gate is gone -- proven not to close the
+        // exploit (four sibling decrypt call sites share the same
+        // unguarded identity store) and shown to regress legitimate
+        // first-time location sharing between already-trusted peers. The
+        // human accepted TOFU's risk app-wide instead of patching this one
+        // call site. This test now documents that accepted outcome instead
+        // of a prevention that never actually worked: bob's session with
+        // "alice" gets silently established using mallory's identity key,
+        // and the forged fix IS stored. This is intentional, tracked risk,
+        // not a regression -- do not "fix" this test back without revisiting
+        // the ADR-0003 addendum decision first.
+        final bob = await newStack('bob', nextSuffix());
+        final mallory = await newStack('mallory', nextSuffix());
+        addTearDown(bob.dispose);
+        addTearDown(mallory.dispose);
+
+        await allowVisibility(bob, 'alice');
+
+        // Bob has no prior session (and no stored identity) for alice.
+        expect(
+          await bob.signalStore
+              .getIdentity(SignalProtocolAddress('alice', 1)),
+          isNull,
+        );
+
+        // Mallory establishes a session claiming to be talking to "bob" and
+        // encrypts a fabricated location fix. Since bob has never confirmed
+        // a session back to mallory, this ciphertext is a fresh
+        // `PreKeySignalMessage` (the X3DH responder path bob would have to
+        // run on receipt).
+        await mallory.cryptoService.establishSession(
+          SignalProtocolAddress('bob', 1),
+          await bob.identityService.getLocalPreKeyBundle(),
+        );
+        final forgedFrame = LocationShareFrame(
+          latitudeE7: 511111111,
+          longitudeE7: -1111111,
+          capturedAtMs: 1000,
+        ).serialize();
+        final maliciousCiphertext = await mallory.cryptoService.encrypt(
+          SignalProtocolAddress('bob', 1),
+          forgedFrame,
+        );
+        expect(maliciousCiphertext, isA<PreKeySignalMessage>());
+
+        // Wrapped with `source` spoofed to alice -- a trusted contact bob
+        // has never actually talked to over Signal.
+        final wireFrame = RelayPacketFrame(
+          payloadType: PayloadType.control,
+          packetId: 'pkt-forged',
+          destination: 'bob',
+          source: 'alice',
+          priority: 0,
+          createdAtMs: 0,
+          expiresAtMs: 999999999999,
+          payload: encodeCiphertextControlBody(maliciousCiphertext),
+        );
+
+        await bob.locationShareService.handleWireFrame(wireFrame);
+
+        // The forged fix IS stored under alice's name -- TOFU accepted the
+        // ciphertext as a legitimate first contact from "alice".
+        final storedFix = await LocationFixRepository(
+          db: bob.db,
+        ).readFix('alice');
+        expect(storedFix, isNotNull);
+        expect(storedFix!.latitude, closeTo(51.1111111, 1e-6));
+
+        // ...and alice's identity slot IS now poisoned with mallory's key --
+        // the exact accepted risk. Any genuine future contact from the real
+        // alice will decrypt under mallory's identity, not her own, until
+        // something out-of-band (not built for v1) catches the mismatch.
+        final poisonedIdentity = await bob.signalStore.getIdentity(
+          SignalProtocolAddress('alice', 1),
+        );
+        final malloryIdentity = (await mallory.signalStore
+                .getIdentityKeyPair())
+            .getPublicKey();
+        expect(poisonedIdentity, isNotNull);
+        expect(poisonedIdentity!.serialize(), malloryIdentity.serialize());
+      },
+    );
+
     test('test_EARS_LOC_12_malformed_frame_dropped', () async {
       final alice = await newStack('alice', nextSuffix());
       final bob = await newStack('bob', nextSuffix());
