@@ -28,6 +28,7 @@ import 'package:nexora/core/routing_engine/routing_engine.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/groups/data/group_repository.dart';
+import 'package:nexora/features/location/data/location_fix_repository.dart';
 import 'package:nexora/features/location/data/location_settings_repository.dart';
 import 'package:nexora/features/location/domain/location_share_service.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
@@ -659,6 +660,48 @@ void main() {
       // injected seams.
       final outcome = await stack.locationShareService.share('device-b');
       expect(outcome, const LocationShareOutcomeNoFix());
+    },
+  );
+
+  // --- E09-B06: the privacy sweep is wired at composition-root startup --
+
+  test(
+    'test_EARS_LOC_5_sweep_runs_at_composition_root_startup',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+
+      // Seed a stored fix for a peer this device has already blocked --
+      // written DIRECTLY to `location_fixes`, deliberately WITHOUT ever
+      // sending or receiving a wire frame, so `handleWireFrame`'s own
+      // delete-on-not-visible branch (which only fires on a NEW inbound
+      // frame) cannot possibly be what deletes it -- mirrors
+      // `location_share_service_test.dart`'s own "privacy sweep" group
+      // reasoning: a test that routed through a frame would prove nothing
+      // about the composition-root wiring this bug is actually about.
+      await RelationshipRepository(db)
+          .upsert('device-b', RelationshipState.blocked);
+      final fixes = LocationFixRepository(db: db);
+      await fixes.upsertFix(
+        peerDeviceId: 'device-b',
+        latitude: 12.0,
+        longitude: 34.0,
+        capturedAtMs: 1000,
+        receivedAtMs: 1000,
+      );
+      expect(await fixes.readFix('device-b'), isNotNull);
+
+      // No message is ever received by this stack -- `create()`'s own
+      // startup sweep is what must remove the row, not any inbound wire
+      // frame.
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'device-a',
+        transport: newTransport(),
+      );
+      addTearDown(stack.dispose);
+      expect(stack.status, const MessagingStackStatus.ready());
+
+      expect(await fixes.readFix('device-b'), isNull);
     },
   );
 }
