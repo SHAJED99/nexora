@@ -67,10 +67,18 @@
             android:foregroundServiceType="connectedDevice" />
         <!-- E10-T08 / ADR-0007 §S3: restarts ForegroundMeshService on boot,
              but only if BackgroundApiHost's persisted "messaging active"
-             flag was on at last shutdown; see BootReceiver.kt. -->
+             flag was on at last shutdown; see BootReceiver.kt.
+             exported="true" is required here (E10-B01): BOOT_COMPLETED is
+             broadcast by the system server under a different UID than this
+             app's, and an exported="false" receiver never receives a
+             cross-UID broadcast at all -- Android's own boot-receiver docs
+             declare it exported. Safe to export: onReceive hard-filters on
+             the action string, then on the persisted flag (BootReceiver.kt),
+             so a spoofed intent can at most start a service this app was
+             already configured to start. -->
         <receiver
             android:name=".background.BootReceiver"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>

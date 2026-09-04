@@ -14,6 +14,8 @@
 // codec, `stoppedBySystem` events are observable, and `BackgroundStub`'s
 // double-start idempotence contract holds for whatever calls E10-T10 will
 // make against it.
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/background/background_service.dart';
@@ -22,6 +24,106 @@ import 'package:nexora/core/background/generated/background_api.g.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('EARS-PLAT-10 — the boot receiver must actually be reachable', () {
+    // E10-B01: `android:exported="false"` on a manifest-declared receiver
+    // means only components running under this app's own UID may deliver
+    // an intent to it. `ACTION_BOOT_COMPLETED` is broadcast by the system
+    // server under a DIFFERENT uid, so an unexported BootReceiver never
+    // receives it at all -- the whole boot-restart feature (ADR-0007 §S3)
+    // is then dead on every device, silently, because nothing in this repo
+    // asserted the one manifest attribute the feature actually depends on.
+    // This is the only layer this defect is assertable at without a real
+    // device (no installable hardware in this environment -- the standing
+    // E04 limitation).
+    //
+    // Deliberately no XML-parsing package: `xml` is only a transitive
+    // dependency today (not declared in pubspec.yaml), and adding a new
+    // direct dependency is a rule-3 human gate this bug fix's own scope
+    // fence does not authorise. A targeted regex extraction of the two
+    // `<receiver>`/`<service>` elements by name is sufficient and exact
+    // for this manifest's structure.
+    late String manifestText;
+
+    setUpAll(() {
+      final file = File(
+        '${Directory.current.path}/android/app/src/main/AndroidManifest.xml',
+      );
+      manifestText = file.readAsStringSync();
+    });
+
+    String elementFor(String tag, String name) {
+      final pattern = RegExp(
+        '<$tag\\b[^>]*android:name="${RegExp.escape(name)}"[^>]*'
+        '(?:/>|>.*?</$tag>)',
+        dotAll: true,
+      );
+      final match = pattern.firstMatch(manifestText);
+      expect(
+        match,
+        isNotNull,
+        reason: 'no <$tag android:name="$name"> element found in the '
+            'manifest',
+      );
+      return match!.group(0)!;
+    }
+
+    test(
+      'test_EARS_PLAT_10_boot_receiver_is_exported_so_the_system_can_deliver_boot_completed',
+      () {
+        final receiver = elementFor('receiver', '.background.BootReceiver');
+        expect(
+          receiver,
+          contains('android:exported="true"'),
+          reason:
+              'BOOT_COMPLETED is broadcast by the system server (a different '
+              'uid than this app) -- an exported="false" receiver can never '
+              'be delivered this broadcast, making the whole boot-restart '
+              'feature (ADR-0007 §S3) unreachable on every device (E10-B01).',
+        );
+      },
+    );
+
+    test(
+      'test_EARS_PLAT_10_foreground_service_stays_unexported',
+      () {
+        // The fix for B01 is scoped to the receiver only -- the service
+        // itself must remain unexported, since it is only ever started by
+        // this app (either via the Pigeon channel or by BootReceiver
+        // itself, both in-process). Exporting it would be a real regression
+        // this test exists to catch.
+        final service = elementFor(
+          'service',
+          '.background.ForegroundMeshService',
+        );
+        expect(service, contains('android:exported="false"'));
+      },
+    );
+
+    test(
+      'test_EARS_PLAT_10_boot_receiver_declares_the_boot_completed_action',
+      () {
+        final receiver = elementFor('receiver', '.background.BootReceiver');
+        expect(
+          receiver,
+          contains('android.intent.action.BOOT_COMPLETED'),
+        );
+      },
+    );
+
+    test(
+      'test_EARS_PLAT_10_receive_boot_completed_permission_is_declared',
+      () {
+        expect(
+          manifestText,
+          contains(
+            '<uses-permission android:name='
+            '"android.permission.RECEIVE_BOOT_COMPLETED" />',
+          ),
+        );
+      },
+    );
+  });
 
   final TestDefaultBinaryMessenger messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
