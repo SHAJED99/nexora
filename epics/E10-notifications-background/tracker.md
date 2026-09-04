@@ -726,3 +726,41 @@ next dispatch won't see it.
   exactly the scenario it was written for. Recommend as a small follow-up
   fix the next time `ForegroundMeshService.kt` is touched, not a reopen of
   `E10-B05`.
+- **CF-19 · `E10-B09`'s cold-start tap delivery is inferred, not proven on
+  a real device.** A true cold start (process launched by tapping a
+  notification alone) runs `configureFlutterEngine` before Dart's own
+  entrypoint executes, so `NotificationApiHost.notifyTapped`'s event post
+  reaches a Dart side that hasn't constructed `NotificationService`/
+  registered `NotificationEventsApi.setUp` yet. This should be safely
+  buffered by `dart:ui`'s platform-channel `ChannelBuffers` (default
+  capacity 1 per channel) until that registration happens, but this has
+  not been verified on real hardware — no device/emulator existed in this
+  environment (same constraint noted throughout this project, e.g.
+  E09-T05's own unmet manual-verification gate). Found by the `E10-B09`
+  reviewer (PR #79). The warm path (app already running, `singleTop`,
+  `onNewIntent`) is unaffected and does not depend on this timing.
+  Recommend as a manual verification step the next time real hardware is
+  available, not a blocking gap today.
+- **CF-20 · `E10-B09`'s tap intent extras are never consumed, so a
+  process-death-then-restore Activity recreation could re-deliver the
+  same tap.** `MainActivity`'s `setIntent(intent)` in `onNewIntent`
+  persists the tap extras on the Activity's own intent; if the OS later
+  recreates that Activity after a process death (not a config change,
+  which the manifest already covers via `android:configChanges`), it
+  re-enters `configureFlutterEngine` with the same intent and could
+  re-forward the same tap. No user-visible impact today —
+  `notificationTapped` has no consumer yet (`OQ-E10-1` still open) — but
+  becomes a real double-navigation the moment routing lands. Found by the
+  `E10-B09` reviewer (PR #79). Fix direction, for whoever builds the
+  routing: `intent.removeExtra(...)` immediately after
+  `handleNotificationTapIntent` consumes the extras.
+- **CF-21 · `NotificationService.post()`/`cancel()` share `ensureReady()`'s
+  original defect class, just not its own bug's fence.** Both forward the
+  raw Pigeon call directly; a "host not attached" `PlatformException` (the
+  same shape `E10-B10` fixed for `ensureChannels()`) would propagate
+  uncaught from either. `post()`'s own doc comment ("never throws") is
+  scoped only to a permission refusal, not this case. Found by the
+  `E10-B10` reviewer (PR #79), correctly left out of that bug's fence
+  (`post`/`cancel` are explicitly not in `E10-B10`'s `files:`). Recommend
+  as the next small fix in this file, same shape as `E10-B10`, not folded
+  in retroactively.

@@ -45,7 +45,7 @@ class NotificationApiHost(
     const val REQUEST_CODE = 4300
 
     /** Intent extra key: the tapped notification's Pigeon id (a [Long]),
-     * read back by [MainActivity]'s launch/new-intent handling (E10-B07). */
+     * read back by [MainActivity]'s launch/new-intent handling (E10-B09). */
     const val EXTRA_NOTIFICATION_ID = "com.nexora.nexora.NOTIFICATION_ID"
 
     /** Intent extra key: the tapped notification's category, by
@@ -124,7 +124,7 @@ class NotificationApiHost(
       return false
     }
 
-    // E10-B07: every category posted through this host was previously
+    // E10-B09: every category posted through this host was previously
     // un-tappable -- no setContentIntent, so tapping a message/call/
     // trust-request notification did nothing at all, and (with no
     // setAutoCancel) it stayed in the shade until something called
@@ -170,7 +170,7 @@ class NotificationApiHost(
   }
 
   /**
-   * E10-B07: delivers a tap to Dart. Called by [MainActivity] once it
+   * E10-B09: delivers a tap to Dart. Called by [MainActivity] once it
    * decodes [EXTRA_NOTIFICATION_ID]/[EXTRA_NOTIFICATION_CATEGORY] off the
    * intent that (re)launched it -- either [MainActivity.onNewIntent] (app
    * already running) or the initial launch intent (a cold start via the

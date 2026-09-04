@@ -136,7 +136,7 @@ class MainActivity : FlutterActivity() {
     // reuses it instead of creating a second one.
     FlutterEngineCache.getInstance().put(ForegroundMeshService.ENGINE_ID, flutterEngine)
 
-    // E10-B07: the cold-start case -- a notification tap that launches a
+    // E10-B09: the cold-start case -- a notification tap that launches a
     // fresh process delivers its extras on THIS launch intent, not via
     // onNewIntent (that only fires for an already-running singleTop
     // instance). notificationApiHost is now attached (just above), so the
@@ -145,7 +145,7 @@ class MainActivity : FlutterActivity() {
   }
 
   /**
-   * E10-B07: reads [NotificationApiHost.EXTRA_NOTIFICATION_ID]/
+   * E10-B09: reads [NotificationApiHost.EXTRA_NOTIFICATION_ID]/
    * [NotificationApiHost.EXTRA_NOTIFICATION_CATEGORY] off [intent] (if
    * present) and forwards the tap to Dart via [notificationApiHost].
    * Called from both [onNewIntent] (app already running, `singleTop`) and

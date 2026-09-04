@@ -54,7 +54,7 @@ class NotificationService implements NotificationSink {
 
   final NotificationApi _api;
 
-  /// E10-B08: bounds every step of [ensureReady] -- matches this codebase's
+  /// E10-B10: bounds every step of [ensureReady] -- matches this codebase's
   /// existing best-effort-platform-call convention (`FirebaseMetadataService
   /// ._timeout`, `SyncCursorService._timeout`, both 10s default, overridable
   /// by tests via the constructor so a hang test doesn't need to wait the
@@ -80,7 +80,7 @@ class NotificationService implements NotificationSink {
   /// exist and permission is granted; false when denied. EARS-PLAT-5,
   /// EARS-PLAT-6.
   ///
-  /// E10-B08: this contract is `Future<bool>`, never a throw and never an
+  /// E10-B10: this contract is `Future<bool>`, never a throw and never an
   /// unresolved `Future` -- but neither was actually guaranteed before this
   /// fix. Two real failure modes, both confirmed by probe: (1) the host
   /// channel not yet attached (`_api.ensureChannels()` throws a
@@ -102,10 +102,25 @@ class NotificationService implements NotificationSink {
       await _api.ensureChannels().timeout(_readyTimeout);
       if (await _api.hasPermission().timeout(_readyTimeout)) return true;
 
-      final Future<bool> resultFuture =
-          permissionResults.first.timeout(_readyTimeout);
+      // Subscribed eagerly (before `requestPermission` below) so no event
+      // is raced away, but `.timeout()` is applied at the AWAIT site, not
+      // here -- if `requestPermission()` itself throws or times out, this
+      // `Future` is abandoned before the code below ever reaches it.
+      final Future<bool> resultFuture = permissionResults.first;
+      // A `Future` (unlike a `Stream`) fans out to every listener attached
+      // to it independently -- this drain, attached the instant the
+      // `Future` exists, exists ONLY to mark it as handled so an abandoned
+      // completion (this stream closing with no event ever emitted, e.g.
+      // via `dispose()` in a test's tearDown, or `requestPermission()`
+      // itself failing below before the real `await` is ever reached)
+      // never reaches the zone as an unhandled asynchronous error. The
+      // real result is still obtained by the separate `await` below,
+      // completely unaffected by this drain (found by review: round 1 of
+      // this fix left the abandoned-Future case genuinely unhandled, just
+      // via a different trigger than round 1's own fix for it addressed).
+      unawaited(resultFuture.catchError((_) => false));
       await _api.requestPermission().timeout(_readyTimeout);
-      return await resultFuture;
+      return await resultFuture.timeout(_readyTimeout);
     } catch (_) {
       // Any failure to determine or obtain readiness -- a channel error,
       // a timeout waiting for the OS to answer -- collapses to the same

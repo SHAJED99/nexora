@@ -151,7 +151,7 @@ void main() {
     'test_EARS_PLAT_5_ensureReady_returns_false_not_throws_when_the_host_'
     'channel_is_unavailable',
     () async {
-      // E10-B08: with NO mock handler registered for ensureChannels, the
+      // E10-B10: with NO mock handler registered for ensureChannels, the
       // real Pigeon codec throws a PlatformException/MissingPluginException
       // rather than returning -- confirmed reachable in production the
       // instant this host isn't attached yet. ensureReady()'s own doc
@@ -174,7 +174,7 @@ void main() {
     'test_EARS_PLAT_5_ensureReady_returns_false_rather_than_hanging_when_'
     'the_permission_result_never_arrives',
     () async {
-      // E10-B08: hasPermission() reports false (not yet granted) and
+      // E10-B10: hasPermission() reports false (not yet granted) and
       // requestPermission() completes normally, but the OS never delivers
       // onPermissionResult -- reachable in production when the host
       // Activity is destroyed between the request and the callback
@@ -211,6 +211,60 @@ void main() {
       final bool result = await service.ensureReady();
 
       expect(result, isFalse);
+    },
+  );
+
+  test(
+    'test_EARS_PLAT_5_ensureReady_returns_false_and_leaves_no_unhandled_'
+    'error_when_requestPermission_itself_fails',
+    () async {
+      // E10-B10 round 2 (Opus review): a distinct third failure path from
+      // the two above -- hasPermission() reports false, then
+      // requestPermission() ITSELF throws/times out (no mock handler
+      // registered here, so the real Pigeon call throws a
+      // PlatformException) while `permissionResults.first`'s Future is
+      // still unresolved. Round 1 of this fix applied `.timeout()`
+      // directly to that unresolved Future before it was ever awaited --
+      // abandoning it mid-flight with its own live timeout Timer still
+      // running, which fired as an unhandled asynchronous error ~50ms
+      // later with nothing left to catch it. The fix moves `.timeout()`
+      // to the actual await site. This test cannot observe the leaked
+      // error directly (it would surface as a top-level zone error, not
+      // a rethrow here) -- it instead proves ensureReady() itself
+      // returns false promptly, and relies on `flutter test`'s own
+      // process-wide detection of any unhandled async error to catch a
+      // regression (the exact mechanism that caught round 1's defect
+      // during review).
+      const String suffix = 'requestpermissionfails';
+      final NotificationService service = NotificationService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: suffix,
+        readyTimeout: const Duration(milliseconds: 50),
+      );
+      addTearDown(service.dispose);
+
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.NotificationApi.ensureChannels.$suffix',
+        (ByteData? message) async =>
+            NotificationApi.pigeonChannelCodec.encodeMessage(<Object?>[null]),
+      );
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.NotificationApi.hasPermission.$suffix',
+        (ByteData? message) async =>
+            NotificationApi.pigeonChannelCodec.encodeMessage(<Object?>[false]),
+      );
+      // Deliberately no mock handler for requestPermission -- the real
+      // Pigeon call throws PlatformException. Deliberately no
+      // onPermissionResult event either.
+
+      final bool result = await service.ensureReady();
+
+      expect(result, isFalse);
+
+      // Outlive the abandoned Future's would-be timeout window (round 1's
+      // defect fired here) so a regression has a chance to surface before
+      // this test (and its handler) tears down.
+      await Future<void>.delayed(const Duration(milliseconds: 150));
     },
   );
 
