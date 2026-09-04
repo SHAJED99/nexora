@@ -9,9 +9,12 @@ sharded + 5 bug tasks filed by the sweep
 
 **Bug sweep run 2026-09-04** (`skills/bug-sweep`, reviewer `claude-opus-5`,
 independent worktree off `epic_09`@`cd643f0`) — see §Bug sweep below.
-**5 defects filed (`E09-B01`…`B05`); P1 = 0, P2 = 5, of which 1 is already
-discharged.** The `skills/release` gate for the epic→`development` PR is
-**CLOSED** until P1/P2 = 0.
+**11 bugs total (`E09-B01`…`B11`, `B06`-`B11` filed by follow-on review
+rounds).** `E09-B09`/`B11` (the S1 identity-poisoning exploit) closed
+2026-09-04, accepted as disclosed risk via `ADR-0003`'s addendum, PR #54.
+**P1 = 0. P2/P3 still nonzero** (`E09-B02`, `E09-B05`, `E09-B08`,
+`E09-B10` open — see the table below) — the `skills/release` gate for the
+epic→`development` PR stays **CLOSED** until those clear too.
 
 **Still open, non-blocking, carried forward:**
 - 🟡 `OQ-E09-2` (`epic.md`) — the toggles still have **no settings surface**.
@@ -258,14 +261,27 @@ the same convention already used for `OQ-E09-T05-1/2/3`, `OQ-E09-T04-1/2`,
 
 | Bug | Severity | Priority | Blocks the epic→`development` PR? |
 |---|---|---|---|
-| `E09-B01` | S2 | P2 | **yes** |
-| `E09-B02` | S2 | P2 | **yes** |
-| `E09-B03` | S3 | P2 | **yes** |
+| `E09-B01` | S2 | P2 | no — `status: done` |
+| `E09-B02` | S2 | P2 | **yes** — `status: review-requested` |
+| `E09-B03` | S3 | P2 | no — `status: done` |
 | `E09-B04` | S3 | P2 | no — already discharged |
-| `E09-B05` | S2 | P2 | **yes** |
+| `E09-B05` | S2 | P2 | **yes** — `status: todo` |
+| `E09-B06` | S2 | P2 | no — `status: done` |
+| `E09-B07` | S3 | should | no — `status: done` |
+| `E09-B08` | S3 | P3 | **yes** — `status: todo` |
+| `E09-B09` | S1 | P1 | no — `status: done`, resolved 2026-09-04 by `E09-B11`'s accepted-risk decision (see below) |
+| `E09-B10` | S3 | P2 | **yes** — `status: todo` |
+| `E09-B11` | S1 | P1 | no — `status: done`, resolved 2026-09-04: human delegated the rule-3 decision ("do what is best"); accepted TOFU's risk app-wide (ADR-0003 addendum) rather than a per-file patch. PR #54, 3 review rounds, final Opus verdict APPROVE, merged into `epic_09`. |
 
-**P1 = 0. P2 = 5 (4 outstanding).** Per `skills/bug-sweep` step 4 and
-`skills/release`, the epic→`development` PR opens only at P1/P2 = 0, so the
+**Post-B09/B11 status (2026-09-04):** the S1 identity-poisoning exploit
+(`E09-B09`→`E09-B11`) is closed as an accepted, disclosed risk — see
+`agent/memory/decisions/ADR-0003-crypto-protocol.md` §Addendum
+(2026-09-04) for the full record. **This does not clear the epic's
+release gate**: `E09-B02` (`review-requested`), `E09-B05`, `E09-B08`, and
+`E09-B10` are still open P2/P3 bugs from the earlier sweep, unrelated to
+this session's E09-B11 work and untouched by it. **P1 = 0** (both S1s
+now closed); **P2/P3 still nonzero** — the epic→`development` PR remains
+closed on that basis alone, independent of the B09/B11 resolution.
 gate is **closed**.
 
 ### 🧍 Merge-gate condition — on-device verification (not filed as a bug)
@@ -300,21 +316,24 @@ done.
 ## Carried-forward observations (read before this epic's retro)
 - **2026-09-04 · `E09-B05`'s retroactive re-review of `E09-T03` (opus) ·
   the `frame.source`-trust defect (`E09-B09`) is plausibly not unique to
-  location sharing.** The reviewer notes `lib/core/calls/call_signaling.dart`,
-  `lib/core/messaging/group_membership_service.dart`, and
-  `InboundPipeline`'s group-message handler all use the same shape — decrypt
-  succeeds, and the decrypting session's claimed address (which traces back
-  to `RelayPacketFrame.source` or an equivalent attacker-settable field) is
-  trusted as sender identity without confirming a *pre-existing*
-  authenticated session. **This was explicitly out of `E09-B09`'s fix
-  fence** (fixing the location path only). Whether the same trust-on-first-
-  use exploit is reachable through calls or groups is unverified — this is
-  a flag for a dedicated cross-cutting security sweep, not a confirmed
-  finding against those files. **Owner: whichever epic/session next runs a
-  security-lens pass — E06 (calls), E07 (groups), or a dedicated
-  pre-release security sweep, whichever comes first.** Do not let this
-  drift unread the way `E09-T04`'s false E08-ownership claim did
-  (`E09-B02`).
+  location sharing. UPDATE 2026-09-04 (post-`E09-B11`): confirmed, and
+  resolved as an accepted risk, not a fix.** `E09-B11`'s round-2 review
+  confirmed all four sibling decrypt call sites share the identical
+  unguarded `DriftSignalProtocolStore.isTrustedIdentity` trust-on-first-use
+  shape: `receive_message_use_case.dart:107`, `call_signaling.dart:608`,
+  `group_membership_service.dart:501` (`lib/features/groups/domain/`),
+  `group_crypto_service.dart:389` (`lib/core/crypto/`). The human decided
+  (delegated: "do what is best") to accept TOFU's risk profile app-wide
+  rather than patch any one call site — recorded in
+  `agent/memory/decisions/ADR-0003-crypto-protocol.md` §Addendum
+  (2026-09-04). **No code change to any of the four sibling sites** — the
+  decision is disclosed acceptance, not elimination. Any future epic
+  building real authenticated first-contact (safety-number/QR verification,
+  or `E11`'s device directory as an authoritative identity source) would
+  supersede this addendum, not silently edit it. Original note, still true
+  as history: this was explicitly out of `E09-B09`'s fix fence, and its
+  false E08-ownership near-miss pattern (`E09-B02`) is why it got written
+  down here instead of left in a review comment.
 - **2026-09-04 · `E09-B07`'s fix review (opus) · a bug's own §Regression
   test / §Fix direction asserted an acceptance criterion that is
   mathematically unfalsifiable, and nobody noticed until the fix was
