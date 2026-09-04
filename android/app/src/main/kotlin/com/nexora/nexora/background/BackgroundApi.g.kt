@@ -43,6 +43,150 @@ private object BackgroundApiPigeonUtils {
       )
     }
   }
+  fun doubleEquals(a: Double, b: Double): Boolean {
+    // Normalize -0.0 to 0.0 and handle NaN equality.
+    return (if (a == 0.0) 0.0 else a) == (if (b == 0.0) 0.0 else b) || (a.isNaN() && b.isNaN())
+  }
+
+  fun floatEquals(a: Float, b: Float): Boolean {
+    // Normalize -0.0 to 0.0 and handle NaN equality.
+    return (if (a == 0.0f) 0.0f else a) == (if (b == 0.0f) 0.0f else b) || (a.isNaN() && b.isNaN())
+  }
+
+  fun doubleHash(d: Double): Int {
+    // Normalize -0.0 to 0.0 and handle NaN to ensure consistent hash codes.
+    val normalized = if (d == 0.0) 0.0 else d
+    val bits = java.lang.Double.doubleToLongBits(normalized)
+    return (bits xor (bits ushr 32)).toInt()
+  }
+
+  fun floatHash(f: Float): Int {
+    // Normalize -0.0 to 0.0 and handle NaN to ensure consistent hash codes.
+    val normalized = if (f == 0.0f) 0.0f else f
+    return java.lang.Float.floatToIntBits(normalized)
+  }
+
+  fun deepEquals(a: Any?, b: Any?): Boolean {
+    if (a === b) {
+      return true
+    }
+    if (a == null || b == null) {
+      return false
+    }
+    if (a is ByteArray && b is ByteArray) {
+      return a.contentEquals(b)
+    }
+    if (a is IntArray && b is IntArray) {
+      return a.contentEquals(b)
+    }
+    if (a is LongArray && b is LongArray) {
+      return a.contentEquals(b)
+    }
+    if (a is DoubleArray && b is DoubleArray) {
+      if (a.size != b.size) return false
+      for (i in a.indices) {
+        if (!doubleEquals(a[i], b[i])) return false
+      }
+      return true
+    }
+    if (a is FloatArray && b is FloatArray) {
+      if (a.size != b.size) return false
+      for (i in a.indices) {
+        if (!floatEquals(a[i], b[i])) return false
+      }
+      return true
+    }
+    if (a is Array<*> && b is Array<*>) {
+      if (a.size != b.size) return false
+      for (i in a.indices) {
+        if (!deepEquals(a[i], b[i])) return false
+      }
+      return true
+    }
+    if (a is List<*> && b is List<*>) {
+      if (a.size != b.size) return false
+      val iterA = a.iterator()
+      val iterB = b.iterator()
+      while (iterA.hasNext() && iterB.hasNext()) {
+        if (!deepEquals(iterA.next(), iterB.next())) return false
+      }
+      return true
+    }
+    if (a is Map<*, *> && b is Map<*, *>) {
+      if (a.size != b.size) return false
+      for (entry in a) {
+        val key = entry.key
+        var found = false
+        for (bEntry in b) {
+          if (deepEquals(key, bEntry.key)) {
+            if (deepEquals(entry.value, bEntry.value)) {
+              found = true
+              break
+            } else {
+              return false
+            }
+          }
+        }
+        if (!found) return false
+      }
+      return true
+    }
+    if (a is Double && b is Double) {
+      return doubleEquals(a, b)
+    }
+    if (a is Float && b is Float) {
+      return floatEquals(a, b)
+    }
+    return a == b
+  }
+
+  fun deepHash(value: Any?): Int {
+    return when (value) {
+      null -> 0
+      is ByteArray -> value.contentHashCode()
+      is IntArray -> value.contentHashCode()
+      is LongArray -> value.contentHashCode()
+      is DoubleArray -> {
+        var result = 1
+        for (item in value) {
+          result = 31 * result + doubleHash(item)
+        }
+        result
+      }
+      is FloatArray -> {
+        var result = 1
+        for (item in value) {
+          result = 31 * result + floatHash(item)
+        }
+        result
+      }
+      is Array<*> -> {
+        var result = 1
+        for (item in value) {
+          result = 31 * result + deepHash(item)
+        }
+        result
+      }
+      is List<*> -> {
+        var result = 1
+        for (item in value) {
+          result = 31 * result + deepHash(item)
+        }
+        result
+      }
+      is Map<*, *> -> {
+        var result = 0
+        for (entry in value) {
+          result += ((deepHash(entry.key) * 31) xor deepHash(entry.value))
+        }
+        result
+      }
+      is Double -> doubleHash(value)
+      is Float -> floatHash(value)
+      else -> value.hashCode()
+    }
+  }
+
 }
 
 /**
@@ -74,12 +218,92 @@ enum class ServiceState(val raw: Int) {
     }
   }
 }
+
+/**
+ * E10-T09 (FR-PLAT-002, FR-PLAT-003): a snapshot of the Android power
+ * environment the app is running in. Reports facts only — nothing reacts
+ * to this yet (`E10-T10`, task §2/§4). A field unavailable on the running
+ * API level reads `false`, never `null` (task §5/§6 — the permissive
+ * reading, so a missing signal never masquerades as an active
+ * restriction).
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class PowerState (
+  /** `PowerManager.isDeviceIdleMode` — Doze. */
+  val deviceIdle: Boolean,
+  /** `PowerManager.isPowerSaveMode` — Battery Saver. */
+  val powerSaveMode: Boolean,
+  /**
+   * `ActivityManager.isBackgroundRestricted` — per-app background
+   * restriction (Android puts this on an app the user has restricted from
+   * Settings, independent of Doze/Battery Saver).
+   */
+  val backgroundRestricted: Boolean,
+  /**
+   * `PowerManager.isIgnoringBatteryOptimizations` — a query, never a
+   * prompt (ADR-0007 §S2 / `OQ-E10-4`: this task does not request the
+   * exemption).
+   */
+  val ignoringBatteryOptimizations: Boolean,
+  /** `KeyguardManager.isKeyguardLocked` — screen lock. */
+  val screenLocked: Boolean
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): PowerState {
+      val deviceIdle = pigeonVar_list[0] as Boolean
+      val powerSaveMode = pigeonVar_list[1] as Boolean
+      val backgroundRestricted = pigeonVar_list[2] as Boolean
+      val ignoringBatteryOptimizations = pigeonVar_list[3] as Boolean
+      val screenLocked = pigeonVar_list[4] as Boolean
+      return PowerState(deviceIdle, powerSaveMode, backgroundRestricted, ignoringBatteryOptimizations, screenLocked)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      deviceIdle,
+      powerSaveMode,
+      backgroundRestricted,
+      ignoringBatteryOptimizations,
+      screenLocked,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as PowerState
+    return BackgroundApiPigeonUtils.deepEquals(this.deviceIdle, other.deviceIdle) && BackgroundApiPigeonUtils.deepEquals(this.powerSaveMode, other.powerSaveMode) && BackgroundApiPigeonUtils.deepEquals(this.backgroundRestricted, other.backgroundRestricted) && BackgroundApiPigeonUtils.deepEquals(this.ignoringBatteryOptimizations, other.ignoringBatteryOptimizations) && BackgroundApiPigeonUtils.deepEquals(this.screenLocked, other.screenLocked)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + BackgroundApiPigeonUtils.deepHash(this.deviceIdle)
+    result = 31 * result + BackgroundApiPigeonUtils.deepHash(this.powerSaveMode)
+    result = 31 * result + BackgroundApiPigeonUtils.deepHash(this.backgroundRestricted)
+    result = 31 * result + BackgroundApiPigeonUtils.deepHash(this.ignoringBatteryOptimizations)
+    result = 31 * result + BackgroundApiPigeonUtils.deepHash(this.screenLocked)
+    return result
+  }
+  override fun toString(): String {
+    return "PowerState(deviceIdle=$deviceIdle, powerSaveMode=$powerSaveMode, backgroundRestricted=$backgroundRestricted, ignoringBatteryOptimizations=$ignoringBatteryOptimizations, screenLocked=$screenLocked)"
+  }
+}
 private open class BackgroundApiPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
       129.toByte() -> {
         return (readValue(buffer) as Long?)?.let {
           ServiceState.ofRaw(it.toInt())
+        }
+      }
+      130.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          PowerState.fromList(it)
         }
       }
       else -> super.readValueOfType(type, buffer)
@@ -90,6 +314,10 @@ private open class BackgroundApiPigeonCodec : StandardMessageCodec() {
       is ServiceState -> {
         stream.write(129)
         writeValue(stream, value.raw.toLong())
+      }
+      is PowerState -> {
+        stream.write(130)
+        writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
     }
@@ -111,6 +339,11 @@ interface BackgroundApi {
   /** Stops the service and removes its ongoing notification. */
   fun stopService()
   fun isServiceRunning(): Boolean
+  /**
+   * E10-T09: a one-shot snapshot of the current power state. Never throws
+   * — an unreadable signal on this API level reads `false` (task §5/§6).
+   */
+  fun powerState(): PowerState
 
   companion object {
     /** The codec used by BackgroundApi. */
@@ -167,6 +400,21 @@ interface BackgroundApi {
           channel.setMessageHandler(null)
         }
       }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.nexora.BackgroundApi.powerState$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.powerState())
+            } catch (exception: Throwable) {
+              BackgroundApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
     }
   }
 }
@@ -187,6 +435,30 @@ class BackgroundEventsApi(private val binaryMessenger: BinaryMessenger, private 
     val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
     return suspendCancellableCoroutine { continuation ->
       val channelName = "dev.flutter.pigeon.nexora.BackgroundEventsApi.onServiceStateChanged$separatedMessageChannelSuffix"
+      val channel = BasicMessageChannel<Any?>(binaryMessenger, channelName, codec)
+      channel.send(listOf(stateArg)) {
+        if (it is List<*>) {
+          if (it.size > 1) {
+            continuation.resumeWithException(FlutterError(it[0] as String, it[1] as String, it[2] as String?))
+          } else {
+            continuation.resume(Unit)
+          }
+        } else {
+          continuation.resumeWithException(BackgroundApiPigeonUtils.createConnectionError(channelName))
+        } 
+      }
+    }
+  }
+  /**
+   * E10-T09: emitted on every observed transition of a Doze / Battery
+   * Saver / background-restriction / screen-lock signal, de-duplicated on
+   * equal consecutive states (task §5/§6).
+   */
+  suspend fun onPowerStateChanged(stateArg: PowerState)
+{
+    val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
+    return suspendCancellableCoroutine { continuation ->
+      val channelName = "dev.flutter.pigeon.nexora.BackgroundEventsApi.onPowerStateChanged$separatedMessageChannelSuffix"
       val channel = BasicMessageChannel<Any?>(binaryMessenger, channelName, codec)
       channel.send(listOf(stateArg)) {
         if (it is List<*>) {

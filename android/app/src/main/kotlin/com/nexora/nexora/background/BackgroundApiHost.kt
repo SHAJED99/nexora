@@ -4,6 +4,11 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
 import io.flutter.plugin.common.BinaryMessenger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * Native Kotlin host for the Pigeon background-service boundary (ADR-0004,
@@ -49,11 +54,29 @@ class BackgroundApiHost(
 
   private val eventsApi = BackgroundEventsApi(binaryMessenger)
 
+  /** E10-T09: reads and observes Doze/Battery-Saver/background-restriction/
+   * screen-lock (task §3). Registered/unregistered in [attach]/[detach] —
+   * this class's own header explains why no manifest change is needed. */
+  private val powerStateMonitor = PowerStateMonitor(context)
+
+  /** `BackgroundEventsApi.onPowerStateChanged` is a suspend function
+   * (Pigeon-generated); this scope is this host's own — cancelled in
+   * [detach] so a torn-down engine's binary messenger never receives a
+   * send from a coroutine started before detach (task §6). */
+  private var eventsScope: CoroutineScope? = null
+
   /** Registers this host to handle `BackgroundApi` calls from Dart, and
    * lets [ForegroundMeshService] push state events through it. */
   fun attach(messenger: BinaryMessenger) {
     BackgroundApi.setUp(messenger, this)
     ForegroundMeshService.eventsApi = eventsApi
+
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    eventsScope = scope
+    powerStateMonitor.onStateChanged = { state ->
+      scope.launch { eventsApi.onPowerStateChanged(state) }
+    }
+    powerStateMonitor.register()
   }
 
   /** Unregisters this host — call from `cleanUpFlutterEngine` (but NOT
@@ -65,6 +88,10 @@ class BackgroundApiHost(
     if (ForegroundMeshService.eventsApi === eventsApi) {
       ForegroundMeshService.eventsApi = null
     }
+    powerStateMonitor.unregister()
+    powerStateMonitor.onStateChanged = null
+    eventsScope?.cancel()
+    eventsScope = null
   }
 
   /**
@@ -108,4 +135,7 @@ class BackgroundApiHost(
   }
 
   override fun isServiceRunning(): Boolean = ForegroundMeshService.isRunning
+
+  /** E10-T09: a one-shot snapshot, never a thrown exception (task §5/§6). */
+  override fun powerState(): PowerState = powerStateMonitor.currentState()
 }

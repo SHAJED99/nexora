@@ -50,10 +50,54 @@ abstract class BackgroundApi {
   void stopService();
 
   bool isServiceRunning();
+
+  /// E10-T09: a one-shot snapshot of the current power state. Never throws
+  /// — an unreadable signal on this API level reads `false` (task §5/§6).
+  PowerState powerState();
 }
 
 /// Flutter-side API: native Kotlin calls into Dart.
 @FlutterApi()
 abstract class BackgroundEventsApi {
   void onServiceStateChanged(ServiceState state);
+
+  /// E10-T09: emitted on every observed transition of a Doze / Battery
+  /// Saver / background-restriction / screen-lock signal, de-duplicated on
+  /// equal consecutive states (task §5/§6).
+  void onPowerStateChanged(PowerState state);
+}
+
+/// E10-T09 (FR-PLAT-002, FR-PLAT-003): a snapshot of the Android power
+/// environment the app is running in. Reports facts only — nothing reacts
+/// to this yet (`E10-T10`, task §2/§4). A field unavailable on the running
+/// API level reads `false`, never `null` (task §5/§6 — the permissive
+/// reading, so a missing signal never masquerades as an active
+/// restriction).
+class PowerState {
+  PowerState({
+    required this.deviceIdle,
+    required this.powerSaveMode,
+    required this.backgroundRestricted,
+    required this.ignoringBatteryOptimizations,
+    required this.screenLocked,
+  });
+
+  /// `PowerManager.isDeviceIdleMode` — Doze.
+  bool deviceIdle;
+
+  /// `PowerManager.isPowerSaveMode` — Battery Saver.
+  bool powerSaveMode;
+
+  /// `ActivityManager.isBackgroundRestricted` — per-app background
+  /// restriction (Android puts this on an app the user has restricted from
+  /// Settings, independent of Doze/Battery Saver).
+  bool backgroundRestricted;
+
+  /// `PowerManager.isIgnoringBatteryOptimizations` — a query, never a
+  /// prompt (ADR-0007 §S2 / `OQ-E10-4`: this task does not request the
+  /// exemption).
+  bool ignoringBatteryOptimizations;
+
+  /// `KeyguardManager.isKeyguardLocked` — screen lock.
+  bool screenLocked;
 }
