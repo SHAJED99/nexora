@@ -655,9 +655,22 @@ class MessagingStack {
     // change stream (bug file's fix direction (2)): no such stream exists
     // yet on `RelationshipRepository` (only `E09-B01`'s per-peer
     // `watchState(deviceId)` does), and adding one is out of this bug's
-    // `files:` fence, which lists only this file and its test -- see
-    // `epics/E09-location-sharing/tasks/E09-B06.md`'s own Open Questions.
-    await stack.locationShareService.pruneFixesForNonVisiblePeers();
+    // `files:` fence, which lists only this file and its test -- tracked as
+    // `E09-B07`, not left as an unread note in this closed file.
+    //
+    // Wrapped in its own try/catch (carried-forward observation, PR #49
+    // round-1 review): every other step in this constructor degrades to
+    // `unavailable` on failure rather than making the whole stack
+    // unconstructible, and a throw here -- e.g. a corrupt row, a transient
+    // storage error -- must not be the one exception to that contract. A
+    // failed sweep just means the exposure window from `E09-B02` stays
+    // open a little longer; it must never mean the app fails to start.
+    try {
+      await stack.locationShareService.pruneFixesForNonVisiblePeers();
+    } catch (_) {
+      // Best-effort: the sweep is a privacy hygiene pass, not a
+      // correctness-critical step. Never let it block composition.
+    }
 
     return stack;
   }
