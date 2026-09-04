@@ -617,7 +617,7 @@ class MessagingStack {
       clock: clock,
     );
 
-    return MessagingStack._(
+    final stack = MessagingStack._(
       db: db,
       signalStore: resolvedStore,
       identityService: identityService,
@@ -632,6 +632,34 @@ class MessagingStack {
       status: status,
       coordinatorTickInterval: coordinatorTickInterval,
     );
+
+    // E09-B06: `LocationShareService.pruneFixesForNonVisiblePeers()`
+    // (E09-B02's fix for FR-LOC-004/EARS-LOC-5) exists and is tested, but
+    // had zero call sites anywhere in `lib/` -- a blocked/de-authorized
+    // peer's stored `location_fixes` row was written BEFORE the
+    // relationship changed stays on disk indefinitely, because
+    // `handleWireFrame`'s own delete-on-not-visible branch only fires when
+    // a NEW frame arrives, and a blocked peer's frames are exactly the ones
+    // that never arrive again. Run once here, at this composition root's
+    // own startup, closing the exposure window down to "at most until next
+    // launch" for every relationship change that happened while the app was
+    // closed (bug file's fix direction (1)). `locationShareService` is
+    // unconditionally constructed above regardless of [status] (this
+    // file's own "every field still non-null and safe to reference either
+    // way" contract), and this sweep only touches this device's own local
+    // `location_fixes` table -- nothing here depends on crypto/identity
+    // having initialized successfully, so it runs even when [status] is
+    // `unavailable`.
+    //
+    // Deliberately NOT also wired reactively off a table-wide relationship
+    // change stream (bug file's fix direction (2)): no such stream exists
+    // yet on `RelationshipRepository` (only `E09-B01`'s per-peer
+    // `watchState(deviceId)` does), and adding one is out of this bug's
+    // `files:` fence, which lists only this file and its test -- see
+    // `epics/E09-location-sharing/tasks/E09-B06.md`'s own Open Questions.
+    await stack.locationShareService.pruneFixesForNonVisiblePeers();
+
+    return stack;
   }
 
   /// Closes transport subscriptions and the database. Test-only — the app
