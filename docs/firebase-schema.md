@@ -9,7 +9,8 @@
 
 Project: `nexora-b3a97` · Realtime Database instance:
 `nexora-b3a97-default-rtdb`. Every path lives under `users/$uid/…` except
-`directory/`, reserved for `E11-T06` (`ADR-0008`, accepted option 2).
+`directory/`, the public device directory `E11-T06` builds (`ADR-0008`,
+accepted option 2).
 
 ## Tree
 
@@ -21,7 +22,7 @@ Project: `nexora-b3a97` · Realtime Database instance:
 | `users/$uid/relationships/$peerDeviceId` | live | `state:String` (one of `trusted`/`allowed`/`unknown`/`blocked`), `updatedAt:int(ServerValue)` | trust metadata, block metadata | `E11-T05` | structural (`.validate` + `$other` deny) — `E11-T05` |
 | `users/$uid/push/$deviceId` | reserved (no owner) | — | push notification information | ⏳ `OQ-E11-2` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
 | `config/version_policy` | reserved (no owner) | — | application version policy | ⏳ `OQ-E11-2` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
-| `directory/$deviceId` | reserved | — declared by `E11-T06` | device public identity information | `E11-T06` (`ADR-0008` accepted, option 2) | client guard only (no rule yet — reserved node, `E11-T02` §4) |
+| `directory/$deviceId` | live | `identityPublicKey:String` (base64), `prekeyBundle:String` (base64 `PreKeyBundleCodec` v1), `revokedAt:int?`, `ownerUid:String` | device public identity information | `E11-T06` (`ADR-0008` accepted, option 2) | structural (`.validate` + `$other` deny), plus cross-account exact-id read + immutable-`ownerUid` write — `E11-T06` |
 
 `users/$uid`'s own `$other` child (any subtree not named `devices` or
 `sync_cursors`) is also denied structurally (`.validate: false`) —
@@ -38,9 +39,23 @@ new top-level path. The fourth `live` row (`relationships/$peerDeviceId`) is
 `E11-T05`'s own deliverable — a new top-level-under-`$uid` node, own-account
 only (`ADR-0008`'s declined-option-3 boundary): `$peerDeviceId` is always a
 remote device id, never a foreign account's uid, and this row does not
-change that. The remaining `reserved` rows are declared here as
-placeholders their owning task flips to `live` — this is the anti-collision
-mechanism for this shared doc, not a promise of behaviour (see
+change that. The fifth `live` row (`directory/$deviceId`) is `E11-T06`'s
+own deliverable and the one deliberate exception to "every path lives
+under `users/$uid/…`, owner-only": it is a top-level node, readable by
+**any authenticated account, by exact device id only** — never a listing,
+never a query — per `ADR-0008` option 2. `identityPublicKey` and
+`prekeyBundle` are public-by-construction material (a public key and a
+public prekey bundle); `revokedAt` mirrors this device's own local
+revocation state (`E11-T04`'s `device_revocations` table, read locally —
+not re-derived from the `users/$uid/devices/$deviceId/revocation` row,
+which only that device's owning account can read); `ownerUid` is a
+write-ownership marker and is immutable after first write
+(`database.rules.json`'s `.write` expression requires the caller's
+`auth.uid` to already match the stored `ownerUid` whenever the node
+exists, and to match the value it is writing in every case). The
+remaining `reserved` rows are declared here as placeholders their owning
+task flips to `live` — this is the anti-collision mechanism for this
+shared doc, not a promise of behaviour (see
 `epics/E11-firebase-sync/epic.md` §Analyze gate, "Contract sanity").
 
 ## Path registry and field-allowlist code
@@ -50,21 +65,26 @@ mechanism for this shared doc, not a promise of behaviour (see
   `users/$uid/devices` node, used to enumerate every device's revocation
   flag in one read), `FirebasePaths.deviceRevocation` (E11-T04),
   `FirebasePaths.relationships` (the parent `users/$uid/relationships`
-  node, used to enumerate every peer relationship in one read) and
-  `FirebasePaths.relationship` (E11-T05). Pure functions, no I/O.
+  node, used to enumerate every peer relationship in one read),
+  `FirebasePaths.relationship` (E11-T05), `FirebasePaths.directoryRoot`
+  (the parent `directory` node — never passed to a live `.ref(...)` call,
+  only used by the rules test to prove a read there is denied) and
+  `FirebasePaths.directoryEntry` (E11-T06). Pure functions, no I/O.
 - Allowed fields: `lib/core/services/firebase_boundary.dart` —
   `FirebaseBoundary.allowedFields(FirebaseNodeKind)` and
   `FirebaseBoundary.assertAllowedFields(FirebaseNodeKind, Map<String, Object?>)`,
   which throws `FirebaseBoundaryViolation` (naming the offending key(s),
   never their values) before any write reaches `.set()`.
-- The four existing wrappers — `FirebaseMetadataService.registerDevice`
+- The five existing wrappers — `FirebaseMetadataService.registerDevice`
   (`lib/core/services/firebase_metadata_service.dart`),
   `SyncCursorService.writeCursorToFirebase`
   (`lib/features/messaging/domain/sync_cursor_service.dart`),
   `DeviceRevocationService.revoke`
-  (`lib/core/services/device_revocation_service.dart`, E11-T04) and
+  (`lib/core/services/device_revocation_service.dart`, E11-T04),
   `RelationshipSyncService.push`
-  (`lib/core/services/relationship_sync_service.dart`, E11-T05) — build
+  (`lib/core/services/relationship_sync_service.dart`, E11-T05) and
+  `DeviceDirectoryService.publish`
+  (`lib/core/services/device_directory_service.dart`, E11-T06) — build
   their payload, call `assertAllowedFields` **before** entering their
   existing best-effort `try`/`catch`, then call the path-registry function
   for the actual `.ref(...)` call. This ordering matters: a boundary
@@ -84,8 +104,17 @@ these, in any node, ever.
   rules** — `E11-T02`'s structural Dart test
   (`test/core/services/firebase_rules_test.dart`) proves the rules FILE says
   the right thing; only the Firebase emulator + `@firebase/rules-unit-testing`
-  (`OQ-E11-T02-1`, deferred to land with `E11-T05`/`E11-T06`) proves the
-  server actually does it.
+  (`OQ-E11-T02-1`) proves the server actually does it. Still not brought in
+  as of `E11-T06` — the last of the two tasks `OQ-E11-T02-1`'s answer named
+  as the point to add it — because it is a new dev dependency (🧍 rule 3,
+  `new_dependency`) outside this task's own `files:` fence. `E11-T06`
+  instead adds a small in-file rules-cascade simulator (walks `.read` from
+  root down to a target path exactly as the RTDB server would, rather than
+  checking the JSON for an absent key) for the one property that matters
+  most here — that `directory` (no child) denies a read while
+  `directory/$deviceId` grants one — but this is still not a server-backed
+  proof. `OQ-E11-T02-1` carries forward, unresolved, to whichever task next
+  touches a rules-bearing node.
 - **Deployment** — `database.rules.json` is not published by any task;
   `firebase deploy --only database` is a human step at the merge gate
   (`E11-T02` §4).

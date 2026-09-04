@@ -1,13 +1,22 @@
-// E11-T02 — structural tests for `database.rules.json` (EARS-FB-4, FB-5,
-// FB-6).
+// E11-T02/E11-T04/E11-T05/E11-T06 — structural tests for
+// `database.rules.json` (EARS-FB-4, FB-5, FB-6, FB-13, FB-16, FB-18, FB-19).
 //
 // These tests prove the rules FILE SAYS the right thing: they parse
 // `database.rules.json` and cross-check it against `docs/firebase-schema.md`
 // (the single source of truth for what fields each `live` node may carry —
 // task §6 Risks: "a test that duplicates the thing it is checking passes
 // even when both are wrong together"). They do not prove the Realtime
-// Database SERVER enforces it — that needs the Firebase emulator, deferred
-// per `OQ-E11-T02-1` to land with `E11-T05`/`E11-T06`.
+// Database SERVER enforces it — that needs the Firebase emulator
+// (`OQ-E11-T02-1`), still not brought in as of `E11-T06` (a new dev
+// dependency, 🧍 rule 3, outside this task's own `files:` fence — see
+// `docs/firebase-schema.md`'s "What this schema does not cover"). For the
+// one property that matters most in `E11-T06` — that a read at `directory`
+// (no child) is denied while `directory/$deviceId` grants one — the
+// `_cascadingReadGranted` helper below goes one step further than every
+// other group in this file: it actually SIMULATES the RTDB read-cascade
+// algorithm (walk root → target, OR-ing each level's `.read`) rather than
+// checking the JSON for an absent key, per `E11-T06` task §3's explicit
+// requirement. It is still not a server-backed proof.
 import 'dart:convert';
 import 'dart:io';
 
@@ -145,6 +154,65 @@ void _collectReadWriteRules(
       );
     }
   }
+}
+
+/// Interprets one `.read`/`.write` rule VALUE for an authenticated caller.
+/// This codebase's rules file only ever produces three shapes for a bare
+/// grant check with no `$uid`/`ownerUid` bound to compare against: a
+/// boolean literal, and the two string forms `"auth != null"` (any
+/// authenticated user) and anything else (never a blanket grant for an
+/// arbitrary caller reading an arbitrary node — `auth.uid === $uid`-shaped
+/// expressions require binding `$uid` to the specific uid being tested,
+/// which `_cascadingReadGranted` below deliberately does not attempt; it
+/// only asks "is there an ungated grant on the way to this path").
+bool _grantsForAnyAuthenticatedCaller(dynamic ruleValue) {
+  if (ruleValue == null) return false;
+  if (ruleValue is bool) return ruleValue;
+  if (ruleValue is String) return ruleValue.trim() == 'auth != null';
+  return false;
+}
+
+/// Simulates RTDB's actual read-cascade evaluation for an authenticated
+/// caller: walks [rules] from the root down to (and including)
+/// [pathSegments], checking each level's `.read` rule as it goes. A `.read`
+/// grant at any level grants the read for that node and everything below
+/// it — RTDB never looks at rules *below* the requested path, and a grant
+/// never flows back UP to an ancestor. This is the real evaluation
+/// algorithm, not a "does this key exist" check (`E11-T06` task §3's
+/// explicit requirement for the `directory`-parent-denial proof).
+///
+/// Every literal segment on [pathSegments] must exist in the rules tree
+/// (this helper is only ever called with paths this file's own rules
+/// declare); a `$`-prefixed wildcard in [rules] matches any concrete
+/// segment name at that position, mirroring `_navigate`.
+bool _cascadingReadGranted(
+  Map<String, dynamic> rules,
+  List<String> pathSegments,
+) {
+  var node = rules['rules'] as Map<String, dynamic>;
+  if (_grantsForAnyAuthenticatedCaller(node['.read'])) return true;
+
+  for (final segment in pathSegments) {
+    Map<String, dynamic>? next;
+    if (node.containsKey(segment)) {
+      next = node[segment] as Map<String, dynamic>;
+    } else {
+      final wildcardKey =
+          node.keys.where((k) => k.startsWith(r'$')).cast<String?>().firstWhere(
+                (_) => true,
+                orElse: () => null,
+              );
+      if (wildcardKey != null) next = node[wildcardKey] as Map<String, dynamic>;
+    }
+    if (next == null) {
+      // No node at all exists at this point in the path -- nothing to grant
+      // a read on, so the walk stops here, denied.
+      return false;
+    }
+    node = next;
+    if (_grantsForAnyAuthenticatedCaller(node['.read'])) return true;
+  }
+  return false;
 }
 
 void main() {
@@ -333,16 +401,27 @@ void main() {
   });
 
   group('test_EARS_FB_6_no_cross_account_access', () {
-    test('every .read/.write in the file is either false or scoped to '
-        'auth.uid === \$uid; none is the literal true', () {
+    test('every .read/.write outside directory/ is either false or scoped '
+        'to auth.uid === \$uid; none is the literal true', () {
       final rules =
           jsonDecode(rulesFile.readAsStringSync()) as Map<String, dynamic>;
       final root = rules['rules'] as Map<String, dynamic>;
       final found = <MapEntry<String, dynamic>>[];
       _collectReadWriteRules(root, '', found);
 
-      expect(found, isNotEmpty);
-      for (final entry in found) {
+      // `directory/$deviceId` is `ADR-0008`'s ONE deliberate, reviewed
+      // exception to "every read is scoped to auth.uid === $uid" — it is
+      // readable by ANY authenticated user, by exact device id only. Its
+      // own read/write shape is asserted explicitly and exhaustively by
+      // `test_EARS_FB_18_directory_read_rules`/
+      // `test_EARS_FB_19_directory_write_rules` below, so excluding it
+      // here does not weaken this test: it narrows what this test is FOR
+      // (proving every node that is NOT the directory stays owner-scoped)
+      // rather than silently accepting a cross-account grant anywhere.
+      final outsideDirectory =
+          found.where((entry) => !entry.key.startsWith('/directory')).toList();
+      expect(outsideDirectory, isNotEmpty);
+      for (final entry in outsideDirectory) {
         final value = entry.value;
         if (value is bool) {
           expect(
@@ -360,6 +439,152 @@ void main() {
           );
         }
       }
+    });
+
+    test('the only rules under directory/ are the exact ones E11-T06 '
+        'documents -- this test cannot be satisfied by silently adding a '
+        'second, broader grant somewhere else under directory/', () {
+      final rules =
+          jsonDecode(rulesFile.readAsStringSync()) as Map<String, dynamic>;
+      final root = rules['rules'] as Map<String, dynamic>;
+      final found = <MapEntry<String, dynamic>>[];
+      _collectReadWriteRules(root, '', found);
+      final underDirectory =
+          found.where((entry) => entry.key.startsWith('/directory')).toList();
+
+      expect(underDirectory, hasLength(2));
+      expect(
+        underDirectory.map((e) => e.key).toSet(),
+        {r'/directory/$deviceId/.read', r'/directory/$deviceId/.write'},
+      );
+    });
+  });
+
+  group('test_EARS_FB_18_directory_read_rules', () {
+    late Map<String, dynamic> rules;
+
+    setUpAll(() {
+      rules = jsonDecode(rulesFile.readAsStringSync()) as Map<String, dynamic>;
+    });
+
+    test('the directory/\$deviceId node grants read to any authenticated '
+        'user -- the exact string, not merely "contains"', () {
+      final node = _navigate(rules, ['directory', r'$deviceId']);
+      expect(node['.read'], 'auth != null');
+    });
+
+    test(
+      'an authenticated caller reading the bare "directory" parent node is '
+      'DENIED -- proven by simulating the RTDB read-cascade (root -> '
+      'directory), not by checking the JSON for an absent key '
+      '(ADR-0008\'s single highest-value property: a rule granted one '
+      'level too high here would let any authenticated user list/crawl '
+      'the entire device directory)',
+      () {
+        expect(_cascadingReadGranted(rules, ['directory']), isFalse);
+      },
+    );
+
+    test(
+      'the SAME cascade walk one level deeper, at directory/<any-id>, IS '
+      'granted -- proves the denial above is because no rule grants a '
+      'read at "directory" specifically, not because the whole subtree is '
+      'unreachable by this simulator',
+      () {
+        expect(
+          _cascadingReadGranted(rules, ['directory', 'some-known-device-id']),
+          isTrue,
+        );
+      },
+    );
+
+    test('no other node in the whole file (users/\$uid included) grants a '
+        'read that would cascade down into directory/ -- \$other at the '
+        'root is the only other rule above "directory" in the tree, and it '
+        'denies', () {
+      final root = rules['rules'] as Map<String, dynamic>;
+      // "directory" is an explicit sibling of "users" and "$other" at the
+      // root (this file's own JSON structure) -- there is no ancestor of
+      // "directory" other than the bare root itself, which _cascadingReadGranted
+      // already checked. This test instead confirms the structural sibling
+      // shape assumed above still holds, so a future edit that nested
+      // "directory" under something else would fail loudly here rather
+      // than silently invalidating the cascade tests' assumptions.
+      expect(root.containsKey('directory'), isTrue);
+      expect(root['directory'], isNot(contains('.read')));
+    });
+  });
+
+  group('test_EARS_FB_19_directory_write_rules', () {
+    late Map<String, dynamic> rules;
+    late Map<String, dynamic> deviceIdNode;
+
+    setUpAll(() {
+      rules = jsonDecode(rulesFile.readAsStringSync()) as Map<String, dynamic>;
+      deviceIdNode = _navigate(rules, ['directory', r'$deviceId']);
+    });
+
+    test('carries only identityPublicKey, prekeyBundle, revokedAt, '
+        'ownerUid', () {
+      expect(
+        _declaredFieldKeys(deviceIdNode),
+        {'identityPublicKey', 'prekeyBundle', 'revokedAt', 'ownerUid'},
+      );
+    });
+
+    test('rejects any other field via \$other.validate == false', () {
+      expect(deviceIdNode.containsKey(r'$other'), isTrue);
+      expect(
+        (deviceIdNode[r'$other'] as Map<String, dynamic>)['.validate'],
+        isFalse,
+      );
+    });
+
+    test('.validate requires identityPublicKey/prekeyBundle/ownerUid on '
+        'every write (revokedAt stays optional -- absent when not '
+        'revoked)', () {
+      final validate = deviceIdNode['.validate'] as String;
+      for (final field in ['identityPublicKey', 'prekeyBundle', 'ownerUid']) {
+        expect(validate.contains("'$field'"), isTrue,
+            reason: '.validate does not require "$field"');
+      }
+      expect(validate.contains("'revokedAt'"), isFalse,
+          reason: '.validate must not require "revokedAt" -- it is null/'
+              'absent when a device has never been revoked');
+    });
+
+    test('.write requires the caller to write their OWN uid as ownerUid '
+        '(non-owner write denied, EARS-FB-19) -- exact string, not merely '
+        '"contains"', () {
+      expect(
+        deviceIdNode['.write'],
+        "auth != null && newData.child('ownerUid').val() === auth.uid && "
+            "(!data.exists() || data.child('ownerUid').val() === auth.uid)",
+      );
+    });
+
+    test('.write makes ownerUid immutable after first write: a caller '
+        'whose uid does not match the EXISTING ownerUid is denied '
+        'regardless of what they write, and a caller who does match can '
+        'never write a DIFFERENT ownerUid than their own -- both '
+        'consequences fall out of the single conjunction above, verified '
+        'here by re-deriving each clause independently', () {
+      final write = deviceIdNode['.write'] as String;
+      // Clause 1: every write's new ownerUid must equal the caller's uid --
+      // this alone already forces ownerUid to only ever be the writer's
+      // own uid, on every single write, first or not.
+      expect(write.contains("newData.child('ownerUid').val() === auth.uid"),
+          isTrue);
+      // Clause 2: once the node exists, the EXISTING ownerUid must also
+      // equal the caller's uid -- so a second account can never overwrite
+      // a first account's entry, which is exactly the "whoever publishes
+      // first wins a race that should not be a race" risk task §6 names.
+      expect(
+        write.contains(
+          "(!data.exists() || data.child('ownerUid').val() === auth.uid)",
+        ),
+        isTrue,
+      );
     });
   });
 }

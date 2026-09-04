@@ -61,4 +61,20 @@ class FirebasePaths {
   /// about, never a foreign account's uid.
   static String relationship(String uid, String peerDeviceId) =>
       'users/$uid/relationships/$peerDeviceId';
+
+  /// `directory` — the parent node every [directoryEntry] lives under
+  /// (`E11-T06`, `ADR-0008` option 2). Deliberately never passed to
+  /// `.ref(...)` by any application code — `DeviceDirectoryService` only
+  /// ever reads/writes an exact [directoryEntry]. This function exists so
+  /// the rules test can attempt a read at exactly this path and prove it is
+  /// denied, without hand-typing the string a second time in the test file.
+  static String directoryRoot() => 'directory';
+
+  /// `directory/<deviceId>` — the public device-directory entry for
+  /// [deviceId] (`E11-T06`, `ADR-0008` option 2). A top-level node, NOT
+  /// under `users/$uid` — this is the one path in the whole tree any
+  /// authenticated account may read, by exact id only, and the parent
+  /// [directoryRoot] must never grant that same read (task §2/§6 Risks —
+  /// the entire privacy argument for this node rests on that asymmetry).
+  static String directoryEntry(String deviceId) => 'directory/$deviceId';
 }
