@@ -37,6 +37,19 @@ void main() {
     );
   }
 
+  NotificationFacts factsFor(
+    NotificationCategory category, {
+    String? peerDisplayName = 'device-b',
+  }) {
+    return NotificationFacts(
+      category: category,
+      conversationId: 'device-b',
+      peerDeviceId: 'device-b',
+      peerDisplayName: peerDisplayName,
+      stableId: stableNotificationId('device-b'),
+    );
+  }
+
   group('EARS-NOTIFY-6', () {
     test(
       'test_EARS_NOTIFY_6_disabled_category_posts_nothing',
@@ -113,6 +126,194 @@ void main() {
       },
     );
   });
+
+  // Regression coverage for E10-B03: four categories (`incomingCall`,
+  // `connectionRequest`, `groupEvent`, `storageWarning`) fell through
+  // `_copyFor`'s `default:` and posted generic `NEXORA`/`Notification` copy
+  // instead of the copy each owning task contracted in its own §5. Each
+  // block below asserts the exact §5 string, verbatim, at both `hidden` and
+  // `senderOnly` -- these must fail on pre-fix code (all four returned
+  // `NEXORA`/`Notification` regardless of category).
+  group('E10-B03 category copy', () {
+    group('incomingCall (E10-T04.md:108)', () {
+      test(
+        'test_E10_B03_incoming_call_hidden_has_no_peer_name',
+        () async {
+          await settings.setPrivacyLevel(NotificationPrivacyLevel.hidden);
+
+          final request = await policy.resolve(
+            factsFor(NotificationCategory.incomingCall),
+          );
+
+          expect(request, isNotNull);
+          expect(request!.title, 'Incoming call');
+          expect(request.body, 'Someone is calling');
+        },
+      );
+
+      test(
+        'test_E10_B03_incoming_call_sender_only_shows_peer_name',
+        () async {
+          await settings.setPrivacyLevel(NotificationPrivacyLevel.senderOnly);
+
+          final request = await policy.resolve(
+            factsFor(NotificationCategory.incomingCall),
+          );
+
+          expect(request!.title, 'Incoming call');
+          expect(request.body, 'device-b');
+        },
+      );
+
+      test(
+        'test_E10_B03_incoming_call_sender_only_falls_back_to_unknown_device',
+        () async {
+          await settings.setPrivacyLevel(NotificationPrivacyLevel.senderOnly);
+
+          final request = await policy.resolve(
+            factsFor(NotificationCategory.incomingCall, peerDisplayName: null),
+          );
+
+          expect(request!.title, 'Incoming call');
+          expect(request.body, 'Unknown device');
+        },
+      );
+    });
+
+    group('connectionRequest (E10-T05.md:105)', () {
+      test(
+        'test_E10_B03_connection_request_hidden',
+        () async {
+          await settings.setPrivacyLevel(NotificationPrivacyLevel.hidden);
+
+          final request = await policy.resolve(
+            factsFor(NotificationCategory.connectionRequest),
+          );
+
+          expect(request!.title, 'Connection request');
+          expect(request.body, 'An unknown device wants to connect');
+        },
+      );
+
+      test(
+        'test_E10_B03_connection_request_sender_only_reads_the_same',
+        () async {
+          await settings.setPrivacyLevel(NotificationPrivacyLevel.senderOnly);
+
+          final request = await policy.resolve(
+            factsFor(NotificationCategory.connectionRequest),
+          );
+
+          expect(request!.title, 'Connection request');
+          expect(request.body, 'An unknown device wants to connect');
+        },
+      );
+    });
+
+    group('groupEvent (E10-T06.md:108)', () {
+      // `NotificationFacts` carries no group name and no `GroupEventNotice.
+      // kind` (E10-T06.md:209) -- only the §5 generic `NEXORA`/`Group
+      // activity` string is renderable, at every privacy level.
+      test(
+        'test_E10_B03_group_event_hidden',
+        () async {
+          await settings.setPrivacyLevel(NotificationPrivacyLevel.hidden);
+
+          final request = await policy.resolve(
+            factsFor(NotificationCategory.groupEvent),
+          );
+
+          expect(request!.title, 'NEXORA');
+          expect(request.body, 'Group activity');
+        },
+      );
+
+      test(
+        'test_E10_B03_group_event_sender_only_reads_the_same',
+        () async {
+          await settings.setPrivacyLevel(NotificationPrivacyLevel.senderOnly);
+
+          final request = await policy.resolve(
+            factsFor(NotificationCategory.groupEvent),
+          );
+
+          expect(request!.title, 'NEXORA');
+          expect(request.body, 'Group activity');
+        },
+      );
+    });
+
+    group('storageWarning (E10-T07.md:107)', () {
+      test(
+        'test_E10_B03_storage_warning_hidden',
+        () async {
+          await settings.setPrivacyLevel(NotificationPrivacyLevel.hidden);
+
+          final request = await policy.resolve(
+            factsFor(NotificationCategory.storageWarning),
+          );
+
+          expect(request!.title, 'Storage almost full');
+          expect(request.body, 'NEXORA is running low on local storage');
+        },
+      );
+
+      test(
+        'test_E10_B03_storage_warning_sender_only_reads_the_same',
+        () async {
+          await settings.setPrivacyLevel(NotificationPrivacyLevel.senderOnly);
+
+          final request = await policy.resolve(
+            factsFor(NotificationCategory.storageWarning),
+          );
+
+          expect(request!.title, 'Storage almost full');
+          expect(request.body, 'NEXORA is running low on local storage');
+        },
+      );
+    });
+
+    // The unshipped classes (`voiceMessage`, `ptt`, `trustRequest`,
+    // `securityEvent`) must keep falling through to the generic default --
+    // this fix does not invent copy for them (OQ-E10-3/6/7).
+    test(
+      'test_E10_B03_unshipped_categories_still_use_the_generic_default',
+      () async {
+        await settings.setPrivacyLevel(NotificationPrivacyLevel.senderOnly);
+
+        final request = await policy.resolve(
+          factsFor(NotificationCategory.trustRequest),
+        );
+
+        expect(request!.title, 'NEXORA');
+        expect(request.body, 'Notification');
+      },
+    );
+  });
+
+  // Defect #2 (latent): `resolve()` downgrades `full` to `senderOnly`
+  // (notification_policy.dart:91). Before this fix, `_copyFor` had no branch
+  // differentiating `full` from `senderOnly`, so deleting the downgrade line
+  // left the whole suite green -- the existing
+  // `test_EARS_NOTIFY_7_full_downgrades_to_sender_only` above proved nothing.
+  // `_copyFor` now asserts it is never called with `full` (resolve() must
+  // downgrade first), which makes that assertion -- and this test -- fail
+  // for the right reason if the downgrade line is removed. See the bug's
+  // run log for the manual falsification (delete the line, confirm red,
+  // restore, confirm green).
+  test(
+    'test_E10_B03_full_privacy_never_reaches_copyFor_undowngraded',
+    () async {
+      await settings.setPrivacyLevel(NotificationPrivacyLevel.full);
+
+      final request = await policy.resolve(messageFacts());
+
+      // Must render exactly like `senderOnly` -- proof that `resolve()`
+      // downgraded `full` before `_copyFor` ever saw it.
+      expect(request!.title, 'device-b');
+      expect(request.body, 'New message');
+    },
+  );
 
   test('the posted request id is the facts stableId, for replace-not-stack', () async {
     final facts = messageFacts();
