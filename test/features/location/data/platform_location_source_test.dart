@@ -143,21 +143,40 @@ void main() {
 
   group('EARS-LOC-16 — every no-fix path returns null, never throws', () {
     test('test_EARS_LOC_16_permission_denied_returns_null', () async {
+      // Call counters, not `fail('must not be called')`: a `fail()` thrown
+      // from inside one of these seams is caught by this class's own broad
+      // `catch (_)` (platform_location_source.dart:129-135) and collapses to
+      // the same `null` this test already expects, so the guard would never
+      // actually fail the test (opus review on PR #42, finding F1). A
+      // counter asserted with `expect(..., 0)` in the test body cannot be
+      // swallowed that way.
+      var currentPositionCalls = 0;
+      var lastKnownCalls = 0;
       final source = PlatformLocationSource(
         isLocationServiceEnabled: () async => true,
         checkPermission: () async => LocationPermission.denied,
         requestPermission: () async => LocationPermission.denied,
-        currentPosition: (_) async => fail('must not be called'),
-        lastKnownPosition: () async => fail('must not be called'),
+        currentPosition: (_) async {
+          currentPositionCalls++;
+          return _fakePosition(timestamp: DateTime.utc(2026));
+        },
+        lastKnownPosition: () async {
+          lastKnownCalls++;
+          return null;
+        },
       );
 
       expect(await source.currentFix(), isNull);
+      expect(currentPositionCalls, 0);
+      expect(lastKnownCalls, 0);
     });
 
     test(
       'test_EARS_LOC_16_permission_permanently_denied_returns_null',
       () async {
         var requestCalls = 0;
+        var currentPositionCalls = 0;
+        var lastKnownCalls = 0;
         final source = PlatformLocationSource(
           isLocationServiceEnabled: () async => true,
           checkPermission: () async => LocationPermission.deniedForever,
@@ -165,8 +184,14 @@ void main() {
             requestCalls++;
             return LocationPermission.deniedForever;
           },
-          currentPosition: (_) async => fail('must not be called'),
-          lastKnownPosition: () async => fail('must not be called'),
+          currentPosition: (_) async {
+            currentPositionCalls++;
+            return _fakePosition(timestamp: DateTime.utc(2026));
+          },
+          lastKnownPosition: () async {
+            lastKnownCalls++;
+            return null;
+          },
         );
 
         expect(await source.currentFix(), isNull);
@@ -175,56 +200,99 @@ void main() {
         // class must not even attempt the re-prompt that Android silently
         // no-ops.
         expect(requestCalls, 0);
+        expect(currentPositionCalls, 0);
+        expect(lastKnownCalls, 0);
       },
     );
 
     test('test_EARS_LOC_16_provider_disabled_returns_null', () async {
+      var checkPermissionCalls = 0;
+      var requestPermissionCalls = 0;
+      var currentPositionCalls = 0;
+      var lastKnownCalls = 0;
       final source = PlatformLocationSource(
         isLocationServiceEnabled: () async => false,
-        checkPermission: () async => fail('must not be called'),
-        requestPermission: () async => fail('must not be called'),
-        currentPosition: (_) async => fail('must not be called'),
-        lastKnownPosition: () async => fail('must not be called'),
+        checkPermission: () async {
+          checkPermissionCalls++;
+          return LocationPermission.whileInUse;
+        },
+        requestPermission: () async {
+          requestPermissionCalls++;
+          return LocationPermission.whileInUse;
+        },
+        currentPosition: (_) async {
+          currentPositionCalls++;
+          return _fakePosition(timestamp: DateTime.utc(2026));
+        },
+        lastKnownPosition: () async {
+          lastKnownCalls++;
+          return null;
+        },
       );
 
       expect(await source.currentFix(), isNull);
+      // The provider-off short-circuit (task file §2 step 1) must return
+      // before touching the permission chain or either position read.
+      expect(checkPermissionCalls, 0);
+      expect(requestPermissionCalls, 0);
+      expect(currentPositionCalls, 0);
+      expect(lastKnownCalls, 0);
     });
 
     test(
       'test_EARS_LOC_16_timeout_returns_null_with_no_last_known_fix',
       () async {
+        var requestPermissionCalls = 0;
         final source = PlatformLocationSource(
           timeout: const Duration(milliseconds: 20),
           isLocationServiceEnabled: () async => true,
           checkPermission: () async => LocationPermission.whileInUse,
-          requestPermission: () async => fail('must not be called'),
+          requestPermission: () async {
+            requestPermissionCalls++;
+            return LocationPermission.whileInUse;
+          },
           currentPosition: (_) => Completer<Position>().future,
           lastKnownPosition: () async => null,
         );
 
         expect(await source.currentFix(), isNull);
+        // Permission is already granted (`whileInUse`) -- the `denied`
+        // branch that triggers a request must not run.
+        expect(requestPermissionCalls, 0);
       },
     );
 
     test('test_EARS_LOC_16_platform_exception_returns_null', () async {
+      var requestPermissionCalls = 0;
+      var lastKnownCalls = 0;
       final source = PlatformLocationSource(
         isLocationServiceEnabled: () async => true,
         checkPermission: () async => LocationPermission.whileInUse,
-        requestPermission: () async => fail('must not be called'),
+        requestPermission: () async {
+          requestPermissionCalls++;
+          return LocationPermission.whileInUse;
+        },
         currentPosition: (_) async =>
             throw PlatformException(code: 'boom'),
         // A non-timeout platform exception must NOT fall back to
         // last-known (task file §5) -- it resolves to null directly.
-        lastKnownPosition: () async => fail('must not be called'),
+        lastKnownPosition: () async {
+          lastKnownCalls++;
+          return null;
+        },
       );
 
       expect(await source.currentFix(), isNull);
+      expect(requestPermissionCalls, 0);
+      expect(lastKnownCalls, 0);
     });
 
     test(
       'unableToDetermine permission returns null without a second request',
       () async {
         var requestCalls = 0;
+        var currentPositionCalls = 0;
+        var lastKnownCalls = 0;
         final source = PlatformLocationSource(
           isLocationServiceEnabled: () async => true,
           checkPermission: () async => LocationPermission.unableToDetermine,
@@ -232,28 +300,56 @@ void main() {
             requestCalls++;
             return LocationPermission.unableToDetermine;
           },
-          currentPosition: (_) async => fail('must not be called'),
-          lastKnownPosition: () async => fail('must not be called'),
+          currentPosition: (_) async {
+            currentPositionCalls++;
+            return _fakePosition(timestamp: DateTime.utc(2026));
+          },
+          lastKnownPosition: () async {
+            lastKnownCalls++;
+            return null;
+          },
         );
 
         expect(await source.currentFix(), isNull);
         expect(requestCalls, 0);
+        expect(currentPositionCalls, 0);
+        expect(lastKnownCalls, 0);
       },
     );
 
     test(
       'isLocationServiceEnabled throwing collapses to null, never rethrows',
       () async {
+        var checkPermissionCalls = 0;
+        var requestPermissionCalls = 0;
+        var currentPositionCalls = 0;
+        var lastKnownCalls = 0;
         final source = PlatformLocationSource(
           isLocationServiceEnabled: () async =>
               throw PlatformException(code: 'service-check-failed'),
-          checkPermission: () async => fail('must not be called'),
-          requestPermission: () async => fail('must not be called'),
-          currentPosition: (_) async => fail('must not be called'),
-          lastKnownPosition: () async => fail('must not be called'),
+          checkPermission: () async {
+            checkPermissionCalls++;
+            return LocationPermission.whileInUse;
+          },
+          requestPermission: () async {
+            requestPermissionCalls++;
+            return LocationPermission.whileInUse;
+          },
+          currentPosition: (_) async {
+            currentPositionCalls++;
+            return _fakePosition(timestamp: DateTime.utc(2026));
+          },
+          lastKnownPosition: () async {
+            lastKnownCalls++;
+            return null;
+          },
         );
 
         expect(await source.currentFix(), isNull);
+        expect(checkPermissionCalls, 0);
+        expect(requestPermissionCalls, 0);
+        expect(currentPositionCalls, 0);
+        expect(lastKnownCalls, 0);
       },
     );
   });
