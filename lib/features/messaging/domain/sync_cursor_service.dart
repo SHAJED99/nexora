@@ -217,20 +217,32 @@ class SyncCursorService {
       'lastConfirmedSequenceNumber': cursor.lastConfirmedSequenceNumber,
       'updatedAt': cursor.updatedAt,
     };
-    try {
-      await guardedWriteCursorData(uid, cursor, data).timeout(_timeout);
-    } catch (e) {
-      ObservabilityService.instance.logError(
-        'firebase.sync_cursor_write_failed',
-        cause: e,
-      );
-    }
+    await guardedWriteCursorData(uid, cursor, data);
   }
 
-  /// E11-B04: the actual guard-then-write sequence, extracted so a test can
-  /// drive it with an arbitrary payload — see the identical reasoning on
-  /// `FirebaseMetadataService.guardedWriteDeviceMetadata`.
-  /// `@visibleForTesting` — production behavior is unchanged.
+  /// E11-B04 round-2 (Opus review): the actual guard-then-write sequence,
+  /// extracted so a test can drive it with an arbitrary payload -- see the
+  /// identical reasoning on `FirebaseMetadataService.guardedWriteDeviceMetadata`.
+  ///
+  /// The `try` wraps ONLY the write call, not [FirebaseBoundary
+  /// .assertAllowedFields] above it -- that ordering is what makes both
+  /// halves of this method's contract hold at once: `assertAllowedFields`
+  /// throws synchronously, before the `try` block is ever entered (true
+  /// even though this whole method is `async` -- synchronous code ahead of
+  /// a `try` in an async function body still runs, and still throws,
+  /// before that `try`'s dynamic extent begins), so a boundary violation
+  /// propagates as a programming error exactly as task §6 Risks requires;
+  /// a genuine write-layer failure (timeout, offline, a thrown
+  /// `DatabaseException`) originates *inside* the `try` and is caught and
+  /// logged, never thrown to the caller, per this class's existing
+  /// EARS-MSG-6 contract. Round 1 of this fix put the `try` around the
+  /// call to this method from `writeCursorToFirebase` instead of inside
+  /// it -- that let a synchronous write-layer throw (a realistic shape;
+  /// this repo's own `_ThrowingWriteSyncCursorService` test fixture
+  /// throws synchronously, not via `async`) escape uncaught, the opposite
+  /// defect from what round 1 was fixing. `@visibleForTesting` —
+  /// production behavior (guard call, then write call, same order,
+  /// write-layer errors still caught) is unchanged from before E11-B04.
   @visibleForTesting
   Future<void> guardedWriteCursorData(
     String uid,
@@ -238,7 +250,14 @@ class SyncCursorService {
     Map<String, dynamic> data,
   ) async {
     FirebaseBoundary.assertAllowedFields(FirebaseNodeKind.syncCursor, data);
-    await writeCursorData(uid, cursor, data);
+    try {
+      await writeCursorData(uid, cursor, data).timeout(_timeout);
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'firebase.sync_cursor_write_failed',
+        cause: e,
+      );
+    }
   }
 
   /// Performs the actual Realtime Database write. Split out from

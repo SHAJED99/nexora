@@ -5,11 +5,14 @@ cross-model reviewed, `E11-B03` docs-fixed). **A second pass — a
 retroactive rule-5 re-review of `T01`/`T02` (same pattern found in E09/E10
 this session, since both were same-model reviewed) — then found 3 more
 real bugs: `E11-B04` (S3, fixed), `E11-B05` (S3, fixed — a real Firebase
-rules gap), `E11-B06` (S2/S3, blocked/deferred — unreachable until
-`E11-B01`'s wiring gap closes, same logic already accepted for B01).**
-**P1/P2 = 0, ready for epic→development merge** (E11-B06 is S2 but
-correctly deferred, not counted against the gate, per B01's own
-precedent) · **Started:** 2026-09-04 · **Completed:** 2026-09-04 ·
+rules gap), `E11-B06` (S2, filed, priority left `TBD`).** **P1/P2 = 0 for
+every priority-stamped bug; `E11-B06` (S2, severity only — no human
+priority stamp yet) is the one open item before the epic→`development`
+gate can honestly be called clear.** `E11-B01` reached a similar
+"unreachable without a real caller" shape, but only after the human's own
+`bug_priorities` pass stamped it P3 — `E11-B06` has not yet been through
+that gate, so its eventual priority is the human's call, not assumed here.
+· **Started:** 2026-09-04 · **Completed:** 2026-09-04 ·
 **Progress:** 6/6 tasks done
 
 ## Tasks
@@ -254,9 +257,21 @@ is BLOCKED on that one bug alone.**
   authenticated user overwrite a whole documented container with a leaf
   value -- fixed, falsified by stashing and re-running), `E11-B06` (S2/S3,
   `T06`'s `directory` node has a first-writer-wins squatting risk plus a
-  cross-account-readable `ownerUid` -- filed `blocked`, deferred until a
-  real consumer exists, same precedent as `E11-B01`). `T01`/`T02`'s
-  `reviewed_by` restamped to the real cross-model pass. Full suite:
-  899/899. `flutter analyze`: clean. **P1/P2 = 0 unchanged** — `E11-B06`
-  is S2 but correctly excluded from the count for the same reason
-  `E11-B01` already was.
+  cross-account-readable `ownerUid` -- filed `blocked`, priority left
+  `TBD` for the human). `T01`/`T02`'s `reviewed_by` restamped to the real
+  cross-model pass. Full suite: 899/899. `flutter analyze`: clean.
+  **The epic→`development` gate awaits the human's `bug_priorities` stamp
+  on `E11-B06`** — not assumed clear ahead of it, unlike the tracker's
+  earlier draft of this entry.
+- 2026-09-04 Round 2 (Opus re-review of PR #78): found `E11-B04`'s
+  `SyncCursorService` fix had silently inverted the exact property it was
+  meant to protect -- moving the guard call outside the `try` also moved
+  the WRITE call's exception handling outside it, since both were bundled
+  in one non-`try`-wrapped seam. A genuine write-layer failure (thrown
+  synchronously, as this repo's own `_ThrowingWriteSyncCursorService` test
+  fixture does) would have escaped uncaught in production. Fixed by moving
+  the `try`/`catch` inside `guardedWriteCursorData` itself, wrapping only
+  the write call -- the guard's synchronous throw now precedes the `try`'s
+  own dynamic extent even though the enclosing method is `async`, so both
+  halves of the contract (guard violations propagate, write failures are
+  caught) hold simultaneously. Full suite re-confirmed: 899/899.

@@ -10,10 +10,14 @@ merge gate.
 6 sharded tasks (T01–T06: schema/path registry, security rules, device
 registry semantics, revocation, own-account relationship mirror, public
 device directory per `ADR-0008` option 2) + an original bug sweep (3
-findings, all resolved) + a second, retroactive rule-5 re-review pass
-(3 more findings: 2 fixed, 1 correctly deferred). Final state: **899/899
-tests, `flutter analyze` clean, P1/P2 = 0**, verified locally at the
-merge tip.
+findings, all resolved) + a second, retroactive rule-5 re-review pass (3
+more findings: `E11-B04`/`E11-B05` fixed, `E11-B06` filed with priority
+left `TBD`). Final state: **899/899 tests, `flutter analyze` clean**,
+verified locally at the merge tip. **P1/P2 = 0 for every priority-stamped
+bug; `E11-B06` (S2 severity, no priority stamp yet) is the one item
+between here and an honestly-clear epic→`development` gate** — the human's
+own `bug_priorities` pass decides whether it counts, same gate `E11-B01`
+already went through once.
 
 ## What recurred (the richest signal — see `agent/memory/lessons/`)
 
