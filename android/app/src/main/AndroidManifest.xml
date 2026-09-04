@@ -71,7 +71,7 @@
              exported="true" is required here (E10-B01): BOOT_COMPLETED is
              broadcast by the system server under a different UID than this
              app's, and an exported="false" receiver never receives a
-             cross-UID broadcast at all -- Android's own boot-receiver docs
+             cross-UID broadcast at all; Android's own boot-receiver docs
              declare it exported. Safe to export: onReceive hard-filters on
              the action string, then on the persisted flag (BootReceiver.kt),
              so a spoofed intent can at most start a service this app was
