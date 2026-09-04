@@ -1,7 +1,7 @@
 ---
 id: E11
 title: Firebase Metadata Sync
-status: todo
+status: build-complete (bug sweep run 2026-09-04; 3 bugs open, P2×2 — epic→development blocked)
 type: feature
 priority: { moscow: should, wsjf: 3.5 }
 depends_on: [E01, E02]
@@ -65,12 +65,20 @@ with, and extends, that wrapper rather than replacing it.
 
 | Task | Title | Layer | Size | MoSCoW | EARS owned | Status |
 |---|---|---|---|---|---|---|
-| E11-T01 | Firebase data-boundary schema, path registry and wrapper reconciliation | backend | M | must | FB-1, FB-2, FB-3 | todo |
-| E11-T02 | Security rules that structurally enforce the FR-FB-002 boundary | backend | M | must | FB-4, FB-5, FB-6 | todo |
-| E11-T03 | Device registry semantics — real `createdAt`, refreshed `lastSeenAt` | backend | S | should | FB-7, FB-8, FB-9 | todo |
-| E11-T04 | Device revocation records and own-account propagation | backend | M | should | FB-10, FB-11, FB-12, FB-13 | todo |
-| E11-T05 | Own-account relationship-config mirror (trust/block state across a user's own devices) | backend | M | should | FB-14, FB-15, FB-16 | todo |
-| E11-T06 | Public device directory — identity key + prekey bundle + revocation, exact-id lookup only | backend | M | should | FB-17, FB-18, FB-19 | todo |
+| E11-T01 | Firebase data-boundary schema, path registry and wrapper reconciliation | backend | M | must | FB-1, FB-2, FB-3 | done |
+| E11-T02 | Security rules that structurally enforce the FR-FB-002 boundary | backend | M | must | FB-4, FB-5, FB-6 | done |
+| E11-T03 | Device registry semantics — real `createdAt`, refreshed `lastSeenAt` | backend | S | should | FB-7, FB-8, FB-9 | done |
+| E11-T04 | Device revocation records and own-account propagation | backend | M | should | FB-10, FB-11, FB-12, FB-13 | done |
+| E11-T05 | Own-account relationship-config mirror (trust/block state across a user's own devices) | backend | M | should | FB-14, FB-15, FB-16 | done |
+| E11-T06 | Public device directory — identity key + prekey bundle + revocation, exact-id lookup only | backend | M | should | FB-17, FB-18, FB-19 | done |
+
+### Bug tasks (from the 2026-09-04 sweep)
+
+| Bug | Title | Severity | Priority | Status |
+|---|---|---|---|---|
+| E11-B01 | `directory/$deviceId` is never published by the running app (EARS-FB-17 holds only in tests) | S2 | P2 | blocked (planner) |
+| E11-B02 | `lookupDevice` accepts an entry whose `identityPublicKey` disagrees with its own `prekeyBundle` | S2 | P2 | todo |
+| E11-B03 | `E11-T06` edited two files outside its `files:` fence with no §Deviations entry | S4 | P3 | todo |
 
 DAG, collision matrix and the reconciliation rationale: `tracker.md`.
 
@@ -179,5 +187,42 @@ delegated authority, listed here for visibility rather than as blockers:
    E14's sharding pass (version policy) or a future notifications task
    (push tokens) rather than drifting further.
 
+## Bug sweep — 2026-09-04
+
+**Reviewer:** `claude-opus-5`, independent worktree, `epic_11` @ `877e8bd`
+(verified byte-identical to `origin/epic_11`). **891/891 tests green**,
+`flutter analyze` clean. Full evidence, probe output and the gate table live
+in `tracker.md` §Bug sweep — 2026-09-04.
+
+**Three defects found.** Severity is the reviewer's; priority was set under
+decision authority explicitly delegated by the human for this session's
+gate-clearing.
+
+| id | severity | priority | what |
+|---|---|---|---|
+| `E11-B01` | **S2** | **P2** | The public device directory is never written in production. `DeviceDirectoryService` is never constructed anywhere in `lib/`, and the sole production `IdentityService` (`messaging_stack.dart:491`) passes no publish hook — so EARS-FB-17's trigger fires on every launch and nothing publishes. Filed `blocked`/`owner_agent: planner`: publishing needs a Firebase uid, the trigger site has no auth context, and `ADR-0005` makes the app offline-first — the publish-vs-auth lifecycle is a rule-3 design call, not a scoped fix. |
+| `E11-B02` | **S2** | **P2** | `lookupDevice` decodes the identity key from two independent, attacker-controlled fields of the same cross-account-readable node and never checks they agree, so one entry can hand `E07`'s TOFU consumer identity A while `E06-T07`'s prekey consumer establishes a session on identity B. Proven with a reviewer probe. Scoped fix inside T06's own file. |
+| `E11-B03` | S4 | P3 | `E11-T06` edited `identity_service.dart` and `device_revocation_service.dart` outside its `files:` fence, with no §Deviations entry — its own §3 mandated changes its frontmatter did not permit. Docs-only; does not block the merge. |
+
+**Security properties re-derived independently** (not trusting the merge-time
+record, per the sweep brief): the `directory` parent node is structurally
+unreadable while `directory/$deviceId` is readable by exact id — re-proved
+with the reviewer's own RTDB read-cascade model, including mutation controls
+confirming the model detects a hoisted `.read`. No rule anywhere grants a
+bare `true`. `ownerUid` is anchored to server-authenticated `auth.uid`, so
+`publish`'s caller-supplied `uid` is not a trust hole. All ✅.
+
+**On the `E09-B09` pattern (item 5 of the brief):** the write side is clean —
+Firebase `auth.uid` really is server-authenticated, genuinely unlike a mesh
+frame's self-asserted `source`. The pattern nonetheless recurs on the *read*
+side as `E11-B02`, in the subtler form of two unvalidated identity fields
+inside one payload. Worth recording as a recurrence: the failure mode is not
+"which field carries the identity" but "two fields that must agree, and no
+code that checks".
+
+**Merge status: BLOCKED.** P1 = 0, **P2 = 2**. Per `skills/release`, the
+epic→`development` PR opens only when P1/P2 = 0. `E11-B01` additionally needs
+a planner decision before it can be scheduled at all.
+
 ## Retro
-<pending — after the bug sweep>
+<pending — after the bugs are fixed and the epic closes>
