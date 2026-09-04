@@ -1,22 +1,66 @@
 # E09 · Location Sharing · Progress
 
-**Status:** **sharded 2026-09-04 — 5 tasks, awaiting the 🧍 `analyze_report`
-gate before any dispatch.** `E09-T01`–`T04` are dispatchable the moment that
-gate clears (T01 additionally fires the 🧍 `db_schema_migration` gate on its
-own §5). `E09-T05` is `blocked` on two rule-3 human decisions and is **not**
-dispatchable regardless. **Backend/logic only** — this epic ships no screen;
-see §Why there is no frontend task. ·
-**Started:** — · **Completed:** — · **Progress:** 0/5
+**Status:** **all 5 sharded tasks merged, reviewed APPROVE — build-complete.**
+`E09-T05`'s two rule-3 blockers (`OQ-E09-T05-1`/`-2`) were answered
+2026-09-04 and it shipped. **Backend/logic only** — this epic ships no
+screen; see §Why there is no frontend task. ·
+**Started:** 2026-09-03 · **Completed:** 2026-09-04 · **Progress:** 5/5
+sharded + 5 bug tasks filed by the sweep
+
+**Bug sweep run 2026-09-04** (`skills/bug-sweep`, reviewer `claude-opus-5`,
+independent worktree off `epic_09`@`cd643f0`) — see §Bug sweep below.
+**5 defects filed (`E09-B01`…`B05`); P1 = 0, P2 = 5, of which 1 is already
+discharged.** The `skills/release` gate for the epic→`development` PR is
+**CLOSED** until P1/P2 = 0.
+
+**Still open, non-blocking, carried forward:**
+- 🟡 `OQ-E09-2` (`epic.md`) — the toggles still have **no settings surface**.
+  `FR-LOC-001`/`FR-LOC-002` are persisted, enforced and tested, but a user
+  cannot change them in-app until the Privacy & Security design pass
+  (`GAP-005`, still 🟡 proposed) happens. Owner: human.
+- 🟡 `OQ-E09-3` / `OQ-E09-T03-2` — `RelayDeliveryState.failed` remains
+  unwritten by choice. **Re-verified this sweep:** grep across `lib/` finds
+  no assignment anywhere in the codebase; `LocationShareService` returns
+  `LocationShareOutcome.transportFailed` to its own caller instead
+  (`location_share_service.dart:300-312`). Correctly owned, not dropped.
+  Owner: human.
+- 🟡 **`LocationUnavailableReason.notConnected` is unreachable in
+  production.** Both production callers of `LocationVisibilityPolicy.evaluate`
+  pass this device's own `localState` for `remoteState`
+  (`location_share_service.dart:224`, `location_read_model.dart:183`),
+  because no two-sided relationship-state exchange exists — the accepted
+  `OQ-E09-T02-1` limitation. With `remoteState == localState`, `connected`
+  ⟺ `authorized`, so `notConnected` can only ever be produced by a test that
+  passes the two states differently. Not a defect and not filed as one; the
+  reason value is the seam `FR-TRUST-007` (E11) fills. Recorded so nobody
+  rediscovers it as a bug.
+- 🟡 **`epics/E06-personal-chat/epic.md:110`'s `E06-T18` row is now stale**
+  — it still reads "needs E09's permission model existing
+  (FR-LOC-001/002/003)", which E09 has now delivered (T02's four-condition
+  policy + T04's `live`/`lastKnown`/`unavailable` reading). Not edited by
+  this sweep: it is E06's file, outside E09's fence. Owner: planner, at
+  E06-T18's sharding. `E09-B01` additionally `blocks: [E06-T18]` and must
+  land first.
 
 ## Tasks
 
-| Task | Title | Layer | Size | MoSCoW | Status | depends_on |
+| Task | Title | Layer | Size | MoSCoW | depends_on | Status |
 |---|---|---|---|---|---|---|
-| E09-T01 | Location schema migration v15 — global toggle, per-peer toggles, single last-known fix per peer | backend | M | must | todo | — |
-| E09-T02 | Location sharing settings repository + the four-condition visibility policy | backend | M | must | todo | T01 |
-| E09-T03 | Encrypted location share wire protocol (control kind 7) — gated send and gated receive | backend | M | must | todo | T01, T02 |
-| E09-T04 | Last-known-location fallback with explicit freshness — stale is never presented as live | backend | S | should | todo | T03 |
-| E09-T05 | Device location acquisition — real `LocationSource`, runtime permission, composition-root wiring | backend | M | should | **blocked** | T02, T03 |
+| E09-T01 | Location schema migration v15 — global toggle, per-peer toggles, single last-known fix per peer | backend | M | must | — | done · builder (sonnet) → reviewer (**sonnet — rule-5 breach, see `E09-B05`**) · APPROVE · merged `764b150` (PR #32) |
+| E09-T02 | Location sharing settings repository + the four-condition visibility policy | backend | M | must | T01 | done · builder (sonnet) → reviewer (**sonnet — rule-5 breach, see `E09-B05`**) · APPROVE · merged `f6f3117` (PR #35) |
+| E09-T03 | Encrypted location share wire protocol (control kind 7) — gated send and gated receive | backend | M | must | T01, T02 | done · builder (sonnet) → reviewer (**sonnet — rule-5 breach, see `E09-B05`**) · APPROVE · merged `4c03aa2` (PR #38) · CI red on GitHub Actions **billing**, not code; merged on the reviewer's own local run |
+| E09-T04 | Last-known-location fallback with explicit freshness — stale is never presented as live | backend | S | should | T03 | done · builder (sonnet) → reviewer (opus, cross-model) · round 1 CHANGES (2 falsified defects in `watch()`) → round 2 APPROVE · merged `ab03dba` (PR #41) + follow-up `5f4afc6` |
+| E09-T05 | Device location acquisition — real `LocationSource`, runtime permission, composition-root wiring | backend | M | should | T02, T03 | done · builder (sonnet) → reviewer (opus, cross-model) · round 1 CHANGES (F1: unfalsifiable `fail()` guards) → round 2 APPROVE · merged `9a221c4` (PR #42) · **on-device manual steps 4/5 NOT performed — standing limitation** |
+
+## Bug tasks
+
+| Bug | Title | Sev | Prio | Status |
+|---|---|---|---|---|
+| E09-B01 | `watch()` never re-evaluates the policy on a relationship change — a blocked peer stays visible | S2 | P2 | todo |
+| E09-B02 | Blocking a peer never deletes their stored coordinates; T04 §4 hands retention to E08, which does not own it | S2 | P2 | todo |
+| E09-B03 | `AndroidManifest.xml` comment claims an E04 Bluetooth regression check that §9 records as never performed | S3 | P2 | todo |
+| E09-B04 | Tracker/epic status never advanced past sharding — `0/5`, all `todo`, five merges unrecorded | S3 | P2 | **done** (this sweep) |
+| E09-B05 | Rule 5 breach — T01/T02/T03 reviewed by the same model that implemented them | S2 | P2 | todo |
 
 ## State machine
 
@@ -26,7 +70,8 @@ todo ──▶ in-progress ──▶ review-requested ──┬─▶ changes-re
                     side states: blocked (needs a human answer) · frozen (rate limit)
 ```
 
-`E09-T05` sits in `blocked` from the start: `OQ-E09-T05-1` (which location
+*(Historical, kept as written at sharding — T05 has since cleared this and
+is `done`.)* `E09-T05` sat in `blocked` from the start: `OQ-E09-T05-1` (which location
 package — a new dependency) and `OQ-E09-T05-2` (the Android manifest
 permission change, which touches the posture E04's Bluetooth transport
 depends on) are both rule-3 human calls. It leaves `blocked` when they are
@@ -123,3 +168,131 @@ surface for these toggles does not exist yet. Recorded as `OQ-E09-2`.
   empty. `scheduler.py --validate` green. ANALYZE REPORT appended to `epic.md`;
   🧍 `analyze_report` gate ⏳ AWAITING HUMAN — **no task dispatches until it
   clears.**
+- 2026-09-04 🧍 `analyze_report` cleared (decision authority explicitly
+  delegated to the agent for this session). All five items under "For the
+  human, before you clear this gate" decided; `OQ-E09-T05-1`/`-2` answered,
+  so `E09-T05` moved `blocked` → `todo`. `OQ-E09-T01-1`
+  (🧍 `db_schema_migration`) also cleared — v15 DDL approved as specified.
+- 2026-09-03 `E09-T01` merged — PR #32, `764b150`, APPROVE.
+- 2026-09-03 `E09-T02` merged — PR #35, `f6f3117`, APPROVE.
+- 2026-09-04 `E09-T03` merged — PR #38, `4c03aa2`, APPROVE. GitHub Actions CI
+  red on a **billing/spending-limit** fault, account-wide, not a code defect;
+  merged on the reviewer's own independent local `flutter analyze` +
+  `flutter test` run (864/864).
+- 2026-09-04 `E09-T04` merged — PR #41, `ab03dba`, round 1 CHANGES → round 2
+  APPROVE (cross-model, opus). Two real falsified defects in `watch()`.
+  Follow-up `5f4afc6` renamed two regression tests off the `EARS-LOC-15` id.
+- 2026-09-04 `E09-T05` merged — PR #42, `9a221c4`, round 1 CHANGES → round 2
+  APPROVE (cross-model, opus). On-device manual steps 4/5 **not performed**;
+  recorded as a standing limitation, not ticked.
+- 2026-09-04 **`skills/bug-sweep` end-of-epic sweep** (reviewer
+  `claude-opus-5`, independent worktree off `cd643f0`). Full suite re-run
+  locally: `flutter analyze` clean, `flutter test` **895/895 passed**. All 17
+  EARS ids traced to named tests. Five defects filed, `E09-B01`…`B05`.
+  Backfilled the five merge entries above, which this log was missing
+  entirely — that omission is itself `E09-B04`.
+- 2026-09-04 This tracker and `epic.md` brought up to E08's closure shape
+  (`E09-B04`, S3/P2, discharged by this same commit).
+
+## Bug sweep — 2026-09-04 (reviewer: `claude-opus-5`, independent worktree)
+
+Run off `epic_09`@`cd643f0` in a clean worktree, per `skills/bug-sweep`.
+CI is unavailable account-wide (GitHub Actions billing), so the local run
+below is the only verification and was treated as such.
+
+### Suite — run by the reviewer, not trusted from a PR body
+- `flutter analyze` → **No issues found.**
+- `flutter test` → **895/895 passed** (E09 added ~98 tests over E08's 797).
+
+### EARS coverage — 17/17
+Every `EARS-LOC-1` … `EARS-LOC-17` has ≥1 test named for it, across
+`location_visibility_policy_test.dart`, `location_settings_repository_test.dart`,
+`location_share_service_test.dart`, `location_share_test.dart`,
+`location_read_model_test.dart`, `location_fix_repository_test.dart`,
+`platform_location_source_test.dart`, `location_tables_test.dart`,
+`database_migration_test.dart` and `messaging_stack_test.dart`. No orphan in
+either direction.
+
+**Test-quality spot checks** (`skills/review` §2, "falsify the evidence"):
+the load-bearing negative guards are counter-based
+(`_FakeLocationSource.callCount`, `expect(fake.callCount, 0)` at
+`location_share_service_test.dart:152, 180`), which genuinely fails if the
+send-side gate is removed — the `fail()`-based shape the T05 reviewer proved
+unfalsifiable was replaced in `10b7050` and does not recur here.
+**Disclosed limitation of this sweep:** deliberate source mutation was not
+permitted in this session's environment, so falsification was done by
+independent probe (below) and by reading each guard's failure mode, not by
+breaking the code and re-running.
+
+### Cross-task seams examined
+| Seam | Verdict |
+|---|---|
+| T01 schema → T02/T03/T04 repositories | ✅ PK-per-peer invariant holds; `location_fixes` physically cannot hold history |
+| T02 policy → T03 send gate / T03 receive gate | ✅ gate genuinely evaluated twice, independently (`location_share_service.dart:234, 364`); neither side trusts the other |
+| T02 policy → **T04 `watch()`** | ❌ **`E09-B01`** — only 2 of the policy's 4 inputs are watched |
+| T03 `deleteFix` → the block path | ❌ **`E09-B02`** — the only delete trigger is an inbound frame |
+| T03 registration → T05 real source in the composition root | ✅ `messaging_stack.dart:395-406`; `_UnavailableLocationSource` genuinely retired |
+| T04 §4 "retention is E08's" → E08's actual scope | ❌ folded into **`E09-B02`** — E08 has no location kind and never touches the table |
+| E09 → E08 storage inventory | ✅ no defect: `location_fixes` is not an enumerable `StorageItemKind`, but its bytes are inside `databaseFile`'s real on-disk measurement, and the row count is bounded by peer count |
+| E09 → E11 `EARS-FB-1` (no permanent location in Firebase) | ✅ no Firebase path exists in any E09 file |
+| E09 → E13 `EARS-DIAG-1` (never log location) | ✅ zero logging calls of any kind under `lib/features/location/` or in `location_share.dart` |
+| E09 → E06-T18 (the consumer this epic exists to unblock) | ⚠️ delivered, but `E09-B01` must land first; E06's own row is stale (carried forward above) |
+| Manifest change → E04 Bluetooth posture | ⚠️ static checks pass; **unverified on hardware** — see the merge-gate condition below |
+
+### The scope-creep / invented-API pass
+Diff `cc4baff..cd643f0` is **33 files, +10 619 / −2 228**, of which
+`database.g.dart` (Drift codegen) is the bulk of both. Every non-generated
+file maps to exactly one task's `files:` list. Findings: **none.** No
+invented API, no dependency beyond the human-approved `geolocator: 14.0.2`
+exact pin, no refactor outside scope, no deletion of pre-existing behaviour
+(the only deletions in a hand-written file are the four lines of
+`database_migration_test.dart`'s v13→v14 exact-set assertion, **widened**
+to v13→v15 with the widening disclosed in the test's own comment).
+
+### 🧍 HUMAN GATE — `bug_priorities`
+Severities are the reviewer's. **Priorities were set by the agent under the
+decision authority explicitly delegated by the human for this session** —
+the same convention already used for `OQ-E09-T05-1/2/3`, `OQ-E09-T04-1/2`,
+`OQ-E09-T01-1` and the `analyze_report` gate itself. Each bug file's
+§Feedback log records the reasoning. The human may override any of them.
+
+| Bug | Severity | Priority | Blocks the epic→`development` PR? |
+|---|---|---|---|
+| `E09-B01` | S2 | P2 | **yes** |
+| `E09-B02` | S2 | P2 | **yes** |
+| `E09-B03` | S3 | P2 | **yes** |
+| `E09-B04` | S3 | P2 | no — already discharged |
+| `E09-B05` | S2 | P2 | **yes** |
+
+**P1 = 0. P2 = 5 (4 outstanding).** Per `skills/bug-sweep` step 4 and
+`skills/release`, the epic→`development` PR opens only at P1/P2 = 0, so the
+gate is **closed**.
+
+### 🧍 Merge-gate condition — on-device verification (not filed as a bug)
+`E09-T05`'s manual steps 3/4/5 — a real GPS fix acquisition, and confirming
+E04's Bluetooth discovery survives the `maxSdkVersion="30"` lift on an API
+≤30 **and** an API 31+ device — were **never performed**; no physical device
+or emulator existed in this environment. This is disclosed correctly in
+`E09-T05.md` §7/§9 and its DoD box is deliberately unticked.
+
+**Assessed honestly, as asked:** this is an *unmet verification obligation*,
+not a defect. It has no expected-vs-actual, so it has no repro and no
+regression test, and filing it as a P1/P2 bug would block the epic on
+hardware nobody in this environment has — while E05–E08 all shipped riding
+the same unverified E04 transport (this epic's own inherited obligation #7).
+So it is recorded here as a **human merge-gate condition**, matching E04's
+own retro precedent, rather than as `E09-B0n`.
+
+**Residual risk: low, and unmeasured.** Independently re-checked this sweep:
+`geolocator_android-5.0.2` declares no `ACCESS_FINE_LOCATION` of its own, so
+no merger conflict; `BLUETOOTH_SCAN`'s `neverForLocation` flag is
+byte-identical to its pre-E09 form (diff against `cc4baff`); the flag is an
+assertion about what the *Bluetooth scan* derives, and E09 derives position
+from the location provider; E04's `BluetoothPermissions.kt` still branches on
+`SDK_INT` and never requests `ACCESS_FINE_LOCATION` for a scan on API 31+.
+None of that substitutes for the hardware check.
+
+**The human decides at the `verified` gate:** run steps 3/4/5 on real
+hardware, or accept the risk explicitly and carry it into E09's retro.
+`E09-B03` exists because the manifest currently *claims* this was already
+done.

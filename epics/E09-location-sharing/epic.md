@@ -1,7 +1,7 @@
 ---
 id: E09
 title: Location Sharing
-status: todo
+status: in-progress
 type: feature
 priority: { moscow: could, wsjf: 3.7 }
 depends_on: [E02, E03, E04]
@@ -44,14 +44,30 @@ for this epic's task-sharding.
 
 | Task | Title | Layer | Size | MoSCoW | EARS owned | Status |
 |---|---|---|---|---|---|---|
-| E09-T01 | Location schema migration v15 — global toggle, per-peer toggles, single last-known fix per peer | backend | M | must | LOC-3, LOC-5 (no-history half), LOC-6 | todo |
-| E09-T02 | Location sharing settings repository + the four-condition visibility policy | backend | M | must | LOC-1, LOC-4, LOC-7 | todo |
-| E09-T03 | Encrypted location share wire protocol (control kind 7) — gated send and gated receive | backend | M | must | LOC-5 (encryption + blocked halves), LOC-8…12 | todo |
-| E09-T04 | Last-known-location fallback with explicit freshness — stale is never presented as live | backend | S | should | LOC-2, LOC-13, LOC-14 | todo |
-| E09-T05 | Device location acquisition — real `LocationSource`, runtime permission, composition-root wiring | backend | M | should | LOC-15, LOC-16, LOC-17 | todo (unblocked 2026-09-04 — `OQ-E09-T05-1`/`-2` answered) |
+| E09-T01 | Location schema migration v15 — global toggle, per-peer toggles, single last-known fix per peer | backend | M | must | LOC-3, LOC-5 (no-history half), LOC-6 | **done** · APPROVE · `764b150` (PR #32) |
+| E09-T02 | Location sharing settings repository + the four-condition visibility policy | backend | M | must | LOC-1, LOC-4, LOC-7 | **done** · APPROVE · `f6f3117` (PR #35) |
+| E09-T03 | Encrypted location share wire protocol (control kind 7) — gated send and gated receive | backend | M | must | LOC-5 (encryption + blocked halves), LOC-8…12 | **done** · APPROVE · `4c03aa2` (PR #38) |
+| E09-T04 | Last-known-location fallback with explicit freshness — stale is never presented as live | backend | S | should | LOC-2, LOC-13, LOC-14 | **done** · CHANGES→APPROVE · `ab03dba` (PR #41) |
+| E09-T05 | Device location acquisition — real `LocationSource`, runtime permission, composition-root wiring | backend | M | should | LOC-15, LOC-16, LOC-17 | **done** · CHANGES→APPROVE · `9a221c4` (PR #42) · on-device steps 4/5 not performed |
 
-DAG, collision matrix and the "why there is no frontend task" rationale:
-`tracker.md`.
+### Bug tasks (filed by the 2026-09-04 sweep)
+
+| Bug | Title | Sev | Prio | Status |
+|---|---|---|---|---|
+| E09-B01 | `LocationReadModel.watch()` never re-evaluates the policy on a relationship change — a blocked peer stays visible | S2 | P2 | todo |
+| E09-B02 | Blocking a peer never deletes their stored coordinates; `E09-T04` §4 hands retention to E08, which does not own it | S2 | P2 | todo |
+| E09-B03 | `AndroidManifest.xml` comment claims an E04 Bluetooth regression check that `E09-T05` §9 records as never performed | S3 | P2 | todo |
+| E09-B04 | Tracker/epic status never advanced past sharding — `0/5`, all `todo`, five merges unrecorded | S3 | P2 | **done** |
+| E09-B05 | Rule 5 breach — T01/T02/T03 reviewed by the same model that implemented them | S2 | P2 | todo |
+
+**Build-complete 2026-09-04; bug sweep run the same day. P1 = 0, P2 = 5 (4
+outstanding), so the epic→`development` PR gate is CLOSED** per
+`skills/release`.
+
+DAG, collision matrix, the "why there is no frontend task" rationale, and the
+**full §Bug sweep report** (suite run, 17/17 EARS trace, cross-task seam
+table, scope-creep pass, the 🧍 `bug_priorities` gate and the on-device
+merge-gate condition): `tracker.md`.
 
 ## Open Questions
 - **OQ-E09-1 — no map/location-display screen exists in the design contracts.** Needs a design gap entry (`design/gaps.md`) tracing to FR-LOC-* before this epic's UI tasks can be sharded.
@@ -152,4 +168,16 @@ Five things worth a deliberate look — three are decisions only you can make:
    is a particular number.
 
 ## Retro
-<pending — after the bug sweep>
+<pending — after `E09-B01`/`B02`/`B03`/`B05` close and the human `verified`
+gate>. Three items are already booked for it, so they are not lost if the
+retro is written by someone who did not run the sweep:
+1. **`E09-B05` — the rule-5 routing miss.** Mechanically checkable
+   (`reviewed_by` model ≠ `executed_by` model); a `L-process-*` lesson with a
+   `make health` / `scheduler.py --validate` check as its promotion step.
+   Audit E01–E08 for the same pattern — this sweep did not.
+2. **`E09-B04` — the un-stamped tracker.** The stamping habit fired on the
+   *commit message* (`docs(E09): T0n merged`) and stopped there, five times
+   running. Candidate health check: an epic whose task files say `done` while
+   its tracker says `todo`.
+3. **The on-device gap** (`E09-T05` steps 3/4/5), still open, still human-owned
+   — the third epic in a row to inherit E04's unverified-transport problem.
