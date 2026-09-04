@@ -617,4 +617,126 @@ void main() {
       expect(await LocationFixRepository(db: bob.db).readFix('alice'), isNull);
     });
   });
+
+  group('privacy sweep (E09-B02, EARS-LOC-5)', () {
+    // `pruneFixesForNonVisiblePeers()`'s regression coverage (bug file
+    // "Regression test (write it first)"): each test stores a fix by
+    // writing directly to `location_fixes` -- deliberately WITHOUT ever
+    // sending or receiving a wire frame -- so a peer that has since become
+    // non-visible cannot possibly hit `handleWireFrame`'s own
+    // delete-on-not-visible branch. That absence is the point: a test that
+    // routed through a frame would pass on today's (pre-fix) code and prove
+    // nothing about the sweep.
+
+    test(
+      'test_EARS_LOC_5_blocking_a_peer_deletes_their_stored_fix',
+      () async {
+        final bob = await newStack('bob', nextSuffix());
+        addTearDown(bob.dispose);
+        await allowVisibility(bob, 'alice');
+
+        final fixes = LocationFixRepository(db: bob.db);
+        await fixes.upsertFix(
+          peerDeviceId: 'alice',
+          latitude: 12.0,
+          longitude: 34.0,
+          capturedAtMs: 1000,
+          receivedAtMs: 1000,
+        );
+        expect(await fixes.readFix('alice'), isNotNull);
+
+        // Bob blocks alice -- no frame ever arrives afterwards.
+        await RelationshipRepository(bob.db)
+            .upsert('alice', RelationshipState.blocked);
+
+        final service = buildService(bob);
+        await service.pruneFixesForNonVisiblePeers();
+
+        expect(await fixes.readFix('alice'), isNull);
+      },
+    );
+
+    test(
+      'test_EARS_LOC_5_trusted_to_unknown_deletes_their_stored_fix',
+      () async {
+        final bob = await newStack('bob', nextSuffix());
+        addTearDown(bob.dispose);
+        await allowVisibility(bob, 'alice');
+
+        final fixes = LocationFixRepository(db: bob.db);
+        await fixes.upsertFix(
+          peerDeviceId: 'alice',
+          latitude: 12.0,
+          longitude: 34.0,
+          capturedAtMs: 1000,
+          receivedAtMs: 1000,
+        );
+        expect(await fixes.readFix('alice'), isNotNull);
+
+        // Relationship drops from trusted to unknown (e.g. an unfriend) --
+        // no frame ever arrives afterwards.
+        await RelationshipRepository(bob.db)
+            .upsert('alice', RelationshipState.unknown);
+
+        final service = buildService(bob);
+        await service.pruneFixesForNonVisiblePeers();
+
+        expect(await fixes.readFix('alice'), isNull);
+      },
+    );
+
+    test(
+      'test_EARS_LOC_5_global_sharing_off_deletes_their_stored_fix',
+      () async {
+        final bob = await newStack('bob', nextSuffix());
+        addTearDown(bob.dispose);
+        await allowVisibility(bob, 'alice');
+
+        final fixes = LocationFixRepository(db: bob.db);
+        await fixes.upsertFix(
+          peerDeviceId: 'alice',
+          latitude: 12.0,
+          longitude: 34.0,
+          capturedAtMs: 1000,
+          receivedAtMs: 1000,
+        );
+        expect(await fixes.readFix('alice'), isNotNull);
+
+        // The user turns global location sharing off entirely -- no frame
+        // ever arrives afterwards.
+        final settings = LocationSettingsRepository(db: bob.db);
+        await settings.writeGlobalEnabled(false);
+
+        final service = buildService(bob);
+        await service.pruneFixesForNonVisiblePeers();
+
+        expect(await fixes.readFix('alice'), isNull);
+      },
+    );
+
+    test(
+      'test_EARS_LOC_5_sweep_leaves_visible_peers_fix_untouched',
+      () async {
+        final bob = await newStack('bob', nextSuffix());
+        addTearDown(bob.dispose);
+        await allowVisibility(bob, 'alice');
+
+        final fixes = LocationFixRepository(db: bob.db);
+        await fixes.upsertFix(
+          peerDeviceId: 'alice',
+          latitude: 12.0,
+          longitude: 34.0,
+          capturedAtMs: 1000,
+          receivedAtMs: 1000,
+        );
+
+        final service = buildService(bob);
+        await service.pruneFixesForNonVisiblePeers();
+
+        // Alice is still fully visible -- the sweep must not delete a fix
+        // whose policy still holds.
+        expect(await fixes.readFix('alice'), isNotNull);
+      },
+    );
+  });
 }
