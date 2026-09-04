@@ -63,4 +63,14 @@ class LocationFixRepository {
           ..where((t) => t.peerDeviceId.equals(peerDeviceId)))
         .go();
   }
+
+  /// `E09-T04`'s reactive read: emits [peerDeviceId]'s single row (or
+  /// `null` when none exists) immediately on listen, then on every insert,
+  /// update or delete of that row — the same emit-on-listen shape
+  /// `StorageSettingsRepository.watch()` established (task file §5).
+  Stream<LocationFixRow?> watchFix(String peerDeviceId) {
+    return (db.select(db.locationFixes)
+          ..where((t) => t.peerDeviceId.equals(peerDeviceId)))
+        .watchSingleOrNull();
+  }
 }
