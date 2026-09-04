@@ -399,4 +399,73 @@ void main() {
       capturedAt.add(customWindow).millisecondsSinceEpoch,
     );
   });
+
+  test(
+      'test_EARS_LOC_14_watch_re_emits_unavailable_when_the_peer_is_blocked',
+      () async {
+    // E09-B01: watch() subscribed to only 2 of evaluate()'s 4 inputs and
+    // never to the peer's RelationshipState, so a subscriber that listens
+    // once kept rendering LocationAvailable after the peer was blocked.
+    // Falsification: revert the fourth (relationships) subscription in
+    // watch() and this test fails with events.last still LocationAvailable
+    // -- exactly the reviewer's probe signature in the bug file.
+    await allowPeer();
+    await fixes.upsertFix(
+      peerDeviceId: peer,
+      latitude: 12.0,
+      longitude: 34.0,
+      capturedAtMs: fixedNow.millisecondsSinceEpoch,
+      receivedAtMs: fixedNow.millisecondsSinceEpoch,
+    );
+
+    final model = buildModel();
+    final events = <LocationReading>[];
+    final sub = model.watch(peer).listen(events.add);
+    await Future<void>.delayed(Duration.zero);
+    expect(events.last, isA<LocationAvailable>());
+
+    await relationships.upsert(peer, RelationshipState.blocked);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+
+    expect(events.last, isA<LocationUnavailable>());
+    expect(
+      (events.last as LocationUnavailable).reason,
+      LocationUnavailableReason.blocked,
+    );
+
+    await sub.cancel();
+  });
+
+  test(
+      'test_EARS_LOC_14_watch_re_emits_unavailable_when_the_peer_is_deauthorized',
+      () async {
+    // Mirrored case: trusted -> unknown de-authorization. Fails identically
+    // to the blocked case today, for the same reason -- no subscription to
+    // the relationship state at all.
+    await allowPeer();
+    await fixes.upsertFix(
+      peerDeviceId: peer,
+      latitude: 12.0,
+      longitude: 34.0,
+      capturedAtMs: fixedNow.millisecondsSinceEpoch,
+      receivedAtMs: fixedNow.millisecondsSinceEpoch,
+    );
+
+    final model = buildModel();
+    final events = <LocationReading>[];
+    final sub = model.watch(peer).listen(events.add);
+    await Future<void>.delayed(Duration.zero);
+    expect(events.last, isA<LocationAvailable>());
+
+    await relationships.upsert(peer, RelationshipState.unknown);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+
+    expect(events.last, isA<LocationUnavailable>());
+    expect(
+      (events.last as LocationUnavailable).reason,
+      LocationUnavailableReason.notAuthorized,
+    );
+
+    await sub.cancel();
+  });
 }

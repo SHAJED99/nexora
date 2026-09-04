@@ -224,8 +224,18 @@ class LocationReadModel {
     );
   }
 
-  /// Emits the current reading immediately on listen, then on every
-  /// stored-fix or settings change (task file §5).
+  /// Emits the current reading immediately on listen, then on every change
+  /// to any of the four inputs [LocationVisibilityPolicy.evaluate] gates on
+  /// for [peerDeviceId] — the peer's stored `RelationshipState`
+  /// (`RelationshipRepository.watchState`), the global switch, and the
+  /// per-peer switch — plus every stored-fix change (task file §5).
+  ///
+  /// `E09-B01`: this list previously named only "stored-fix or settings
+  /// change" and omitted the relationship-state subscription entirely, so a
+  /// listener that subscribed once kept reporting a blocked peer as
+  /// available until an unrelated fix or settings change happened to fire a
+  /// recompute. The fourth subscription below closes that gap; this comment
+  /// is the corrected, complete trigger set.
   ///
   /// A `watch` stream does NOT re-evaluate freshness on the passage of
   /// time — it emits on data change, so a `live` reading can silently age
@@ -281,6 +291,11 @@ class LocationReadModel {
         )
         ..add(
           _settings.watchPeerEnabled(peerDeviceId).skip(1).listen((_) {
+            unawaited(emitCurrent());
+          }),
+        )
+        ..add(
+          _relationships.watchState(peerDeviceId).skip(1).listen((_) {
             unawaited(emitCurrent());
           }),
         );
