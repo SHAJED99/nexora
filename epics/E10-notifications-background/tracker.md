@@ -198,3 +198,16 @@ rather than presented as approved design.
   title/body. `notification_policy.dart`'s copy table was deliberately left
   out of `E10-T04`'s fence; whichever task next extends that copy table (or
   the end-of-epic sweep) must not close E10 with this string still live.
+- **2026-09-04 · `E10-T05`'s cross-model review · `PrekeyExchange.dispose()`
+  has no caller anywhere in `lib/` — third instance of the same pattern.**
+  Confirmed inert, not a leak: `messaging_stack.dart:600` documents
+  `MessagingStack.dispose()` itself as "test-only — the app process never
+  calls this", so no live code path was ever going to reach either
+  `dispose()`. Fold into the `CallSignaling.dispose()` entry above when
+  wiring teardown for real — one composition-root dispose pass should close
+  both, not two separate fast-follows. Also noted: the source's per-peer
+  dedup state is evaluated inside `.where()` (per-subscription, not
+  process-wide) and never resets on a `blocked → unblocked → unknown`
+  transition — matches the task's contract as written, not a defect, but
+  worth a second look if this epic's sweep ever needs "notify again after
+  re-becoming unknown" behaviour.
