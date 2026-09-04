@@ -180,3 +180,21 @@ rather than presented as approved design.
   matrix empty. `python agent/orchestrator/scheduler.py --validate` green.
   ANALYZE REPORT appended to `epic.md`; 🧍 `analyze_report` gate ⏳ AWAITING
   HUMAN — **no task dispatches until it clears.**
+
+## Carried-forward observations (read before the end-of-epic sweep)
+- **2026-09-04 · `E10-T04`'s cross-model review · `CallSignaling.dispose()`
+  has no caller anywhere in `lib/`.** `E10-T04` added `dispose()` to close
+  the new `notices` stream controller, but nothing in the composition root
+  (`messaging_stack.dart` or elsewhere) calls it — the same unwired-
+  capability shape as `E09-B02`/`E09-B06` (`L-process-007`). Not a live leak
+  today (the app process, not the controller, is what actually ends), but a
+  correctness gap that must not be silently carried past this epic's close.
+  **Owner: whichever task next touches `messaging_stack.dart`'s
+  `CallSignaling` construction/teardown, or the end-of-epic sweep if none
+  does.** Confirmed present as of PR #45 (merged 2026-09-04).
+- **2026-09-04 · same review · `OQ-E10-T04-2`'s generic notification copy
+  ("NEXORA" / "Notification") is confirmed still shipping**, not a
+  theoretical gap — the reviewer's own probe read back the actual posted
+  title/body. `notification_policy.dart`'s copy table was deliberately left
+  out of `E10-T04`'s fence; whichever task next extends that copy table (or
+  the end-of-epic sweep) must not close E10 with this string still live.

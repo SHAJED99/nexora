@@ -17,14 +17,15 @@ import 'package:nexora/core/notifications/notification_stub.dart';
 import 'package:nexora/core/notifications/sources/call_notification_source.dart';
 
 void main() {
-  // `CallNotificationSource.facts` is an `async*` generator (its own header
-  // explains why) -- listening to it schedules the generator body to start
-  // on a LATER microtask, not synchronously the way `StreamController
-  // .broadcast().listen()` does. Every test below awaits this one microtask
-  // after subscribing and before publishing on `controller`, or the event
-  // would be added to the broadcast `notices` stream before the generator's
-  // own internal `await for` has actually subscribed to it, and a broadcast
-  // stream drops an event with no subscriber at the moment it is added.
+  // `CallNotificationSource.facts` is built with `.where().map()` over the
+  // underlying broadcast stream, not an `async*` generator -- an earlier
+  // `async*` implementation hung on `StreamSubscription.cancel()` and was
+  // replaced (see `CallNotificationSource`'s own header). `.where().map()`
+  // still only forwards events added AFTER a listener subscribes -- a
+  // broadcast stream drops an event with no subscriber at the moment it is
+  // added -- so every test below still awaits one microtask after
+  // subscribing and before publishing on `controller`, to let the
+  // subscription actually attach first.
   Future<void> settle() => Future<void>.delayed(Duration.zero);
 
   test('test_EARS_NOTIFY_8_invite_posts_incoming_call_notification',
