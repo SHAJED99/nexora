@@ -247,3 +247,30 @@ rather than presented as approved design.
   stay at one post, not re-post). The production code is correct -- this is
   a test-coverage gap, not a defect. Fold in an `over -> null -> over`
   regression test the next time this file is touched.
+- **2026-09-04 · `E10-T08`'s cross-model review · a process kill + boot
+  restart revives the foreground service but not the Dart isolate/tick
+  until the user reopens the app (deviation #2, confirmed accurate and
+  understated by the reviewer).** After a real process kill, the
+  `FlutterEngineCache` is empty, so `BackgroundApiHost`'s `eventsApi` is
+  null — `EARS-PLAT-8`'s "SHALL report its state to Dart" is unreachable
+  by construction in this scenario, and the restarted service shows its
+  permanent "relaying messages" notification while nothing actually
+  relays until the app is manually reopened. Fixing this needs
+  `lib/app/main.dart` (headlessly reviving the Dart isolate on service
+  restart), outside `E10-T08`'s own `files:` fence. **Filed as an S3
+  finding for the end-of-epic sweep**, not fixed in T08 itself.
+- **2026-09-04 · same review · `TransportApiHost`/`NotificationApiHost`
+  are constructed with the Activity and stay attached after it is
+  destroyed** (`MainActivity.kt:59,63`), so a backgrounded
+  `startDiscovery()` call runs against a destroyed Activity via
+  `BluetoothTransport.kt:447`/`:153`. Whether this actually crashes,
+  no-ops, or silently misbehaves was not determined (no on-device
+  verification possible in this environment) — **flagged as an S3 item
+  for the end-of-epic sweep** to assess with real hardware, not confirmed
+  as a live defect here.
+- **2026-09-04 · same review · `EARS-PLAT-10` (E10-T08's boot-restart
+  criterion) has no test, while the task's own DoD demands one for every
+  §8 criterion — a contract contradiction inside the task file itself**,
+  the same shape `E09-B07`'s retro lesson already named (an acceptance
+  criterion the task's own contract can't actually satisfy). Flagged for
+  the planner at E10's retro, not a builder defect.
