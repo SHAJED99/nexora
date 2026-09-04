@@ -18,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -108,6 +109,35 @@ class ForegroundMeshService : Service() {
 
     startAsForeground()
     emitState(ServiceState.RUNNING)
+
+    // E10-B05 round-2 (Opus review): a null read here means the "paused"
+    // notification's own tap intent is the thing most likely to fix it --
+    // opening MainActivity creates and caches a fresh engine. Nothing else
+    // re-reads the cache afterward otherwise, so the notification would
+    // stay wrong, permanently, in the one direction a user actually acts
+    // on. Poll briefly rather than hook MainActivity/BackgroundApiHost's
+    // attach() (it runs before FlutterEngineCache.put() in
+    // MainActivity.configureFlutterEngine, so that hook would still read
+    // an empty cache) -- keeps this fix entirely inside this file, the
+    // bug's only files:update entry. No-op in the common case: the loop
+    // never starts when an engine is already cached at onCreate.
+    if (retainedEngine == null) {
+      watchForEngineAttach()
+    }
+  }
+
+  private fun watchForEngineAttach() {
+    scope.launch {
+      while (retainedEngine == null) {
+        delay(2_000)
+        val engine = FlutterEngineCache.getInstance().get(ENGINE_ID)
+        if (engine != null) {
+          retainedEngine = engine
+          startAsForeground()
+          return@launch
+        }
+      }
+    }
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
