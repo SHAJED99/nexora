@@ -190,12 +190,48 @@ void main() {
       expect(result.reason, LocationUnavailableReason.globalOff);
 
       // The delegation to ConflictResolver.resolveLocationSharing is
-      // proven, not coincidental: the sharing-allowed value the policy
-      // used to reach this reason equals the resolver's own output.
+      // proven, not coincidental: the policy's OWN reported visibility
+      // (`result.isVisible`) must equal the resolver's verdict on the same
+      // two inputs -- not merely a standalone fact about the resolver
+      // asserted in isolation. If the policy stopped delegating (e.g.
+      // re-derived `globalEnabled && peerEnabled` inline), this would still
+      // pass for THIS combination only by coincidence, which is why the
+      // sweep below covers every combination of the two inputs, including
+      // `globalEnabled: false, peerEnabled: false` (untested elsewhere:
+      // the multi-failure precedence test masks it behind `blocked`).
       expect(
-        ConflictResolver.resolveLocationSharing(false, true),
-        isFalse,
+        result.isVisible,
+        equals(ConflictResolver.resolveLocationSharing(false, true)),
       );
+    });
+
+    test(
+        'test_EARS_LOC_4_policy_visibility_matches_resolver_verdict_for_every_input_combination',
+        () {
+      for (final globalEnabled in [true, false]) {
+        for (final peerEnabled in [true, false]) {
+          final result = LocationVisibilityPolicy.evaluate(
+            localState: RelationshipState.trusted,
+            remoteState: RelationshipState.trusted,
+            globalEnabled: globalEnabled,
+            peerEnabled: peerEnabled,
+          );
+
+          expect(
+            result.isVisible,
+            equals(
+              ConflictResolver.resolveLocationSharing(
+                globalEnabled,
+                peerEnabled,
+              ),
+            ),
+            reason: 'globalEnabled=$globalEnabled peerEnabled=$peerEnabled: '
+                "the policy's reported visibility must equal the "
+                "resolver's own verdict on the same two inputs, so the "
+                'delegation is proven rather than coincidental',
+          );
+        }
+      }
     });
   });
 }
