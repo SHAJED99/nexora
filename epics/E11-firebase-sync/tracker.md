@@ -1,6 +1,6 @@
 # E11 · Firebase Metadata Sync · Progress
 
-**Status:** build-complete, bug sweep run 2026-09-04 — 3 bugs open (P2×2, P3×1), epic→`development` PR **blocked** until P1/P2 = 0 · **Started:** 2026-09-04 · **Completed (build):** 2026-09-04 · **Progress:** 6/6 tasks done
+**Status:** build-complete, bug sweep run 2026-09-04 — `E11-B01` resolved (won't-fix-in-E11, EARS-FB-17 amended), `E11-B02` (P2) is the sole merge-blocking bug, `E11-B03` (P3) non-blocking · **Started:** 2026-09-04 · **Completed (build):** 2026-09-04 · **Progress:** 6/6 tasks done
 
 ## Tasks
 
@@ -17,7 +17,7 @@
 
 | Bug | Status | Severity | Priority | Owner |
 |---|---|---|---|---|
-| E11-B01 | blocked | S2 | P2 | planner (design decision, not a scoped fix) |
+| E11-B01 | **done — resolved won't-fix-in-E11** | S2 | P3 (was P2) | planner — took the bug's own named "defensible human override"; EARS-FB-17 amended, wiring deferred to first real consumer |
 | E11-B02 | todo | S2 | P2 | builder |
 | E11-B03 | todo | S4 | P3 | planner (docs-only) |
 
@@ -192,12 +192,13 @@ gate-clearing** (same convention as this session's E09/E10 work):
 
 | id | priority | direction |
 |---|---|---|
-| `E11-B01` | **P2** | planner decides the publish lifecycle **or** amends EARS-FB-17 to publisher-only. Defensible human override: P3, but only paired with amending the criterion — not with leaving it claimed-but-unmet. |
+| `E11-B01` | **P3 (resolved)** | Took the bug's own named "defensible human override": `EARS-FB-17` amended in `epic.md` to describe the proven-but-unwired capability actually shipped; wiring deferred to the first real consumer (`E07`/`E06-T07`). Closed `done`, not fixed in place. |
 | `E11-B02` | **P2** | fix before merge — small, entirely inside T06's own file, and it stops two future epics inheriting an unsound primitive |
 | `E11-B03` | P3 | docs-only; next planning pass. Does not block the merge. |
 
 **P1/P2 = 0 is required before the epic→`development` PR opens
-(`skills/release`). Currently P1 = 0, P2 = 2 → the merge is BLOCKED.**
+(`skills/release`). Currently P1 = 0, P2 = 1 (`E11-B02` only) → the merge
+is BLOCKED on that one bug alone.**
 
 ## Event log (append-only)
 - 2026-08-26 E11 drafted during Wave 1 epic-breakdown; deferred to a later wave.

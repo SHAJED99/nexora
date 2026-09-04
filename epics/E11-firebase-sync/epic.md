@@ -48,7 +48,31 @@ with, and extends, that wrapper rather than replacing it.
 - **EARS-FB-14**: WHEN a relationship's state changes locally, the system SHALL persist it locally first and best-effort mirror it to the account's own Firebase relationship node, without blocking or reversing the local change on a Firebase failure. (FR-TRUST-007)
 - **EARS-FB-15**: WHEN a remote relationship state disagrees with the local one for the same peer device, the system SHALL resolve to the more restrictive of the two via `ConflictResolver.resolveTrust`. (FR-MSG-007)
 - **EARS-FB-16**: The system's Firebase security rules SHALL grant read and write on `users/$uid/relationships/*` only to the authenticated owner of `$uid`. (FR-FB-001, ADR-0005, ADR-0008)
-- **EARS-FB-17**: WHEN a device's signed prekey rotates, its one-time prekeys are replenished, or it is revoked, the system SHALL best-effort publish the corresponding `directory/$deviceId` entry without exposing any private key material. (FR-FB-001, FR-FB-002)
+- **EARS-FB-17**: WHEN a signed-in device's signed prekey rotates, its
+  one-time prekeys are replenished, or it is revoked, and a call site with
+  a Firebase-authenticated uid triggers the publish, the system SHALL
+  best-effort publish the corresponding `directory/$deviceId` entry
+  without exposing any private key material. (FR-FB-001, FR-FB-002)
+  > **Amended 2026-09-04, per `E11-B01`** (decision authority explicitly
+  > delegated to the agent for this session): the original wording implied
+  > publishing is wired into every prekey-rotation event unconditionally —
+  > `E11-T06` built the mechanism (`DeviceDirectoryService.publish`),
+  > proven and tested, but never had a production caller, because the
+  > trigger site (`MessagingStack.create`, offline-first per `ADR-0005`)
+  > has no auth context to supply a uid. This amendment makes the
+  > criterion describe what `E11-T06` actually ships — a **proven,
+  > callable capability with no wiring yet** — the same shape `E11-T04`
+  > (`isRevoked`) and `E11-T05` (`push`/`pull`) already disclosed in their
+  > own `files:` fences. No requirement is dropped: `FR-FB-001` still
+  > permits this data class and `ADR-0008` still authorises the
+  > directory's existence and shape. **Wiring a real publish call site is
+  > deferred to whichever epic builds the directory's first consumer** —
+  > `E07`'s TOFU replacement or `E06-T07`'s prekey fallback — since that
+  > task will need to answer the sign-in-timing question in the context of
+  > its own actual usage, rather than E11 guessing at a lifecycle policy no
+  > consumer yet needs. `E11-B01` closed as **won't-fix-in-E11, tracked
+  > forward** rather than fixed in place; the amended criterion is now
+  > testable and met by what already shipped.
 - **EARS-FB-18**: The system's Firebase security rules SHALL permit reading `directory/$deviceId` by any authenticated user for an exact, known device id, and SHALL deny any read at the `directory` parent node. (NFR-PRIV-001, ADR-0008)
 - **EARS-FB-19**: The system's Firebase security rules SHALL permit writing `directory/$deviceId` only to the account recorded as its `ownerUid`, and SHALL make `ownerUid` immutable after first write. (FR-FB-001, ADR-0008)
 
@@ -76,7 +100,7 @@ with, and extends, that wrapper rather than replacing it.
 
 | Bug | Title | Severity | Priority | Status |
 |---|---|---|---|---|
-| E11-B01 | `directory/$deviceId` is never published by the running app (EARS-FB-17 holds only in tests) | S2 | P2 | blocked (planner) |
+| E11-B01 | `directory/$deviceId` is never published by the running app (EARS-FB-17 holds only in tests) | S2 | P2→P3 | **resolved: won't-fix-in-E11** — EARS-FB-17 amended to match what shipped; wiring deferred to the first real consumer (E07/E06-T07) |
 | E11-B02 | `lookupDevice` accepts an entry whose `identityPublicKey` disagrees with its own `prekeyBundle` | S2 | P2 | todo |
 | E11-B03 | `E11-T06` edited two files outside its `files:` fence with no §Deviations entry | S4 | P3 | todo |
 
@@ -200,7 +224,7 @@ gate-clearing.
 
 | id | severity | priority | what |
 |---|---|---|---|
-| `E11-B01` | **S2** | **P2** | The public device directory is never written in production. `DeviceDirectoryService` is never constructed anywhere in `lib/`, and the sole production `IdentityService` (`messaging_stack.dart:491`) passes no publish hook — so EARS-FB-17's trigger fires on every launch and nothing publishes. Filed `blocked`/`owner_agent: planner`: publishing needs a Firebase uid, the trigger site has no auth context, and `ADR-0005` makes the app offline-first — the publish-vs-auth lifecycle is a rule-3 design call, not a scoped fix. |
+| `E11-B01` | **S2** | **P2→P3, resolved** | The public device directory is never written in production. `DeviceDirectoryService` is never constructed anywhere in `lib/`, and the sole production `IdentityService` (`messaging_stack.dart:491`) passes no publish hook. Filed `blocked`/`owner_agent: planner` since the publish-vs-auth lifecycle (offline-first per `ADR-0005`, publishing needs a Firebase uid the trigger site doesn't have) is a rule-3 design call, not a scoped fix. **Resolved 2026-09-04 by taking the bug's own named "defensible human override"**: `EARS-FB-17` amended to describe the proven-but-unwired shape `E11-T04`/`T05` already used, and wiring deferred to whichever epic builds the directory's first real consumer (`E07` TOFU / `E06-T07` fallback), which will need to answer the lifecycle question in context anyway. Closed as won't-fix-in-E11, not fixed in place. |
 | `E11-B02` | **S2** | **P2** | `lookupDevice` decodes the identity key from two independent, attacker-controlled fields of the same cross-account-readable node and never checks they agree, so one entry can hand `E07`'s TOFU consumer identity A while `E06-T07`'s prekey consumer establishes a session on identity B. Proven with a reviewer probe. Scoped fix inside T06's own file. |
 | `E11-B03` | S4 | P3 | `E11-T06` edited `identity_service.dart` and `device_revocation_service.dart` outside its `files:` fence, with no §Deviations entry — its own §3 mandated changes its frontmatter did not permit. Docs-only; does not block the merge. |
 
@@ -220,9 +244,10 @@ inside one payload. Worth recording as a recurrence: the failure mode is not
 "which field carries the identity" but "two fields that must agree, and no
 code that checks".
 
-**Merge status: BLOCKED.** P1 = 0, **P2 = 2**. Per `skills/release`, the
-epic→`development` PR opens only when P1/P2 = 0. `E11-B01` additionally needs
-a planner decision before it can be scheduled at all.
+**Merge status: BLOCKED on `E11-B02` alone.** `E11-B01` resolved (see above,
+now P3, won't-fix-in-E11) — P1 = 0, **P2 = 1** (`E11-B02`). Per
+`skills/release`, the epic→`development` PR opens only when P1/P2 = 0.
+`E11-B03` (S4/P3) does not block.
 
 ## Retro
 <pending — after the bugs are fixed and the epic closes>
