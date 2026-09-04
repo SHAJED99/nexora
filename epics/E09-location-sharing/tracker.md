@@ -296,3 +296,22 @@ None of that substitutes for the hardware check.
 hardware, or accept the risk explicitly and carry it into E09's retro.
 `E09-B03` exists because the manifest currently *claims* this was already
 done.
+
+## Carried-forward observations (read before this epic's retro)
+- **2026-09-04 · `E09-B05`'s retroactive re-review of `E09-T03` (opus) ·
+  the `frame.source`-trust defect (`E09-B09`) is plausibly not unique to
+  location sharing.** The reviewer notes `lib/core/calls/call_signaling.dart`,
+  `lib/core/messaging/group_membership_service.dart`, and
+  `InboundPipeline`'s group-message handler all use the same shape — decrypt
+  succeeds, and the decrypting session's claimed address (which traces back
+  to `RelayPacketFrame.source` or an equivalent attacker-settable field) is
+  trusted as sender identity without confirming a *pre-existing*
+  authenticated session. **This was explicitly out of `E09-B09`'s fix
+  fence** (fixing the location path only). Whether the same trust-on-first-
+  use exploit is reachable through calls or groups is unverified — this is
+  a flag for a dedicated cross-cutting security sweep, not a confirmed
+  finding against those files. **Owner: whichever epic/session next runs a
+  security-lens pass — E06 (calls), E07 (groups), or a dedicated
+  pre-release security sweep, whichever comes first.** Do not let this
+  drift unread the way `E09-T04`'s false E08-ownership claim did
+  (`E09-B02`).
