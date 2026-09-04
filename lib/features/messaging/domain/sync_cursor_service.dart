@@ -19,6 +19,7 @@
 // or ciphertext.
 import 'package:drift/drift.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/services/firebase_boundary.dart';
@@ -216,15 +217,28 @@ class SyncCursorService {
       'lastConfirmedSequenceNumber': cursor.lastConfirmedSequenceNumber,
       'updatedAt': cursor.updatedAt,
     };
-    FirebaseBoundary.assertAllowedFields(FirebaseNodeKind.syncCursor, data);
     try {
-      await writeCursorData(uid, cursor, data).timeout(_timeout);
+      await guardedWriteCursorData(uid, cursor, data).timeout(_timeout);
     } catch (e) {
       ObservabilityService.instance.logError(
         'firebase.sync_cursor_write_failed',
         cause: e,
       );
     }
+  }
+
+  /// E11-B04: the actual guard-then-write sequence, extracted so a test can
+  /// drive it with an arbitrary payload — see the identical reasoning on
+  /// `FirebaseMetadataService.guardedWriteDeviceMetadata`.
+  /// `@visibleForTesting` — production behavior is unchanged.
+  @visibleForTesting
+  Future<void> guardedWriteCursorData(
+    String uid,
+    SyncCursor cursor,
+    Map<String, dynamic> data,
+  ) async {
+    FirebaseBoundary.assertAllowedFields(FirebaseNodeKind.syncCursor, data);
+    await writeCursorData(uid, cursor, data);
   }
 
   /// Performs the actual Realtime Database write. Split out from

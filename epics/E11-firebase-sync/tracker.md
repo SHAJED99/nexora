@@ -1,6 +1,16 @@
 # E11 · Firebase Metadata Sync · Progress
 
-**Status:** bug-sweep-clean, all 3 findings resolved 2026-09-04 (`E11-B01` won't-fix, `E11-B02` fixed + cross-model reviewed, `E11-B03` docs-fixed) — **P1/P2=0, ready for epic→development merge** · **Started:** 2026-09-04 · **Completed:** 2026-09-04 · **Progress:** 6/6 tasks done
+**Status:** original bug sweep clean (`E11-B01` won't-fix, `E11-B02` fixed +
+cross-model reviewed, `E11-B03` docs-fixed). **A second pass — a
+retroactive rule-5 re-review of `T01`/`T02` (same pattern found in E09/E10
+this session, since both were same-model reviewed) — then found 3 more
+real bugs: `E11-B04` (S3, fixed), `E11-B05` (S3, fixed — a real Firebase
+rules gap), `E11-B06` (S2/S3, blocked/deferred — unreachable until
+`E11-B01`'s wiring gap closes, same logic already accepted for B01).**
+**P1/P2 = 0, ready for epic→development merge** (E11-B06 is S2 but
+correctly deferred, not counted against the gate, per B01's own
+precedent) · **Started:** 2026-09-04 · **Completed:** 2026-09-04 ·
+**Progress:** 6/6 tasks done
 
 ## Tasks
 
@@ -20,6 +30,9 @@
 | E11-B01 | **done — resolved won't-fix-in-E11** | S2 | P3 (was P2) | planner — took the bug's own named "defensible human override"; EARS-FB-17 amended, wiring deferred to first real consumer |
 | E11-B02 | **done** | S2 | P2 | builder — fixed, cross-model reviewed (PR #57) |
 | E11-B03 | **done** | S4 | P3 | planner (docs-only) — `files:` fence corrected |
+| E11-B04 | **done** | S3 | TBD | builder — `T01`'s EARS-FB-2 guard tests were tautological (exercised a self-authored fake, or compared payload shape); rewritten to drive the real guarded write path with a forbidden key |
+| E11-B05 | **done** | S3 | TBD | builder — `T02`'s rules had no `.validate` on any documented container node (`users/$uid`, `devices`, `relationships`, `sync_cursors` + wildcards), allowing a leaf-value overwrite of a whole container. Rules never deployed, so not exploited in production; fixed and falsified before this |
+| E11-B06 | **blocked, deferred** | S2/S3 | TBD | planner — `directory/$deviceId`'s first-writer-wins ownership + cross-account-readable `ownerUid`, both real but unreachable until `E11-B01`'s wiring gap closes (same precedent) |
 
 ## DAG
 
@@ -231,3 +244,19 @@ is BLOCKED on that one bug alone.**
   (IdentityKey.fromBytes tolerates trailing bytes) -- unexploitable via the
   fixed comparison but worth a note for E07/E06-T07's own eventual reads
   of this field.
+- 2026-09-04 A second, retroactive rule-5 re-review of `T01`/`T02` (found
+  same-model reviewed, the exact pattern `E09-B05` documented for E09) was
+  run cross-model by a genuinely independent Opus session. Found 3 more
+  real defects: `E11-B04` (S3, `T01`'s EARS-FB-2 guard tests were
+  tautological -- fixed by extracting a `@visibleForTesting`
+  guard-then-write seam both real call sites now go through), `E11-B05`
+  (S3, `T02`'s rules had no container-level `.validate`, letting an
+  authenticated user overwrite a whole documented container with a leaf
+  value -- fixed, falsified by stashing and re-running), `E11-B06` (S2/S3,
+  `T06`'s `directory` node has a first-writer-wins squatting risk plus a
+  cross-account-readable `ownerUid` -- filed `blocked`, deferred until a
+  real consumer exists, same precedent as `E11-B01`). `T01`/`T02`'s
+  `reviewed_by` restamped to the real cross-model pass. Full suite:
+  899/899. `flutter analyze`: clean. **P1/P2 = 0 unchanged** — `E11-B06`
+  is S2 but correctly excluded from the count for the same reason
+  `E11-B01` already was.

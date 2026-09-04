@@ -307,6 +307,93 @@ void main() {
     });
   });
 
+  group('test_EARS_FB_5_documented_containers_reject_a_leaf_overwrite', () {
+    // E11-B05: `$other: {".validate": false}` only fires for an UNDOCUMENTED
+    // child name -- it says nothing about writing a scalar/leaf value
+    // directly at a documented CONTAINER path itself (e.g.
+    // `users/$uid/devices` = "a random 10MB string" instead of an object).
+    // RTDB evaluates `.validate` at every level of the written hierarchy;
+    // a container with no `.validate` of its own accepts anything,
+    // including a leaf, because there are no children for `$other` to even
+    // apply to. The fix is `.validate: newData.hasChildren()` on every
+    // container level -- present here, absent anywhere in the path, and
+    // the write in question is provably let through.
+    late Map<String, dynamic> rules;
+
+    setUpAll(() {
+      rules = jsonDecode(rulesFile.readAsStringSync()) as Map<String, dynamic>;
+    });
+
+    /// A container node's `.validate` must literally be
+    /// `newData.hasChildren()` -- the exact expression, not merely
+    /// present -- so a leaf write at this path is rejected regardless of
+    /// its value (a `.validate` that instead re-checked field names would
+    /// still pass a leaf if RTDB's own "no children to check" behavior let
+    /// it slip past a hasChildren-less field validator).
+    void expectRejectsLeafWrite(Map<String, dynamic> node, String label) {
+      expect(
+        node['.validate'],
+        'newData.hasChildren()',
+        reason: '$label has no (or the wrong) container-level .validate -- '
+            r'a scalar/leaf write here would be accepted, since $other'
+            "'s "
+            'deny-unknown-child rule only fires on a NAMED child, never on '
+            'the container itself receiving a non-object value',
+      );
+    }
+
+    test('users/\$uid rejects a leaf overwrite of the whole account subtree',
+        () {
+      final root = rules['rules'] as Map<String, dynamic>;
+      final users = root['users'] as Map<String, dynamic>;
+      final uidKey = users.keys.firstWhere((k) => k.startsWith(r'$'));
+      expectRejectsLeafWrite(
+        users[uidKey] as Map<String, dynamic>,
+        r'users/$uid',
+      );
+    });
+
+    test('devices rejects a leaf overwrite of the whole device list', () {
+      final uidNode = _navigate(rules, ['users', r'$uid']);
+      expectRejectsLeafWrite(
+        uidNode['devices'] as Map<String, dynamic>,
+        'users/\$uid/devices',
+      );
+    });
+
+    test('relationships rejects a leaf overwrite of the whole list', () {
+      final uidNode = _navigate(rules, ['users', r'$uid']);
+      expectRejectsLeafWrite(
+        uidNode['relationships'] as Map<String, dynamic>,
+        'users/\$uid/relationships',
+      );
+    });
+
+    test(
+        'sync_cursors and its two intermediate wildcard levels each reject '
+        'a leaf overwrite', () {
+      final uidNode = _navigate(rules, ['users', r'$uid']);
+      final syncCursors = uidNode['sync_cursors'] as Map<String, dynamic>;
+      expectRejectsLeafWrite(syncCursors, 'users/\$uid/sync_cursors');
+
+      final writerKey = syncCursors.keys.firstWhere((k) => k.startsWith(r'$'));
+      final writerNode = syncCursors[writerKey] as Map<String, dynamic>;
+      expectRejectsLeafWrite(
+        writerNode,
+        'users/\$uid/sync_cursors/\$writer',
+      );
+
+      final conversationKey =
+          writerNode.keys.firstWhere((k) => k.startsWith(r'$'));
+      final conversationNode =
+          writerNode[conversationKey] as Map<String, dynamic>;
+      expectRejectsLeafWrite(
+        conversationNode,
+        'users/\$uid/sync_cursors/\$writer/\$conversation',
+      );
+    });
+  });
+
   group('test_EARS_FB_13_revocation_node_rules', () {
     late Map<String, dynamic> rules;
     late Map<String, dynamic> revocationNode;

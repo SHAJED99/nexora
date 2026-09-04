@@ -20,6 +20,7 @@
 // identity/session state, and a failure here must never affect the
 // offline-first local sign-in flow — see `registerDevice`.
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/services/firebase_boundary.dart';
 import 'package:nexora/core/services/firebase_paths.dart';
@@ -122,6 +123,24 @@ class FirebaseMetadataService {
       'platform': 'android',
       if (isFirstRegistration) 'createdAt': ServerValue.timestamp,
     };
+    await guardedWriteDeviceMetadata(uid, deviceId, data);
+  }
+
+  /// E11-B04: the actual guard-then-write sequence, extracted so a test can
+  /// drive it with an arbitrary payload — [_registerDevice] only ever
+  /// builds a payload from its own hardcoded, already-safe field set (task
+  /// §6 Risks), so there was previously no way to prove EARS-FB-2's
+  /// ordering (guard before write, write never reached on violation)
+  /// through the public API: every real call site is guaranteed to pass.
+  /// `@visibleForTesting` — production behavior is unchanged (same guard
+  /// call, same write call, same order); this only exposes the sequence to
+  /// a test that wants to force a violation.
+  @visibleForTesting
+  Future<void> guardedWriteDeviceMetadata(
+    String uid,
+    String deviceId,
+    Map<String, dynamic> data,
+  ) async {
     FirebaseBoundary.assertAllowedFields(FirebaseNodeKind.device, data);
     await writeDeviceMetadata(uid, deviceId, data);
   }
