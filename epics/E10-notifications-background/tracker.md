@@ -1,14 +1,20 @@
 # E10 · Notifications & Background Operation · Progress
 
-**Status:** **bug sweep complete 2026-09-04 — 7 bugs filed (`E10-B01`..`B07`),
-`E10-B01` is P1 and `B02`/`B03`/`B04`/`B05` are P2, so P1/P2 = 5 ≠ 0 and the
-epic→`development` PR does NOT open yet** (`skills/release`). All 10 tasks
-merged and cross-model reviewed; 913/913 tests green, `flutter analyze`
-clean. `ADR-0007` accepted (option 1, connectedDevice, boot-restart in scope)
-unblocked T08/T09/T10 earlier this session. **Backend/native only** — this
-epic ships no screen; see §Why there is no frontend task. ·
+**Status:** **bug sweep complete 2026-09-04 — 8 bugs total
+(`E10-B01`..`B08`, `B08` discovered post-sweep during `B04`'s fix review).
+`E10-B01`, `B02`, `B03`, `B04`, `B08` fixed, cross-model (Opus) reviewed —
+APPROVE on every one — and merged. `B06`/`B07` assessed non-blocking
+(tracking-only). Only `E10-B05` remains open, correctly `blocked` on
+`owner_agent: planner` — a rule-3 architecture decision no agent can make.
+P1/P2 = 1, so the epic→`development` PR still does NOT open**
+(`skills/release`). All 10 tasks merged and cross-model reviewed; full suite
+green after every fix (see individual bug files for exact counts —
+928/928 as of the last merge, PR #62). `ADR-0007` accepted (option 1,
+connectedDevice, boot-restart in scope) unblocked T08/T09/T10 earlier this
+session. **Backend/native only** — this epic ships no screen; see §Why
+there is no frontend task. ·
 **Started:** 2026-09-04 · **Completed (build):** 2026-09-04 ·
-**Swept:** 2026-09-04 · **Progress:** 10/10 tasks, 0/7 bugs
+**Swept:** 2026-09-04 · **Progress:** 10/10 tasks, 7/8 bugs done (B05 blocked)
 
 ## Tasks
 
@@ -365,6 +371,17 @@ an observation, not a violation — nothing invented an API, a field or a path.
 | `E10-B05` | S3 | P2 | After a process kill or reboot the service revives and permanently claims to be "relaying messages" with no Dart isolate behind it. **`blocked`, `owner_agent: planner`.** | **yes** — the expected path on MIUI |
 | `E10-B06` | S4 | P4 | Six `dispose()`/`stop()` methods with no caller in `lib/`. **Assessed as inert, not a leak** — see CF-1. | n/a |
 | `E10-B07` | S4 | P3 | Five EARS criteria green on tests that cannot fail; mutations to the guarded lines survive the whole suite. | n/a |
+| `E10-B08` | S2 | P1 | `E10-B01`'s own fix commit introduced an illegal `--` inside an `AndroidManifest.xml` comment, breaking Gradle's manifest merge for the whole app since. **Done, merged.** | **yes** — every `flutter build apk` since `e62f91f` |
+
+**Post-sweep status (2026-09-04):** `E10-B01` fixed directly. `E10-B02`,
+`E10-B03`, `E10-B04` each built, cross-model (Opus) reviewed — **APPROVE**,
+all three — and merged (PRs #64, #62, #63). `E10-B08` (discovered during
+`E10-B04`'s build as a pre-existing regression from the already-merged
+`E10-B01` commit) fixed, reviewed — **APPROVE** — and merged (PR #65).
+**P1/P2 now 1** (`E10-B05`, correctly `blocked`/`owner_agent: planner` — a
+rule-3 architecture decision, not resolvable by an agent). The
+epic→`development` PR still does not open until that is zero
+(`skills/release`).
 
 **Two reviewer-written probes, quoted in the bug files:**
 - Deleted `notification_policy.dart:91` (the `full` → `senderOnly` privacy
@@ -642,3 +659,39 @@ things are recorded as observations rather than violations:
 - **The ten `OQ-E10-*` open questions** — all still human-owned and none
   closed by this sweep. `OQ-E10-1` in particular is now load-bearing for
   `E10-B03` and `E10-B05`.
+
+### Carried-forward observations found during fix review (post-sweep, 2026-09-04)
+
+Two new findings surfaced by the independent reviewers of `E10-B02`'s and
+`E10-B04`'s fixes — neither is a defect in the fix being reviewed, both are
+pre-existing seams the reviewer noticed while verifying. Logged here per
+`L-process-008` (a carried-forward observation gets a reader, even when it
+isn't the current bug's problem) rather than left in a PR comment where the
+next dispatch won't see it.
+
+- **CF-16 · A third ungated route to the radio** — `devices_controller.dart:115`
+  calls `startDiscovery()` directly, with no `BackgroundPolicy` consultation
+  at all. `E10-B02`'s fix closes the two routes through
+  `BackgroundLifecycleObserver`, but this call site bypasses that seam
+  entirely. Self-limiting under Doze (the screen must be off for Doze to be
+  active, and this is a user-tap-driven controller), but **not** self-limiting
+  under Battery Saver, which can be active with the screen on. Found by the
+  `E10-B02` reviewer (PR #64). Not filed as its own bug — no observed
+  violation, only a live gap — but the next task or bug touching
+  `devices_controller.dart` or `BackgroundPolicy` should route this call
+  through the same gate, or explicitly decide not to and say why.
+- **CF-17 · Reopen-while-connected silently drops mesh links without
+  notifying Dart** — `TransportApiHost.detach` → `BluetoothTransport.release()`
+  (`BluetoothTransport.kt:394-415`) closes every open socket **without**
+  emitting `onConnectionStateChanged(DISCONNECTED)` (contrast the normal
+  disconnect path at `:229`, which does emit it). Combined with `E10-B04`'s
+  fix (which now correctly calls `detach()` on the previous host set every
+  reopen while the service runs), a close/reopen cycle while the service has
+  live mesh connections will close those sockets and leave Dart's connection
+  state stale — showing devices as connected that no longer are. **Not a
+  regression from E10-B04**: pre-fix, the leaked old `TransportApiHost` kept
+  the sockets nominally alive (just serving a destroyed Activity); post-fix,
+  the sockets are correctly closed but the state event is correctly missing.
+  Found by the `E10-B04` reviewer (PR #63). Recommend logging as a new bug
+  the next time any task or bug touches `BluetoothTransport.kt` or
+  `TransportApiHost.kt` — do not expand `E10-B04`'s own fence to cover it.
