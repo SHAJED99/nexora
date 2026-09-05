@@ -18,11 +18,16 @@
 //
 // Uses an in-memory Drift database — no real filesystem I/O.
 import 'package:drift/native.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:nexora/app/bindings.dart';
+import 'package:nexora/core/background/background_service.dart';
+import 'package:nexora/core/background/background_stub.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
+import 'package:nexora/core/notifications/generated/notification_api.g.dart'
+    show NotificationApi;
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/login/data/device_identity_repository.dart';
@@ -66,6 +71,46 @@ class _CountingTransportService extends TransportService {
   Stream<TransportDevice> get discoveredDevices {
     discoveredDevicesAccessCount++;
     return super.discoveredDevices;
+  }
+
+  /// Same reasoning, for the second of the four gated subsystems:
+  /// `LinkQualityFeed.start()` (`link_quality_feed.dart:48`) is the ONLY
+  /// production call site that subscribes to `TransportService.linkQuality`
+  /// -- counting accesses to this getter is a direct, non-fragile proxy for
+  /// "did the link-quality feed actually get subscribed" under
+  /// `AppBinding.dependencies()`.
+  int linkQualityAccessCount = 0;
+
+  @override
+  Stream<LinkQuality> get linkQuality {
+    linkQualityAccessCount++;
+    return super.linkQuality;
+  }
+}
+
+/// The third gated subsystem's own counting seam, mirroring
+/// `_CountingTransportService` above exactly: `BackgroundLifecycleObserver
+/// .start()` (`bindings.dart`) is the ONLY production call site that
+/// subscribes to `BackgroundControl.state`/`.powerStates` -- counting
+/// accesses to those two getters is a direct proxy for "did the background
+/// observer actually attach its listeners" under
+/// `AppBinding.dependencies()`, without a `fail()` planted inside either
+/// stream (this project's own lesson on `fail()` in injected seams: a broad
+/// catch in the SUT can swallow it silently).
+class _CountingBackgroundControl extends BackgroundStub {
+  int stateAccessCount = 0;
+  int powerStatesAccessCount = 0;
+
+  @override
+  Stream<ServiceState> get state {
+    stateAccessCount++;
+    return super.state;
+  }
+
+  @override
+  Stream<PowerState> get powerStates {
+    powerStatesAccessCount++;
+    return super.powerStates;
   }
 }
 
@@ -160,6 +205,47 @@ void main() {
       return stack;
     }
 
+    // E14-B02 (round 2, coverage gap fix): `notificationDispatcher.start()`
+    // is the fourth gated subsystem. `bindings.dart` always constructs its
+    // `NotificationService()` with the default, empty `messageChannelSuffix`
+    // -- there is exactly one Pigeon channel name for `ensureChannels()` for
+    // every test in this group, so mocking that ONE channel and counting
+    // invocations is a direct, non-fragile proxy for "did
+    // `NotificationDispatcher.start()` -- and therefore every
+    // `_subscribe(source)` call inside it -- ever run", without reaching
+    // into that class's private `_subscriptions` list. `ensureReady()`
+    // (`notification_service.dart`) calls `ensureChannels()` as its very
+    // first platform call, before anything else, so this is reached (or
+    // not) exactly when `start()` itself is (or isn't).
+    const String ensureChannelsChannel =
+        'dev.flutter.pigeon.nexora.NotificationApi.ensureChannels';
+    final BasicMessageChannel<Object?> ensureChannelsChannelHandle =
+        BasicMessageChannel<Object?>(
+      ensureChannelsChannel,
+      NotificationApi.pigeonChannelCodec,
+      binaryMessenger: messenger,
+    );
+    var ensureChannelsCallCount = 0;
+
+    setUp(() {
+      ensureChannelsCallCount = 0;
+      // `setMockMessageHandler` (raw bytes) is deprecated in favour of this
+      // decoded form -- same effect, no new analyzer info.
+      messenger.setMockDecodedMessageHandler<Object?>(
+        ensureChannelsChannelHandle,
+        (Object? message) async {
+          ensureChannelsCallCount++;
+          return <Object?>[null];
+        },
+      );
+    });
+
+    tearDown(
+      () => messenger.setMockDecodedMessageHandler<Object?>(
+        ensureChannelsChannelHandle,
+        null,
+      ),
+    );
     tearDown(Get.reset);
 
     test(
@@ -167,11 +253,14 @@ void main() {
         'inbound_pipeline', () async {
       final stack = await buildStack();
       addTearDown(stack.dispose);
+      final backgroundControl = _CountingBackgroundControl();
+      addTearDown(backgroundControl.dispose);
 
       AppBinding(
         db: stack.db,
         messagingStack: stack,
         blockCommunication: true,
+        backgroundControl: backgroundControl,
       ).dependencies();
 
       final transport = stack.transport as _CountingTransportService;
@@ -181,6 +270,41 @@ void main() {
         reason: 'under VersionState.updateRequired, neither '
             'MessagingCoordinator.start() nor InboundPipeline.start() may '
             'ever subscribe to live transport data',
+      );
+      expect(
+        transport.linkQualityAccessCount,
+        0,
+        reason: 'under VersionState.updateRequired, '
+            'LinkQualityFeed.start() may never subscribe to live '
+            'link-quality events either',
+      );
+      expect(
+        backgroundControl.stateAccessCount,
+        0,
+        reason: 'under VersionState.updateRequired, '
+            'BackgroundLifecycleObserver.start() may never subscribe to '
+            'the background service state stream',
+      );
+      expect(
+        backgroundControl.powerStatesAccessCount,
+        0,
+        reason: 'under VersionState.updateRequired, '
+            'BackgroundLifecycleObserver.start() may never subscribe to '
+            'the power-state stream either',
+      );
+
+      // `notificationDispatcher.start()` is fire-and-forget
+      // (`unawaited(...)` in `bindings.dart`) -- let any pending
+      // microtask run before asserting its absence, or this assertion
+      // would pass even on unfixed code purely because nothing has had a
+      // chance to run yet.
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        ensureChannelsCallCount,
+        0,
+        reason: 'under VersionState.updateRequired, '
+            'NotificationDispatcher.start() may never run either -- so it '
+            'must never reach NotificationService.ensureReady()',
       );
     });
 
@@ -197,8 +321,14 @@ void main() {
       final stack = await buildStack();
       addTearDown(stack.dispose);
       addTearDown(stack.coordinator.stop);
+      final backgroundControl = _CountingBackgroundControl();
+      addTearDown(backgroundControl.dispose);
 
-      AppBinding(db: stack.db, messagingStack: stack).dependencies();
+      AppBinding(
+        db: stack.db,
+        messagingStack: stack,
+        backgroundControl: backgroundControl,
+      ).dependencies();
 
       final transport = stack.transport as _CountingTransportService;
       expect(
@@ -207,6 +337,36 @@ void main() {
         reason: 'under VersionState.upToDate/updateAvailable, the mesh '
             'must keep starting exactly as it always has -- this is what '
             'stops the fix from passing by disabling startup unconditionally',
+      );
+      expect(
+        transport.linkQualityAccessCount,
+        greaterThan(0),
+        reason: 'under VersionState.upToDate/updateAvailable, '
+            'LinkQualityFeed.start() must keep subscribing exactly as it '
+            'always has',
+      );
+      expect(
+        backgroundControl.stateAccessCount,
+        greaterThan(0),
+        reason: 'under VersionState.upToDate/updateAvailable, '
+            'BackgroundLifecycleObserver.start() must keep subscribing to '
+            'the background service state stream exactly as it always has',
+      );
+      expect(
+        backgroundControl.powerStatesAccessCount,
+        greaterThan(0),
+        reason: 'under VersionState.upToDate/updateAvailable, '
+            'BackgroundLifecycleObserver.start() must keep subscribing to '
+            'the power-state stream exactly as it always has',
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        ensureChannelsCallCount,
+        greaterThan(0),
+        reason: 'under VersionState.upToDate/updateAvailable, '
+            'NotificationDispatcher.start() must keep running exactly as '
+            'it always has, reaching NotificationService.ensureReady()',
       );
     });
   });
