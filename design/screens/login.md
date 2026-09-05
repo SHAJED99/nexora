@@ -80,7 +80,13 @@ character; a case or spacing change is a finding, not a nit.
 > above, log each one in `design/gaps.md`, and get 🧍 human approval before
 > building. Do not invent silently.
 
-- (none identified yet)
+- **GAP-028 (E12, `FR-RECOVER-001`/`FR-RECOVER-002`)** — this design has
+  nothing between a successful Google sign-in and the dashboard redirect
+  for the case where the signed-in account already owns other devices
+  with local history this new device cannot read. Proposed: a new
+  `design/screens/device-enrollment.md` screen, reached here before the
+  existing dashboard redirect when that condition holds — full
+  derivation in `design/gaps.md` GAP-028. 🟡 proposed, not yet approved.
 
 ## Notes for the implementing agent
 - (exact copy quirks, dynamic data, anything the probe cannot see)
