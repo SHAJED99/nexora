@@ -8,6 +8,8 @@
 import 'dart:async';
 
 import 'package:get/get.dart';
+import 'package:nexora/core/abuse/rate_limiter.dart';
+import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
 import 'package:nexora/features/trust/domain/block_use_case.dart';
@@ -45,7 +47,38 @@ class DevicesController extends GetxController {
   })  : _repository = repository,
         _transportService = transportService ?? TransportService(),
         _evaluateConnectionRequestUseCase = evaluateConnectionRequestUseCase ??
-            EvaluateConnectionRequestUseCase(repository);
+            EvaluateConnectionRequestUseCase(
+              repository,
+              rateLimiter: _defaultRateLimiter(),
+            );
+
+  /// E13-T07 (FR-ABUSE-001, EARS-ABUSE-4, task §2 item 2): this is the
+  /// "default-fallback construction" the task file names — `DevicesBinding`
+  /// (`devices_binding.dart`, outside this task's `files:` fence) never
+  /// supplies its own `evaluateConnectionRequestUseCase`, so this branch is
+  /// what the real running app actually uses, and before this task it built
+  /// an `EvaluateConnectionRequestUseCase` with no `RateLimiter` at all.
+  ///
+  /// `AppDatabase` is the app-wide permanent singleton `app/bindings.dart`
+  /// registers before any route's own `Bindings.dependencies()` can run
+  /// (same ordering guarantee `TransportService`'s own fallback note above
+  /// already documents for that parameter), so `Get.find<AppDatabase>()`
+  /// always resolves in the real app. It throws only when no such GetX
+  /// container exists at all -- true for a `DevicesController` built
+  /// directly in a test with no binding set up (this file's existing
+  /// `transportService ?? TransportService()` fallback documents the
+  /// identical "test-only" caveat) -- so this returns `null` in that case
+  /// instead of letting the constructor itself throw: every existing test
+  /// that omits `evaluateConnectionRequestUseCase` keeps constructing a
+  /// `DevicesController` exactly as it did before this task (gate skipped,
+  /// unchanged behavior); only the real app ever gets a real limiter here.
+  static RateLimiter? _defaultRateLimiter() {
+    try {
+      return RateLimiter(Get.find<AppDatabase>());
+    } catch (_) {
+      return null;
+    }
+  }
 
   final RelationshipRepository _repository;
   final BlockUseCase _blockUseCase;
@@ -137,6 +170,29 @@ class DevicesController extends GetxController {
     try {
       final RelationshipState state =
           await _evaluateConnectionRequestUseCase(device.id);
+      // E13-T07 (UI-conflation finding from E13-T02's review): a
+      // `blocked` result reaching THIS call path is never a genuinely
+      // user-blocked device -- a device with a persisted `blocked`
+      // relationship row is already present in `relationships` from the
+      // last `load()`, which makes the `alreadyShown` check above (this
+      // method's own entry guard) skip evaluating it a second time. The
+      // only way `blocked` can come back here is `RateLimiter`'s own
+      // admission denial (EARS-ABUSE-4) -- a transient "too many
+      // evaluations of this device id right now" outcome, not a trust
+      // decision. Showing that with the exact same red "Blocked" badge a
+      // real block gets (`devices_view.dart`'s own `_stateVisual`, out of
+      // this task's `files:` fence) would tell the user something false
+      // and permanent-looking about a peer they never blocked. Rather than
+      // add a new `RelationshipState` (out of scope per task §4: no new
+      // function signatures/behavior on `EvaluateConnectionRequestUseCase`
+      // itself) or touch the view (out of this task's fence), the fix that
+      // stays inside this file's own fence is simplest: don't surface a
+      // rate-limited evaluation at all. The device just doesn't appear this
+      // scan cycle -- discovery re-announces it on the next cycle (this
+      // class's own header, and `_evaluatingIds`' doc comment above already
+      // describe that re-announcement), by which point the 1-minute window
+      // has normally rolled over.
+      if (state == RelationshipState.blocked) return;
       // Re-check: `load()` may have replaced the list while the evaluation
       // was in flight and could already have brought this device back in.
       if (relationships.any((r) => r.deviceId == device.id)) return;

@@ -123,6 +123,7 @@ import 'dart:typed_data';
 
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 
+import '../abuse/rate_limiter.dart';
 import '../calls/call_signaling.dart';
 import '../crypto/crypto_stub.dart';
 import '../crypto/drift_signal_store.dart';
@@ -269,10 +270,18 @@ class MessagingStack {
     // caller to remember -- `create()` is still the ONLY place this ever
     // happens (task file §3: "registered as a control handler in
     // messaging_stack.dart").
+    // E13-T07 (FR-ABUSE-001, EARS-ABUSE-4): the real, only production
+    // construction site of `EvaluateConnectionRequestUseCase` now gets a
+    // real `RateLimiter` -- before this task, `_rateLimiter` here always
+    // defaulted to `null` and the connection-request admission gate that
+    // `RelationshipState.blocked` short-circuit relies on could never
+    // actually deny anything in the running app (task §2 item 1).
     prekeyExchange = PrekeyExchange(
       stack: this,
-      evaluateConnectionRequest:
-          EvaluateConnectionRequestUseCase(RelationshipRepository(db)),
+      evaluateConnectionRequest: EvaluateConnectionRequestUseCase(
+        RelationshipRepository(db),
+        rateLimiter: RateLimiter(db),
+      ),
     );
     inbound.registerControlHandler(
       kControlKindPrekeyExchange,

@@ -8,6 +8,7 @@
 // that always throws from its write seam.
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nexora/core/abuse/rate_limiter.dart';
 import 'package:nexora/core/auth/google_auth_service.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/services/firebase_metadata_service.dart';
@@ -136,6 +137,56 @@ void main() {
       final identity = await db.latestDeviceIdentity();
       expect(identity, isNotNull);
       expect(identity!.signedIn, isTrue);
+
+      await db.close();
+    },
+  );
+
+  test(
+    'test_EARS_ABUSE_5_wired_sign_in_flow_denies_over_limit_registration',
+    () async {
+      // E13-T07 (FR-ABUSE-001): before this task, `SignInUseCase.call`
+      // never passed `accountUid` into `createDeviceIdentity`, so
+      // `DeviceIdentityRepository`'s per-account registration rate limit
+      // (E13-T02) could never actually fire through the real sign-in path,
+      // no matter how many devices one account registered. This proves the
+      // wiring: the SAME account uid, registering past
+      // `_maxDeviceRegistrationsPerWindow` (5) devices, gets denied via the
+      // real `SignInUseCase.call` entry point, not just the repository in
+      // isolation.
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final repository = DeviceIdentityRepository(
+        db,
+        rateLimiter: RateLimiter(db),
+      );
+      const accountUid = 'firebase-uid-flood';
+      final useCase = SignInUseCase(
+        repository,
+        authService: FakeGoogleAuthService.success(accountUid),
+      );
+
+      for (var i = 0; i < 5; i++) {
+        await useCase('device-$i');
+      }
+
+      // The 6th registration under the SAME account uid must be denied.
+      await expectLater(
+        useCase('device-6'),
+        throwsA(
+          isA<AppFailure>().having(
+            (f) => f.code,
+            'code',
+            'device.registration_rate_limited',
+          ),
+        ),
+      );
+
+      final rows = await db.select(db.deviceIdentities).get();
+      expect(
+        rows,
+        hasLength(5),
+        reason: 'the denied 6th attempt must not have written a device row',
+      );
 
       await db.close();
     },

@@ -19,6 +19,24 @@ class RateLimiter {
 
   final AppDatabase _db;
 
+  /// `E13-T07` (`OQ-E13-T01-1`): a conservative staleness bound used by the
+  /// opportunistic eviction in [allow] below. Comfortably larger than the
+  /// longest fixed window any caller in this codebase uses today
+  /// (`DeviceIdentityRepository`'s 24h device-registration window is
+  /// currently the longest) so a row is only ever evicted long after every
+  /// legitimate caller's own window would already have rolled it over on
+  /// its own — eviction can only ever delay tidying up a dead row, never
+  /// touch one that could still matter to a live limit (task §6 risk: "An
+  /// eviction policy that runs too aggressively could evict a bucket
+  /// mid-window").
+  ///
+  /// This table has no column recording which `window` a given row's
+  /// caller actually used (task §5: "no schema-visible change" is the
+  /// preferred shape), so eviction cannot know a *specific* row's own
+  /// window duration — it only knows this single, deliberately generous
+  /// upper bound shared by every bucket kind in the table.
+  static const Duration _staleRowMaxAge = Duration(days: 2);
+
   /// Fixed-window admission check for [bucketKey] (task §2):
   /// - if no window has started yet, or the current window has elapsed
   ///   since it started, the window resets and the counter is set to
@@ -39,6 +57,27 @@ class RateLimiter {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
 
     return _db.transaction<bool>(() async {
+      // `E13-T07` (`OQ-E13-T01-1`): opportunistic eviction, piggy-backed on
+      // this existing write path rather than a new polling timer (task §3's
+      // own suggested shape) -- bounds `RateLimitCounters` row growth under
+      // a flood of distinct, attacker-rotated bucket keys (E13-T02's
+      // reviewer probed this directly: 500 requests with a rotating,
+      // attacker-chosen `deviceId` produced 500 permanent rows and zero
+      // denials, because `connection_request:$deviceId` is keyed on a value
+      // the remote peer controls). Every `allow()` call first deletes any
+      // row whose window elapsed at least [_staleRowMaxAge] ago, regardless
+      // of that row's own `bucketKey` -- so the table can never grow
+      // forever, only up to "however many distinct keys were touched within
+      // the trailing [_staleRowMaxAge] window". Runs inside the SAME
+      // transaction as the point lookup/write below, so this sweep and this
+      // call's own admission decision are atomic together.
+      await (_db.delete(_db.rateLimitCounters)..where(
+            (t) => t.windowStartMs.isSmallerThanValue(
+              nowMs - _staleRowMaxAge.inMilliseconds,
+            ),
+          ))
+          .go();
+
       final existing = await (_db.select(
         _db.rateLimitCounters,
       )..where((t) => t.bucketKey.equals(bucketKey))).getSingleOrNull();
