@@ -103,7 +103,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -567,12 +567,45 @@ class AppDatabase extends _$AppDatabase {
       if (from < 18) {
         // E13-T01: new `rate_limit_counters` table -- additive only, no
         // changes to any pre-existing table (task §3, §5,
-        // docs/conventions.md "Schema migrations"). No index needed: the
-        // only local access pattern is a point lookup by `bucketKey`,
-        // which the PK's own implicit index already serves (same
-        // reasoning as `device_revocations`/`sync_cursors`). No backfill
-        // -- no bucket exists for any identity yet (task §5).
+        // docs/conventions.md "Schema migrations"). No backfill -- no
+        // bucket exists for any identity yet (task §5).
+        //
+        // **E13-B01 correction**: this step's original comment claimed "no
+        // index needed" on the grounds that the only local access pattern
+        // is a point lookup by `bucketKey`. That was true when this step
+        // was written; `E13-T07`'s later opportunistic eviction (added
+        // inside `RateLimiter.allow`, this same table, no schema change at
+        // the time) introduced a second access pattern -- a range filter
+        // on `windowStartMs` -- that the PK's index does not serve. See the
+        // `from < 19` step below, which adds the index this table actually
+        // needed once T07 landed.
         await m.createTable(rateLimitCounters);
+      }
+      if (from < 19) {
+        // E13-B01: `RateLimiter.allow`'s stale-row eviction
+        // (`rate_limiter.dart`) filters on `windowStartMs` on every single
+        // admission decision, and that column had no index -- an unindexed
+        // full-table scan whose cost is proportional to `rate_limit_
+        // counters`' row count, a count an attacker directly controls by
+        // rotating claimed bucket keys (`relay:${frame.source}`,
+        // `storage_volume:${frame.source}` are keyed on an unverified
+        // claimed identity, T03's own accepted limitation). Purely
+        // additive: a new index on an existing table, no backfill, no
+        // change to any existing row or to `RateLimiter`'s behavior.
+        //
+        // As with the `from < 11`/`from < 13`/etc. steps above:
+        // `createTable` only issues the CREATE TABLE statement and would
+        // not have created this index anyway -- but there is no
+        // `createTable` in this step at all (the table already exists), so
+        // the index is created explicitly via a raw statement, with
+        // `IF NOT EXISTS` for the same retry-safety reason those earlier
+        // steps document (the generated `createIndex` statement in
+        // `database.g.dart` has no such guard).
+        await m.database.customStatement(
+          'CREATE INDEX IF NOT EXISTS '
+          'idx_rate_limit_counters_window_start ON rate_limit_counters '
+          '(window_start_ms);',
+        );
       }
     },
   );

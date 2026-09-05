@@ -263,6 +263,113 @@ void main() {
     },
   );
 
+  test('test_E13_B01_window_start_index_exists_in_schema', () async {
+    // E13-B01: the eviction sweep's own filter column (`windowStartMs`)
+    // must have a real secondary index -- not just the `bucketKey`
+    // primary key -- or the sweep is an unindexed full-table scan on
+    // every single `allow()` call, with a table size an attacker
+    // directly controls (rotating claimed bucket keys).
+    final rows = await db
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type='index' "
+          "AND name='idx_rate_limit_counters_window_start'",
+        )
+        .get();
+    expect(
+      rows,
+      hasLength(1),
+      reason: 'idx_rate_limit_counters_window_start must exist so the '
+          'eviction range-delete in RateLimiter.allow is not an unindexed '
+          'full-table scan (E13-B01)',
+    );
+  });
+
+  test('test_E13_B01_eviction_delete_query_plan_uses_the_new_index', () async {
+    // Falsification target: revert the @TableIndex on RateLimitCounters
+    // (or the `from < 19` migration step) and this test must fail --
+    // SQLite's own query planner is the source of truth for whether the
+    // eviction's range-delete can actually use the index, not a
+    // reasoned guess. Mirrors the exact predicate shape
+    // `RateLimiter.allow` issues (`windowStartMs.isSmallerThanValue`),
+    // literal cutoff only for query-plan purposes.
+    final plan = await db
+        .customSelect(
+          'EXPLAIN QUERY PLAN DELETE FROM rate_limit_counters '
+          'WHERE window_start_ms < 9999999999999',
+        )
+        .get();
+
+    expect(plan, isNotEmpty);
+    final details = plan.map((row) => row.read<String>('detail')).join(' | ');
+    expect(
+      details,
+      contains('idx_rate_limit_counters_window_start'),
+      reason: 'the eviction delete must use the new index, not a bare '
+          'table scan -- got: $details',
+    );
+    expect(
+      details,
+      contains('USING INDEX idx_rate_limit_counters_window_start'),
+      reason: 'a plain "SCAN rate_limit_counters" (no "USING INDEX") means '
+          'the delete is still O(table-size) -- got: $details',
+    );
+  });
+
+  test(
+    'test_E13_B01_eviction_still_deletes_exactly_the_stale_rows_at_scale',
+    () async {
+      // Correctness must be unchanged by the index: with a larger row
+      // count than the pre-existing eviction test uses, the sweep must
+      // still delete exactly the stale rows and leave exactly the live
+      // ones -- the index changes cost, never which rows are chosen.
+      final longAgoMs =
+          DateTime.now().millisecondsSinceEpoch -
+          const Duration(days: 3).inMilliseconds;
+      final recentMs =
+          DateTime.now().millisecondsSinceEpoch -
+          const Duration(hours: 1).inMilliseconds;
+
+      for (var i = 0; i < 500; i++) {
+        await db
+            .into(db.rateLimitCounters)
+            .insert(
+              RateLimitCountersCompanion.insert(
+                bucketKey: 'relay:attacker-$i',
+                windowStartMs: longAgoMs,
+                count: 1,
+              ),
+            );
+      }
+      for (var i = 0; i < 5; i++) {
+        await db
+            .into(db.rateLimitCounters)
+            .insert(
+              RateLimitCountersCompanion.insert(
+                bucketKey: 'relay:live-$i',
+                windowStartMs: recentMs,
+                count: 1,
+              ),
+            );
+      }
+
+      final result = await limiter.allow(
+        'relay:trigger',
+        maxCount: 10,
+        window: const Duration(minutes: 1),
+      );
+      expect(result, isTrue);
+
+      final remaining = await (db.select(db.rateLimitCounters)).get();
+      final remainingKeys = remaining.map((r) => r.bucketKey).toSet();
+      expect(
+        remainingKeys,
+        {for (var i = 0; i < 5; i++) 'relay:live-$i', 'relay:trigger'},
+        reason: 'exactly the still-live rows plus this call\'s own row must '
+            'survive; every stale row must be gone',
+      );
+    },
+  );
+
   test('test_rate_limiter_two_bucket_keys_are_independent', () async {
     await limiter.allow(
       'bucket-e-1',

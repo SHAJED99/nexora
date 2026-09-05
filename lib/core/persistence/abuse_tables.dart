@@ -26,8 +26,22 @@ import 'package:drift/drift.dart';
 /// The primary key is `bucketKey` itself, the same reasoning
 /// `device_revocations`/`sync_cursors` already document (task §5): the only
 /// local access pattern is a point lookup by `bucketKey`, which the PK's
-/// own implicit index already serves -- no secondary index needed.
+/// own implicit index already serves.
+///
+/// **E13-B01 correction**: the claim above ("no secondary index needed")
+/// stopped being true the moment `E13-T07` added the opportunistic stale-row
+/// eviction in `RateLimiter.allow` (`rate_limiter.dart`), which range-filters
+/// on `windowStartMs` on every single admission decision. That access
+/// pattern is not a point lookup by `bucketKey` and the PK's index does not
+/// serve it -- left unindexed, the eviction was an O(table-size) scan on
+/// every `allow()` call, with the table's size directly attacker-controlled
+/// (E13-B01). `idx_rate_limit_counters_window_start` below exists
+/// specifically to serve that range-delete.
 @DataClassName('RateLimitCounterRow')
+@TableIndex(
+  name: 'idx_rate_limit_counters_window_start',
+  columns: {#windowStartMs},
+)
 class RateLimitCounters extends Table {
   TextColumn get bucketKey => text()();
 
