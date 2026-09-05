@@ -13,11 +13,11 @@ race, round 2 APPROVE), merged.** **A retroactive rule-5 re-review of
 more real bugs in `T01` (`E10-B09`: no notification-tap delivery
 producer; `E10-B10`: `ensureReady()` could throw/hang instead of
 returning `bool`), both fixed. `T02` re-reviewed clean, no findings.**
-**P1/P2 = 0 for every priority-stamped bug** (`B09`/`B10` are S2
-severity, priority left `TBD` for the human's `bug_priorities` gate — the
-epic→`development` merge should wait on that stamp before being called
-unconditionally clear, same caveat E11 recorded this session). All 10
-tasks + all 10 bugs merged and cross-model reviewed; full suite green
+**P1/P2 = 0.** `B09`/`B10` stamped P2 at the `bug_priorities` gate under
+delegated decision authority, 2026-09-05 — both already fixed and
+APPROVEd by the time the stamp landed, so this is a record-keeping close,
+not an open gate. All 10 tasks + all 10 bugs merged and cross-model
+reviewed; full suite green
 after every fix (see individual bug files for exact counts). `ADR-0007`
 accepted (option 1, connectedDevice, boot-restart in scope) unblocked
 T08/T09/T10 earlier this session. **Backend/native only** — this epic
@@ -381,8 +381,8 @@ an observation, not a violation — nothing invented an API, a field or a path.
 | `E10-B06` | S4 | P4 | Six `dispose()`/`stop()` methods with no caller in `lib/`. **Assessed as inert, not a leak** — see CF-1. | n/a |
 | `E10-B07` | S4 | P3 | Five EARS criteria green on tests that cannot fail; mutations to the guarded lines survive the whole suite. | n/a |
 | `E10-B08` | S2 | P1 | `E10-B01`'s own fix commit introduced an illegal `--` inside an `AndroidManifest.xml` comment, breaking Gradle's manifest merge for the whole app since. **Done, merged.** | **yes** — every `flutter build apk` since `e62f91f` |
-| `E10-B09` | S2 | TBD | `T01`'s notifications had no `setContentIntent`/`setAutoCancel` and nothing ever called `onNotificationTapped` -- every posted notification was un-tappable and never dismissed itself. **Done, merged.** Found by the retroactive rule-5 re-review of `T01`. | **yes** — every user-facing category |
-| `E10-B10` | S2 | TBD | `NotificationService.ensureReady()` had no `try`/`catch` and no timeout -- a host-channel error threw uncaught, and a never-arriving permission result hung forever, silently killing every notification source for the process's life. **Done, merged.** Found by the same re-review pass. | **yes** — reachable via the same "no Activity, revived engine" shape `E10-B05` found |
+| `E10-B09` | S2 | P2 | `T01`'s notifications had no `setContentIntent`/`setAutoCancel` and nothing ever called `onNotificationTapped` -- every posted notification was un-tappable and never dismissed itself. **Done, merged.** Found by the retroactive rule-5 re-review of `T01`. | **yes** — every user-facing category |
+| `E10-B10` | S2 | P2 | `NotificationService.ensureReady()` had no `try`/`catch` and no timeout -- a host-channel error threw uncaught, and a never-arriving permission result hung forever, silently killing every notification source for the process's life. **Done, merged, 2 review rounds.** Found by the same re-review pass. | **yes** — reachable via the same "no Activity, revived engine" shape `E10-B05` found |
 
 **Post-sweep status (2026-09-04):** `E10-B01` fixed directly. `E10-B02`,
 `E10-B03`, `E10-B04` each built, cross-model (Opus) reviewed — **APPROVE**,

@@ -92,17 +92,25 @@ resolved at E08's retro as a rule amendment).
   inert; five EARS criteria on unfalsifiable tests) remain tracking-only,
   unchanged by this retro.
 
+## Human decisions — resolved this session
+
+1. **`bug_priorities` stamps on `E10-B09`/`E10-B10`** — both P2, under
+   the decision authority already delegated to the agent for this
+   session (both bugs were already fixed and reviewed APPROVE; the
+   stamp is a record-keeping close, not an open gate).
+2. **`AGENTS.md` rule 3 amended (2026-09-05, direct human instruction):**
+   epic→`development` merges are now delegated to the agent, once P1/P2
+   = 0 and rule 5's cross-model review gate has genuinely passed.
+   `development`→`main` remains entirely human-only.
+
 ## Human decisions — still open
 
 1. **`retro_promotions` gate** for the `L-process-016` recurrence bump
    (now 3, past the ladder's own "2nd time → becomes a rule" threshold a
    second time).
-2. **`bug_priorities` stamps on `E10-B09`/`E10-B10`** (both S2 severity,
-   priority left `TBD`) — the epic→`development` gate should wait on
-   this, not assume P1/P2=0 ahead of it, matching the same correction
-   applied to `E11`'s retro this session.
-3. **The `epic_10` → `development` merge itself** (PR #75, rule 5 —
-   every task now genuinely cross-model reviewed).
+
+The `epic_10` → `development` merge itself (PR #75) is no longer a human
+decision — see above.
 
 `make health` re-run after this retro's edits: H3 now passes for E10
 (this file exists); H4/H5/H7's failures are unchanged E05/E06/E08
