@@ -130,6 +130,25 @@
 // migration: `E13-T01`'s `RateLimiter` keeps its own `rate_limit_counters`
 // table, keyed by an arbitrary string bucket key — nothing about
 // `relay_packets` changes.
+//
+// **E13-T05 addition: byte-volume admission control.** This task's own
+// task-sharding-time §3 assumed its check belonged inside
+// `RelayEngine.enqueue`, mirroring the identical assumption `E13-T03`'s own
+// task file made and had to correct (`Q-E13-T03-1`) for the exact same
+// reason: `RelayEngine.enqueue` has no sender-identity parameter or column
+// to gate on at all. Confirmed at execution time (this task's own
+// `OQ-E13-T05-1`, now resolved): the real call site is the SAME one T03
+// already gates — this file's forward branch, immediately after T03's own
+// count check. This task adds a SECOND, independent `RateLimiter.allow`
+// call there — `increment: bytes.length` (the byte-volume of the ORIGINAL
+// wire buffer, not `frame.payload.length`) against a distinct
+// `storage_volume:` bucket key, still keyed by `frame.source` for
+// consistency with T03's own `relay:` bucket. Neither check substitutes for
+// the other: a sender could send few-but-huge packets (fails this check,
+// passes T03's count check) or many small ones (passes this check, fails
+// T03's count check) — either denying is enough to reject the forward. No
+// schema migration: reuses the exact same `rate_limit_counters` table T03's
+// own gate already uses, merely a different `bucketKey` prefix.
 // ignore_for_file: prefer_initializing_formals
 import 'dart:async';
 import 'dart:typed_data';
@@ -172,6 +191,27 @@ typedef ControlHandler = Future<void> Function(RelayPacketFrame frame);
 /// to do (queue writes, wake radios) before being denied.
 const int _relayRateLimitMaxCount = 60;
 const Duration _relayRateLimitWindow = Duration(minutes: 1);
+
+/// Per-claimed-sender byte-volume admission limit (`FR-ABUSE-001`, E13-T05's
+/// own decision — see the task's Run log). Independent of, and checked
+/// alongside, [_relayRateLimitMaxCount] above: a sender could send few but
+/// huge packets (fails this check, passes the count check) or many small
+/// ones (passes this check, fails the count check) — neither substitutes
+/// for the other (task file §3).
+///
+/// 5 MiB per claimed `frame.source` per rolling minute — five times
+/// `StorageSettingsRepository.minMaxBytes` (1 MiB, `storage_settings_
+/// repository.dart`), the smallest total local-storage quota this app lets a
+/// user configure for its ENTIRE store across every conversation. Budgeting
+/// five times that floor to ONE claimed sender's inbound relay traffic in
+/// ONE minute is already generous for legitimate mesh traffic (occasional
+/// media forwarding through this device, not just short text messages)
+/// while still bounding what a single claimed identity can force this
+/// device to write toward local storage before being denied — an
+/// unthrottled flooder at this rate would already exceed the smallest
+/// configurable device-wide quota in well under a minute.
+const int _storageVolumeRateLimitMaxBytes = 5 * 1024 * 1024;
+const Duration _storageVolumeRateLimitWindow = Duration(minutes: 1);
 
 /// Silent-drop counters (task file §5) — the bug sweep's and the Dashboard's
 /// only handle on this loop, since a bad packet is dropped, not surfaced.
@@ -239,6 +279,13 @@ class InboundCounters {
   /// relay rate limit (`FR-ABUSE-001`, `Q-E13-T03-1`'s resolution) — the
   /// packet is denied `enqueue` entirely: never queued, never counted
   /// toward [forwarded].
+  ///
+  /// Also incremented by E13-T05's own, independent byte-volume admission
+  /// check (`EARS-ABUSE-10/11`) — the two checks share this single counter
+  /// (either denying looks the same from the outside: never queued, never
+  /// forwarded) rather than each getting its own, since nothing downstream
+  /// of this counter (the bug sweep, the Dashboard) needs to distinguish
+  /// WHICH gate denied a given packet, only that admission was denied.
   int rateLimited = 0;
 }
 
@@ -433,6 +480,27 @@ class InboundPipeline {
         window: _relayRateLimitWindow,
       );
       if (!relayAllowed) {
+        counters.rateLimited++;
+        return;
+      }
+
+      // E13-T05: a SECOND, independent admission gate at this same call
+      // site — byte-volume, not count — keyed the same way (`frame.source`)
+      // for consistency with the count gate directly above. `bytes.length`
+      // is the size of the ORIGINAL wire buffer this device received (the
+      // same value that ends up written to `relay_packets.size_bytes` a few
+      // lines below via `RelayEngine.enqueue`), never `frame.payload.length`
+      // — the whole packet is what would be persisted, not just its opaque
+      // payload. Either gate denying is enough to reject the forward
+      // (task file §3); this check never substitutes for the count check
+      // above, and is never itself substituted for by it.
+      final bool volumeAllowed = await _rateLimiter.allow(
+        'storage_volume:${frame.source}',
+        maxCount: _storageVolumeRateLimitMaxBytes,
+        window: _storageVolumeRateLimitWindow,
+        increment: bytes.length,
+      );
+      if (!volumeAllowed) {
         counters.rateLimited++;
         return;
       }
