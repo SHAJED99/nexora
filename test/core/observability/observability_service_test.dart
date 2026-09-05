@@ -119,9 +119,24 @@ void main() {
         expect(options.enableAutoNativeBreadcrumbs, isFalse,
             reason: 'native breadcrumbs are outside this app\'s own '
                 'controlled logging surface (task §4)');
-        // No usage/behavior analytics for v1 (ADR-0006) — performance
-        // tracing is unrelated to crash/error reporting.
-        expect(options.tracesSampleRate, 0.0);
+        expect(options.enablePrintBreadcrumbs, isFalse,
+            reason: 'left at the SDK default of true, DebugPrintIntegration '
+                'replaces global debugPrint in release/profile builds and '
+                'ships every debugPrint call anywhere in the app or a '
+                'dependency to Sentry as a breadcrumb');
+        // No usage/behavior analytics for v1 (ADR-0006).
+        expect(options.enableAutoSessionTracking, isFalse,
+            reason: 'defaults to true; emits release-health session '
+                'envelopes (device/OS/release + stable install id) on '
+                'every foreground/background transition — usage '
+                'telemetry ADR-0006 says does not ship in v1');
+        // `tracesSampleRate` must stay unset: SentryOptions.isTracingEnabled()
+        // treats ANY non-null value (including 0.0) as "tracing on".
+        expect(options.tracesSampleRate, isNull,
+            reason: 'a non-null value, even 0.0, turns tracing on per '
+                'SentryOptions.isTracingEnabled()');
+        expect(options.enableAutoPerformanceTracing, isFalse);
+        expect(options.enableUserInteractionTracing, isFalse);
       },
     );
   });

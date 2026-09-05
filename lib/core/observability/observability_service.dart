@@ -77,10 +77,38 @@ class SentryObservabilityClient implements ObservabilityClient {
     //   scope (§4 — no native wiring) and outside this app's own
     //   controlled logging surface.
     options.enableAutoNativeBreadcrumbs = false;
-    // No analytics/usage tracking for v1 (ADR-0006) — session tracking
-    // and performance tracing are unrelated to crash/error reporting and
-    // are left at their SDK defaults off/minimal rather than opted into.
-    options.tracesSampleRate = 0.0;
+    // - `enablePrintBreadcrumbs`: OFF. Left at the SDK default of `true`,
+    //   `DebugPrintIntegration` is added unconditionally by
+    //   `SentryFlutter.init` and, specifically in release/profile builds
+    //   (the only builds that actually send to Sentry — it early-returns
+    //   in debug), replaces Flutter's global `debugPrint` so that every
+    //   `debugPrint` call anywhere in the app or in any dependency becomes
+    //   a Sentry breadcrumb attached to every subsequent event. That is
+    //   uncontrolled arbitrary text egressing to a third-party vendor in
+    //   production — exactly what FR-DIAG-002 and this task's own §6 Risks
+    //   ("disable it explicitly rather than assume it's off") forbid.
+    options.enablePrintBreadcrumbs = false;
+    // No analytics/usage tracking for v1 (ADR-0006). Session tracking and
+    // performance tracing default to ON in the SDK, not off, so both are
+    // explicitly disabled here rather than left untouched:
+    // - `enableAutoSessionTracking`: OFF. Left at its SDK default of
+    //   `true`, this emits release-health session envelopes on every
+    //   app foreground/background transition — carrying device/OS/release
+    //   context plus a stable installation id, i.e. usage telemetry, which
+    //   ADR-0006 says does not ship in v1.
+    options.enableAutoSessionTracking = false;
+    // - Tracing: NOT enabled. `SentryOptions.isTracingEnabled()` treats
+    //   any non-null `tracesSampleRate` — including `0.0` — as "tracing
+    //   on" (it only checks `tracesSampleRate != null || tracesSampler !=
+    //   null`), which would activate `enableAutoPerformanceTracing` /
+    //   `enableUserInteractionTracing` (both default `true`) and
+    //   `sentry-trace`/`baggage` header propagation on instrumented HTTP
+    //   requests. So `tracesSampleRate` is deliberately left unset (its
+    //   natural `null` default actually disables tracing), and the two
+    //   auto-tracing flags are also explicitly turned off as a
+    //   belt-and-braces statement of intent independent of that field.
+    options.enableAutoPerformanceTracing = false;
+    options.enableUserInteractionTracing = false;
   }
 
   @override
