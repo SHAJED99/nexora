@@ -81,6 +81,18 @@ Structured, leveled (`debug`/`info`/`warn`/`error`), routed through
 `core/observability`. Never `print()` in `lib/`. Every log call is subject
 to FR-DIAG-002 — no plaintext, keys, voice/call content, or precise location.
 
+**Vendor pick (E13-T06, PROPOSED — not yet approved):** `sentry_flutter`,
+per `ADR-0006`'s own named example. `ObservabilityService` now exposes an
+`ObservabilityClient` injection seam (`lib/core/observability/
+observability_service.dart`) a `SentryObservabilityClient` adapter drops
+into once the package clears the pubspec.yaml `new_dependency` human gate
+below — `init()`/`log()`/`logError()`'s public signatures do not change
+when that happens, so no existing call site is touched. Hosting
+(self-hosted vs. managed) is left for that same follow-up to record,
+per `ADR-0006`'s closing line. Until approved, `ObservabilityService`
+defaults to the same best-effort console behaviour (debug builds only)
+the genesis stub had.
+
 ## UI widget kit
 
 Three packages are the project's standard component layer, superseding raw
