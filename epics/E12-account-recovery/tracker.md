@@ -192,3 +192,28 @@ E13-T07).
   from a legitimate first-device case and emits no telemetry. One-line
   fix (`ObservabilityService.instance.logError('recovery.device_identity_repository_unresolved', cause: e)`),
   fold into the epic sweep rather than a standalone task.
+- 2026-09-06 — **Epic sweep filed `E12-B01` through `E12-B08`** (3× S1 at
+  cross-task seams: B01 device-id reuse — now resolved via `E13-T07`'s fix
+  reaching `login_controller.dart`; B02/B03 enrollment approval never
+  reached the enrolling device — fixed via a dedicated Firebase channel,
+  human-decided, merged; B04–B08 lower-priority, all fixed and merged).
+  The F1/C5 items above are superseded by `E12-B08`'s fix (the silent
+  catch now logs; the login-flow failure path itself was judged
+  acceptable, not fixed, since mapping a genuine read failure to a
+  sign-in error is more honest than silently proceeding to `/dashboard`).
+- 2026-09-06 — **B04's fix round 2 review surfaced two more carried-
+  forward items**, both now tracked as their own bugs rather than left in
+  a run log only: `E12-B04`'s own item 2 (a failed `readOwnDeviceIds` read
+  is still cached identically to a genuine empty result, with no
+  distinguishing telemetry — disclosed and deferred inside `E12-B04.md`'s
+  own Run log, not yet a separate task) and **`E12-B12`** (the `devices`
+  screen's design-verify gate, now that `E12-B05` fixed its broken probe,
+  reports a real 62.3% (38/61) FAIL — pre-existing drift, not caused by
+  any E12 change, but genuinely red and needs an owner before this epic
+  is feature-complete).
+- 2026-09-06 — **`E12-B09`/`E12-B10`/`E12-B11` filed** from B02/B03's own
+  review: B09 (S3) an enrollment grant is permanent/unrevocable once
+  written; B10 (S4) the grant's Firebase rule lacks a defense-in-depth
+  self-grant check; B11 (S3) `RelationshipSyncService` is now fully dead
+  production code and `FR-TRUST-007` has zero remaining wiring — a
+  planner call on direction, not a coding defect.

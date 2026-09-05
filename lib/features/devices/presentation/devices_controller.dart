@@ -92,10 +92,12 @@ class DevicesController extends GetxController {
 
   final RxBool loading = false.obs;
 
-  /// `E12-T01`'s `readOwnDeviceIds` result, fetched at most once per this
-  /// controller's lifetime and cached here (§3/§6 of the task: "a
-  /// best-effort hint, not something to re-fetch on every single discovery
-  /// event" -- no refresh timer, matching E10's one-tick discipline).
+  /// `E12-T01`'s `readOwnDeviceIds` result, fetched at most once per
+  /// *discovery cycle* (reset in [discover], E12-B04) and cached here (§3/§6
+  /// of the task: "a best-effort hint, not something to re-fetch on every
+  /// single discovery event" -- no refresh timer, matching E10's one-tick
+  /// discipline; re-resolving on a fresh, user-initiated `discover()` call
+  /// is not a timer).
   ///
   /// Deliberately a cached **Future**, not a cached value: `discover()`
   /// commonly announces several devices back-to-back (real Bluetooth scans
@@ -128,6 +130,38 @@ class DevicesController extends GetxController {
   /// `test_rediscovery_after_load_readds_unpersisted_device`.
   final Set<String> _evaluatingIds = <String>{};
 
+  /// Device ids that were classified `normal` by discovery (added to
+  /// [relationships] in-memory by `_onDeviceDiscovered`, not loaded from
+  /// `RelationshipRepository`) together with the [TransportDevice] payload
+  /// that discovered them (E12-B04 round 2, F1).
+  ///
+  /// Why this exists: `_onDeviceDiscovered`'s own `alreadyShown` guard
+  /// short-circuits BEFORE `_classifyDiscoveredDevice` runs again for any id
+  /// already present in [relationships] or [pendingEnrollments] -- correctly,
+  /// since re-running classification on every re-announced discovery event
+  /// (real scans repeat `onDeviceDiscovered` every cycle, per T03b) would be
+  /// wasted work for the overwhelming common case where nothing changed.
+  /// But that guard is exactly what made the original B04 fix (resetting
+  /// [_ownDeviceIdsFuture] alone) inert against B04's OWN repro: a device
+  /// discovered once while the own-device-id cache was stale gets classified
+  /// `normal` and added to [relationships] as a terminal answer -- from then
+  /// on `alreadyShown` is true for it, and no amount of resetting the cache
+  /// ever reaches `_classifyDiscoveredDevice` for that id again, however many
+  /// times `discover()` is subsequently called.
+  ///
+  /// Tracking these ids (and only these -- never an id `load()` populated
+  /// from a real persisted relationship, since that means this side already
+  /// evaluated the device on purpose and must not be silently reclassified)
+  /// lets [discover] explicitly re-run classification for them once the
+  /// own-device-id cache updates, moving a device into [pendingEnrollments]
+  /// if it now matches. Cleared whenever [load] replaces [relationships]
+  /// wholesale (an in-memory discovery-only entry does not survive a real
+  /// reload anyway -- see `_evaluatingIds`'s own doc comment on the same
+  /// point) and whenever a tracked id is reclassified or otherwise removed
+  /// from [relationships] (`block`/`verify`).
+  final Map<String, TransportDevice> _discoveredNormalDevices =
+      <String, TransportDevice>{};
+
   @override
   void onInit() {
     super.onInit();
@@ -138,6 +172,11 @@ class DevicesController extends GetxController {
   Future<void> load() async {
     loading.value = true;
     relationships.value = await _repository.listAll();
+    // Every entry now in `relationships` came from the repository, not from
+    // an in-memory discovery classification -- the discovery-only rows this
+    // tracks did not survive the replace above (E12-B04 round 2, F1's own
+    // doc comment on `_discoveredNormalDevices`).
+    _discoveredNormalDevices.clear();
     loading.value = false;
   }
 
@@ -211,6 +250,31 @@ class DevicesController extends GetxController {
   /// never-seen device, FR-UI-004) and appended to the displayed list —
   /// additive to, never replacing, what `load()` already populated.
   void discover() {
+    // E12-B04: re-resolve this discovery cycle's own-device-id read rather
+    // than reusing whatever settled during a previous cycle. The natural
+    // enrollment order is "open Devices, tap Discover, *then* sign in the
+    // new device" -- a future cached across `discover()` calls would still
+    // reflect the registry from the moment of the FIRST tap, permanently
+    // misclassifying a device that registered afterwards as an ordinary
+    // stranger. Cheap and user-initiated (task's own suggested direction),
+    // not a polling timer: nothing refetches unless the user taps Discover
+    // again. Concurrent discovery events WITHIN one cycle still share the
+    // single future this assignment starts -- only cross-cycle reuse is
+    // removed, preserving the in-flight de-dup the cache exists for (see
+    // `_ownDeviceIdsFuture`'s own doc comment).
+    _ownDeviceIdsFuture = null;
+    // E12-B04 round 2, F1: resetting the cache above is necessary but not
+    // sufficient -- a device already sitting in `relationships` as a
+    // discovery-classified `normal` stranger is never re-offered to
+    // `_classifyDiscoveredDevice` by `_onDeviceDiscovered` itself (its
+    // `alreadyShown` guard short-circuits first). Explicitly re-evaluate
+    // every such tracked device now, against the freshly-reset cache, so a
+    // second Discover tap actually surfaces a device that registered after
+    // the first tap classified it as an ordinary stranger. Unawaited: this
+    // is user-initiated re-classification of already-visible rows, not
+    // something the caller needs to block on (same shape as
+    // `startDiscovery` below).
+    unawaited(_reevaluateDiscoveredNormalDevices());
     _discoverySubscription ??=
         _transportService.discoveredDevices.listen(_onDeviceDiscovered);
     unawaited(
@@ -264,11 +328,55 @@ class DevicesController extends GetxController {
           updatedAt: DateTime.now(),
         ),
       );
+      // E12-B04 round 2, F1: tracked so a LATER `discover()` call (once the
+      // own-device-id cache has had a chance to update) can re-run
+      // classification for this id -- this row is an in-memory discovery
+      // classification, not a persisted relationship, so it is still
+      // eligible to turn out to be a pending enrollment after all.
+      _discoveredNormalDevices[device.id] = device;
     } finally {
       // Always released, including on a failed evaluation — otherwise a
       // single repository error would blacklist the id for the rest of the
       // screen's life.
       _evaluatingIds.remove(device.id);
+    }
+  }
+
+  /// E12-B04 round 2, F1: re-runs classification for every device currently
+  /// tracked in [_discoveredNormalDevices] against whatever own-device-id
+  /// cache is current at the moment this is called (freshly reset by
+  /// [discover] just before this is invoked). A device that now turns out to
+  /// be a pending enrollment moves from [relationships] into
+  /// [pendingEnrollments]; one still not present in the current own-device
+  /// set stays exactly as it was.
+  ///
+  /// Iterates a snapshot (`.entries.toList()`), not the live map, since
+  /// [relationships]/[_discoveredNormalDevices] are mutated inside the loop.
+  /// Skips an id currently in [_evaluatingIds] -- a fresh discovery event for
+  /// the SAME id is already mid-classification via `_onDeviceDiscovered`,
+  /// and running a second classification concurrently would race the two
+  /// outcomes against each other for no benefit (the in-flight one will
+  /// settle on its own next scan-cycle guard).
+  Future<void> _reevaluateDiscoveredNormalDevices() async {
+    for (final entry in _discoveredNormalDevices.entries.toList()) {
+      final String deviceId = entry.key;
+      if (_evaluatingIds.contains(deviceId)) continue;
+      final _DeviceClassification classification =
+          await _classifyDiscoveredDevice(deviceId);
+      if (classification != _DeviceClassification.pendingEnrollment) {
+        continue;
+      }
+      // Re-check: `load()` or a concurrent discovery event may have already
+      // resolved this id one way or another while classification was in
+      // flight above.
+      if (pendingEnrollments.any((d) => d.id == deviceId)) {
+        _discoveredNormalDevices.remove(deviceId);
+        continue;
+      }
+      if (!_discoveredNormalDevices.containsKey(deviceId)) continue;
+      relationships.removeWhere((r) => r.deviceId == deviceId);
+      pendingEnrollments.add(entry.value);
+      _discoveredNormalDevices.remove(deviceId);
     }
   }
 

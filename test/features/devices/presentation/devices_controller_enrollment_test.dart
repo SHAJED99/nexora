@@ -336,7 +336,7 @@ void main() {
   });
 
   test(
-      'readOwnDeviceIds is fetched at most once per controller lifetime (session cache)',
+      'readOwnDeviceIds is fetched at most once per discovery cycle (E12-B04)',
       () async {
     const String suffix = 'enrollment-cache';
     final stub = _StubFirebaseMetadataService({'own-device'});
@@ -379,6 +379,183 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(stub.callCount, 1);
+  });
+
+  test(
+      'test_E12_B04_stale_own_device_cache_does_not_permanently_disable_enrollment_detection',
+      () async {
+    // Repro from E12-B04: the trusted device's Devices screen is opened
+    // (its own-device-id read resolves against the registry as it stood at
+    // that moment), THEN a new device registers, and only after that does
+    // discovery announce it. Before the fix, the cached Future from the
+    // first `discover()` call would still answer with the pre-registration
+    // set for the rest of the controller's life, misclassifying the new
+    // device as an ordinary stranger forever. The fix: each `discover()`
+    // call re-resolves the own-device-id read, so a second Discover tap
+    // (the natural next user action -- re-scanning) sees the updated
+    // registry.
+    const String suffix = 'enrollment-stale-cache';
+    final stub = _StubFirebaseMetadataService({'already-known-device'});
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.startDiscovery.$suffix',
+      (ByteData? message) async =>
+          TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[null]),
+    );
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.stopDiscovery.$suffix',
+      (ByteData? message) async =>
+          TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[null]),
+    );
+    final controller = DevicesController(
+      repository,
+      blockUseCase,
+      transportService: TransportService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: suffix,
+      ),
+      evaluateConnectionRequestUseCase:
+          EvaluateConnectionRequestUseCase(repository),
+      currentAccountUid: () async => 'uid-1',
+      firebaseMetadataService: stub,
+    );
+
+    // First discovery cycle: some unrelated stranger device is discovered,
+    // populating [_ownDeviceIdsFuture] for this cycle (the read is only
+    // triggered by a classification, never by `discover()` itself).
+    controller.discover();
+    await Future<void>.delayed(Duration.zero);
+    pushDiscoveredDevice(
+      suffix,
+      TransportDevice(
+        id: 'unrelated-stranger',
+        displayName: 'Some Other Phone',
+        type: TransportType.bluetooth,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(stub.callCount, 1);
+
+    // The new device registers server-side in between the two cycles --
+    // simulated here by mutating the stub's own-device set, exactly as
+    // `readOwnDeviceIds` would now return if re-queried.
+    stub._ids.add('newly-enrolled-device');
+
+    // Second Discover tap (the natural next step -- the user re-scans
+    // after the new device has had a chance to come up): the own-device-id
+    // read must be re-resolved, not answered from the stale first-cycle
+    // cache.
+    controller.discover();
+    await Future<void>.delayed(Duration.zero);
+    pushDiscoveredDevice(
+      suffix,
+      TransportDevice(
+        id: 'newly-enrolled-device',
+        displayName: 'New Phone',
+        type: TransportType.bluetooth,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(stub.callCount, 2);
+    expect(controller.pendingEnrollments, hasLength(1));
+    expect(controller.pendingEnrollments.single.id, 'newly-enrolled-device');
+    // NOT rendered as an ordinary unknown-peer row alongside the unrelated
+    // stranger from the first cycle.
+    expect(
+      controller.relationships.any((r) => r.deviceId == 'newly-enrolled-device'),
+      isFalse,
+    );
+  });
+
+  test(
+      'test_E12_B04_F1_device_discovered_during_stale_cycle_is_reclassified_on_next_discover',
+      () async {
+    // The reviewer's exact repro of round 1's gap: the device that SHOULD
+    // become a pending enrollment is discovered ONCE, during the stale
+    // cycle, and gets classified `normal` -- an ordinary Unknown stranger --
+    // added to `relationships` as an in-memory row. Resetting
+    // `_ownDeviceIdsFuture` alone (round 1's fix, proven by the test above)
+    // does nothing for THIS device from then on: `_onDeviceDiscovered`'s own
+    // `alreadyShown` guard short-circuits before `_classifyDiscoveredDevice`
+    // is ever reached again for it, so a second Discover call changed
+    // nothing under round 1's fix. This test never pushes a SECOND discovery
+    // event for the device at all -- unlike the test above, where the
+    // misclassified device is discovered for the first time only in the
+    // second cycle. Round 2 (F1) explicitly re-evaluates every
+    // discovery-tracked `normal` device when `discover()` resets the cache,
+    // which is the only way this device can ever be reclassified.
+    const String suffix = 'enrollment-stale-cycle-reclassify';
+    final stub = _StubFirebaseMetadataService({'already-known-device'});
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.startDiscovery.$suffix',
+      (ByteData? message) async =>
+          TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[null]),
+    );
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.stopDiscovery.$suffix',
+      (ByteData? message) async =>
+          TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[null]),
+    );
+    final controller = DevicesController(
+      repository,
+      blockUseCase,
+      transportService: TransportService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: suffix,
+      ),
+      evaluateConnectionRequestUseCase:
+          EvaluateConnectionRequestUseCase(repository),
+      currentAccountUid: () async => 'uid-1',
+      firebaseMetadataService: stub,
+    );
+
+    // First Discover tap: the own-device-id cache is stale -- it does not
+    // yet contain the target device's id, which only registers server-side
+    // AFTER this cycle's own-device-id read has already resolved.
+    controller.discover();
+    await Future<void>.delayed(Duration.zero);
+    pushDiscoveredDevice(
+      suffix,
+      TransportDevice(
+        id: 'target-device',
+        displayName: 'New Phone',
+        type: TransportType.bluetooth,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    // Misclassified `normal`, exactly as B04's own repro describes -- the
+    // registry did not yet contain this id when it was first evaluated.
+    expect(stub.callCount, 1);
+    expect(controller.pendingEnrollments, isEmpty);
+    expect(
+      controller.relationships.any((r) => r.deviceId == 'target-device'),
+      isTrue,
+    );
+
+    // The device registers server-side in between the two Discover taps.
+    stub._ids.add('target-device');
+
+    // Second Discover tap -- deliberately NO further discovery event is
+    // pushed for this device here. It is already sitting in `relationships`
+    // from the first cycle; this is exactly the case round 1's fix left
+    // uncovered, since `alreadyShown` would otherwise forever short-circuit
+    // `_classifyDiscoveredDevice` for an id already present there.
+    controller.discover();
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(stub.callCount, 2);
+    expect(controller.pendingEnrollments, hasLength(1));
+    expect(controller.pendingEnrollments.single.id, 'target-device');
+    expect(
+      controller.relationships.any((r) => r.deviceId == 'target-device'),
+      isFalse,
+    );
   });
 
   test(
@@ -440,7 +617,15 @@ class _StubFirebaseMetadataService extends FirebaseMetadataService {
   @override
   Future<Set<String>> readOwnDeviceIds(String uid) async {
     callCount++;
-    return _ids;
+    // A defensive snapshot copy -- matching the real
+    // `FirebaseMetadataService.readOwnDeviceIds`, which returns a freshly
+    // built `Set` from its own Realtime Database read, never a live
+    // reference into caller-held state. Returning `_ids` itself here would
+    // let a caller mutate `_ids` AFTER this Future has already resolved and
+    // silently change what an already-cached `Future<Set<String>>` appears
+    // to contain -- masking whether a fix actually re-fetches instead of
+    // just re-reading the same resolved Future's now-mutated value.
+    return Set<String>.of(_ids);
   }
 
   @override
