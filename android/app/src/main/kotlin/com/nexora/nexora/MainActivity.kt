@@ -1,9 +1,11 @@
 package com.nexora.nexora
 
 import android.content.Context
+import android.content.Intent
 import com.nexora.nexora.background.BackgroundApiHost
 import com.nexora.nexora.background.ForegroundMeshService
 import com.nexora.nexora.notifications.NotificationApiHost
+import com.nexora.nexora.notifications.NotificationCategory
 import com.nexora.nexora.transport.TransportApiHost
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -133,6 +135,38 @@ class MainActivity : FlutterActivity() {
     // this same engine, and so a later provideFlutterEngine call above
     // reuses it instead of creating a second one.
     FlutterEngineCache.getInstance().put(ForegroundMeshService.ENGINE_ID, flutterEngine)
+
+    // E10-B09: the cold-start case -- a notification tap that launches a
+    // fresh process delivers its extras on THIS launch intent, not via
+    // onNewIntent (that only fires for an already-running singleTop
+    // instance). notificationApiHost is now attached (just above), so the
+    // tap can be delivered immediately rather than lost.
+    handleNotificationTapIntent(intent)
+  }
+
+  /**
+   * E10-B09: reads [NotificationApiHost.EXTRA_NOTIFICATION_ID]/
+   * [NotificationApiHost.EXTRA_NOTIFICATION_CATEGORY] off [intent] (if
+   * present) and forwards the tap to Dart via [notificationApiHost].
+   * Called from both [onNewIntent] (app already running, `singleTop`) and
+   * the end of [configureFlutterEngine] (a cold start via the tap alone).
+   */
+  private fun handleNotificationTapIntent(intent: Intent?) {
+    val id = intent?.getLongExtra(NotificationApiHost.EXTRA_NOTIFICATION_ID, -1L) ?: -1L
+    if (id < 0) return
+    val categoryName =
+        intent?.getStringExtra(NotificationApiHost.EXTRA_NOTIFICATION_CATEGORY) ?: return
+    val category =
+        NotificationCategory.values().firstOrNull { it.name == categoryName } ?: return
+    notificationApiHost?.notifyTapped(id, category)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    // Keep getIntent() consistent with the intent actually being handled --
+    // matches Android's own documented `singleTop` convention.
+    setIntent(intent)
+    handleNotificationTapIntent(intent)
   }
 
   /**

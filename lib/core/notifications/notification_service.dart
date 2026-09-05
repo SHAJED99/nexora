@@ -39,10 +39,12 @@ class NotificationService implements NotificationSink {
   NotificationService({
     BinaryMessenger? binaryMessenger,
     String messageChannelSuffix = '',
+    Duration? readyTimeout,
   })  : _api = NotificationApi(
           binaryMessenger: binaryMessenger,
           messageChannelSuffix: messageChannelSuffix,
-        ) {
+        ),
+        _readyTimeout = readyTimeout ?? const Duration(seconds: 10) {
     NotificationEventsApi.setUp(
       _EventsHandler(this),
       binaryMessenger: binaryMessenger,
@@ -51,6 +53,13 @@ class NotificationService implements NotificationSink {
   }
 
   final NotificationApi _api;
+
+  /// E10-B10: bounds every step of [ensureReady] -- matches this codebase's
+  /// existing best-effort-platform-call convention (`FirebaseMetadataService
+  /// ._timeout`, `SyncCursorService._timeout`, both 10s default, overridable
+  /// by tests via the constructor so a hang test doesn't need to wait the
+  /// real duration).
+  final Duration _readyTimeout;
 
   final StreamController<bool> _permissionResultController =
       StreamController<bool>.broadcast();
@@ -70,14 +79,55 @@ class NotificationService implements NotificationSink {
   /// granted — requests it and awaits the result. Returns true when channels
   /// exist and permission is granted; false when denied. EARS-PLAT-5,
   /// EARS-PLAT-6.
+  ///
+  /// E10-B10: this contract is `Future<bool>`, never a throw and never an
+  /// unresolved `Future` -- but neither was actually guaranteed before this
+  /// fix. Two real failure modes, both confirmed by probe: (1) the host
+  /// channel not yet attached (`_api.ensureChannels()` throws a
+  /// `PlatformException` rather than returning) turned every caller's
+  /// `await ensureReady()` into an uncaught throw; (2) the OS never
+  /// delivering `onPermissionResult` (reachable in production --
+  /// `NotificationApiHost.requestPermission` can be called against a
+  /// destroyed `Activity` while `ForegroundMeshService` keeps the engine
+  /// alive, the same shape `E10-B05` already found on the neighboring
+  /// service-notification path) hung `permissionResults.first` forever
+  /// with no bound. `notification_dispatcher.dart`'s `start()` sets
+  /// `_started = true` before awaiting this method and only subscribes its
+  /// sources after it returns, so either failure mode silently killed
+  /// every E10 notification source for the rest of the process, with
+  /// nothing surfaced to the user.
   @override
   Future<bool> ensureReady() async {
-    await _api.ensureChannels();
-    if (await _api.hasPermission()) return true;
+    try {
+      await _api.ensureChannels().timeout(_readyTimeout);
+      if (await _api.hasPermission().timeout(_readyTimeout)) return true;
 
-    final Future<bool> resultFuture = permissionResults.first;
-    await _api.requestPermission();
-    return resultFuture;
+      // Subscribed eagerly (before `requestPermission` below) so no event
+      // is raced away, but `.timeout()` is applied at the AWAIT site, not
+      // here -- if `requestPermission()` itself throws or times out, this
+      // `Future` is abandoned before the code below ever reaches it.
+      final Future<bool> resultFuture = permissionResults.first;
+      // A `Future` (unlike a `Stream`) fans out to every listener attached
+      // to it independently -- this drain, attached the instant the
+      // `Future` exists, exists ONLY to mark it as handled so an abandoned
+      // completion (this stream closing with no event ever emitted, e.g.
+      // via `dispose()` in a test's tearDown, or `requestPermission()`
+      // itself failing below before the real `await` is ever reached)
+      // never reaches the zone as an unhandled asynchronous error. The
+      // real result is still obtained by the separate `await` below,
+      // completely unaffected by this drain (found by review: round 1 of
+      // this fix left the abandoned-Future case genuinely unhandled, just
+      // via a different trigger than round 1's own fix for it addressed).
+      unawaited(resultFuture.catchError((_) => false));
+      await _api.requestPermission().timeout(_readyTimeout);
+      return await resultFuture.timeout(_readyTimeout);
+    } catch (_) {
+      // Any failure to determine or obtain readiness -- a channel error,
+      // a timeout waiting for the OS to answer -- collapses to the same
+      // honest `false` the documented contract already promises for a
+      // denial, rather than throwing or hanging the caller.
+      return false;
+    }
   }
 
   /// The single seam every notification source in E10 posts through.

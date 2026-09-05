@@ -2,12 +2,15 @@ package com.nexora.nexora.notifications
 
 import android.Manifest
 import android.app.Activity
+import android.app.PendingIntent
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.nexora.nexora.MainActivity
 import com.nexora.nexora.R
 import io.flutter.plugin.common.BinaryMessenger
 import kotlinx.coroutines.CoroutineScope
@@ -40,6 +43,16 @@ class NotificationApiHost(
      * to both hosts and each must ignore a request code it doesn't own.
      */
     const val REQUEST_CODE = 4300
+
+    /** Intent extra key: the tapped notification's Pigeon id (a [Long]),
+     * read back by [MainActivity]'s launch/new-intent handling (E10-B09). */
+    const val EXTRA_NOTIFICATION_ID = "com.nexora.nexora.NOTIFICATION_ID"
+
+    /** Intent extra key: the tapped notification's category, by
+     * [NotificationCategory.name] (a [String] -- `Serializable`/`Parcelable`
+     * enums round-trip awkwardly across process death, a plain name string
+     * does not). */
+    const val EXTRA_NOTIFICATION_CATEGORY = "com.nexora.nexora.NOTIFICATION_CATEGORY"
   }
 
   private val eventsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -111,6 +124,27 @@ class NotificationApiHost(
       return false
     }
 
+    // E10-B09: every category posted through this host was previously
+    // un-tappable -- no setContentIntent, so tapping a message/call/
+    // trust-request notification did nothing at all, and (with no
+    // setAutoCancel) it stayed in the shade until something called
+    // cancel(id). The tap intent carries the id + category back through
+    // MainActivity's launch/new-intent handling to
+    // eventsApi.onNotificationTapped -- routing what Dart does with a tap
+    // is still OQ-E10-1's open question; this only makes delivery (§4's
+    // explicitly in-scope half) actually reach Dart.
+    val tapIntent = Intent(activity, MainActivity::class.java).apply {
+      flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+      putExtra(EXTRA_NOTIFICATION_ID, request.id)
+      putExtra(EXTRA_NOTIFICATION_CATEGORY, request.category.name)
+    }
+    val tapPendingIntent = PendingIntent.getActivity(
+        activity,
+        request.id.toInt(),
+        tapIntent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
     val notification =
         NotificationCompat.Builder(activity, NotificationChannels.channelId(request.category))
             .setContentTitle(request.title)
@@ -118,6 +152,8 @@ class NotificationApiHost(
             .setOngoing(request.ongoing)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setPriority(priorityFor(request.category))
+            .setContentIntent(tapPendingIntent)
+            .setAutoCancel(!request.ongoing)
             .build()
 
     return try {
@@ -131,6 +167,19 @@ class NotificationApiHost(
 
   override fun cancel(id: Long) {
     NotificationManagerCompat.from(activity).cancel(id.toInt())
+  }
+
+  /**
+   * E10-B09: delivers a tap to Dart. Called by [MainActivity] once it
+   * decodes [EXTRA_NOTIFICATION_ID]/[EXTRA_NOTIFICATION_CATEGORY] off the
+   * intent that (re)launched it -- either [MainActivity.onNewIntent] (app
+   * already running) or the initial launch intent (a cold start via the
+   * tap alone). Best-effort like every other event send in this file: if
+   * no Dart side is currently attached to receive it, the tap is simply
+   * not reported, matching this host's existing posture elsewhere.
+   */
+  fun notifyTapped(id: Long, category: NotificationCategory) {
+    eventsScope.launch { eventsApi.onNotificationTapped(id, category) }
   }
 
   private fun priorityFor(category: NotificationCategory): Int =

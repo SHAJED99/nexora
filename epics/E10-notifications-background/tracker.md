@@ -1,21 +1,29 @@
 # E10 · Notifications & Background Operation · Progress
 
-**Status:** **all 8 bugs closed as of 2026-09-04**
-(`E10-B01`..`B08`, `B08` discovered post-sweep during `B04`'s fix review).
-`E10-B01`, `B02`, `B03`, `B04`, `B08` fixed, cross-model (Opus) reviewed —
-APPROVE on every one — and merged. `B06`/`B07` assessed non-blocking
-(tracking-only). **`E10-B05`'s rule-3 decision was delegated by the human
-("do what is best") — option (b)(ii) chosen and implemented, PR #66,
-2 review rounds (round 1 REQUEST_CHANGES on a stale-notification race,
-round 2 APPROVE), merged.** **P1/P2 = 0 — epic is now eligible for its
-epic→`development` PR** (`skills/release`; the merge itself is still a
-rule-5 human gate). All 10 tasks + all 8 bugs merged and cross-model
-reviewed; full suite green after every fix (see individual bug files for
-exact counts). `ADR-0007` accepted (option 1, connectedDevice, boot-restart
-in scope) unblocked T08/T09/T10 earlier this session. **Backend/native
-only** — this epic ships no screen; see §Why there is no frontend task. ·
+**Status:** **10/10 bugs closed as of 2026-09-04**
+(`E10-B01`..`B10`, `B08` discovered post-sweep during `B04`'s fix review;
+`B09`/`B10` found by a later retroactive rule-5 re-review of `T01`).
+`E10-B01`, `B02`, `B03`, `B04`, `B08`, `B09`, `B10` fixed, cross-model
+(Opus) reviewed — APPROVE on every one — and merged. `B06`/`B07` assessed
+non-blocking (tracking-only). **`E10-B05`'s rule-3 decision was delegated
+by the human ("do what is best") — option (b)(ii) chosen and implemented,
+PR #66, 2 review rounds (round 1 REQUEST_CHANGES on a stale-notification
+race, round 2 APPROVE), merged.** **A retroactive rule-5 re-review of
+`T01`/`T02` (same pattern found in E09/E11 this session) then found 2
+more real bugs in `T01` (`E10-B09`: no notification-tap delivery
+producer; `E10-B10`: `ensureReady()` could throw/hang instead of
+returning `bool`), both fixed. `T02` re-reviewed clean, no findings.**
+**P1/P2 = 0 for every priority-stamped bug** (`B09`/`B10` are S2
+severity, priority left `TBD` for the human's `bug_priorities` gate — the
+epic→`development` merge should wait on that stamp before being called
+unconditionally clear, same caveat E11 recorded this session). All 10
+tasks + all 10 bugs merged and cross-model reviewed; full suite green
+after every fix (see individual bug files for exact counts). `ADR-0007`
+accepted (option 1, connectedDevice, boot-restart in scope) unblocked
+T08/T09/T10 earlier this session. **Backend/native only** — this epic
+ships no screen; see §Why there is no frontend task. ·
 **Started:** 2026-09-04 · **Completed (build):** 2026-09-04 ·
-**Swept:** 2026-09-04 · **Progress:** 10/10 tasks, 8/8 bugs done
+**Swept:** 2026-09-04 · **Progress:** 10/10 tasks, 10/10 bugs done
 
 ## Tasks
 
@@ -373,6 +381,8 @@ an observation, not a violation — nothing invented an API, a field or a path.
 | `E10-B06` | S4 | P4 | Six `dispose()`/`stop()` methods with no caller in `lib/`. **Assessed as inert, not a leak** — see CF-1. | n/a |
 | `E10-B07` | S4 | P3 | Five EARS criteria green on tests that cannot fail; mutations to the guarded lines survive the whole suite. | n/a |
 | `E10-B08` | S2 | P1 | `E10-B01`'s own fix commit introduced an illegal `--` inside an `AndroidManifest.xml` comment, breaking Gradle's manifest merge for the whole app since. **Done, merged.** | **yes** — every `flutter build apk` since `e62f91f` |
+| `E10-B09` | S2 | TBD | `T01`'s notifications had no `setContentIntent`/`setAutoCancel` and nothing ever called `onNotificationTapped` -- every posted notification was un-tappable and never dismissed itself. **Done, merged.** Found by the retroactive rule-5 re-review of `T01`. | **yes** — every user-facing category |
+| `E10-B10` | S2 | TBD | `NotificationService.ensureReady()` had no `try`/`catch` and no timeout -- a host-channel error threw uncaught, and a never-arriving permission result hung forever, silently killing every notification source for the process's life. **Done, merged.** Found by the same re-review pass. | **yes** — reachable via the same "no Activity, revived engine" shape `E10-B05` found |
 
 **Post-sweep status (2026-09-04):** `E10-B01` fixed directly. `E10-B02`,
 `E10-B03`, `E10-B04` each built, cross-model (Opus) reviewed — **APPROVE**,
@@ -716,3 +726,48 @@ next dispatch won't see it.
   exactly the scenario it was written for. Recommend as a small follow-up
   fix the next time `ForegroundMeshService.kt` is touched, not a reopen of
   `E10-B05`.
+- **CF-19 · `E10-B09`'s cold-start tap delivery is inferred, not proven on
+  a real device.** A true cold start (process launched by tapping a
+  notification alone) runs `configureFlutterEngine` before Dart's own
+  entrypoint executes, so `NotificationApiHost.notifyTapped`'s event post
+  reaches a Dart side that hasn't constructed `NotificationService`/
+  registered `NotificationEventsApi.setUp` yet. This should be safely
+  buffered by `dart:ui`'s platform-channel `ChannelBuffers` (default
+  capacity 1 per channel) until that registration happens, but this has
+  not been verified on real hardware — no device/emulator existed in this
+  environment (same constraint noted throughout this project, e.g.
+  E09-T05's own unmet manual-verification gate). Found by the `E10-B09`
+  reviewer (PR #79). The warm path (app already running, `singleTop`,
+  `onNewIntent`) is unaffected and does not depend on this timing.
+  Recommend as a manual verification step the next time real hardware is
+  available, not a blocking gap today.
+- **CF-20 · `E10-B09`'s tap intent extras are never consumed, so a
+  process-death-then-restore Activity recreation could re-deliver the
+  same tap.** `MainActivity`'s `setIntent(intent)` in `onNewIntent`
+  persists the tap extras on the Activity's own intent; if the OS later
+  recreates that Activity after a process death (not a config change,
+  which the manifest already covers via `android:configChanges`), it
+  re-enters `configureFlutterEngine` with the same intent and could
+  re-forward the same tap. No user-visible impact today —
+  `notificationTapped` has no consumer yet (`OQ-E10-1` still open) — but
+  becomes a real double-navigation the moment routing lands. Found by the
+  `E10-B09` reviewer (PR #79). Fix direction, for whoever builds the
+  routing: `intent.removeExtra(...)` immediately after
+  `handleNotificationTapIntent` consumes the extras.
+- **CF-21 · `NotificationService.post()`/`cancel()` share `ensureReady()`'s
+  original defect class, just not its own bug's fence.** Both forward the
+  raw Pigeon call directly (`notification_service.dart:136,141`); a "host
+  not attached" `PlatformException` (the same shape `E10-B10` fixed for
+  `ensureChannels()`) would propagate uncaught from either. `post()`'s own
+  doc comment ("never throws") is scoped only to a permission refusal, not
+  this case. `notification_service.dart` **is** in `E10-B10`'s `files:` —
+  the exclusion is by that bug's own prose fence, not the file list. Also
+  found (round-2 review): `lib/core/notifications/sources/
+  call_notification_source.dart:71`'s `unawaited(sink.cancel(...))` has no
+  `runZonedGuarded`/`PlatformDispatcher.onError` anywhere in
+  `lib/main.dart`/`lib/app/main.dart` to catch a rejected Future from this
+  same path. Not exploitable via a synchronous throw (`cancel()` is
+  `async`), but a rejected Future would still surface as an unhandled
+  async error. Found by the `E10-B10` reviewer (PR #79), correctly left
+  out of that bug's fence. Recommend as the next small fix in this file,
+  same shape as `E10-B10`, not folded in retroactively.
