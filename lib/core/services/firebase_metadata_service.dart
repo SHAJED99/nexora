@@ -184,4 +184,48 @@ class FirebaseMetadataService {
   ) {
     return _database.ref(FirebasePaths.device(uid, deviceId)).update(data);
   }
+
+  /// E12-T01 (`FR-RECOVER-001`): the whole-list reader `E12-T02`/`E12-T03`
+  /// both need -- which device ids already exist under this account's own
+  /// `users/$uid/devices` registry. Best-effort, same as every other method
+  /// on this class: any Realtime Database error, a timeout, or malformed
+  /// data all read as "no information" (an empty set), never a thrown
+  /// error, since this is a hint no caller may block on (task §6 Risks).
+  ///
+  /// Mirrors `DeviceRevocationService.pullRevocations`'s exact
+  /// timeout+catch-and-log wrapper around a raw read seam, plus a private
+  /// pure extraction function -- not a new, competing whole-subtree reader.
+  Future<Set<String>> readOwnDeviceIds(String uid) async {
+    final Object? raw;
+    try {
+      raw = await readOwnDevicesData(uid).timeout(_timeout);
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'firebase.read_own_device_ids_failed',
+        cause: e,
+      );
+      return const {};
+    }
+    return _extractDeviceIds(raw);
+  }
+
+  /// Performs the actual Realtime Database read of the whole
+  /// `users/$uid/devices` subtree. Split out from [readOwnDeviceIds] for the
+  /// same test-seam reason as [writeDeviceMetadata]/
+  /// `DeviceRevocationService.readDevicesData`: `FirebaseDatabase`/
+  /// `DatabaseReference` need a live platform-channel test harness to
+  /// construct in tests, so tests seam here instead.
+  Future<Object?> readOwnDevicesData(String uid) async {
+    final snapshot = await _database.ref(FirebasePaths.devices(uid)).get();
+    return snapshot.value;
+  }
+
+  /// Reads the set of device id keys out of the raw `users/$uid/devices`
+  /// snapshot value. Absent or malformed data (anything that isn't a `Map`)
+  /// reads as an empty set, never a thrown error -- mirrors
+  /// `DeviceRevocationService._extractRevocationFlags`'s shape.
+  static Set<String> _extractDeviceIds(Object? raw) {
+    if (raw is! Map) return const {};
+    return raw.keys.whereType<String>().toSet();
+  }
 }
