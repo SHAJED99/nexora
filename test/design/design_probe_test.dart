@@ -158,6 +158,18 @@ void main() {
         screenId: 'devices',
         screen: GetMaterialApp(home: const DevicesView()),
       );
+      // E12-B05, F4: without this, a future regression that silently brings
+      // back `renderError: true` (e.g. a missing dependency in this `setUp`
+      // again) would still say "All tests passed" here -- this test would
+      // pass whether or not the probe actually walked anything. Real
+      // dart:io read -- must go through `runAsync` for the same reason
+      // `dumpScreenProbe`'s own file write does (see
+      // flutter_probe_dumper.dart).
+      final raw = await tester.runAsync(
+        () => File('build/design-probe/devices.json').readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
     });
   });
 
