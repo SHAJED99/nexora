@@ -58,4 +58,29 @@ class RelationshipRepository {
     final relationship = await get(deviceId);
     return relationship?.state == domain.RelationshipState.blocked;
   }
+
+  /// Reactive read of [deviceId]'s stored `RelationshipState`, added by
+  /// `E09-B01`: a caller re-evaluating a state-dependent policy on every
+  /// change (e.g. `LocationVisibilityPolicy`) previously had no way to
+  /// observe this table at all.
+  ///
+  /// Emits `RelationshipState.unknown` immediately on listen when no row
+  /// exists for [deviceId] — never `null`, and never a state this side has
+  /// not actually recorded — matching [get]'s own `null` -> `unknown`
+  /// fallback used by every caller of this repository (e.g.
+  /// `LocationReadModel._evaluateVisibility`). Built on
+  /// `watchSingleOrNull()`, the same emit-on-listen shape
+  /// `LocationSettingsRepository.watchPeerEnabled` already uses, for the
+  /// same reason: `upsert` never pre-creates a row for every device, so a
+  /// caller must be able to watch a device it has not evaluated yet.
+  Stream<domain.RelationshipState> watchState(String deviceId) {
+    return (_db.select(_db.relationships)
+          ..where((t) => t.deviceId.equals(deviceId)))
+        .watchSingleOrNull()
+        .map(
+          (row) => row == null
+              ? domain.RelationshipState.unknown
+              : domain.RelationshipState.values.byName(row.state),
+        );
+  }
 }

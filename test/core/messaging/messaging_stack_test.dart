@@ -18,6 +18,7 @@ import 'package:nexora/core/crypto/crypto_stub.dart';
 import 'package:nexora/core/crypto/drift_signal_store.dart';
 import 'package:nexora/core/crypto/identity_service.dart';
 import 'package:nexora/core/messaging/ciphertext_codec.dart';
+import 'package:nexora/core/messaging/location_share.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/messaging/relay_packet_frame.dart';
 import 'package:nexora/core/persistence/database.dart';
@@ -27,10 +28,15 @@ import 'package:nexora/core/routing_engine/routing_engine.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/groups/data/group_repository.dart';
+import 'package:nexora/features/location/data/location_fix_repository.dart';
+import 'package:nexora/features/location/data/location_settings_repository.dart';
+import 'package:nexora/features/location/domain/location_share_service.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/messaging/domain/receive_message_use_case.dart';
 import 'package:nexora/features/messaging/domain/send_message_use_case.dart';
 import 'package:nexora/features/messaging/domain/sync_cursor_service.dart';
+import 'package:nexora/features/trust/data/relationship_repository.dart';
+import 'package:nexora/features/trust/domain/relationship.dart';
 
 Uint8List _plaintext(String s) => Uint8List.fromList(s.codeUnits);
 
@@ -579,6 +585,123 @@ void main() {
       );
 
       await stack.dispose();
+    },
+  );
+
+  // --- E09-T03: location-share registration (control kind 7) -----------
+
+  test(
+    'test_location_share_is_registered_exactly_once_on_control_kind_7',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'device-a',
+        transport: newTransport(),
+      );
+      expect(stack.status, const MessagingStackStatus.ready());
+
+      expect(stack.locationShareService, isA<LocationShareService>());
+      expect(
+        identical(stack.locationShareService, stack.locationShareService),
+        isTrue,
+      );
+
+      // A second registration on the SAME control kind must throw --
+      // `InboundPipeline.registerControlHandler`'s own duplicate guard
+      // (task file §6 risk note).
+      expect(
+        () => stack.inbound.registerControlHandler(
+          kControlKindLocationShare,
+          stack.locationShareService.handleWireFrame,
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      await stack.dispose();
+    },
+  );
+
+  // --- E09-T05: real PlatformLocationSource wiring ----------------------
+
+  test(
+    'test_composition_root_wires_a_real_platform_location_source_not_the_retired_placeholder',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'device-a',
+        transport: newTransport(),
+      );
+      addTearDown(stack.dispose);
+      expect(stack.status, const MessagingStackStatus.ready());
+
+      await RelationshipRepository(stack.db)
+          .upsert('device-b', RelationshipState.trusted);
+      final settings = LocationSettingsRepository(db: stack.db);
+      await settings.writeGlobalEnabled(true);
+      await settings.writePeerEnabled('device-b', true);
+
+      // Before E09-T05, `stack.locationShareService`'s source was
+      // `_UnavailableLocationSource` -- an unconditional, permanent
+      // no-fix that never touched a platform channel at all. This test
+      // environment has no real GPS/geolocator platform channel mocked
+      // either, so a genuinely wired `PlatformLocationSource` also
+      // resolves to `noFix` here -- the same OUTCOME, but for a different
+      // REASON (an actual acquisition attempt that fails, per
+      // EARS-LOC-16, not a source that never tries). What this test
+      // actually proves is the one thing a same-outcome check cannot:
+      // `share()` runs to completion without throwing through a real
+      // attempted permission/provider check with no platform channel
+      // present -- exactly the "does not crash the caller" contract
+      // `PlatformLocationSource.currentFix()` promises (task file §5),
+      // now exercised through the composition root end to end, not just
+      // in `platform_location_source_test.dart`'s own unit tests against
+      // injected seams.
+      final outcome = await stack.locationShareService.share('device-b');
+      expect(outcome, const LocationShareOutcomeNoFix());
+    },
+  );
+
+  // --- E09-B06: the privacy sweep is wired at composition-root startup --
+
+  test(
+    'test_EARS_LOC_5_sweep_runs_at_composition_root_startup',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+
+      // Seed a stored fix for a peer this device has already blocked --
+      // written DIRECTLY to `location_fixes`, deliberately WITHOUT ever
+      // sending or receiving a wire frame, so `handleWireFrame`'s own
+      // delete-on-not-visible branch (which only fires on a NEW inbound
+      // frame) cannot possibly be what deletes it -- mirrors
+      // `location_share_service_test.dart`'s own "privacy sweep" group
+      // reasoning: a test that routed through a frame would prove nothing
+      // about the composition-root wiring this bug is actually about.
+      await RelationshipRepository(db)
+          .upsert('device-b', RelationshipState.blocked);
+      final fixes = LocationFixRepository(db: db);
+      await fixes.upsertFix(
+        peerDeviceId: 'device-b',
+        latitude: 12.0,
+        longitude: 34.0,
+        capturedAtMs: 1000,
+        receivedAtMs: 1000,
+      );
+      expect(await fixes.readFix('device-b'), isNotNull);
+
+      // No message is ever received by this stack -- `create()`'s own
+      // startup sweep is what must remove the row, not any inbound wire
+      // frame.
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'device-a',
+        transport: newTransport(),
+      );
+      addTearDown(stack.dispose);
+      expect(stack.status, const MessagingStackStatus.ready());
+
+      expect(await fixes.readFix('device-b'), isNull);
     },
   );
 }

@@ -8,7 +8,30 @@
          only the set that applies. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+    <!-- E09-T05 (OQ-E09-T05-2(a), human-approved 2026-09-04): lifted from
+         android:maxSdkVersion="30" to an unrestricted declaration -- this is
+         now E09's own runtime location permission (FR-LOC-003), needed on
+         EVERY API level, not just the pre-Android-12 Bluetooth-discovery
+         reason E04-T03b originally added it for. `geolocator`'s own library
+         AndroidManifest.xml (geolocator_android-5.0.2, verified in the pub
+         cache) does NOT declare this permission itself -- only its example
+         app does -- so there is no manifest-merger conflict to resolve here;
+         removing the cap in place, rather than adding a second
+         <uses-permission> element with the same name (which the merger
+         rejects as a duplicate/conflicting attribute), is the shape that
+         avoids one. E04's own `BluetoothPermissions.kt` still branches on
+         SDK_INT and never requests this permission for a Bluetooth scan on
+         API 31+ (it relies on BLUETOOTH_SCAN's own `neverForLocation` flag
+         below, unchanged) -- this permission now simply also existing on
+         API 31+ for a DIFFERENT feature (location sharing) does not change
+         what that scan itself asserts or needs. This reasoning is a static
+         source-level argument, NOT an on-device verification: task file §8
+         manual steps 4/5 (confirming E04's Bluetooth discovery actually
+         still works on a real API <=30 device and a real API 31+ device
+         after this change) were NOT performed -- no physical device or
+         emulator was available when this was built (task file §9, E09-B03).
+         This remains an open verification obligation, not a completed one. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <!-- E10-T01: runtime notification permission on API 33+ (FR-NOTIFY-001,
