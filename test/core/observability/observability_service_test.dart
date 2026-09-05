@@ -1,22 +1,16 @@
-// E13-T06 — real observability client (Sentry-or-equivalent) tests.
+// E13-T06 — real observability client (Sentry) tests.
 //
-// BLOCKED at the pubspec.yaml 🧍 new_dependency gate (rule 3, docs/
-// conventions.md "Third-party dependency additions"): `sentry_flutter` is
-// NOT yet in pubspec.yaml/pubspec.lock, and adding it is a human call, not
-// this agent's. See the task file's `## Open Questions` and `## Handoff` for
-// the full account.
-//
-// What IS in scope and tested here without the vendor SDK: the internal
-// client-injection seam this task adds inside `ObservabilityService` so a
-// real vendor adapter can be dropped in later without touching either
-// public method's signature or any of the dozens of existing `logError`/
-// `log` call sites across `lib/`. `EARS-DIAG-2` and `EARS-DIAG-3` are fully
-// testable against that seam using a fake client. `EARS-DIAG-1` (the chosen
-// vendor's own default instrumentation not collecting PII) cannot be tested
-// until a vendor is actually wired in — that test is written but skipped,
-// with the reason stated inline, rather than silently omitted.
+// `sentry_flutter` is human-approved and wired in as
+// `SentryObservabilityClient` (`lib/core/observability/
+// observability_service.dart`). `EARS-DIAG-1`/`2`/`3` are all testable now:
+// `EARS-DIAG-1` asserts the actual `SentryOptions` object
+// `SentryObservabilityClient.init()` configures disables every
+// PII-adjacent default named in the task's §6 Risks; `EARS-DIAG-2`/`3`
+// exercise the `ObservabilityClient` injection seam with a fake client, as
+// before.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/observability/observability_service.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 class _RecordingClient implements ObservabilityClient {
   final List<(LogLevel, String, Object?)> captured = [];
@@ -105,10 +99,30 @@ void main() {
       () {
     test(
       'test_EARS_DIAG_1_chosen_vendor_default_instrumentation_disables_pii_collection',
-      () {},
-      skip: 'BLOCKED on the pubspec.yaml new_dependency human gate (rule 3) — '
-          'no vendor SDK is wired in yet to assert default-instrumentation '
-          'settings against. See E13-T06 ## Open Questions / ## Handoff.',
+      () {
+        final options = SentryFlutterOptions();
+        SentryObservabilityClient.configurePrivacyOptions(options);
+
+        // §6 Risks: the chosen vendor's own default instrumentation must
+        // not auto-capture PII/plaintext-adjacent data — assert every
+        // setting this task's SentryObservabilityClient explicitly
+        // disables, rather than trusting the SDK's shipped defaults.
+        expect(options.sendDefaultPii, isFalse,
+            reason: 'must not attach IP address / ambient PII by default');
+        expect(options.attachScreenshot, isFalse,
+            reason: 'a screenshot could capture on-screen message plaintext');
+        // ignore: experimental_member_use
+        expect(options.attachViewHierarchy, isFalse,
+            reason: 'the view hierarchy can include widget text content');
+        expect(options.enableUserInteractionBreadcrumbs, isFalse,
+            reason: 'interaction breadcrumbs can include widget labels');
+        expect(options.enableAutoNativeBreadcrumbs, isFalse,
+            reason: 'native breadcrumbs are outside this app\'s own '
+                'controlled logging surface (task §4)');
+        // No usage/behavior analytics for v1 (ADR-0006) — performance
+        // tracing is unrelated to crash/error reporting.
+        expect(options.tracesSampleRate, 0.0);
+      },
     );
   });
 

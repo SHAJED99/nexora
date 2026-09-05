@@ -81,17 +81,25 @@ Structured, leveled (`debug`/`info`/`warn`/`error`), routed through
 `core/observability`. Never `print()` in `lib/`. Every log call is subject
 to FR-DIAG-002 — no plaintext, keys, voice/call content, or precise location.
 
-**Vendor pick (E13-T06, PROPOSED — not yet approved):** `sentry_flutter`,
-per `ADR-0006`'s own named example. `ObservabilityService` now exposes an
+**Vendor pick (E13-T06, human-approved 2026-09-05):** `sentry_flutter`,
+per `ADR-0006`'s own named example. `ObservabilityService` exposes an
 `ObservabilityClient` injection seam (`lib/core/observability/
-observability_service.dart`) a `SentryObservabilityClient` adapter drops
-into once the package clears the pubspec.yaml `new_dependency` human gate
-below — `init()`/`log()`/`logError()`'s public signatures do not change
-when that happens, so no existing call site is touched. Hosting
-(self-hosted vs. managed) is left for that same follow-up to record,
-per `ADR-0006`'s closing line. Until approved, `ObservabilityService`
-defaults to the same best-effort console behaviour (debug builds only)
-the genesis stub had.
+observability_service.dart`); `SentryObservabilityClient` is the real
+default implementation — `init()`/`log()`/`logError()`'s public signatures
+are unchanged, so no existing call site was touched. Hosting: managed
+Sentry SaaS (sentry.io), not self-hosted — chosen for zero infra
+maintenance, consistent with this project's other managed-service choices
+(Firebase). The DSN is never hardcoded: it's read at build time via
+`--dart-define=SENTRY_DSN=<dsn>` (`String.fromEnvironment`), the standard
+Flutter build-time config mechanism — no other config-injection convention
+existed yet in this codebase at the time this task ran. An empty/unset DSN
+leaves Sentry initialized-but-not-sending, so dev/CI builds without one
+configured are unaffected. Every PII-adjacent default instrumentation
+option (`sendDefaultPii`, `attachScreenshot`, `attachViewHierarchy`,
+`enableUserInteractionBreadcrumbs`, `enableAutoNativeBreadcrumbs`) is
+explicitly disabled per FR-DIAG-002; see the inline comments on
+`SentryObservabilityClient.configurePrivacyOptions` for the reasoning
+behind each, and `test_EARS_DIAG_1_*` for the assertion.
 
 ## UI widget kit
 
@@ -152,6 +160,10 @@ addition, recorded as a one-line note here with the approving human gate.
 - **2026-08-26** — `on_popup_window_widget` `^0.0.14`, `on_process_button_widget`
   `^2.0.13`, `on_text_input_widget` `^0.1.0` — human-directed (explicit
   request, not agent-proposed). See "UI widget kit" above.
+- **2026-09-05** — `sentry_flutter` `8.14.2` (E13-T06) — human-approved
+  crash/error vendor, `ADR-0006`'s own named example. Pinned to an exact
+  version, not a caret range, per the same convention used for
+  `geolocator`. See "Logging" above.
 - **2026-08-26** — `firebase_database` `^11.1.4` (E01-T02) — same Firebase
   project already named in ADR-0005/ADR-0006's accepted scope; adds the
   Realtime Database client needed for the account-id ↔ device-id metadata
