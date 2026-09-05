@@ -8788,6 +8788,285 @@ class NotificationPreferencesCompanion
   }
 }
 
+class $DeviceRevocationsTable extends DeviceRevocations
+    with TableInfo<$DeviceRevocationsTable, DeviceRevocationRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DeviceRevocationsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revokedAtMeta = const VerificationMeta(
+    'revokedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> revokedAt = GeneratedColumn<DateTime>(
+    'revoked_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+    'source',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [deviceId, revokedAt, source];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'device_revocations';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DeviceRevocationRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('revoked_at')) {
+      context.handle(
+        _revokedAtMeta,
+        revokedAt.isAcceptableOrUnknown(data['revoked_at']!, _revokedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_revokedAtMeta);
+    }
+    if (data.containsKey('source')) {
+      context.handle(
+        _sourceMeta,
+        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {deviceId};
+  @override
+  DeviceRevocationRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DeviceRevocationRow(
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      revokedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}revoked_at'],
+      )!,
+      source: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source'],
+      )!,
+    );
+  }
+
+  @override
+  $DeviceRevocationsTable createAlias(String alias) {
+    return $DeviceRevocationsTable(attachedDatabase, alias);
+  }
+}
+
+class DeviceRevocationRow extends DataClass
+    implements Insertable<DeviceRevocationRow> {
+  /// The device id that was revoked -- may be this device or another of the
+  /// account's own devices (FR-AUTH-004: devices on one account are
+  /// independent).
+  final String deviceId;
+
+  /// When this device recorded the revocation -- not necessarily the same
+  /// instant Firebase's `ServerValue.timestamp` recorded it there.
+  final DateTime revokedAt;
+
+  /// A `RevocationSource.name` string (`DeviceRevocationService`, E11-T04)
+  /// -- `'local'` (this device issued the revocation via `revoke`) or
+  /// `'firebase'` (learned via `pullRevocations`), per docs/conventions.md
+  /// "Enums" -- never an integer index.
+  final String source;
+  const DeviceRevocationRow({
+    required this.deviceId,
+    required this.revokedAt,
+    required this.source,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['device_id'] = Variable<String>(deviceId);
+    map['revoked_at'] = Variable<DateTime>(revokedAt);
+    map['source'] = Variable<String>(source);
+    return map;
+  }
+
+  DeviceRevocationsCompanion toCompanion(bool nullToAbsent) {
+    return DeviceRevocationsCompanion(
+      deviceId: Value(deviceId),
+      revokedAt: Value(revokedAt),
+      source: Value(source),
+    );
+  }
+
+  factory DeviceRevocationRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DeviceRevocationRow(
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      revokedAt: serializer.fromJson<DateTime>(json['revokedAt']),
+      source: serializer.fromJson<String>(json['source']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'deviceId': serializer.toJson<String>(deviceId),
+      'revokedAt': serializer.toJson<DateTime>(revokedAt),
+      'source': serializer.toJson<String>(source),
+    };
+  }
+
+  DeviceRevocationRow copyWith({
+    String? deviceId,
+    DateTime? revokedAt,
+    String? source,
+  }) => DeviceRevocationRow(
+    deviceId: deviceId ?? this.deviceId,
+    revokedAt: revokedAt ?? this.revokedAt,
+    source: source ?? this.source,
+  );
+  DeviceRevocationRow copyWithCompanion(DeviceRevocationsCompanion data) {
+    return DeviceRevocationRow(
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      revokedAt: data.revokedAt.present ? data.revokedAt.value : this.revokedAt,
+      source: data.source.present ? data.source.value : this.source,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeviceRevocationRow(')
+          ..write('deviceId: $deviceId, ')
+          ..write('revokedAt: $revokedAt, ')
+          ..write('source: $source')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(deviceId, revokedAt, source);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DeviceRevocationRow &&
+          other.deviceId == this.deviceId &&
+          other.revokedAt == this.revokedAt &&
+          other.source == this.source);
+}
+
+class DeviceRevocationsCompanion extends UpdateCompanion<DeviceRevocationRow> {
+  final Value<String> deviceId;
+  final Value<DateTime> revokedAt;
+  final Value<String> source;
+  final Value<int> rowid;
+  const DeviceRevocationsCompanion({
+    this.deviceId = const Value.absent(),
+    this.revokedAt = const Value.absent(),
+    this.source = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DeviceRevocationsCompanion.insert({
+    required String deviceId,
+    required DateTime revokedAt,
+    required String source,
+    this.rowid = const Value.absent(),
+  }) : deviceId = Value(deviceId),
+       revokedAt = Value(revokedAt),
+       source = Value(source);
+  static Insertable<DeviceRevocationRow> custom({
+    Expression<String>? deviceId,
+    Expression<DateTime>? revokedAt,
+    Expression<String>? source,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (deviceId != null) 'device_id': deviceId,
+      if (revokedAt != null) 'revoked_at': revokedAt,
+      if (source != null) 'source': source,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DeviceRevocationsCompanion copyWith({
+    Value<String>? deviceId,
+    Value<DateTime>? revokedAt,
+    Value<String>? source,
+    Value<int>? rowid,
+  }) {
+    return DeviceRevocationsCompanion(
+      deviceId: deviceId ?? this.deviceId,
+      revokedAt: revokedAt ?? this.revokedAt,
+      source: source ?? this.source,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (revokedAt.present) {
+      map['revoked_at'] = Variable<DateTime>(revokedAt.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeviceRevocationsCompanion(')
+          ..write('deviceId: $deviceId, ')
+          ..write('revokedAt: $revokedAt, ')
+          ..write('source: $source, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -8833,6 +9112,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $NotificationCategorySettingsTable(this);
   late final $NotificationPreferencesTable notificationPreferences =
       $NotificationPreferencesTable(this);
+  late final $DeviceRevocationsTable deviceRevocations =
+      $DeviceRevocationsTable(this);
   late final Index idxMessagesConversationCreatedAt = Index(
     'idx_messages_conversation_created_at',
     'CREATE INDEX idx_messages_conversation_created_at ON messages (conversation_id, created_at)',
@@ -8891,6 +9172,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     locationFixes,
     notificationCategorySettings,
     notificationPreferences,
+    deviceRevocations,
     idxMessagesConversationCreatedAt,
     idxGroupMembersCurrent,
     idxGroupSingleOwner,
@@ -13835,6 +14117,181 @@ typedef $$NotificationPreferencesTableProcessedTableManager =
       NotificationPreferenceRow,
       PrefetchHooks Function()
     >;
+typedef $$DeviceRevocationsTableCreateCompanionBuilder =
+    DeviceRevocationsCompanion Function({
+      required String deviceId,
+      required DateTime revokedAt,
+      required String source,
+      Value<int> rowid,
+    });
+typedef $$DeviceRevocationsTableUpdateCompanionBuilder =
+    DeviceRevocationsCompanion Function({
+      Value<String> deviceId,
+      Value<DateTime> revokedAt,
+      Value<String> source,
+      Value<int> rowid,
+    });
+
+class $$DeviceRevocationsTableFilterComposer
+    extends Composer<_$AppDatabase, $DeviceRevocationsTable> {
+  $$DeviceRevocationsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get revokedAt => $composableBuilder(
+    column: $table.revokedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DeviceRevocationsTableOrderingComposer
+    extends Composer<_$AppDatabase, $DeviceRevocationsTable> {
+  $$DeviceRevocationsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get revokedAt => $composableBuilder(
+    column: $table.revokedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DeviceRevocationsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DeviceRevocationsTable> {
+  $$DeviceRevocationsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get revokedAt =>
+      $composableBuilder(column: $table.revokedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+}
+
+class $$DeviceRevocationsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DeviceRevocationsTable,
+          DeviceRevocationRow,
+          $$DeviceRevocationsTableFilterComposer,
+          $$DeviceRevocationsTableOrderingComposer,
+          $$DeviceRevocationsTableAnnotationComposer,
+          $$DeviceRevocationsTableCreateCompanionBuilder,
+          $$DeviceRevocationsTableUpdateCompanionBuilder,
+          (
+            DeviceRevocationRow,
+            BaseReferences<
+              _$AppDatabase,
+              $DeviceRevocationsTable,
+              DeviceRevocationRow
+            >,
+          ),
+          DeviceRevocationRow,
+          PrefetchHooks Function()
+        > {
+  $$DeviceRevocationsTableTableManager(
+    _$AppDatabase db,
+    $DeviceRevocationsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DeviceRevocationsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DeviceRevocationsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DeviceRevocationsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> deviceId = const Value.absent(),
+                Value<DateTime> revokedAt = const Value.absent(),
+                Value<String> source = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DeviceRevocationsCompanion(
+                deviceId: deviceId,
+                revokedAt: revokedAt,
+                source: source,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String deviceId,
+                required DateTime revokedAt,
+                required String source,
+                Value<int> rowid = const Value.absent(),
+              }) => DeviceRevocationsCompanion.insert(
+                deviceId: deviceId,
+                revokedAt: revokedAt,
+                source: source,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DeviceRevocationsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DeviceRevocationsTable,
+      DeviceRevocationRow,
+      $$DeviceRevocationsTableFilterComposer,
+      $$DeviceRevocationsTableOrderingComposer,
+      $$DeviceRevocationsTableAnnotationComposer,
+      $$DeviceRevocationsTableCreateCompanionBuilder,
+      $$DeviceRevocationsTableUpdateCompanionBuilder,
+      (
+        DeviceRevocationRow,
+        BaseReferences<
+          _$AppDatabase,
+          $DeviceRevocationsTable,
+          DeviceRevocationRow
+        >,
+      ),
+      DeviceRevocationRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -13899,4 +14356,6 @@ class $AppDatabaseManager {
         _db,
         _db.notificationPreferences,
       );
+  $$DeviceRevocationsTableTableManager get deviceRevocations =>
+      $$DeviceRevocationsTableTableManager(_db, _db.deviceRevocations);
 }

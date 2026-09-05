@@ -1,26 +1,28 @@
-// Schema migration test for the v15->v16 notification-preferences step
-// (E10-T02, EARS-NOTIFY-3/4).
+// E11-T04 -- v16->v17 migration test: new `device_revocations` table
+// (additive, no changes to existing tables).
+// (Renumbered during the epic_11 -> development merge, 2026-09-05: E09 and
+// E10 each independently claimed v15/v16 against an earlier development
+// baseline that predated this table, pushing this task's own step to v17.)
 //
-// Follows the same hand-built-prior-schema, exact-set-equality shape
-// `test/core/persistence/database_migration_test.dart` established for
-// E08-T01's v13->v14 step and E09-T01's v14->v15 step (task §6 risk note:
-// "the migration test must build the *previous* schema by hand and
-// migrate ... asserting on a freshly-created v16 database proves nothing
-// about upgrades").
+// Follows the pattern established in sync_migration_test.dart / the other
+// per-task migration test files: hand-build the exact PRIOR-version (v16)
+// schema with raw SQL, set `userVersion`, open it with `AppDatabase`, and
+// assert both that the upgrade creates the new table in a usable shape and
+// that pre-existing rows in old tables survived untouched.
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
-/// The full v15 schema -- everything E01-E09 created, in the exact shape
-/// each table has as of schema version 15 (the version immediately before
-/// this task's `notification_category_settings`/`notification_preferences`
-/// step). Needed in full because `AppDatabase`'s `onUpgrade` guards every
-/// earlier step with `from < N`, so opening a raw database at
-/// `userVersion = 15` skips every step up to and including the
-/// location-tables one (`from < 15`) and runs only the new `from < 16`
-/// step.
-void _createV15Tables(sqlite3.Database raw) {
+/// The full v16 schema -- everything E01-E10 created, in the exact shape
+/// each table has as of schema version 16 (the version immediately before
+/// this task's `device_revocations` step, after the epic_11 -> development
+/// renumbering). Needed in full (not just a subset) because `AppDatabase`'s
+/// `onUpgrade` guards every earlier step with `from < N`, so opening a raw
+/// database at `userVersion = 16` skips every step up to and including the
+/// notification-tables one (`from < 16`) and runs only this task's new
+/// `from < 17` step.
+void _createV16Tables(sqlite3.Database raw) {
   raw.execute('''
     CREATE TABLE device_identities (
       id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -239,6 +241,14 @@ void _createV15Tables(sqlite3.Database raw) {
     'CREATE INDEX idx_storage_decisions_decided_at ON storage_decisions '
     '(decided_at);',
   );
+  // The default row the v13->v14 step inserts on upgrade (task §5 of E08-T01
+  // -- the app must never have to cope with an absent settings row).
+  raw.execute(
+    "INSERT INTO storage_policy_settings (id, mode, updated_at) "
+    "VALUES (1, 'smart', 1000);",
+  );
+
+  // E09-T01 (v14->v15): location-sharing tables.
   raw.execute('''
     CREATE TABLE location_settings (
       id INTEGER NOT NULL,
@@ -270,12 +280,58 @@ void _createV15Tables(sqlite3.Database raw) {
     'CREATE INDEX idx_location_fixes_captured_at ON location_fixes '
     '(captured_at);',
   );
+  // The default row the v14->v15 step inserts on upgrade (task §5 of
+  // E09-T01 -- the app must never have to cope with an absent settings
+  // row).
+  raw.execute(
+    "INSERT INTO location_settings (id, global_enabled, updated_at) "
+    "VALUES (1, 0, 1000);",
+  );
+
+  // E10-T02 (v15->v16): notification preference tables.
+  raw.execute('''
+    CREATE TABLE notification_category_settings (
+      category TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      PRIMARY KEY (category)
+    );
+  ''');
+  raw.execute('''
+    CREATE TABLE notification_preferences (
+      id INTEGER NOT NULL,
+      privacy_level TEXT NOT NULL DEFAULT 'hidden',
+      PRIMARY KEY (id)
+    );
+  ''');
+  // The nine enabled category rows plus the `hidden` preferences singleton
+  // the v15->v16 step seeds on upgrade (task §5 of E10-T02 -- same "app
+  // never copes with an absent row" invariant as `storage_policy_settings`
+  // / `location_settings` above).
+  for (final category in const [
+    'message',
+    'voiceMessage',
+    'ptt',
+    'incomingCall',
+    'connectionRequest',
+    'trustRequest',
+    'groupEvent',
+    'securityEvent',
+    'storageWarning',
+  ]) {
+    raw.execute(
+      "INSERT INTO notification_category_settings (category, enabled) "
+      "VALUES ('$category', 1);",
+    );
+  }
+  raw.execute(
+    "INSERT INTO notification_preferences (id, privacy_level) "
+    "VALUES (0, 'hidden');",
+  );
 }
 
-/// Every table name that must exist pre-migration, per `_createV15Tables`
-/// above -- the "before" side of the exact-set diff in
-/// `test_EARS_NOTIFY_3_migration_seeds_conservative_defaults`.
-const _preExistingTablesV15 = [
+/// Every table name that must exist pre-migration, per `_createV16Tables`
+/// above -- the "before" side of the exact-set diff below.
+const _preExistingTables = [
   'device_identities',
   'relationships',
   'signal_identity',
@@ -299,26 +355,10 @@ const _preExistingTablesV15 = [
   'location_settings',
   'location_peer_settings',
   'location_fixes',
+  'notification_category_settings',
+  'notification_preferences',
 ];
 
-/// Rows this test seeds to prove the v15->v16 step touches nothing outside
-/// the two new tables.
-void _seedV15Data(sqlite3.Database raw) {
-  raw.execute(
-    "INSERT INTO device_identities (device_id, signed_in) VALUES ('v15-device', 1);",
-  );
-  raw.execute(
-    "INSERT INTO messages "
-    "(id, conversation_id, sender_device_id, sequence_number, ciphertext, created_at, delivery_state) "
-    "VALUES ('msg-1', 'conv-1', 'device-A', 1, X'0102', 1000, 'queued');",
-  );
-  raw.execute(
-    "INSERT INTO location_settings (id, global_enabled, updated_at) "
-    "VALUES (1, 0, 1000);",
-  );
-}
-
-/// All `sqlite_master` table names, as a set.
 Future<Set<String>> _tableNames(AppDatabase db) async {
   final rows = await db
       .customSelect("SELECT name FROM sqlite_master WHERE type='table'")
@@ -326,33 +366,31 @@ Future<Set<String>> _tableNames(AppDatabase db) async {
   return rows.map((r) => r.read<String>('name')).toSet();
 }
 
-const _expectedUserFacingCategories = [
-  'message',
-  'voiceMessage',
-  'ptt',
-  'incomingCall',
-  'connectionRequest',
-  'trustRequest',
-  'groupEvent',
-  'securityEvent',
-  'storageWarning',
-];
-
 void main() {
   test(
-    'test_EARS_NOTIFY_3_migration_seeds_conservative_defaults',
+    'test_migration_v16_to_v17_preserves_rows',
     () async {
       final raw = sqlite3.sqlite3.openInMemory();
-      _createV15Tables(raw);
-      _seedV15Data(raw);
+      _createV16Tables(raw);
+
+      // Pre-existing data in old tables, to prove this v16->v17 step
+      // touches nothing outside the new table.
+      raw.execute(
+        "INSERT INTO device_identities (device_id, signed_in) VALUES ('v14-device', 1);",
+      );
+      raw.execute(
+        "INSERT INTO messages "
+        "(id, conversation_id, sender_device_id, sequence_number, ciphertext, created_at, delivery_state) "
+        "VALUES ('msg-1', 'conv-1', 'device-A', 1, X'0102', 1000, 'queued');",
+      );
 
       // Snapshot each pre-existing table's exact `CREATE TABLE` DDL text
-      // from `sqlite_master` while still on the raw v15 handle -- proves
+      // from `sqlite_master` while still on the raw v14 handle -- proves
       // the post-migration comparison below is byte-identical, not merely
-      // that a same-named table still exists (task §4: not a column, not
-      // an index, not a comment).
+      // that a same-named table still exists (task §4: additive only, no
+      // existing column altered).
       final preMigrationSql = <String, String>{
-        for (final tableName in _preExistingTablesV15)
+        for (final tableName in _preExistingTables)
           tableName: raw
                   .select(
                     "SELECT sql FROM sqlite_master WHERE type='table' "
@@ -368,70 +406,53 @@ void main() {
           row['name'] as String,
       };
 
-      raw.userVersion = 15;
+      raw.userVersion = 16;
       final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
       addTearDown(db.close);
 
-      // Force the lazy migration to run before inspecting sqlite_master.
+      // Opening at target schemaVersion 17 triggers onUpgrade(from: 16,
+      // to: 17). Force the lazy migration to run before inspecting
+      // sqlite_master.
       await db.customSelect('SELECT 1').get();
 
-      // Exact set equality (task §3/§6): the tables added by this step are
-      // *exactly* the two declared in §5, not a superset or subset.
-      //
-      // E11-T04 note (renumbered during the epic_11 -> development merge,
-      // 2026-09-05): `AppDatabase.forTesting` always migrates a raw
-      // database up to the *current* `schemaVersion` (17 as of this
-      // renumbering, not 16) -- opening this v15 handle therefore also
-      // runs the `from < 17` step, so the exact-set diff below legitimately
-      // includes `device_revocations` too.
+      // Exactly one new table -- `device_revocations`, no index (task §5,
+      // sync_tables.dart's "point lookup by PK needs no secondary index"
+      // reasoning applies identically here).
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
-        {
-          'notification_category_settings',
-          'notification_preferences',
-          'device_revocations',
-        },
-        reason: 'the v15->current-version upgrade must add exactly these '
-            'tables (notifications from v15->v16, device_revocations from '
-            'v16->v17)',
+        {'device_revocations'},
+        reason: 'the v16->v17 step must add exactly this one table',
       );
 
-      // Nine user-facing categories, every one enabled -- no
-      // `backgroundService` row (task §2, §4).
-      final categoryRows =
-          await db.select(db.notificationCategorySettings).get();
-      expect(categoryRows, hasLength(9));
-      expect(
-        categoryRows.map((r) => r.category).toSet(),
-        _expectedUserFacingCategories.toSet(),
-      );
-      expect(categoryRows.every((r) => r.enabled), isTrue);
-      expect(
-        categoryRows.any((r) => r.category == 'backgroundService'),
-        isFalse,
-      );
+      // The new table is usable through the real Dart definition.
+      expect(await db.select(db.deviceRevocations).get(), isEmpty);
 
-      // The singleton privacy row defaults to `hidden`.
-      final preferenceRows = await db.select(db.notificationPreferences).get();
-      expect(preferenceRows, hasLength(1));
-      expect(preferenceRows.single.id, 0);
-      expect(preferenceRows.single.privacyLevel, 'hidden');
+      await db.into(db.deviceRevocations).insert(
+            DeviceRevocationsCompanion.insert(
+              deviceId: 'device-Z',
+              revokedAt: DateTime.fromMillisecondsSinceEpoch(5000),
+              source: 'local',
+            ),
+          );
+      final row = await db.select(db.deviceRevocations).getSingle();
+      expect(row.deviceId, 'device-Z');
+      expect(row.source, 'local');
 
-      // Pre-existing tables + their pre-existing rows are untouched by this
-      // step.
+      // Old tables + their pre-existing rows are untouched by this step.
       final identities = await db.select(db.deviceIdentities).get();
-      expect(identities.single.deviceId, 'v15-device');
+      expect(identities.single.deviceId, 'v14-device');
       final messageRows = await db.select(db.messages).get();
       expect(messageRows, hasLength(1));
       expect(messageRows.single.id, 'msg-1');
-      final locationSettingsRows = await db.select(db.locationSettings).get();
-      expect(locationSettingsRows, hasLength(1));
-      expect(locationSettingsRows.single.globalEnabled, isFalse);
 
-      // Byte-identical schema check on every pre-existing table: no
-      // altered/renamed/dropped column (task §4).
-      for (final tableName in _preExistingTablesV15) {
+      // The pre-existing storage-policy default row also survived.
+      final settingsRows = await db.select(db.storagePolicySettings).get();
+      expect(settingsRows, hasLength(1));
+      expect(settingsRows.single.mode, 'smart');
+
+      // Byte-identical schema check on every pre-existing table.
+      for (final tableName in _preExistingTables) {
         final rows = await db
             .customSelect(
               "SELECT sql FROM sqlite_master WHERE type='table' "
@@ -449,19 +470,36 @@ void main() {
   );
 
   test(
-    'test_EARS_NOTIFY_3_fresh_install_seeds_conservative_defaults',
+    'test_migration_v13_to_v17_creates_device_revocations_table_via_intermediate_step',
     () async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      // A real install jumping straight from v13 (pre-storage-tables) all
+      // the way to the current schema (v17) must get every intermediate
+      // step (`from < 14` through `from < 17`) applied in order.
+      final raw = sqlite3.sqlite3.openInMemory();
+      _createV16Tables(raw);
+      // Roll this fixture back to v13 shape: drop the storage tables the
+      // `from < 14` step is responsible for creating, so this test proves
+      // that step runs too, not just `from < 15` in isolation.
+      raw.execute('DROP TABLE storage_item_stats;');
+      raw.execute('DROP TABLE storage_policy_settings;');
+      raw.execute('DROP TABLE storage_decisions;');
+      raw.userVersion = 13;
+
+      final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
       addTearDown(db.close);
 
-      final categoryRows =
-          await db.select(db.notificationCategorySettings).get();
-      expect(categoryRows, hasLength(9));
-      expect(categoryRows.every((r) => r.enabled), isTrue);
+      expect(await db.select(db.deviceRevocations).get(), isEmpty);
+      expect(await db.select(db.storagePolicySettings).get(), hasLength(1));
 
-      final preferenceRows = await db.select(db.notificationPreferences).get();
-      expect(preferenceRows, hasLength(1));
-      expect(preferenceRows.single.privacyLevel, 'hidden');
+      await db.into(db.deviceRevocations).insert(
+            DeviceRevocationsCompanion.insert(
+              deviceId: 'device-Y',
+              revokedAt: DateTime.fromMillisecondsSinceEpoch(1000),
+              source: 'firebase',
+            ),
+          );
+      final row = await db.select(db.deviceRevocations).getSingle();
+      expect(row.deviceId, 'device-Y');
     },
   );
 }

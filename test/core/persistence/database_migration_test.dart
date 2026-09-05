@@ -453,6 +453,11 @@ void main() {
       // E10-T02 note: same widening again -- current `schemaVersion` is now
       // 16, so opening this v13 handle also runs the `from < 16` step,
       // adding the two notification-preference tables to the diff below.
+      //
+      // E11-T04 note (renumbered during the epic_11 -> development merge,
+      // 2026-09-05): same widening a third time -- current `schemaVersion`
+      // is now 17, so opening this v13 handle also runs the `from < 17`
+      // step, adding `device_revocations` to the diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -465,10 +470,12 @@ void main() {
           'location_fixes',
           'notification_category_settings',
           'notification_preferences',
+          'device_revocations',
         },
         reason: 'the v13->current-version upgrade must add exactly these '
             'tables (storage from v13->v14, location from v14->v15, '
-            'notifications from v15->v16)',
+            'notifications from v15->v16, device_revocations from '
+            'v16->v17)',
       );
 
       // Same exact-set treatment for the declared indexes. Neither
@@ -625,6 +632,11 @@ void main() {
       // the way to the current `schemaVersion` (16), so the `from < 16`
       // step's two notification-preference tables legitimately appear in
       // this diff too.
+      //
+      // E11-T04 note (renumbered during the epic_11 -> development merge,
+      // 2026-09-05): same widening a third time -- current `schemaVersion`
+      // is now 17, so this v14 handle also runs the `from < 17` step,
+      // adding `device_revocations` to the diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -634,9 +646,11 @@ void main() {
           'location_fixes',
           'notification_category_settings',
           'notification_preferences',
+          'device_revocations',
         },
         reason: 'the v14->current-version upgrade must add exactly these '
-            'tables (location from v14->v15, notifications from v15->v16)',
+            'tables (location from v14->v15, notifications from v15->v16, '
+            'device_revocations from v16->v17)',
       );
 
       // Same exact-set treatment for the one declared index.

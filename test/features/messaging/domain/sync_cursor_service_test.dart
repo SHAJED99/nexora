@@ -10,6 +10,8 @@ import 'dart:async';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/services/firebase_boundary.dart';
+import 'package:nexora/core/services/firebase_paths.dart';
 import 'package:nexora/features/messaging/domain/sync_cursor_service.dart';
 
 /// Captures the path components + data a real write would have sent.
@@ -278,6 +280,76 @@ void main() {
     });
 
     test(
+      'test_EARS_FB_2_writeCursorToFirebase_asserts_allowed_fields_before_the_try_block',
+      () async {
+        // E11-T01: writeCursorToFirebase's own payload must match the
+        // boundary's allow-list exactly, and the guard call must sit
+        // outside the existing best-effort try/catch (task §6 Risks) --
+        // verified here by comparing the captured field set to
+        // FirebaseBoundary's registered allow-list.
+        final db = _openTestDatabase();
+        addTearDown(db.close);
+        final service = _CapturingSyncCursorService(
+          localDeviceId: 'device-A',
+          database: db,
+        );
+        await service.recordLocalProgress('conv-1', 'device-B', 7);
+        final cursor = (await service.cursorFor('conv-1', 'device-B'))!;
+
+        await service.writeCursorToFirebase('uid-123', cursor);
+
+        expect(
+          service.capturedData!.keys.toSet(),
+          FirebaseBoundary.allowedFields(FirebaseNodeKind.syncCursor),
+        );
+      },
+    );
+
+    test(
+      'test_EARS_FB_2_a_forbidden_field_never_reaches_the_real_write_seam',
+      () async {
+        // E11-B04: the test above proves writeCursorToFirebase's own
+        // hardcoded payload is always allow-list-safe -- it cannot prove
+        // the GUARD is what's keeping it safe, since that payload can
+        // never actually violate the allow-list. This drives the real
+        // guard-then-write sequence (guardedWriteCursorData, called by
+        // production code exactly as writeCursorToFirebase calls it) with
+        // a payload that DOES violate the allow-list, confirming both that
+        // FirebaseBoundaryViolation is thrown AND that the real write seam
+        // (writeCursorData) was never reached.
+        final db = _openTestDatabase();
+        addTearDown(db.close);
+        final service = _CapturingSyncCursorService(
+          localDeviceId: 'device-A',
+          database: db,
+        );
+        const cursor = SyncCursor(
+          localDeviceId: 'device-A',
+          remoteDeviceId: 'device-B',
+          conversationId: 'conv-1',
+          lastConfirmedSequenceNumber: 1,
+          updatedAt: 0,
+        );
+
+        await expectLater(
+          () => service.guardedWriteCursorData(
+            'uid-123',
+            cursor,
+            {'localDeviceId': 'device-A', 'plaintext': 'leak'},
+          ),
+          throwsA(isA<FirebaseBoundaryViolation>()),
+        );
+
+        expect(
+          service.capturedData,
+          isNull,
+          reason: 'writeCursorData must never be reached when the guard '
+              'throws',
+        );
+      },
+    );
+
+    test(
       'test_EARS_MSG_6_firebase_write_failure_caught_not_thrown',
       () async {
         final db = _openTestDatabase();
@@ -388,6 +460,43 @@ void main() {
         expect(result, isNotNull);
         expect(result!.lastConfirmedSequenceNumber, 42);
         expect(result.conversationId, 'conv-1');
+      },
+    );
+  });
+
+  group('E11-T01 path registry', () {
+    test(
+      'test_EARS_FB_3_write_and_read_paths_are_byte_identical_to_the_original',
+      () {
+        // Byte-identical to SyncCursorService._cursorPath's original inline
+        // path: 'users/$uid/sync_cursors/$writerDeviceId/$conversationId/$aboutDeviceId'.
+        //
+        // writeCursorData writes at (localDeviceId, conversationId,
+        // remoteDeviceId) -- this device is the writer, the remote device is
+        // "about".
+        expect(
+          FirebasePaths.syncCursor(
+            'uid-123',
+            'device-A',
+            'conv-1',
+            'device-B',
+          ),
+          'users/uid-123/sync_cursors/device-A/conv-1/device-B',
+        );
+
+        // readCursorData reads at (remoteDeviceId, conversationId,
+        // localDeviceId) -- the remote device is the writer of *its own*
+        // cursor entry, this device is "about" from that entry's point of
+        // view. Argument order must not be transposed (task §6 Risks).
+        expect(
+          FirebasePaths.syncCursor(
+            'uid-123',
+            'device-B',
+            'conv-1',
+            'device-A',
+          ),
+          'users/uid-123/sync_cursors/device-B/conv-1/device-A',
+        );
       },
     );
   });
