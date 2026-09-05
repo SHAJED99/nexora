@@ -14,14 +14,35 @@
 // `PopScope(canPop: false)`, is a widget-tree property asserted directly
 // against `VersionUpdateView` below, not something a plain `GetxController`
 // unit test could reach).
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:nexora/app/main.dart' show initialRouteFor;
+import 'package:nexora/app/main.dart'
+    show evaluateVersionStateAtLaunch, initialRouteFor;
 import 'package:nexora/app/routes.dart';
+import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/services/version_policy_service.dart';
 import 'package:nexora/features/version/domain/version_state.dart';
 import 'package:nexora/features/version/presentation/version_update_controller.dart';
 import 'package:nexora/features/version/presentation/version_update_view.dart';
+
+/// E14-B01's own test seam (`version_policy_service_test.dart`'s pattern,
+/// reused here rather than re-invented): overrides the read seam so
+/// [VersionPolicyService.refresh] never touches a real `FirebaseDatabase`,
+/// while everything else -- the real Drift table, `cached()`'s real query --
+/// runs exactly as `main.dart`'s own composition does.
+class _FixedReadVersionPolicyService extends VersionPolicyService {
+  _FixedReadVersionPolicyService({
+    required super.database,
+    required this.payload,
+  });
+
+  final Object? payload;
+
+  @override
+  Future<Object?> readVersionPolicyData() async => payload;
+}
 
 void main() {
   group('initialRouteFor (EARS-VER-10)', () {
@@ -39,6 +60,52 @@ void main() {
         () {
       expect(initialRouteFor(VersionState.upToDate), Routes.welcome);
       expect(initialRouteFor(VersionState.updateAvailable), Routes.welcome);
+    });
+  });
+
+  group('E14-B01 — main.dart\'s real launch composition, end to end', () {
+    test(
+        'test_EARS_VER_3_4_5_refresh_populates_the_cache_so_launch_routes_'
+        'to_the_mandatory_update_screen', () async {
+      // A real Drift database -- `VersionPolicyService.cached()` runs its
+      // actual query against it, exactly as `main.dart` does. Only the
+      // remote read (`readVersionPolicyData`) is seamed, same as
+      // `version_policy_service_test.dart`'s own pattern.
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+
+      final versionPolicyService = _FixedReadVersionPolicyService(
+        database: db,
+        payload: {
+          // Far below `installedBuildProvider`'s `1` below -- guarantees
+          // `UPDATE_REQUIRED` regardless of the exact threshold semantics.
+          'minimumSupportedBuild': 100,
+          'currentBuild': 120,
+          'updateAvailableBuild': 130,
+          'signature': 'sig-v1',
+          'updatedAt': 1700000000000,
+        },
+      );
+
+      // Calls `main.dart`'s OWN `evaluateVersionStateAtLaunch` -- the exact
+      // function `main()` itself calls -- rather than re-implementing its
+      // steps here. Before E14-B01's fix, that function never called
+      // `.refresh()` at all -- so `.cached()` below returned `null`,
+      // `EvaluateVersionStateUseCase` took its fail-open `upToDate` branch,
+      // and this test failed asserting `Routes.welcome` instead of
+      // `Routes.versionUpdateRequired`. A test that instead re-derived the
+      // same steps inline would pass either way and prove nothing about
+      // `main.dart`'s own wiring.
+      final versionState = await evaluateVersionStateAtLaunch(
+        versionPolicyService,
+        () async => 1,
+      );
+
+      expect(versionState, VersionState.updateRequired);
+      expect(
+        initialRouteFor(versionState),
+        Routes.versionUpdateRequired,
+      );
     });
   });
 
