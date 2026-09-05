@@ -25,6 +25,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/services/firebase_metadata_service.dart';
 import 'package:nexora/features/recovery/presentation/device_enrollment_controller.dart';
+import 'package:nexora/features/recovery/presentation/device_enrollment_view.dart';
 
 /// A test double for `FirebaseMetadataService.readEnrollmentGrant` (E12-B03)
 /// -- reports a fixed, controllable grant-node value instead of touching a
@@ -87,6 +88,110 @@ void main() {
     addTearDown(controller.onClose);
     await tester.pump();
   }
+
+  // B07: renders the real `DeviceEnrollmentView` (not a `SizedBox.shrink`
+  // placeholder) so the button's presence/enablement is proven by the
+  // widget tree the user actually sees, not by reading the controller in
+  // isolation.
+  Future<void> pumpEnrollmentView(
+    WidgetTester tester,
+    DeviceEnrollmentController controller,
+    List<String> reached,
+  ) async {
+    // Unlike `pumpEnrollmentFlow` above (whose `/device-enrollment` page is
+    // a `SizedBox.shrink` placeholder), the real `DeviceEnrollmentView`
+    // resolves `controller` via `GetView` the instant its page is built --
+    // so the controller must already be registered BEFORE `pumpWidget`
+    // triggers that first build, not after.
+    Get.put<DeviceEnrollmentController>(controller);
+    addTearDown(controller.onClose);
+    await tester.pumpWidget(
+      GetMaterialApp(
+        initialRoute: '/device-enrollment',
+        getPages: [
+          GetPage<dynamic>(
+            name: '/device-enrollment',
+            page: () => const DeviceEnrollmentView(),
+          ),
+          GetPage<dynamic>(
+            name: '/dashboard',
+            page: () {
+              reached.add('/dashboard');
+              return const SizedBox.shrink();
+            },
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+  }
+
+  group('test_EARS_RECOVER_11_continue_without_history_button_rendering', () {
+    testWidgets(
+      'test_E12_B07_button_present_and_tappable_on_first_frame_in_waiting',
+      (tester) async {
+        // Never approves -- irrelevant to this test either way, since the
+        // assertion happens before any poll can resolve.
+        final stub = _StubFirebaseMetadataService(null);
+        final controller = DeviceEnrollmentController(
+          accountUid: 'uid-1',
+          thisDeviceId: 'this-device',
+          firebaseMetadataService: stub,
+          // Long enough that no poll tick and no timeout can fire during
+          // this test -- the button must be reachable before either.
+          pollInterval: const Duration(seconds: 30),
+          maxPolls: 1000,
+        );
+
+        final reached = <String>[];
+        await pumpEnrollmentView(tester, controller, reached);
+
+        // First frame only -- no `pump(pollInterval)`, no settle. The very
+        // first poll is in flight (unawaited) but has not resolved.
+        expect(controller.state.value, EnrollmentState.waiting);
+        final buttonFinder = find.text('Continue without history');
+        expect(buttonFinder, findsOneWidget);
+
+        await tester.tap(buttonFinder);
+        await tester.pump();
+
+        expect(controller.state.value, EnrollmentState.noRecoveryNotice);
+        expect(reached, isEmpty);
+      },
+    );
+
+    testWidgets(
+      'test_E12_B07_button_present_and_tappable_in_denied',
+      (tester) async {
+        final stub = _StubFirebaseMetadataService(null);
+        final controller = DeviceEnrollmentController(
+          accountUid: 'uid-1',
+          thisDeviceId: 'this-device',
+          firebaseMetadataService: stub,
+          pollInterval: const Duration(seconds: 30),
+          maxPolls: 1000,
+        );
+
+        final reached = <String>[];
+        await pumpEnrollmentView(tester, controller, reached);
+
+        // Force `denied` directly (same technique the controller-level
+        // "from denied" test above uses) so this asserts the view's own
+        // rendering of that state, not the timeout path.
+        controller.state.value = EnrollmentState.denied;
+        await tester.pump();
+
+        final buttonFinder = find.text('Continue without history');
+        expect(buttonFinder, findsOneWidget);
+
+        await tester.tap(buttonFinder);
+        await tester.pump();
+
+        expect(controller.state.value, EnrollmentState.noRecoveryNotice);
+        expect(reached, isEmpty);
+      },
+    );
+  });
 
   group('checkApproval (E12-B03)', () {
     test(

@@ -96,7 +96,11 @@ class LoginController extends GetxController {
     }
     try {
       return Get.find<DeviceIdentityRepository>();
-    } catch (_) {
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'recovery.device_identity_repository_unresolved',
+        cause: e,
+      );
       return null;
     }
   }
