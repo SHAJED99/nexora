@@ -176,8 +176,8 @@ character; a case or spacing change is a finding, not a nit.
   (the `Unknown`/`Verify` row is the closest existing shape), with
   `Approve`/`Deny` in place of the single `Verify` action — full
   derivation in `design/gaps.md` GAP-028 and the new
-  `design/screens/device-enrollment-approval.md` contract. 🟡 proposed,
-  not yet approved.
+  `design/screens/device-enrollment-approval.md` contract. ✅ approved
+  (human, 2026-09-05) — not yet built.
 
 ## Notes for the implementing agent
 - (exact copy quirks, dynamic data, anything the probe cannot see)

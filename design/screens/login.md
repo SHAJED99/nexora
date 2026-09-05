@@ -86,7 +86,8 @@ character; a case or spacing change is a finding, not a nit.
   with local history this new device cannot read. Proposed: a new
   `design/screens/device-enrollment.md` screen, reached here before the
   existing dashboard redirect when that condition holds — full
-  derivation in `design/gaps.md` GAP-028. 🟡 proposed, not yet approved.
+  derivation in `design/gaps.md` GAP-028. ✅ approved (human, 2026-09-05)
+  — not yet built.
 
 ## Notes for the implementing agent
 - (exact copy quirks, dynamic data, anything the probe cannot see)

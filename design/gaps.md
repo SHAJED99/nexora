@@ -13,9 +13,9 @@ the already-approved, already-measured `conversations.md` contract and
 closes GAP-006, which was approved on 2026-08-29 with "rows deferred to
 E07" written into it.)
 
-> **E12/E14 reopening, ⏳ AWAITING HUMAN.** E12 (Account Recovery & Device
-> Enrollment) and E14 (Version & Update Management) task-sharding reopened
-> this gate for **GAP-028** and **GAP-029**. GAP-028: new-device
+> **E12/E14 reopening, cleared 2026-09-05.** E12 (Account Recovery &
+> Device Enrollment) and E14 (Version & Update Management) task-sharding
+> reopened this gate for **GAP-028** and **GAP-029**. GAP-028: new-device
 > enrollment and the "no recovery" notice, neither shown anywhere in the
 > design — two derived screens proposed, `device-enrollment.md` (the new
 > device's own journey) and `device-enrollment-approval.md` (the existing
@@ -24,10 +24,11 @@ E07" written into it.)
 > layout. GAP-029: the mandatory-update block, also absent from the
 > design — one derived full-screen state, `version-update-required.md`,
 > deliberately NOT a dialog (this design draws no dialog/sheet primitive
-> anywhere, same finding `GAP-025` already recorded). See each gap's own
-> entry for the full derivation. Nothing in either epic is sharded past
-> this point until approved (task-sharding's own precondition: a frontend
-> task with no `design_contract:` is not shardable). `E14` separately
+> anywhere, same finding `GAP-025` already recorded). **Both approved as
+> proposed, 2026-09-05.** `E12`/`E14`'s frontend tasks may now be sharded
+> against `device-enrollment.md`, `device-enrollment-approval.md` and
+> `version-update-required.md` once those contracts are written. `E14`
+> separately
 > carries its own `OQ-E14-1` (an unrelated scope-placement question, no
 > UI surface) still open regardless of this gate.
 
@@ -1245,7 +1246,7 @@ and that is the strongest single argument for this disposition.**
 
 ## GAP-028 — new-device enrollment and the "no recovery" notice have no design source at all
 
-- **status:** 🟡 proposed
+- **status:** ✅ approved
 - **screen:** _(new, derived)_ `design/screens/device-enrollment.md` (the
   NEW device's own journey) and `design/screens/device-enrollment-approval.md`
   (the EXISTING trusted device's approval prompt)
@@ -1318,12 +1319,12 @@ and that is the strongest single argument for this disposition.**
      error state — this is a synchronous local decision, not a network
      round-trip in the UI's own terms, whatever the backend does
      underneath is out of this screen's concern).
-- **approved by:** _(pending — 🧍 human)_
+- **approved by:** human (shajed99), 2026-09-05 — approved as proposed
 - **built:** not built.
 
 ## GAP-029 — the mandatory-update block has no design source at all
 
-- **status:** 🟡 proposed
+- **status:** ✅ approved
 - **screen:** _(new, derived)_ `design/screens/version-update-required.md`
 - **spec:** `FR-VER-006` ("WHEN installed version is UPDATE_REQUIRED, the
   system SHALL block communication and present a non-dismissible mandatory
@@ -1369,7 +1370,7 @@ and that is the strongest single argument for this disposition.**
 - **note:** `E14`'s own `OQ-E14-1` (where `FR-VER-004`'s simulation
   framework lives, this epic or `E04`) is unrelated to this gap and does
   not block it — that question has no UI surface either way.
-- **approved by:** _(pending — 🧍 human)_
+- **approved by:** human (shajed99), 2026-09-05 — approved as proposed
 - **built:** not built.
 
 ## The usual suspects
