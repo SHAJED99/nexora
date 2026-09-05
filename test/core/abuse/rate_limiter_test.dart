@@ -175,6 +175,94 @@ void main() {
     },
   );
 
+  test(
+    'test_EARS_ABUSE_17_stale_counter_rows_are_evicted',
+    () async {
+      // E13-T07 (OQ-E13-T01-1): a flood of distinct, attacker-rotated
+      // bucket keys whose windows have long since elapsed must not grow
+      // `RateLimitCounters` forever -- each `allow()` call opportunistically
+      // sweeps rows stale enough that no caller's own window could still be
+      // open on them.
+      final longAgoMs =
+          DateTime.now().millisecondsSinceEpoch -
+          const Duration(days: 3).inMilliseconds;
+      for (var i = 0; i < 50; i++) {
+        await db
+            .into(db.rateLimitCounters)
+            .insert(
+              RateLimitCountersCompanion.insert(
+                bucketKey: 'connection_request:attacker-device-$i',
+                windowStartMs: longAgoMs,
+                count: 1,
+              ),
+            );
+      }
+      final beforeCount = await (db.select(db.rateLimitCounters)).get();
+      expect(beforeCount, hasLength(50));
+
+      // A single, unrelated `allow()` call piggy-backs the eviction sweep.
+      final result = await limiter.allow(
+        'connection_request:legit-device',
+        maxCount: 10,
+        window: const Duration(minutes: 1),
+      );
+      expect(result, isTrue);
+
+      final afterRows = await (db.select(db.rateLimitCounters)).get();
+      // Every stale row is gone; only the one this call itself just wrote
+      // remains.
+      expect(afterRows, hasLength(1));
+      expect(afterRows.single.bucketKey, 'connection_request:legit-device');
+    },
+  );
+
+  test(
+    'test_EARS_ABUSE_17_eviction_never_touches_a_row_still_within_its_window',
+    () async {
+      // §6 risk: eviction must never reset an active, legitimate window.
+      const bucketKey = 'device_registration:legit-account';
+      final recentMs =
+          DateTime.now().millisecondsSinceEpoch -
+          const Duration(hours: 1).inMilliseconds;
+      await db
+          .into(db.rateLimitCounters)
+          .insert(
+            RateLimitCountersCompanion.insert(
+              bucketKey: bucketKey,
+              windowStartMs: recentMs,
+              count: 4,
+            ),
+          );
+
+      // A 24h window (device registration's own) has not elapsed after
+      // only 1h, so this call must be denied (4 + 1 > 5's ceiling would not
+      // even apply here -- 4 + 1 = 5, still <= 5, so it must be admitted,
+      // proving the row's own count/window survived the sweep untouched).
+      final result = await limiter.allow(
+        bucketKey,
+        maxCount: 5,
+        window: const Duration(hours: 24),
+      );
+      expect(result, isTrue);
+
+      final row = await (db.select(
+        db.rateLimitCounters,
+      )..where((t) => t.bucketKey.equals(bucketKey))).getSingle();
+      expect(
+        row.count,
+        5,
+        reason:
+            'the pre-existing count must have been incremented, not reset '
+            'by eviction touching a still-active window',
+      );
+      expect(
+        row.windowStartMs,
+        recentMs,
+        reason: 'eviction must not have reset this window\'s start time',
+      );
+    },
+  );
+
   test('test_rate_limiter_two_bucket_keys_are_independent', () async {
     await limiter.allow(
       'bucket-e-1',
