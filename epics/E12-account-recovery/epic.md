@@ -41,6 +41,23 @@ None new. Design gap resolved: `GAP-028` (approved 2026-09-05, contracts
 written — `design/screens/device-enrollment.md`,
 `design/screens/device-enrollment-approval.md`).
 
+## Bug sweep result (2026-09-06)
+
+All 3 tasks `done` and merged to `epic_12`; end-of-epic sweep run per
+`skills/bug-sweep`. **8 bugs filed, 3 of them S1 — the epic is NOT ready for
+its `development` merge.** `EARS-RECOVER-1` ("an existing trusted device
+SHALL authorize a new device's enrollment") is non-functional in the running
+app for three independent reasons (`E12-B01`, `E12-B02`, `E12-B03`), while
+both task suites and `flutter analyze` are green.
+
+`EARS-RECOVER-2` (lost keys ⇒ unrecoverable) is unaffected — it is a
+structural property of `ADR-0003`, and this epic's contribution to it is UI
+copy, which shipped correctly.
+
+See `tracker.md` §Bug sweep for the table, the probe evidence, the `E13-T07`
+cross-epic sequencing dependency, and the C2/C3 out-of-scope dispositions.
+🧍 `bug_priorities` gate pending: severity set, priority is the human's.
+
 ## Analyze report / Retro
 
 ### ANALYZE REPORT (2026-09-05)
