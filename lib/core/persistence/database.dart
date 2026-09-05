@@ -21,6 +21,7 @@ import 'revocation_table.dart';
 import 'routing_tables.dart';
 import 'storage_tables.dart';
 import 'sync_tables.dart';
+import 'version_policy_tables.dart';
 
 part 'database.g.dart';
 
@@ -92,6 +93,7 @@ class DeviceIdentities extends Table {
     NotificationCategorySettings,
     NotificationPreferences,
     DeviceRevocations,
+    VersionPolicyCache,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -101,7 +103,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -561,6 +563,21 @@ class AppDatabase extends _$AppDatabase {
         // creation itself is unchanged from what E11-T04 shipped and
         // reviewed; only its position in the version sequence moved.
         await m.createTable(deviceRevocations);
+      }
+      if (from < 18) {
+        // E14-T01: new `version_policy_cache` table -- additive only, no
+        // changes to any pre-existing table (task §5,
+        // docs/conventions.md "Schema migrations"). No index needed: the
+        // only local access pattern is a point lookup by the fixed row id
+        // `1`, which the PK's own implicit index already serves (same
+        // reasoning as `sync_tables.dart`'s "no @TableIndex" comment). No
+        // default row inserted here, unlike
+        // `storage_policy_settings`/`location_settings`/
+        // `notification_preferences` above -- a fresh device has no
+        // remote policy to seed from (task §3), and an absent row is
+        // itself the correct "never successfully fetched" state
+        // `VersionPolicyService.cached()` must be able to return.
+        await m.createTable(versionPolicyCache);
       }
     },
   );

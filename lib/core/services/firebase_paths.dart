@@ -91,4 +91,14 @@ class FirebasePaths {
   /// write is from the entry's true owner.
   static String directoryPrivateOwnerUid(String deviceId) =>
       'directory_private/$deviceId/ownerUid';
+
+  /// `config/version_policy` — `E14-T01`, claiming `OQ-E11-2`'s reserved
+  /// node (`docs/firebase-schema.md`). A top-level node, NOT under
+  /// `users/$uid` — this is server/ops-published policy shared by every
+  /// account, not per-account data, the same reasoning as [directoryRoot]/
+  /// [directoryEntry] being siblings of `users` rather than nested under a
+  /// uid. `.write: false` for every client (task §2) — no client code, this
+  /// build included, ever writes this node; see `E14-T01`'s own §4 for who
+  /// actually publishes it.
+  static String versionPolicy() => 'config/version_policy';
 }
