@@ -53,6 +53,36 @@ blocked on a human decision (`OQ-E14-T03-1`).
   infrastructure? Blocks `T03` only; every other task is unaffected.
   - **Status:** 🟡 open
 
+## Bug sweep result (2026-09-06)
+
+Run by the reviewer per `skills/bug-sweep` against the merged `epic_14`
+(T03 excluded, parked on `OQ-E14-T03-1`). Full detail, evidence and
+carried-forward triage in `tracker.md` § Bug sweep.
+
+- Suite on the merged branch: **1179/1179 pass**; `flutter analyze` clean of
+  anything E14 introduced (1 pre-existing info-level lint from E07).
+- **5 bugs filed:** `E14-B01` (S2), `E14-B02` (S2), `E14-B03` (S3),
+  `E14-B04` (S4), `E14-B05` (S4). 🧍 Priorities are unset — the
+  `bug_priorities` gate is the human's.
+- **`EARS-VER-1` is NOT met end-to-end.** Both halves fail in a shipped
+  build: the mandatory prompt is unreachable because nothing calls
+  `VersionPolicyService.refresh()` (`E14-B01`), and communication is never
+  blocked because `AppBinding` starts the messaging stack unconditionally
+  (`E14-B02`). Each individual task was correct inside its own fence; the
+  defects live in the seams between them.
+- **`EARS-VER-2` is met** — T06's migration-safety suite proves it, with one
+  S4 completeness gap (`E14-B04`).
+- **`FR-VER-007` verified PASS** against the pinned `in_app_update` source:
+  the flow is Play's own `startUpdateFlowForResult(IMMEDIATE)`, never a raw
+  APK download.
+- **Design gate: not runnable.** `version-update-required` has no golden and
+  is absent from `design/sources.yaml` (17 contracts, 7 goldens repo-wide) —
+  the project-wide gap E12's sweep already raised. T04's fidelity is
+  hand-verified, not measured.
+
+**Merge readiness:** ❌ not ready. Two S2 defects open against the epic's own
+headline criterion; the epic→`development` PR gate requires P1/P2 = 0.
+
 ## Analyze report / Retro
 
 ### ANALYZE REPORT (2026-09-05)
