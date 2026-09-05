@@ -756,11 +756,18 @@ next dispatch won't see it.
   `handleNotificationTapIntent` consumes the extras.
 - **CF-21 · `NotificationService.post()`/`cancel()` share `ensureReady()`'s
   original defect class, just not its own bug's fence.** Both forward the
-  raw Pigeon call directly; a "host not attached" `PlatformException` (the
-  same shape `E10-B10` fixed for `ensureChannels()`) would propagate
-  uncaught from either. `post()`'s own doc comment ("never throws") is
-  scoped only to a permission refusal, not this case. Found by the
-  `E10-B10` reviewer (PR #79), correctly left out of that bug's fence
-  (`post`/`cancel` are explicitly not in `E10-B10`'s `files:`). Recommend
-  as the next small fix in this file, same shape as `E10-B10`, not folded
-  in retroactively.
+  raw Pigeon call directly (`notification_service.dart:136,141`); a "host
+  not attached" `PlatformException` (the same shape `E10-B10` fixed for
+  `ensureChannels()`) would propagate uncaught from either. `post()`'s own
+  doc comment ("never throws") is scoped only to a permission refusal, not
+  this case. `notification_service.dart` **is** in `E10-B10`'s `files:` —
+  the exclusion is by that bug's own prose fence, not the file list. Also
+  found (round-2 review): `lib/core/notifications/sources/
+  call_notification_source.dart:71`'s `unawaited(sink.cancel(...))` has no
+  `runZonedGuarded`/`PlatformDispatcher.onError` anywhere in
+  `lib/main.dart`/`lib/app/main.dart` to catch a rejected Future from this
+  same path. Not exploitable via a synchronous throw (`cancel()` is
+  `async`), but a rejected Future would still surface as an unhandled
+  async error. Found by the `E10-B10` reviewer (PR #79), correctly left
+  out of that bug's fence. Recommend as the next small fix in this file,
+  same shape as `E10-B10`, not folded in retroactively.
