@@ -458,6 +458,10 @@ void main() {
       // 2026-09-05): same widening a third time -- current `schemaVersion`
       // is now 17, so opening this v13 handle also runs the `from < 17`
       // step, adding `device_revocations` to the diff below.
+      //
+      // E13-T01 note: same widening a fourth time -- current `schemaVersion`
+      // is now 18, so opening this v13 handle also runs the `from < 18`
+      // step, adding `rate_limit_counters` to the diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -471,11 +475,12 @@ void main() {
           'notification_category_settings',
           'notification_preferences',
           'device_revocations',
+          'rate_limit_counters',
         },
         reason: 'the v13->current-version upgrade must add exactly these '
             'tables (storage from v13->v14, location from v14->v15, '
             'notifications from v15->v16, device_revocations from '
-            'v16->v17)',
+            'v16->v17, rate_limit_counters from v17->v18)',
       );
 
       // Same exact-set treatment for the declared indexes. Neither
@@ -637,6 +642,10 @@ void main() {
       // 2026-09-05): same widening a third time -- current `schemaVersion`
       // is now 17, so this v14 handle also runs the `from < 17` step,
       // adding `device_revocations` to the diff below.
+      //
+      // E13-T01 note: same widening a fourth time -- current `schemaVersion`
+      // is now 18, so this v14 handle also runs the `from < 18` step,
+      // adding `rate_limit_counters` to the diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -647,10 +656,12 @@ void main() {
           'notification_category_settings',
           'notification_preferences',
           'device_revocations',
+          'rate_limit_counters',
         },
         reason: 'the v14->current-version upgrade must add exactly these '
             'tables (location from v14->v15, notifications from v15->v16, '
-            'device_revocations from v16->v17)',
+            'device_revocations from v16->v17, rate_limit_counters from '
+            'v17->v18)',
       );
 
       // Same exact-set treatment for the one declared index.

@@ -10,6 +10,7 @@ import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'abuse_tables.dart';
 import 'crypto_tables.dart';
 import 'group_tables.dart';
 import 'location_tables.dart';
@@ -92,6 +93,7 @@ class DeviceIdentities extends Table {
     NotificationCategorySettings,
     NotificationPreferences,
     DeviceRevocations,
+    RateLimitCounters,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -101,7 +103,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -561,6 +563,16 @@ class AppDatabase extends _$AppDatabase {
         // creation itself is unchanged from what E11-T04 shipped and
         // reviewed; only its position in the version sequence moved.
         await m.createTable(deviceRevocations);
+      }
+      if (from < 18) {
+        // E13-T01: new `rate_limit_counters` table -- additive only, no
+        // changes to any pre-existing table (task §3, §5,
+        // docs/conventions.md "Schema migrations"). No index needed: the
+        // only local access pattern is a point lookup by `bucketKey`,
+        // which the PK's own implicit index already serves (same
+        // reasoning as `device_revocations`/`sync_cursors`). No backfill
+        // -- no bucket exists for any identity yet (task §5).
+        await m.createTable(rateLimitCounters);
       }
     },
   );
