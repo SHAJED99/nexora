@@ -100,8 +100,8 @@ character; a case or spacing change is a finding, not a nit.
   screen's own centred single-focus layout — reached wherever the
   version-check actually runs (at launch and/or mid-session, a behavioral
   decision for whichever task builds it, not a placement this contract
-  settles) — full derivation in `design/gaps.md` GAP-029. 🟡 proposed,
-  not yet approved.
+  settles) — full derivation in `design/gaps.md` GAP-029. ✅ approved
+  (human, 2026-09-05) — not yet built.
 
 ## Notes for the implementing agent
 - (exact copy quirks, dynamic data, anything the probe cannot see)
