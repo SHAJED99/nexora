@@ -89,7 +89,10 @@ change, not a rules-file fix, and
 squarely `E11-B06`'s own scope fence: "does not fix anything itself...
 possibly a protocol-level decision"). **Finding 3** (no unpublish path,
 only a `revokedAt` update) is confirmed here as the deliberate, final
-design: revoke, don't delete.
+design: revoke, don't delete — enforced by the `.write` rule's own
+`newData.exists() &&` clause (added at round 3 review after that
+property was found to have been silently dropped by finding 2's
+refactor; `ADR-0008`'s addendum has the full detail).
 
 The remaining `reserved` rows are declared here as placeholders their
 owning task flips to `live` — this is the anti-collision mechanism for

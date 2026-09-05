@@ -274,6 +274,21 @@ three are decided here; the third is fixed in code, not decided:
 - **Finding 3 (no unpublish path): human decision — final, as shipped.**
   ✅ "Revoke, don't delete" is confirmed as the deliberate, permanent
   design: a `directory/$deviceId` entry can be revoked (`revokedAt` set)
-  but never removed. No code change — the existing rule already denies
-  deletion; this addendum only removes the "likely intentional,
-  undocumented" qualifier `E11-B06` originally flagged it with.
+  but never removed.
+
+  **Correction (round 3 review, 2026-09-05): this WAS a code change,
+  not "no code change" as originally written here.** Finding 2's fix
+  (above) refactored the `.write` rule's ownership check from a
+  self-contained `newData.child('ownerUid').val() === auth.uid` (which,
+  as a side effect nobody had enumerated, also denied deletion — on a
+  delete `newData` is null, so that comparison was never true) to an
+  expression that no longer reads `newData` at this node's own value at
+  all. That silently reopened this exact decision as an unreviewed side
+  effect: the owner's own `remove()`/`update({path: null})` started
+  succeeding. Caught by review (emulator-verified both ways: fails with
+  the guard present, succeeds with it removed), fixed by adding
+  `newData.exists() &&` to the `.write` expression explicitly — see
+  `E11-B06.md`'s round 3 Run log and `firebase_rules_test.dart`'s
+  dedicated delete-denial test for the verified detail. The decision
+  above stands; what changed is that it is now an explicit clause in the
+  rule again, not an accidental property of a different check.

@@ -704,11 +704,49 @@ void main() {
       // {directory/$id, directory_private/$id/ownerUid} update succeeds,
       // a second account's squat attempt on an existing entry is denied,
       // and the true owner's own re-publish/rotation still succeeds.
+      //
+      // Round 3 review (Opus, emulator-verified) found this refactor had
+      // silently DROPPED a property the old self-contained `ownerUid`
+      // check used to carry for free: when deleting a node, `newData` at
+      // that node is null, so the OLD `newData.child('ownerUid').val() ===
+      // auth.uid` check (comparing null.child(...) against a uid) was
+      // never true, denying deletion. The new expression never reads
+      // `newData` at THIS node's own value at all, so a delete sailed
+      // through unnoticed -- reopening finding 3's "revoke, don't delete,
+      // permanent" human decision as an unreviewed side effect, not a
+      // choice. `newData.exists() &&` restores it explicitly, verified
+      // against the same emulator: the owner's own `remove()` and a
+      // multi-location `update({'directory/$id': null})` are both denied,
+      // while every other case above still passes.
       expect(
         deviceIdNode['.write'],
-        "auth != null && newData.parent().parent().child('directory_private')"
-            ".child(\$deviceId).child('ownerUid').val() === auth.uid",
+        "auth != null && newData.exists() && newData.parent().parent()"
+            ".child('directory_private').child(\$deviceId).child('ownerUid')"
+            ".val() === auth.uid",
       );
+    });
+
+    test('.write denies deletion of an existing entry -- finding 3\'s '
+        '"revoke, don\'t delete, permanent" human decision (ADR-0008 '
+        'addendum), re-derived independently of the exact-string test '
+        'above so a future edit to the ownership clause cannot silently '
+        'drop this one too', () {
+      final write = deviceIdNode['.write'] as String;
+      // On a delete, `newData` at this node is null/absent -- `.exists()`
+      // is false regardless of who is deleting or what the ownership
+      // check would otherwise say, so this clause alone is what denies
+      // every delete, not an accident of how the ownership check happens
+      // to evaluate against a null newData. Verified against a real
+      // `@firebase/rules-unit-testing` emulator (round 3 review): the
+      // owner's own `remove()` and a multi-location
+      // `update({'directory/$id': null})` are both denied with this
+      // clause present, and both succeed if it is removed -- this is not
+      // a rules-language assumption, it was falsified both ways.
+      expect(write.contains('newData.exists()'), isTrue,
+          reason: '.write has no newData.exists() guard -- a delete of an '
+              'existing directory/\$deviceId entry would silently succeed, '
+              'reopening finding 3\'s decision as an unreviewed side '
+              'effect (E11-B06 round 3)');
     });
   });
 
