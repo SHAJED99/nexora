@@ -8,9 +8,9 @@ REPORT. Not yet dispatched. · **Started:** — · **Completed:** — ·
 
 | Task | Status | Depends on | Blocks |
 |---|---|---|---|
-| E12-T01 | todo | — | T02, T03 |
-| E12-T02 | todo | T01 | — |
-| E12-T03 | todo | T01 | — |
+| E12-T01 | done | — | T02, T03 |
+| E12-T02 | done | T01 | — |
+| E12-T03 | review-requested | T01 | — |
 
 ## DAG
 
@@ -44,3 +44,29 @@ Empty. No two tasks share a file.
   was a way to read back the account's own device list
   (`FirebaseMetadataService`, T01), used to classify a discovered peer as
   "my own enrolling device" instead of a stranger.
+- 2026-09-05 — T01 merged into `epic_12` (cross-model reviewed, APPROVE).
+  T02 merged into `epic_12` (cross-model reviewed, APPROVE, with a real
+  race condition caught during implementation — concurrent discovery
+  events could each miss a resolved-value cache and both independently
+  call `readOwnDeviceIds`; fixed by caching the in-flight `Future`
+  itself instead, verified by the reviewer via falsification).
+
+## Carried-forward observations
+- **The `devices` screen's design gate has been reporting 0% match on a
+  `renderError` probe, unrelated to any change in this epic.**
+  `test/design/design_probe_test.dart`'s `devices` fixture setup
+  registers `RelationshipRepository`/`BlockUseCase` before
+  `DevicesBinding().dependencies()` but not `TransportService`, so the
+  probe dumper's own `DevicesController` construction throws and the
+  dumper honestly records `"renderError": true, "elements": []` — every
+  `make design-verify SCREEN=devices` run since this gap opened has
+  been reporting 0% (0/61), not a real regression. Confirmed by T02's
+  cross-model reviewer via direct byte-for-byte reproduction against
+  both the `epic_12` branch and the unmodified `origin/epic_12` baseline
+  — identical failure output on both, so no task in this epic caused it
+  and none can fix it from inside its own `files:` fence (the probe
+  fixture is outside every E12 task's scope). Needs a dedicated fix
+  (one line: register `TransportService` in that `setUp`) before the
+  `devices` screen is genuinely gated again — flagging here per
+  `skills/bug-sweep`'s carried-forward rule so it isn't silently
+  rediscovered at the epic sweep.
