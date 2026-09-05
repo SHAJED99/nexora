@@ -80,10 +80,12 @@ class DevicesController extends GetxController {
 
   final RxBool loading = false.obs;
 
-  /// `E12-T01`'s `readOwnDeviceIds` result, fetched at most once per this
-  /// controller's lifetime and cached here (§3/§6 of the task: "a
-  /// best-effort hint, not something to re-fetch on every single discovery
-  /// event" -- no refresh timer, matching E10's one-tick discipline).
+  /// `E12-T01`'s `readOwnDeviceIds` result, fetched at most once per
+  /// *discovery cycle* (reset in [discover], E12-B04) and cached here (§3/§6
+  /// of the task: "a best-effort hint, not something to re-fetch on every
+  /// single discovery event" -- no refresh timer, matching E10's one-tick
+  /// discipline; re-resolving on a fresh, user-initiated `discover()` call
+  /// is not a timer).
   ///
   /// Deliberately a cached **Future**, not a cached value: `discover()`
   /// commonly announces several devices back-to-back (real Bluetooth scans
@@ -168,6 +170,19 @@ class DevicesController extends GetxController {
   /// never-seen device, FR-UI-004) and appended to the displayed list —
   /// additive to, never replacing, what `load()` already populated.
   void discover() {
+    // E12-B04: re-resolve this discovery cycle's own-device-id read rather
+    // than reusing whatever settled during a previous cycle. The natural
+    // enrollment order is "open Devices, tap Discover, *then* sign in the
+    // new device" -- a future cached across `discover()` calls would still
+    // reflect the registry from the moment of the FIRST tap, permanently
+    // misclassifying a device that registered afterwards as an ordinary
+    // stranger. Cheap and user-initiated (task's own suggested direction),
+    // not a polling timer: nothing refetches unless the user taps Discover
+    // again. Concurrent discovery events WITHIN one cycle still share the
+    // single future this assignment starts -- only cross-cycle reuse is
+    // removed, preserving the in-flight de-dup the cache exists for (see
+    // `_ownDeviceIdsFuture`'s own doc comment).
+    _ownDeviceIdsFuture = null;
     _discoverySubscription ??=
         _transportService.discoveredDevices.listen(_onDeviceDiscovered);
     unawaited(

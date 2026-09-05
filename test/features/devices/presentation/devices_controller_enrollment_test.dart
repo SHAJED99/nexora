@@ -251,7 +251,7 @@ void main() {
   });
 
   test(
-      'readOwnDeviceIds is fetched at most once per controller lifetime (session cache)',
+      'readOwnDeviceIds is fetched at most once per discovery cycle (E12-B04)',
       () async {
     const String suffix = 'enrollment-cache';
     final stub = _StubFirebaseMetadataService({'own-device'});
@@ -294,6 +294,94 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(stub.callCount, 1);
+  });
+
+  test(
+      'test_E12_B04_stale_own_device_cache_does_not_permanently_disable_enrollment_detection',
+      () async {
+    // Repro from E12-B04: the trusted device's Devices screen is opened
+    // (its own-device-id read resolves against the registry as it stood at
+    // that moment), THEN a new device registers, and only after that does
+    // discovery announce it. Before the fix, the cached Future from the
+    // first `discover()` call would still answer with the pre-registration
+    // set for the rest of the controller's life, misclassifying the new
+    // device as an ordinary stranger forever. The fix: each `discover()`
+    // call re-resolves the own-device-id read, so a second Discover tap
+    // (the natural next user action -- re-scanning) sees the updated
+    // registry.
+    const String suffix = 'enrollment-stale-cache';
+    final stub = _StubFirebaseMetadataService({'already-known-device'});
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.startDiscovery.$suffix',
+      (ByteData? message) async =>
+          TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[null]),
+    );
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.stopDiscovery.$suffix',
+      (ByteData? message) async =>
+          TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[null]),
+    );
+    final controller = DevicesController(
+      repository,
+      blockUseCase,
+      transportService: TransportService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: suffix,
+      ),
+      evaluateConnectionRequestUseCase:
+          EvaluateConnectionRequestUseCase(repository),
+      currentAccountUid: () async => 'uid-1',
+      firebaseMetadataService: stub,
+    );
+
+    // First discovery cycle: some unrelated stranger device is discovered,
+    // populating [_ownDeviceIdsFuture] for this cycle (the read is only
+    // triggered by a classification, never by `discover()` itself).
+    controller.discover();
+    await Future<void>.delayed(Duration.zero);
+    pushDiscoveredDevice(
+      suffix,
+      TransportDevice(
+        id: 'unrelated-stranger',
+        displayName: 'Some Other Phone',
+        type: TransportType.bluetooth,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(stub.callCount, 1);
+
+    // The new device registers server-side in between the two cycles --
+    // simulated here by mutating the stub's own-device set, exactly as
+    // `readOwnDeviceIds` would now return if re-queried.
+    stub._ids.add('newly-enrolled-device');
+
+    // Second Discover tap (the natural next step -- the user re-scans
+    // after the new device has had a chance to come up): the own-device-id
+    // read must be re-resolved, not answered from the stale first-cycle
+    // cache.
+    controller.discover();
+    await Future<void>.delayed(Duration.zero);
+    pushDiscoveredDevice(
+      suffix,
+      TransportDevice(
+        id: 'newly-enrolled-device',
+        displayName: 'New Phone',
+        type: TransportType.bluetooth,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(stub.callCount, 2);
+    expect(controller.pendingEnrollments, hasLength(1));
+    expect(controller.pendingEnrollments.single.id, 'newly-enrolled-device');
+    // NOT rendered as an ordinary unknown-peer row alongside the unrelated
+    // stranger from the first cycle.
+    expect(
+      controller.relationships.any((r) => r.deviceId == 'newly-enrolled-device'),
+      isFalse,
+    );
   });
 
   test(

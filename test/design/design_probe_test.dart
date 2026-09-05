@@ -107,6 +107,7 @@ void main() {
   // ── 1. Screens dumped for `make design-probe` ───────────────────────────
   group('screen probes (make design-probe)', () {
     late AppDatabase db;
+    late TransportService transportService;
 
     setUp(() async {
       Get.testMode = true;
@@ -123,11 +124,31 @@ void main() {
       await repository.upsert('device-blocked', RelationshipState.blocked);
       Get.put<RelationshipRepository>(repository, permanent: true);
       Get.put<BlockUseCase>(BlockUseCase(repository), permanent: true);
+      // E12-B05: `DevicesBinding().dependencies()` resolves
+      // `Get.find<TransportService>()` (see its own doc comment — it must
+      // never let `DevicesController` fall back to constructing its own
+      // instance), so this probe needs one registered too, same
+      // real-`TransportService`-over-a-mocked-native-side pattern the
+      // `conversations`/`chat` probes below already use for their own
+      // `MessagingStack`. Fetched here inside `setUp`, not at group-body
+      // scope: this is the FIRST group in the file, so
+      // `TestWidgetsFlutterBinding` is not yet initialized when the group
+      // body itself runs (that only happens once this group's own
+      // `testWidgets` call is declared, further down) -- `setUp` bodies run
+      // later, at actual test-run time, well after that.
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      transportService = TransportService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: 'devices-probe',
+      );
+      Get.put<TransportService>(transportService, permanent: true);
       DevicesBinding().dependencies();
     });
 
     tearDown(() async {
       await db.close();
+      await transportService.dispose();
       Get.reset();
     });
 
