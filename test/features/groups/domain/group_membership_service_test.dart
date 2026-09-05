@@ -581,4 +581,477 @@ void main() {
       expect(groupOnB.membershipEpoch, 1);
     });
   });
+
+  group(
+    'groupEvents observation seam (E10-T06, EARS-NOTIFY-12/13)',
+    () {
+      late MessagingStack a;
+      late GroupRepository repo;
+      late GroupMembershipService service;
+
+      setUp(() async {
+        a = await newStack('device-hub', nextSuffix());
+        repo = GroupRepository(a.db);
+        service = serviceFor(a);
+      });
+
+      tearDown(() => a.dispose());
+
+      Uint8List frameBytes({
+        required GroupEventKind kind,
+        required String groupId,
+        required int epoch,
+        required String actorDeviceId,
+        String? subjectDeviceId,
+        String? name,
+        List<String>? memberList,
+      }) =>
+          GroupControlFrame(
+            kind: kind,
+            groupId: groupId,
+            epoch: epoch,
+            actorDeviceId: actorDeviceId,
+            subjectDeviceId: subjectDeviceId,
+            name: name,
+            memberList: memberList,
+            createdAtMs: 1,
+          ).serialize();
+
+      // `_groupEvents` is a plain (non-`sync`) broadcast `StreamController`,
+      // so `.add()` schedules delivery rather than firing the listener
+      // inline -- the exact same reason
+      // `connection_request_notification_source_test.dart` awaits a zero-
+      // duration delay after every `controller.add()` before asserting.
+      // `handleControlFrame`'s own `await`s are not guaranteed to consume
+      // enough event-loop turns for that scheduled delivery to have run by
+      // the time the plain `await` above it returns (`test_EARS_NOTIFY_13
+      // _rotation_does_not_double_notify` only happens to work without this
+      // because it awaits an additional real Future, `lastRotationForTest`,
+      // afterwards) -- so every test in this group settles explicitly.
+      Future<void> settle() => Future<void>.delayed(Duration.zero);
+
+      test(
+        'test_EARS_NOTIFY_12_created_bootstrap_posts_addedToGroup',
+        () async {
+          final events = <GroupEventNotice>[];
+          final sub = service.groupEvents.listen(events.add);
+          addTearDown(sub.cancel);
+
+          await service.handleControlFrame(
+            'device-a',
+            frameBytes(
+              kind: GroupEventKind.created,
+              groupId: 'group-created',
+              epoch: 0,
+              actorDeviceId: 'device-a',
+              name: 'Founding Group',
+              memberList: const ['device-a', 'device-hub'],
+            ),
+          );
+          await settle();
+
+          expect(events, hasLength(1));
+          expect(events.single.kind, GroupNotificationEventKind.addedToGroup);
+          expect(events.single.groupId, 'group-created');
+          expect(events.single.groupName, 'Founding Group');
+          expect(events.single.actorDeviceId, 'device-a');
+        },
+      );
+
+      test(
+        'test_EARS_NOTIFY_12_memberAdded_for_self_posts_addedToGroup',
+        () async {
+          final groupId = await repo.createGroup(
+            name: 'G',
+            ownerDeviceId: 'device-a',
+            memberDeviceIds: [],
+          );
+          final events = <GroupEventNotice>[];
+          final sub = service.groupEvents.listen(events.add);
+          addTearDown(sub.cancel);
+
+          await service.handleControlFrame(
+            'device-a',
+            frameBytes(
+              kind: GroupEventKind.memberAdded,
+              groupId: groupId,
+              epoch: 1,
+              actorDeviceId: 'device-a',
+              subjectDeviceId: 'device-hub',
+            ),
+          );
+          await settle();
+
+          expect(events, hasLength(1));
+          expect(events.single.kind, GroupNotificationEventKind.addedToGroup);
+        },
+      );
+
+      test(
+        'test_EARS_NOTIFY_12_memberAdded_for_another_device_posts_memberJoined',
+        () async {
+          final groupId = await repo.createGroup(
+            name: 'G',
+            ownerDeviceId: 'device-a',
+            memberDeviceIds: ['device-hub'],
+          );
+          final events = <GroupEventNotice>[];
+          final sub = service.groupEvents.listen(events.add);
+          addTearDown(sub.cancel);
+
+          await service.handleControlFrame(
+            'device-a',
+            frameBytes(
+              kind: GroupEventKind.memberAdded,
+              groupId: groupId,
+              epoch: 1,
+              actorDeviceId: 'device-a',
+              subjectDeviceId: 'device-b',
+            ),
+          );
+          await settle();
+
+          expect(events, hasLength(1));
+          expect(events.single.kind, GroupNotificationEventKind.memberJoined);
+        },
+      );
+
+      test(
+        'test_EARS_NOTIFY_12_memberRemoved_for_self_posts_removedFromGroup',
+        () async {
+          final groupId = await repo.createGroup(
+            name: 'G',
+            ownerDeviceId: 'device-a',
+            memberDeviceIds: ['device-hub'],
+          );
+          final events = <GroupEventNotice>[];
+          final sub = service.groupEvents.listen(events.add);
+          addTearDown(sub.cancel);
+
+          await service.handleControlFrame(
+            'device-a',
+            frameBytes(
+              kind: GroupEventKind.memberRemoved,
+              groupId: groupId,
+              epoch: 1,
+              actorDeviceId: 'device-a',
+              subjectDeviceId: 'device-hub',
+            ),
+          );
+          await settle();
+
+          expect(events, hasLength(1));
+          expect(
+            events.single.kind,
+            GroupNotificationEventKind.removedFromGroup,
+          );
+        },
+      );
+
+      test(
+        'test_EARS_NOTIFY_12_memberRemoved_for_another_device_posts_memberLeft',
+        () async {
+          final groupId = await repo.createGroup(
+            name: 'G',
+            ownerDeviceId: 'device-a',
+            memberDeviceIds: ['device-hub', 'device-b'],
+          );
+          final events = <GroupEventNotice>[];
+          final sub = service.groupEvents.listen(events.add);
+          addTearDown(sub.cancel);
+
+          await service.handleControlFrame(
+            'device-a',
+            frameBytes(
+              kind: GroupEventKind.memberRemoved,
+              groupId: groupId,
+              epoch: 1,
+              actorDeviceId: 'device-a',
+              subjectDeviceId: 'device-b',
+            ),
+          );
+          await settle();
+
+          expect(events, hasLength(1));
+          expect(events.single.kind, GroupNotificationEventKind.memberLeft);
+        },
+      );
+
+      test(
+        'test_EARS_NOTIFY_12_renamed_posts_renamed_with_the_new_name',
+        () async {
+          final groupId = await repo.createGroup(
+            name: 'Old Name',
+            ownerDeviceId: 'device-a',
+            memberDeviceIds: ['device-hub'],
+          );
+          final events = <GroupEventNotice>[];
+          final sub = service.groupEvents.listen(events.add);
+          addTearDown(sub.cancel);
+
+          await service.handleControlFrame(
+            'device-a',
+            frameBytes(
+              kind: GroupEventKind.renamed,
+              groupId: groupId,
+              epoch: 1,
+              actorDeviceId: 'device-a',
+              name: 'New Name',
+            ),
+          );
+          await settle();
+
+          expect(events, hasLength(1));
+          expect(events.single.kind, GroupNotificationEventKind.renamed);
+          expect(events.single.groupName, 'New Name');
+        },
+      );
+
+      test(
+        'test_EARS_NOTIFY_12_adminGranted_and_adminRevoked_post_adminChanged',
+        () async {
+          final groupId = await repo.createGroup(
+            name: 'G',
+            ownerDeviceId: 'device-a',
+            memberDeviceIds: ['device-hub'],
+          );
+          final events = <GroupEventNotice>[];
+          final sub = service.groupEvents.listen(events.add);
+          addTearDown(sub.cancel);
+
+          await service.handleControlFrame(
+            'device-a',
+            frameBytes(
+              kind: GroupEventKind.adminGranted,
+              groupId: groupId,
+              epoch: 1,
+              actorDeviceId: 'device-a',
+              subjectDeviceId: 'device-hub',
+            ),
+          );
+          await service.handleControlFrame(
+            'device-a',
+            frameBytes(
+              kind: GroupEventKind.adminRevoked,
+              groupId: groupId,
+              epoch: 2,
+              actorDeviceId: 'device-a',
+              subjectDeviceId: 'device-hub',
+            ),
+          );
+          await settle();
+
+          expect(events, hasLength(2));
+          expect(
+            events.map((e) => e.kind),
+            everyElement(GroupNotificationEventKind.adminChanged),
+          );
+        },
+      );
+
+      test(
+        'test_EARS_NOTIFY_12_ownershipTransferred_posts_ownershipTransferred',
+        () async {
+          final groupId = await repo.createGroup(
+            name: 'G',
+            ownerDeviceId: 'device-a',
+            memberDeviceIds: ['device-hub'],
+          );
+          final events = <GroupEventNotice>[];
+          final sub = service.groupEvents.listen(events.add);
+          addTearDown(sub.cancel);
+
+          await service.handleControlFrame(
+            'device-a',
+            frameBytes(
+              kind: GroupEventKind.ownershipTransferred,
+              groupId: groupId,
+              epoch: 1,
+              actorDeviceId: 'device-a',
+              subjectDeviceId: 'device-hub',
+            ),
+          );
+          await settle();
+
+          expect(events, hasLength(1));
+          expect(
+            events.single.kind,
+            GroupNotificationEventKind.ownershipTransferred,
+          );
+        },
+      );
+
+      test(
+        'test_EARS_NOTIFY_12_deleted_posts_groupDeleted_with_name_still_readable',
+        () async {
+          final groupId = await repo.createGroup(
+            name: 'Doomed Group',
+            ownerDeviceId: 'device-a',
+            memberDeviceIds: ['device-hub'],
+          );
+          final events = <GroupEventNotice>[];
+          final sub = service.groupEvents.listen(events.add);
+          addTearDown(sub.cancel);
+
+          await service.handleControlFrame(
+            'device-a',
+            frameBytes(
+              kind: GroupEventKind.deleted,
+              groupId: groupId,
+              epoch: 1,
+              actorDeviceId: 'device-a',
+            ),
+          );
+          await settle();
+
+          expect(events, hasLength(1));
+          expect(events.single.kind, GroupNotificationEventKind.groupDeleted);
+          // task file §6 risk: `groupDeleted` must not read back "Group"
+          // just because the row was physically removed -- it is only
+          // soft-deleted (`_mutateMembers` flips `isDeleted`, never clears
+          // `name`), so the real name is still available here.
+          expect(events.single.groupName, 'Doomed Group');
+        },
+      );
+
+      test(
+        'test_EARS_NOTIFY_13_local_change_posts_nothing',
+        () async {
+          final events = <GroupEventNotice>[];
+          final sub = service.groupEvents.listen(events.add);
+          addTearDown(sub.cancel);
+
+          // createGroup — the founding local write, not a `_perform` call,
+          // but still a wholly local action.
+          final groupId1 = await service.createGroup(
+            name: 'Local G1',
+            memberDeviceIds: [],
+          );
+          expect(events, isEmpty);
+
+          // rename
+          final groupId2 = await repo.createGroup(
+            name: 'G2',
+            ownerDeviceId: 'device-hub',
+            memberDeviceIds: [],
+          );
+          expect(
+            await service.rename(groupId2, 'G2 renamed'),
+            isNull,
+          );
+          expect(events, isEmpty);
+
+          // addMember / grantAdmin / revokeAdmin / removeMember, chained on
+          // one group so the same subject can be walked through every
+          // admin-matrix action.
+          final groupId3 = await repo.createGroup(
+            name: 'G3',
+            ownerDeviceId: 'device-hub',
+            memberDeviceIds: [],
+          );
+          expect(await service.addMember(groupId3, 'member-x'), isNull);
+          expect(events, isEmpty);
+          expect(await service.grantAdmin(groupId3, 'member-x'), isNull);
+          expect(events, isEmpty);
+          expect(await service.revokeAdmin(groupId3, 'member-x'), isNull);
+          expect(events, isEmpty);
+          expect(await service.removeMember(groupId3, 'member-x'), isNull);
+          expect(events, isEmpty);
+
+          // transferOwnership
+          final groupId4 = await repo.createGroup(
+            name: 'G4',
+            ownerDeviceId: 'device-hub',
+            memberDeviceIds: ['member-y'],
+          );
+          expect(
+            await service.transferOwnership(groupId4, 'member-y'),
+            isNull,
+          );
+          expect(events, isEmpty);
+
+          // leave — 'device-hub' must not be sole Owner for this to
+          // succeed (GroupPermissions denies an Owner's own leave), so this
+          // group is seeded with a different Owner directly via the
+          // repository.
+          final groupId5 = await repo.createGroup(
+            name: 'G5',
+            ownerDeviceId: 'device-other-owner',
+            memberDeviceIds: ['device-hub'],
+          );
+          expect(await service.leave(groupId5), isNull);
+          expect(events, isEmpty);
+
+          // deleteGroup
+          final groupId6 = await repo.createGroup(
+            name: 'G6',
+            ownerDeviceId: 'device-hub',
+            memberDeviceIds: [],
+          );
+          expect(await service.deleteGroup(groupId6), isNull);
+          expect(events, isEmpty);
+
+          // Sanity: every group id above is distinct, so no assertion
+          // above was silently a no-op against the wrong row.
+          expect(
+            {groupId1, groupId2, groupId3, groupId4, groupId5, groupId6}
+                .length,
+            6,
+          );
+        },
+      );
+
+      test(
+        'test_EARS_NOTIFY_13_rotation_does_not_double_notify',
+        () async {
+          // A remote membership frame that also drives a real key rotation
+          // (mirrors `test_EARS_GROUP_1_remote_membership_frame_fires_a_real_rotation`
+          // above) must still publish exactly ONE GroupEventNotice — rotation
+          // is a separate, non-notifying side effect of the same epoch bump
+          // (task file §2/§6), counted here rather than eyeballed.
+          final groupId = await repo.createGroup(
+            name: 'G',
+            ownerDeviceId: 'device-a',
+            memberDeviceIds: ['device-hub'],
+          );
+          final events = <GroupEventNotice>[];
+          final sub = service.groupEvents.listen(events.add);
+          addTearDown(sub.cancel);
+
+          await service.handleControlFrame(
+            'device-a',
+            frameBytes(
+              kind: GroupEventKind.renamed,
+              groupId: groupId,
+              epoch: 1,
+              actorDeviceId: 'device-a',
+              name: 'Renamed Remotely',
+            ),
+          );
+          // Await the fire-and-forget rotation so it has had every chance
+          // to (incorrectly) re-enter the emission path before asserting.
+          await service.lastRotationForTest;
+
+          expect(events, hasLength(1));
+          expect(events.single.kind, GroupNotificationEventKind.renamed);
+        },
+      );
+
+      test(
+        'the controller is closed by dispose() (task file §7)',
+        () async {
+          await service.dispose();
+          expect(
+            () => service.groupEvents.listen((_) {}),
+            returnsNormally,
+          );
+          // A broadcast controller that is already closed still allows a
+          // new subscription (it simply never fires `onDone`/data) --
+          // asserting `isClosed` indirectly via a second dispose() call,
+          // which must not throw, is the more meaningful proof here.
+          await service.dispose();
+        },
+      );
+    },
+  );
 }

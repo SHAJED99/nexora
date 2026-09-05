@@ -7362,6 +7362,1432 @@ class StorageDecisionsCompanion extends UpdateCompanion<StorageDecisionRow> {
   }
 }
 
+class $LocationSettingsTable extends LocationSettings
+    with TableInfo<$LocationSettingsTable, LocationSettingRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LocationSettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _globalEnabledMeta = const VerificationMeta(
+    'globalEnabled',
+  );
+  @override
+  late final GeneratedColumn<bool> globalEnabled = GeneratedColumn<bool>(
+    'global_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("global_enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, globalEnabled, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'location_settings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LocationSettingRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('global_enabled')) {
+      context.handle(
+        _globalEnabledMeta,
+        globalEnabled.isAcceptableOrUnknown(
+          data['global_enabled']!,
+          _globalEnabledMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LocationSettingRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LocationSettingRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      globalEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}global_enabled'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $LocationSettingsTable createAlias(String alias) {
+    return $LocationSettingsTable(attachedDatabase, alias);
+  }
+}
+
+class LocationSettingRow extends DataClass
+    implements Insertable<LocationSettingRow> {
+  final int id;
+  final bool globalEnabled;
+
+  /// Epoch-ms.
+  final int updatedAt;
+  const LocationSettingRow({
+    required this.id,
+    required this.globalEnabled,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['global_enabled'] = Variable<bool>(globalEnabled);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  LocationSettingsCompanion toCompanion(bool nullToAbsent) {
+    return LocationSettingsCompanion(
+      id: Value(id),
+      globalEnabled: Value(globalEnabled),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory LocationSettingRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LocationSettingRow(
+      id: serializer.fromJson<int>(json['id']),
+      globalEnabled: serializer.fromJson<bool>(json['globalEnabled']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'globalEnabled': serializer.toJson<bool>(globalEnabled),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  LocationSettingRow copyWith({int? id, bool? globalEnabled, int? updatedAt}) =>
+      LocationSettingRow(
+        id: id ?? this.id,
+        globalEnabled: globalEnabled ?? this.globalEnabled,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  LocationSettingRow copyWithCompanion(LocationSettingsCompanion data) {
+    return LocationSettingRow(
+      id: data.id.present ? data.id.value : this.id,
+      globalEnabled: data.globalEnabled.present
+          ? data.globalEnabled.value
+          : this.globalEnabled,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocationSettingRow(')
+          ..write('id: $id, ')
+          ..write('globalEnabled: $globalEnabled, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, globalEnabled, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LocationSettingRow &&
+          other.id == this.id &&
+          other.globalEnabled == this.globalEnabled &&
+          other.updatedAt == this.updatedAt);
+}
+
+class LocationSettingsCompanion extends UpdateCompanion<LocationSettingRow> {
+  final Value<int> id;
+  final Value<bool> globalEnabled;
+  final Value<int> updatedAt;
+  const LocationSettingsCompanion({
+    this.id = const Value.absent(),
+    this.globalEnabled = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  LocationSettingsCompanion.insert({
+    this.id = const Value.absent(),
+    this.globalEnabled = const Value.absent(),
+    required int updatedAt,
+  }) : updatedAt = Value(updatedAt);
+  static Insertable<LocationSettingRow> custom({
+    Expression<int>? id,
+    Expression<bool>? globalEnabled,
+    Expression<int>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (globalEnabled != null) 'global_enabled': globalEnabled,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  LocationSettingsCompanion copyWith({
+    Value<int>? id,
+    Value<bool>? globalEnabled,
+    Value<int>? updatedAt,
+  }) {
+    return LocationSettingsCompanion(
+      id: id ?? this.id,
+      globalEnabled: globalEnabled ?? this.globalEnabled,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (globalEnabled.present) {
+      map['global_enabled'] = Variable<bool>(globalEnabled.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocationSettingsCompanion(')
+          ..write('id: $id, ')
+          ..write('globalEnabled: $globalEnabled, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $LocationPeerSettingsTable extends LocationPeerSettings
+    with TableInfo<$LocationPeerSettingsTable, LocationPeerSettingRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LocationPeerSettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _peerDeviceIdMeta = const VerificationMeta(
+    'peerDeviceId',
+  );
+  @override
+  late final GeneratedColumn<String> peerDeviceId = GeneratedColumn<String>(
+    'peer_device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [peerDeviceId, enabled, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'location_peer_settings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LocationPeerSettingRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('peer_device_id')) {
+      context.handle(
+        _peerDeviceIdMeta,
+        peerDeviceId.isAcceptableOrUnknown(
+          data['peer_device_id']!,
+          _peerDeviceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_peerDeviceIdMeta);
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {peerDeviceId};
+  @override
+  LocationPeerSettingRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LocationPeerSettingRow(
+      peerDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}peer_device_id'],
+      )!,
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $LocationPeerSettingsTable createAlias(String alias) {
+    return $LocationPeerSettingsTable(attachedDatabase, alias);
+  }
+}
+
+class LocationPeerSettingRow extends DataClass
+    implements Insertable<LocationPeerSettingRow> {
+  /// The same device-id string `relationships.deviceId` uses.
+  final String peerDeviceId;
+  final bool enabled;
+
+  /// Epoch-ms.
+  final int updatedAt;
+  const LocationPeerSettingRow({
+    required this.peerDeviceId,
+    required this.enabled,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['peer_device_id'] = Variable<String>(peerDeviceId);
+    map['enabled'] = Variable<bool>(enabled);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  LocationPeerSettingsCompanion toCompanion(bool nullToAbsent) {
+    return LocationPeerSettingsCompanion(
+      peerDeviceId: Value(peerDeviceId),
+      enabled: Value(enabled),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory LocationPeerSettingRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LocationPeerSettingRow(
+      peerDeviceId: serializer.fromJson<String>(json['peerDeviceId']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'peerDeviceId': serializer.toJson<String>(peerDeviceId),
+      'enabled': serializer.toJson<bool>(enabled),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  LocationPeerSettingRow copyWith({
+    String? peerDeviceId,
+    bool? enabled,
+    int? updatedAt,
+  }) => LocationPeerSettingRow(
+    peerDeviceId: peerDeviceId ?? this.peerDeviceId,
+    enabled: enabled ?? this.enabled,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  LocationPeerSettingRow copyWithCompanion(LocationPeerSettingsCompanion data) {
+    return LocationPeerSettingRow(
+      peerDeviceId: data.peerDeviceId.present
+          ? data.peerDeviceId.value
+          : this.peerDeviceId,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocationPeerSettingRow(')
+          ..write('peerDeviceId: $peerDeviceId, ')
+          ..write('enabled: $enabled, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(peerDeviceId, enabled, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LocationPeerSettingRow &&
+          other.peerDeviceId == this.peerDeviceId &&
+          other.enabled == this.enabled &&
+          other.updatedAt == this.updatedAt);
+}
+
+class LocationPeerSettingsCompanion
+    extends UpdateCompanion<LocationPeerSettingRow> {
+  final Value<String> peerDeviceId;
+  final Value<bool> enabled;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const LocationPeerSettingsCompanion({
+    this.peerDeviceId = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LocationPeerSettingsCompanion.insert({
+    required String peerDeviceId,
+    this.enabled = const Value.absent(),
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : peerDeviceId = Value(peerDeviceId),
+       updatedAt = Value(updatedAt);
+  static Insertable<LocationPeerSettingRow> custom({
+    Expression<String>? peerDeviceId,
+    Expression<bool>? enabled,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (peerDeviceId != null) 'peer_device_id': peerDeviceId,
+      if (enabled != null) 'enabled': enabled,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LocationPeerSettingsCompanion copyWith({
+    Value<String>? peerDeviceId,
+    Value<bool>? enabled,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return LocationPeerSettingsCompanion(
+      peerDeviceId: peerDeviceId ?? this.peerDeviceId,
+      enabled: enabled ?? this.enabled,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (peerDeviceId.present) {
+      map['peer_device_id'] = Variable<String>(peerDeviceId.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocationPeerSettingsCompanion(')
+          ..write('peerDeviceId: $peerDeviceId, ')
+          ..write('enabled: $enabled, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $LocationFixesTable extends LocationFixes
+    with TableInfo<$LocationFixesTable, LocationFixRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LocationFixesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _peerDeviceIdMeta = const VerificationMeta(
+    'peerDeviceId',
+  );
+  @override
+  late final GeneratedColumn<String> peerDeviceId = GeneratedColumn<String>(
+    'peer_device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _latitudeMeta = const VerificationMeta(
+    'latitude',
+  );
+  @override
+  late final GeneratedColumn<double> latitude = GeneratedColumn<double>(
+    'latitude',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _longitudeMeta = const VerificationMeta(
+    'longitude',
+  );
+  @override
+  late final GeneratedColumn<double> longitude = GeneratedColumn<double>(
+    'longitude',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _accuracyMMeta = const VerificationMeta(
+    'accuracyM',
+  );
+  @override
+  late final GeneratedColumn<double> accuracyM = GeneratedColumn<double>(
+    'accuracy_m',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _capturedAtMeta = const VerificationMeta(
+    'capturedAt',
+  );
+  @override
+  late final GeneratedColumn<int> capturedAt = GeneratedColumn<int>(
+    'captured_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _receivedAtMeta = const VerificationMeta(
+    'receivedAt',
+  );
+  @override
+  late final GeneratedColumn<int> receivedAt = GeneratedColumn<int>(
+    'received_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    peerDeviceId,
+    latitude,
+    longitude,
+    accuracyM,
+    capturedAt,
+    receivedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'location_fixes';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LocationFixRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('peer_device_id')) {
+      context.handle(
+        _peerDeviceIdMeta,
+        peerDeviceId.isAcceptableOrUnknown(
+          data['peer_device_id']!,
+          _peerDeviceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_peerDeviceIdMeta);
+    }
+    if (data.containsKey('latitude')) {
+      context.handle(
+        _latitudeMeta,
+        latitude.isAcceptableOrUnknown(data['latitude']!, _latitudeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_latitudeMeta);
+    }
+    if (data.containsKey('longitude')) {
+      context.handle(
+        _longitudeMeta,
+        longitude.isAcceptableOrUnknown(data['longitude']!, _longitudeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_longitudeMeta);
+    }
+    if (data.containsKey('accuracy_m')) {
+      context.handle(
+        _accuracyMMeta,
+        accuracyM.isAcceptableOrUnknown(data['accuracy_m']!, _accuracyMMeta),
+      );
+    }
+    if (data.containsKey('captured_at')) {
+      context.handle(
+        _capturedAtMeta,
+        capturedAt.isAcceptableOrUnknown(data['captured_at']!, _capturedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_capturedAtMeta);
+    }
+    if (data.containsKey('received_at')) {
+      context.handle(
+        _receivedAtMeta,
+        receivedAt.isAcceptableOrUnknown(data['received_at']!, _receivedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_receivedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {peerDeviceId};
+  @override
+  LocationFixRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LocationFixRow(
+      peerDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}peer_device_id'],
+      )!,
+      latitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}latitude'],
+      )!,
+      longitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}longitude'],
+      )!,
+      accuracyM: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}accuracy_m'],
+      ),
+      capturedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}captured_at'],
+      )!,
+      receivedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}received_at'],
+      )!,
+    );
+  }
+
+  @override
+  $LocationFixesTable createAlias(String alias) {
+    return $LocationFixesTable(attachedDatabase, alias);
+  }
+}
+
+class LocationFixRow extends DataClass implements Insertable<LocationFixRow> {
+  final String peerDeviceId;
+
+  /// Decimal degrees, WGS84.
+  final double latitude;
+
+  /// Decimal degrees, WGS84.
+  final double longitude;
+
+  /// Metres; NULL = the sender reported none, never 0 (task §5).
+  final double? accuracyM;
+
+  /// Epoch-ms, as reported by the sender.
+  final int capturedAt;
+
+  /// Epoch-ms, this device's clock, when the fix was accepted.
+  final int receivedAt;
+  const LocationFixRow({
+    required this.peerDeviceId,
+    required this.latitude,
+    required this.longitude,
+    this.accuracyM,
+    required this.capturedAt,
+    required this.receivedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['peer_device_id'] = Variable<String>(peerDeviceId);
+    map['latitude'] = Variable<double>(latitude);
+    map['longitude'] = Variable<double>(longitude);
+    if (!nullToAbsent || accuracyM != null) {
+      map['accuracy_m'] = Variable<double>(accuracyM);
+    }
+    map['captured_at'] = Variable<int>(capturedAt);
+    map['received_at'] = Variable<int>(receivedAt);
+    return map;
+  }
+
+  LocationFixesCompanion toCompanion(bool nullToAbsent) {
+    return LocationFixesCompanion(
+      peerDeviceId: Value(peerDeviceId),
+      latitude: Value(latitude),
+      longitude: Value(longitude),
+      accuracyM: accuracyM == null && nullToAbsent
+          ? const Value.absent()
+          : Value(accuracyM),
+      capturedAt: Value(capturedAt),
+      receivedAt: Value(receivedAt),
+    );
+  }
+
+  factory LocationFixRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LocationFixRow(
+      peerDeviceId: serializer.fromJson<String>(json['peerDeviceId']),
+      latitude: serializer.fromJson<double>(json['latitude']),
+      longitude: serializer.fromJson<double>(json['longitude']),
+      accuracyM: serializer.fromJson<double?>(json['accuracyM']),
+      capturedAt: serializer.fromJson<int>(json['capturedAt']),
+      receivedAt: serializer.fromJson<int>(json['receivedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'peerDeviceId': serializer.toJson<String>(peerDeviceId),
+      'latitude': serializer.toJson<double>(latitude),
+      'longitude': serializer.toJson<double>(longitude),
+      'accuracyM': serializer.toJson<double?>(accuracyM),
+      'capturedAt': serializer.toJson<int>(capturedAt),
+      'receivedAt': serializer.toJson<int>(receivedAt),
+    };
+  }
+
+  LocationFixRow copyWith({
+    String? peerDeviceId,
+    double? latitude,
+    double? longitude,
+    Value<double?> accuracyM = const Value.absent(),
+    int? capturedAt,
+    int? receivedAt,
+  }) => LocationFixRow(
+    peerDeviceId: peerDeviceId ?? this.peerDeviceId,
+    latitude: latitude ?? this.latitude,
+    longitude: longitude ?? this.longitude,
+    accuracyM: accuracyM.present ? accuracyM.value : this.accuracyM,
+    capturedAt: capturedAt ?? this.capturedAt,
+    receivedAt: receivedAt ?? this.receivedAt,
+  );
+  LocationFixRow copyWithCompanion(LocationFixesCompanion data) {
+    return LocationFixRow(
+      peerDeviceId: data.peerDeviceId.present
+          ? data.peerDeviceId.value
+          : this.peerDeviceId,
+      latitude: data.latitude.present ? data.latitude.value : this.latitude,
+      longitude: data.longitude.present ? data.longitude.value : this.longitude,
+      accuracyM: data.accuracyM.present ? data.accuracyM.value : this.accuracyM,
+      capturedAt: data.capturedAt.present
+          ? data.capturedAt.value
+          : this.capturedAt,
+      receivedAt: data.receivedAt.present
+          ? data.receivedAt.value
+          : this.receivedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocationFixRow(')
+          ..write('peerDeviceId: $peerDeviceId, ')
+          ..write('latitude: $latitude, ')
+          ..write('longitude: $longitude, ')
+          ..write('accuracyM: $accuracyM, ')
+          ..write('capturedAt: $capturedAt, ')
+          ..write('receivedAt: $receivedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    peerDeviceId,
+    latitude,
+    longitude,
+    accuracyM,
+    capturedAt,
+    receivedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LocationFixRow &&
+          other.peerDeviceId == this.peerDeviceId &&
+          other.latitude == this.latitude &&
+          other.longitude == this.longitude &&
+          other.accuracyM == this.accuracyM &&
+          other.capturedAt == this.capturedAt &&
+          other.receivedAt == this.receivedAt);
+}
+
+class LocationFixesCompanion extends UpdateCompanion<LocationFixRow> {
+  final Value<String> peerDeviceId;
+  final Value<double> latitude;
+  final Value<double> longitude;
+  final Value<double?> accuracyM;
+  final Value<int> capturedAt;
+  final Value<int> receivedAt;
+  final Value<int> rowid;
+  const LocationFixesCompanion({
+    this.peerDeviceId = const Value.absent(),
+    this.latitude = const Value.absent(),
+    this.longitude = const Value.absent(),
+    this.accuracyM = const Value.absent(),
+    this.capturedAt = const Value.absent(),
+    this.receivedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LocationFixesCompanion.insert({
+    required String peerDeviceId,
+    required double latitude,
+    required double longitude,
+    this.accuracyM = const Value.absent(),
+    required int capturedAt,
+    required int receivedAt,
+    this.rowid = const Value.absent(),
+  }) : peerDeviceId = Value(peerDeviceId),
+       latitude = Value(latitude),
+       longitude = Value(longitude),
+       capturedAt = Value(capturedAt),
+       receivedAt = Value(receivedAt);
+  static Insertable<LocationFixRow> custom({
+    Expression<String>? peerDeviceId,
+    Expression<double>? latitude,
+    Expression<double>? longitude,
+    Expression<double>? accuracyM,
+    Expression<int>? capturedAt,
+    Expression<int>? receivedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (peerDeviceId != null) 'peer_device_id': peerDeviceId,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (accuracyM != null) 'accuracy_m': accuracyM,
+      if (capturedAt != null) 'captured_at': capturedAt,
+      if (receivedAt != null) 'received_at': receivedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LocationFixesCompanion copyWith({
+    Value<String>? peerDeviceId,
+    Value<double>? latitude,
+    Value<double>? longitude,
+    Value<double?>? accuracyM,
+    Value<int>? capturedAt,
+    Value<int>? receivedAt,
+    Value<int>? rowid,
+  }) {
+    return LocationFixesCompanion(
+      peerDeviceId: peerDeviceId ?? this.peerDeviceId,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      accuracyM: accuracyM ?? this.accuracyM,
+      capturedAt: capturedAt ?? this.capturedAt,
+      receivedAt: receivedAt ?? this.receivedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (peerDeviceId.present) {
+      map['peer_device_id'] = Variable<String>(peerDeviceId.value);
+    }
+    if (latitude.present) {
+      map['latitude'] = Variable<double>(latitude.value);
+    }
+    if (longitude.present) {
+      map['longitude'] = Variable<double>(longitude.value);
+    }
+    if (accuracyM.present) {
+      map['accuracy_m'] = Variable<double>(accuracyM.value);
+    }
+    if (capturedAt.present) {
+      map['captured_at'] = Variable<int>(capturedAt.value);
+    }
+    if (receivedAt.present) {
+      map['received_at'] = Variable<int>(receivedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocationFixesCompanion(')
+          ..write('peerDeviceId: $peerDeviceId, ')
+          ..write('latitude: $latitude, ')
+          ..write('longitude: $longitude, ')
+          ..write('accuracyM: $accuracyM, ')
+          ..write('capturedAt: $capturedAt, ')
+          ..write('receivedAt: $receivedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $NotificationCategorySettingsTable extends NotificationCategorySettings
+    with
+        TableInfo<
+          $NotificationCategorySettingsTable,
+          NotificationCategorySettingRow
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $NotificationCategorySettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [category, enabled];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'notification_category_settings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<NotificationCategorySettingRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryMeta);
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {category};
+  @override
+  NotificationCategorySettingRow map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return NotificationCategorySettingRow(
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      )!,
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+    );
+  }
+
+  @override
+  $NotificationCategorySettingsTable createAlias(String alias) {
+    return $NotificationCategorySettingsTable(attachedDatabase, alias);
+  }
+}
+
+class NotificationCategorySettingRow extends DataClass
+    implements Insertable<NotificationCategorySettingRow> {
+  /// A `NotificationCategory.name` string. Never `backgroundService` (task
+  /// §2) -- that category is not user-switchable and no row is seeded for
+  /// it.
+  final String category;
+  final bool enabled;
+  const NotificationCategorySettingRow({
+    required this.category,
+    required this.enabled,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['category'] = Variable<String>(category);
+    map['enabled'] = Variable<bool>(enabled);
+    return map;
+  }
+
+  NotificationCategorySettingsCompanion toCompanion(bool nullToAbsent) {
+    return NotificationCategorySettingsCompanion(
+      category: Value(category),
+      enabled: Value(enabled),
+    );
+  }
+
+  factory NotificationCategorySettingRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return NotificationCategorySettingRow(
+      category: serializer.fromJson<String>(json['category']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'category': serializer.toJson<String>(category),
+      'enabled': serializer.toJson<bool>(enabled),
+    };
+  }
+
+  NotificationCategorySettingRow copyWith({String? category, bool? enabled}) =>
+      NotificationCategorySettingRow(
+        category: category ?? this.category,
+        enabled: enabled ?? this.enabled,
+      );
+  NotificationCategorySettingRow copyWithCompanion(
+    NotificationCategorySettingsCompanion data,
+  ) {
+    return NotificationCategorySettingRow(
+      category: data.category.present ? data.category.value : this.category,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotificationCategorySettingRow(')
+          ..write('category: $category, ')
+          ..write('enabled: $enabled')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(category, enabled);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is NotificationCategorySettingRow &&
+          other.category == this.category &&
+          other.enabled == this.enabled);
+}
+
+class NotificationCategorySettingsCompanion
+    extends UpdateCompanion<NotificationCategorySettingRow> {
+  final Value<String> category;
+  final Value<bool> enabled;
+  final Value<int> rowid;
+  const NotificationCategorySettingsCompanion({
+    this.category = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  NotificationCategorySettingsCompanion.insert({
+    required String category,
+    this.enabled = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : category = Value(category);
+  static Insertable<NotificationCategorySettingRow> custom({
+    Expression<String>? category,
+    Expression<bool>? enabled,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (category != null) 'category': category,
+      if (enabled != null) 'enabled': enabled,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  NotificationCategorySettingsCompanion copyWith({
+    Value<String>? category,
+    Value<bool>? enabled,
+    Value<int>? rowid,
+  }) {
+    return NotificationCategorySettingsCompanion(
+      category: category ?? this.category,
+      enabled: enabled ?? this.enabled,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotificationCategorySettingsCompanion(')
+          ..write('category: $category, ')
+          ..write('enabled: $enabled, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $NotificationPreferencesTable extends NotificationPreferences
+    with TableInfo<$NotificationPreferencesTable, NotificationPreferenceRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $NotificationPreferencesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _privacyLevelMeta = const VerificationMeta(
+    'privacyLevel',
+  );
+  @override
+  late final GeneratedColumn<String> privacyLevel = GeneratedColumn<String>(
+    'privacy_level',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('hidden'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, privacyLevel];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'notification_preferences';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<NotificationPreferenceRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('privacy_level')) {
+      context.handle(
+        _privacyLevelMeta,
+        privacyLevel.isAcceptableOrUnknown(
+          data['privacy_level']!,
+          _privacyLevelMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  NotificationPreferenceRow map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return NotificationPreferenceRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      privacyLevel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}privacy_level'],
+      )!,
+    );
+  }
+
+  @override
+  $NotificationPreferencesTable createAlias(String alias) {
+    return $NotificationPreferencesTable(attachedDatabase, alias);
+  }
+}
+
+class NotificationPreferenceRow extends DataClass
+    implements Insertable<NotificationPreferenceRow> {
+  final int id;
+  final String privacyLevel;
+  const NotificationPreferenceRow({
+    required this.id,
+    required this.privacyLevel,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['privacy_level'] = Variable<String>(privacyLevel);
+    return map;
+  }
+
+  NotificationPreferencesCompanion toCompanion(bool nullToAbsent) {
+    return NotificationPreferencesCompanion(
+      id: Value(id),
+      privacyLevel: Value(privacyLevel),
+    );
+  }
+
+  factory NotificationPreferenceRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return NotificationPreferenceRow(
+      id: serializer.fromJson<int>(json['id']),
+      privacyLevel: serializer.fromJson<String>(json['privacyLevel']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'privacyLevel': serializer.toJson<String>(privacyLevel),
+    };
+  }
+
+  NotificationPreferenceRow copyWith({int? id, String? privacyLevel}) =>
+      NotificationPreferenceRow(
+        id: id ?? this.id,
+        privacyLevel: privacyLevel ?? this.privacyLevel,
+      );
+  NotificationPreferenceRow copyWithCompanion(
+    NotificationPreferencesCompanion data,
+  ) {
+    return NotificationPreferenceRow(
+      id: data.id.present ? data.id.value : this.id,
+      privacyLevel: data.privacyLevel.present
+          ? data.privacyLevel.value
+          : this.privacyLevel,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotificationPreferenceRow(')
+          ..write('id: $id, ')
+          ..write('privacyLevel: $privacyLevel')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, privacyLevel);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is NotificationPreferenceRow &&
+          other.id == this.id &&
+          other.privacyLevel == this.privacyLevel);
+}
+
+class NotificationPreferencesCompanion
+    extends UpdateCompanion<NotificationPreferenceRow> {
+  final Value<int> id;
+  final Value<String> privacyLevel;
+  const NotificationPreferencesCompanion({
+    this.id = const Value.absent(),
+    this.privacyLevel = const Value.absent(),
+  });
+  NotificationPreferencesCompanion.insert({
+    this.id = const Value.absent(),
+    this.privacyLevel = const Value.absent(),
+  });
+  static Insertable<NotificationPreferenceRow> custom({
+    Expression<int>? id,
+    Expression<String>? privacyLevel,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (privacyLevel != null) 'privacy_level': privacyLevel,
+    });
+  }
+
+  NotificationPreferencesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? privacyLevel,
+  }) {
+    return NotificationPreferencesCompanion(
+      id: id ?? this.id,
+      privacyLevel: privacyLevel ?? this.privacyLevel,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (privacyLevel.present) {
+      map['privacy_level'] = Variable<String>(privacyLevel.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotificationPreferencesCompanion(')
+          ..write('id: $id, ')
+          ..write('privacyLevel: $privacyLevel')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -7397,6 +8823,16 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $StorageDecisionsTable storageDecisions = $StorageDecisionsTable(
     this,
   );
+  late final $LocationSettingsTable locationSettings = $LocationSettingsTable(
+    this,
+  );
+  late final $LocationPeerSettingsTable locationPeerSettings =
+      $LocationPeerSettingsTable(this);
+  late final $LocationFixesTable locationFixes = $LocationFixesTable(this);
+  late final $NotificationCategorySettingsTable notificationCategorySettings =
+      $NotificationCategorySettingsTable(this);
+  late final $NotificationPreferencesTable notificationPreferences =
+      $NotificationPreferencesTable(this);
   late final Index idxMessagesConversationCreatedAt = Index(
     'idx_messages_conversation_created_at',
     'CREATE INDEX idx_messages_conversation_created_at ON messages (conversation_id, created_at)',
@@ -7420,6 +8856,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final Index idxStorageDecisionsDecidedAt = Index(
     'idx_storage_decisions_decided_at',
     'CREATE INDEX idx_storage_decisions_decided_at ON storage_decisions (decided_at)',
+  );
+  late final Index idxLocationFixesCapturedAt = Index(
+    'idx_location_fixes_captured_at',
+    'CREATE INDEX idx_location_fixes_captured_at ON location_fixes (captured_at)',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -7446,12 +8886,18 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     storageItemStats,
     storagePolicySettings,
     storageDecisions,
+    locationSettings,
+    locationPeerSettings,
+    locationFixes,
+    notificationCategorySettings,
+    notificationPreferences,
     idxMessagesConversationCreatedAt,
     idxGroupMembersCurrent,
     idxGroupSingleOwner,
     idxGroupEventsGroupEpoch,
     idxStorageItemStatsLastAccessed,
     idxStorageDecisionsDecidedAt,
+    idxLocationFixesCapturedAt,
   ];
 }
 
@@ -11496,6 +12942,899 @@ typedef $$StorageDecisionsTableProcessedTableManager =
       StorageDecisionRow,
       PrefetchHooks Function()
     >;
+typedef $$LocationSettingsTableCreateCompanionBuilder =
+    LocationSettingsCompanion Function({
+      Value<int> id,
+      Value<bool> globalEnabled,
+      required int updatedAt,
+    });
+typedef $$LocationSettingsTableUpdateCompanionBuilder =
+    LocationSettingsCompanion Function({
+      Value<int> id,
+      Value<bool> globalEnabled,
+      Value<int> updatedAt,
+    });
+
+class $$LocationSettingsTableFilterComposer
+    extends Composer<_$AppDatabase, $LocationSettingsTable> {
+  $$LocationSettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get globalEnabled => $composableBuilder(
+    column: $table.globalEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LocationSettingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $LocationSettingsTable> {
+  $$LocationSettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get globalEnabled => $composableBuilder(
+    column: $table.globalEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LocationSettingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LocationSettingsTable> {
+  $$LocationSettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<bool> get globalEnabled => $composableBuilder(
+    column: $table.globalEnabled,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$LocationSettingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LocationSettingsTable,
+          LocationSettingRow,
+          $$LocationSettingsTableFilterComposer,
+          $$LocationSettingsTableOrderingComposer,
+          $$LocationSettingsTableAnnotationComposer,
+          $$LocationSettingsTableCreateCompanionBuilder,
+          $$LocationSettingsTableUpdateCompanionBuilder,
+          (
+            LocationSettingRow,
+            BaseReferences<
+              _$AppDatabase,
+              $LocationSettingsTable,
+              LocationSettingRow
+            >,
+          ),
+          LocationSettingRow,
+          PrefetchHooks Function()
+        > {
+  $$LocationSettingsTableTableManager(
+    _$AppDatabase db,
+    $LocationSettingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LocationSettingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LocationSettingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LocationSettingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<bool> globalEnabled = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+              }) => LocationSettingsCompanion(
+                id: id,
+                globalEnabled: globalEnabled,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<bool> globalEnabled = const Value.absent(),
+                required int updatedAt,
+              }) => LocationSettingsCompanion.insert(
+                id: id,
+                globalEnabled: globalEnabled,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LocationSettingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LocationSettingsTable,
+      LocationSettingRow,
+      $$LocationSettingsTableFilterComposer,
+      $$LocationSettingsTableOrderingComposer,
+      $$LocationSettingsTableAnnotationComposer,
+      $$LocationSettingsTableCreateCompanionBuilder,
+      $$LocationSettingsTableUpdateCompanionBuilder,
+      (
+        LocationSettingRow,
+        BaseReferences<
+          _$AppDatabase,
+          $LocationSettingsTable,
+          LocationSettingRow
+        >,
+      ),
+      LocationSettingRow,
+      PrefetchHooks Function()
+    >;
+typedef $$LocationPeerSettingsTableCreateCompanionBuilder =
+    LocationPeerSettingsCompanion Function({
+      required String peerDeviceId,
+      Value<bool> enabled,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$LocationPeerSettingsTableUpdateCompanionBuilder =
+    LocationPeerSettingsCompanion Function({
+      Value<String> peerDeviceId,
+      Value<bool> enabled,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$LocationPeerSettingsTableFilterComposer
+    extends Composer<_$AppDatabase, $LocationPeerSettingsTable> {
+  $$LocationPeerSettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get peerDeviceId => $composableBuilder(
+    column: $table.peerDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LocationPeerSettingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $LocationPeerSettingsTable> {
+  $$LocationPeerSettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get peerDeviceId => $composableBuilder(
+    column: $table.peerDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LocationPeerSettingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LocationPeerSettingsTable> {
+  $$LocationPeerSettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get peerDeviceId => $composableBuilder(
+    column: $table.peerDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$LocationPeerSettingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LocationPeerSettingsTable,
+          LocationPeerSettingRow,
+          $$LocationPeerSettingsTableFilterComposer,
+          $$LocationPeerSettingsTableOrderingComposer,
+          $$LocationPeerSettingsTableAnnotationComposer,
+          $$LocationPeerSettingsTableCreateCompanionBuilder,
+          $$LocationPeerSettingsTableUpdateCompanionBuilder,
+          (
+            LocationPeerSettingRow,
+            BaseReferences<
+              _$AppDatabase,
+              $LocationPeerSettingsTable,
+              LocationPeerSettingRow
+            >,
+          ),
+          LocationPeerSettingRow,
+          PrefetchHooks Function()
+        > {
+  $$LocationPeerSettingsTableTableManager(
+    _$AppDatabase db,
+    $LocationPeerSettingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LocationPeerSettingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LocationPeerSettingsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$LocationPeerSettingsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> peerDeviceId = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LocationPeerSettingsCompanion(
+                peerDeviceId: peerDeviceId,
+                enabled: enabled,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String peerDeviceId,
+                Value<bool> enabled = const Value.absent(),
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => LocationPeerSettingsCompanion.insert(
+                peerDeviceId: peerDeviceId,
+                enabled: enabled,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LocationPeerSettingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LocationPeerSettingsTable,
+      LocationPeerSettingRow,
+      $$LocationPeerSettingsTableFilterComposer,
+      $$LocationPeerSettingsTableOrderingComposer,
+      $$LocationPeerSettingsTableAnnotationComposer,
+      $$LocationPeerSettingsTableCreateCompanionBuilder,
+      $$LocationPeerSettingsTableUpdateCompanionBuilder,
+      (
+        LocationPeerSettingRow,
+        BaseReferences<
+          _$AppDatabase,
+          $LocationPeerSettingsTable,
+          LocationPeerSettingRow
+        >,
+      ),
+      LocationPeerSettingRow,
+      PrefetchHooks Function()
+    >;
+typedef $$LocationFixesTableCreateCompanionBuilder =
+    LocationFixesCompanion Function({
+      required String peerDeviceId,
+      required double latitude,
+      required double longitude,
+      Value<double?> accuracyM,
+      required int capturedAt,
+      required int receivedAt,
+      Value<int> rowid,
+    });
+typedef $$LocationFixesTableUpdateCompanionBuilder =
+    LocationFixesCompanion Function({
+      Value<String> peerDeviceId,
+      Value<double> latitude,
+      Value<double> longitude,
+      Value<double?> accuracyM,
+      Value<int> capturedAt,
+      Value<int> receivedAt,
+      Value<int> rowid,
+    });
+
+class $$LocationFixesTableFilterComposer
+    extends Composer<_$AppDatabase, $LocationFixesTable> {
+  $$LocationFixesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get peerDeviceId => $composableBuilder(
+    column: $table.peerDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get latitude => $composableBuilder(
+    column: $table.latitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get longitude => $composableBuilder(
+    column: $table.longitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get accuracyM => $composableBuilder(
+    column: $table.accuracyM,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get capturedAt => $composableBuilder(
+    column: $table.capturedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get receivedAt => $composableBuilder(
+    column: $table.receivedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LocationFixesTableOrderingComposer
+    extends Composer<_$AppDatabase, $LocationFixesTable> {
+  $$LocationFixesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get peerDeviceId => $composableBuilder(
+    column: $table.peerDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get latitude => $composableBuilder(
+    column: $table.latitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get longitude => $composableBuilder(
+    column: $table.longitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get accuracyM => $composableBuilder(
+    column: $table.accuracyM,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get capturedAt => $composableBuilder(
+    column: $table.capturedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get receivedAt => $composableBuilder(
+    column: $table.receivedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LocationFixesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LocationFixesTable> {
+  $$LocationFixesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get peerDeviceId => $composableBuilder(
+    column: $table.peerDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get latitude =>
+      $composableBuilder(column: $table.latitude, builder: (column) => column);
+
+  GeneratedColumn<double> get longitude =>
+      $composableBuilder(column: $table.longitude, builder: (column) => column);
+
+  GeneratedColumn<double> get accuracyM =>
+      $composableBuilder(column: $table.accuracyM, builder: (column) => column);
+
+  GeneratedColumn<int> get capturedAt => $composableBuilder(
+    column: $table.capturedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get receivedAt => $composableBuilder(
+    column: $table.receivedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$LocationFixesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LocationFixesTable,
+          LocationFixRow,
+          $$LocationFixesTableFilterComposer,
+          $$LocationFixesTableOrderingComposer,
+          $$LocationFixesTableAnnotationComposer,
+          $$LocationFixesTableCreateCompanionBuilder,
+          $$LocationFixesTableUpdateCompanionBuilder,
+          (
+            LocationFixRow,
+            BaseReferences<_$AppDatabase, $LocationFixesTable, LocationFixRow>,
+          ),
+          LocationFixRow,
+          PrefetchHooks Function()
+        > {
+  $$LocationFixesTableTableManager(_$AppDatabase db, $LocationFixesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LocationFixesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LocationFixesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LocationFixesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> peerDeviceId = const Value.absent(),
+                Value<double> latitude = const Value.absent(),
+                Value<double> longitude = const Value.absent(),
+                Value<double?> accuracyM = const Value.absent(),
+                Value<int> capturedAt = const Value.absent(),
+                Value<int> receivedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LocationFixesCompanion(
+                peerDeviceId: peerDeviceId,
+                latitude: latitude,
+                longitude: longitude,
+                accuracyM: accuracyM,
+                capturedAt: capturedAt,
+                receivedAt: receivedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String peerDeviceId,
+                required double latitude,
+                required double longitude,
+                Value<double?> accuracyM = const Value.absent(),
+                required int capturedAt,
+                required int receivedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => LocationFixesCompanion.insert(
+                peerDeviceId: peerDeviceId,
+                latitude: latitude,
+                longitude: longitude,
+                accuracyM: accuracyM,
+                capturedAt: capturedAt,
+                receivedAt: receivedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LocationFixesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LocationFixesTable,
+      LocationFixRow,
+      $$LocationFixesTableFilterComposer,
+      $$LocationFixesTableOrderingComposer,
+      $$LocationFixesTableAnnotationComposer,
+      $$LocationFixesTableCreateCompanionBuilder,
+      $$LocationFixesTableUpdateCompanionBuilder,
+      (
+        LocationFixRow,
+        BaseReferences<_$AppDatabase, $LocationFixesTable, LocationFixRow>,
+      ),
+      LocationFixRow,
+      PrefetchHooks Function()
+    >;
+typedef $$NotificationCategorySettingsTableCreateCompanionBuilder =
+    NotificationCategorySettingsCompanion Function({
+      required String category,
+      Value<bool> enabled,
+      Value<int> rowid,
+    });
+typedef $$NotificationCategorySettingsTableUpdateCompanionBuilder =
+    NotificationCategorySettingsCompanion Function({
+      Value<String> category,
+      Value<bool> enabled,
+      Value<int> rowid,
+    });
+
+class $$NotificationCategorySettingsTableFilterComposer
+    extends Composer<_$AppDatabase, $NotificationCategorySettingsTable> {
+  $$NotificationCategorySettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$NotificationCategorySettingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $NotificationCategorySettingsTable> {
+  $$NotificationCategorySettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$NotificationCategorySettingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $NotificationCategorySettingsTable> {
+  $$NotificationCategorySettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+}
+
+class $$NotificationCategorySettingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $NotificationCategorySettingsTable,
+          NotificationCategorySettingRow,
+          $$NotificationCategorySettingsTableFilterComposer,
+          $$NotificationCategorySettingsTableOrderingComposer,
+          $$NotificationCategorySettingsTableAnnotationComposer,
+          $$NotificationCategorySettingsTableCreateCompanionBuilder,
+          $$NotificationCategorySettingsTableUpdateCompanionBuilder,
+          (
+            NotificationCategorySettingRow,
+            BaseReferences<
+              _$AppDatabase,
+              $NotificationCategorySettingsTable,
+              NotificationCategorySettingRow
+            >,
+          ),
+          NotificationCategorySettingRow,
+          PrefetchHooks Function()
+        > {
+  $$NotificationCategorySettingsTableTableManager(
+    _$AppDatabase db,
+    $NotificationCategorySettingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$NotificationCategorySettingsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$NotificationCategorySettingsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$NotificationCategorySettingsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> category = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => NotificationCategorySettingsCompanion(
+                category: category,
+                enabled: enabled,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String category,
+                Value<bool> enabled = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => NotificationCategorySettingsCompanion.insert(
+                category: category,
+                enabled: enabled,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$NotificationCategorySettingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $NotificationCategorySettingsTable,
+      NotificationCategorySettingRow,
+      $$NotificationCategorySettingsTableFilterComposer,
+      $$NotificationCategorySettingsTableOrderingComposer,
+      $$NotificationCategorySettingsTableAnnotationComposer,
+      $$NotificationCategorySettingsTableCreateCompanionBuilder,
+      $$NotificationCategorySettingsTableUpdateCompanionBuilder,
+      (
+        NotificationCategorySettingRow,
+        BaseReferences<
+          _$AppDatabase,
+          $NotificationCategorySettingsTable,
+          NotificationCategorySettingRow
+        >,
+      ),
+      NotificationCategorySettingRow,
+      PrefetchHooks Function()
+    >;
+typedef $$NotificationPreferencesTableCreateCompanionBuilder =
+    NotificationPreferencesCompanion Function({
+      Value<int> id,
+      Value<String> privacyLevel,
+    });
+typedef $$NotificationPreferencesTableUpdateCompanionBuilder =
+    NotificationPreferencesCompanion Function({
+      Value<int> id,
+      Value<String> privacyLevel,
+    });
+
+class $$NotificationPreferencesTableFilterComposer
+    extends Composer<_$AppDatabase, $NotificationPreferencesTable> {
+  $$NotificationPreferencesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get privacyLevel => $composableBuilder(
+    column: $table.privacyLevel,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$NotificationPreferencesTableOrderingComposer
+    extends Composer<_$AppDatabase, $NotificationPreferencesTable> {
+  $$NotificationPreferencesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get privacyLevel => $composableBuilder(
+    column: $table.privacyLevel,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$NotificationPreferencesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $NotificationPreferencesTable> {
+  $$NotificationPreferencesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get privacyLevel => $composableBuilder(
+    column: $table.privacyLevel,
+    builder: (column) => column,
+  );
+}
+
+class $$NotificationPreferencesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $NotificationPreferencesTable,
+          NotificationPreferenceRow,
+          $$NotificationPreferencesTableFilterComposer,
+          $$NotificationPreferencesTableOrderingComposer,
+          $$NotificationPreferencesTableAnnotationComposer,
+          $$NotificationPreferencesTableCreateCompanionBuilder,
+          $$NotificationPreferencesTableUpdateCompanionBuilder,
+          (
+            NotificationPreferenceRow,
+            BaseReferences<
+              _$AppDatabase,
+              $NotificationPreferencesTable,
+              NotificationPreferenceRow
+            >,
+          ),
+          NotificationPreferenceRow,
+          PrefetchHooks Function()
+        > {
+  $$NotificationPreferencesTableTableManager(
+    _$AppDatabase db,
+    $NotificationPreferencesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$NotificationPreferencesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$NotificationPreferencesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$NotificationPreferencesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> privacyLevel = const Value.absent(),
+              }) => NotificationPreferencesCompanion(
+                id: id,
+                privacyLevel: privacyLevel,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> privacyLevel = const Value.absent(),
+              }) => NotificationPreferencesCompanion.insert(
+                id: id,
+                privacyLevel: privacyLevel,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$NotificationPreferencesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $NotificationPreferencesTable,
+      NotificationPreferenceRow,
+      $$NotificationPreferencesTableFilterComposer,
+      $$NotificationPreferencesTableOrderingComposer,
+      $$NotificationPreferencesTableAnnotationComposer,
+      $$NotificationPreferencesTableCreateCompanionBuilder,
+      $$NotificationPreferencesTableUpdateCompanionBuilder,
+      (
+        NotificationPreferenceRow,
+        BaseReferences<
+          _$AppDatabase,
+          $NotificationPreferencesTable,
+          NotificationPreferenceRow
+        >,
+      ),
+      NotificationPreferenceRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -11543,4 +13882,21 @@ class $AppDatabaseManager {
       $$StoragePolicySettingsTableTableManager(_db, _db.storagePolicySettings);
   $$StorageDecisionsTableTableManager get storageDecisions =>
       $$StorageDecisionsTableTableManager(_db, _db.storageDecisions);
+  $$LocationSettingsTableTableManager get locationSettings =>
+      $$LocationSettingsTableTableManager(_db, _db.locationSettings);
+  $$LocationPeerSettingsTableTableManager get locationPeerSettings =>
+      $$LocationPeerSettingsTableTableManager(_db, _db.locationPeerSettings);
+  $$LocationFixesTableTableManager get locationFixes =>
+      $$LocationFixesTableTableManager(_db, _db.locationFixes);
+  $$NotificationCategorySettingsTableTableManager
+  get notificationCategorySettings =>
+      $$NotificationCategorySettingsTableTableManager(
+        _db,
+        _db.notificationCategorySettings,
+      );
+  $$NotificationPreferencesTableTableManager get notificationPreferences =>
+      $$NotificationPreferencesTableTableManager(
+        _db,
+        _db.notificationPreferences,
+      );
 }

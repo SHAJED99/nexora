@@ -12,7 +12,9 @@ import 'package:path_provider/path_provider.dart';
 
 import 'crypto_tables.dart';
 import 'group_tables.dart';
+import 'location_tables.dart';
 import 'message_tables.dart';
+import 'notification_tables.dart';
 import 'relationships_table.dart';
 import 'relay_tables.dart';
 import 'routing_tables.dart';
@@ -20,6 +22,27 @@ import 'storage_tables.dart';
 import 'sync_tables.dart';
 
 part 'database.g.dart';
+
+/// `FR-NOTIFY-001`'s nine *user-facing* notification categories -- the
+/// `NotificationCategory` enum's `.name` values
+/// (`lib/core/notifications/generated/notification_api.g.dart`) minus
+/// `backgroundService`, which Android requires unconditionally and which is
+/// therefore not a user preference (E10-T02 §2, §4). Listed as plain string
+/// literals here (not by importing the generated Pigeon enum) so this
+/// migration step depends on nothing outside `core/persistence` -- the same
+/// "no cross-layer import for a seed value" precedent every other seeded
+/// enum string in this file (`'smart'`, `'hidden'`) already follows.
+const List<String> _userFacingNotificationCategories = [
+  'message',
+  'voiceMessage',
+  'ptt',
+  'incomingCall',
+  'connectionRequest',
+  'trustRequest',
+  'groupEvent',
+  'securityEvent',
+  'storageWarning',
+];
 
 /// One row per locally-created device identity. This is the walking
 /// skeleton's proof that UI -> controller -> use case -> repository ->
@@ -62,6 +85,11 @@ class DeviceIdentities extends Table {
   StorageItemStats,
   StoragePolicySettings,
   StorageDecisions,
+  LocationSettings,
+  LocationPeerSettings,
+  LocationFixes,
+  NotificationCategorySettings,
+  NotificationPreferences,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -70,7 +98,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -86,6 +114,42 @@ class AppDatabase extends _$AppDatabase {
               id: const Value(1),
               mode: 'smart',
               updatedAt: DateTime.now().millisecondsSinceEpoch,
+            ),
+            mode: InsertMode.insertOrIgnore,
+          );
+          // E09-T01: a fresh install must have the same single default
+          // `location_settings` row (`globalEnabled == false`) that the
+          // `from < 15` upgrade step inserts below -- the app never has to
+          // cope with an absent settings row on either path (task §5, §6
+          // risk note, same reasoning as `storage_policy_settings` above).
+          await into(locationSettings).insert(
+            LocationSettingsCompanion.insert(
+              id: const Value(1),
+              globalEnabled: const Value(false),
+              updatedAt: DateTime.now().millisecondsSinceEpoch,
+            ),
+            mode: InsertMode.insertOrIgnore,
+          );
+          // E10-T02: a fresh install must have the same nine enabled
+          // `notification_category_settings` rows plus the `hidden`
+          // `notification_preferences` singleton that the `from < 16`
+          // upgrade step seeds below -- the app never has to cope with an
+          // absent row on either path (task §5, §6 risk note, same
+          // reasoning as `storage_policy_settings`/`location_settings`
+          // above).
+          for (final category in _userFacingNotificationCategories) {
+            await into(notificationCategorySettings).insert(
+              NotificationCategorySettingsCompanion.insert(
+                category: category,
+                enabled: const Value(true),
+              ),
+              mode: InsertMode.insertOrIgnore,
+            );
+          }
+          await into(notificationPreferences).insert(
+            NotificationPreferencesCompanion.insert(
+              id: const Value(0),
+              privacyLevel: const Value('hidden'),
             ),
             mode: InsertMode.insertOrIgnore,
           );
@@ -372,6 +436,105 @@ class AppDatabase extends _$AppDatabase {
                     ),
                     mode: InsertMode.insertOrIgnore,
                   );
+            });
+          }
+          if (from < 15) {
+            // E09-T01: location-sharing tables -- `location_settings`,
+            // `location_peer_settings`, `location_fixes` -- additive only,
+            // no changes to any pre-existing table (task §3,
+            // docs/conventions.md "Schema migrations").
+            //
+            // As with `from < 11`/`from < 13`/`from < 14` above:
+            // `createTable` only issues the CREATE TABLE statement, never
+            // any `@TableIndex`-declared index -- those are separate
+            // `DatabaseSchemaEntity`s only created via `create`/`createAll`.
+            // This step's one declared index is therefore also created
+            // explicitly here, with `IF NOT EXISTS` (not `m.createIndex`,
+            // whose generated statement in `database.g.dart` has no such
+            // guard and is not retry-safe across a failed-then-retried
+            // migration).
+            //
+            // Wrapped in a transaction, the same precedent the `from < 14`
+            // step set for a step that inserts (task §2): this step also
+            // inserts the single default `location_settings` row, and that
+            // insert must be atomic with the `createTable` calls -- without
+            // the wrap, a crash/kill between "tables created" and "default
+            // row inserted" would leave `location_settings` created but
+            // empty on a failed-then-retried migration, breaking the "the
+            // app must never have to cope with an absent settings row"
+            // invariant (task §5).
+            await m.database.transaction(() async {
+              await m.createTable(locationSettings);
+              await m.createTable(locationPeerSettings);
+              await m.createTable(locationFixes);
+              await m.database.customStatement(
+                'CREATE INDEX IF NOT EXISTS '
+                'idx_location_fixes_captured_at ON location_fixes '
+                '(captured_at);',
+              );
+              // insertOrIgnore: drift stamps user_version AFTER onUpgrade
+              // returns, so a process crash between this transaction's
+              // COMMIT and that PRAGMA write makes the next open re-run
+              // this whole step against a DB that already has the row.
+              // createTable/createIndex are already retry-safe (IF NOT
+              // EXISTS); this insert needed the same property.
+              await into(locationSettings).insert(
+                    LocationSettingsCompanion.insert(
+                      id: const Value(1),
+                      globalEnabled: const Value(false),
+                      updatedAt: DateTime.now().millisecondsSinceEpoch,
+                    ),
+                    mode: InsertMode.insertOrIgnore,
+                  );
+            });
+          }
+          if (from < 16) {
+            // E10-T02: notification preference tables --
+            // `notification_category_settings`, `notification_preferences`
+            // -- additive only, no changes to any pre-existing table (task
+            // §3, §5, docs/conventions.md "Schema migrations").
+            //
+            // As with `from < 11`/`from < 13`/`from < 14`/`from < 15` above:
+            // `createTable` only issues the CREATE TABLE statement -- there
+            // is no declared `@TableIndex` on either table this step adds,
+            // so unlike those steps there is no companion `CREATE INDEX IF
+            // NOT EXISTS` needed here.
+            //
+            // Wrapped in a transaction, the same precedent the `from < 14`
+            // and `from < 15` steps set for a step that inserts (task §6
+            // risk note): this step also seeds nine category rows plus the
+            // singleton preferences row, and those inserts must be atomic
+            // with the `createTable` calls -- without the wrap, a
+            // crash/kill partway through would leave the tables created but
+            // only partially seeded on a failed-then-retried migration,
+            // breaking "a category with no row is fail-open, a privacy
+            // level with no row is fail-safe" (task §5) by leaving some
+            // categories seeded and others not.
+            await m.database.transaction(() async {
+              await m.createTable(notificationCategorySettings);
+              await m.createTable(notificationPreferences);
+              // insertOrIgnore: drift stamps user_version AFTER onUpgrade
+              // returns, so a process crash between this transaction's
+              // COMMIT and that PRAGMA write makes the next open re-run
+              // this whole step against a DB that already has the rows.
+              // createTable is already retry-safe (IF NOT EXISTS); these
+              // inserts needed the same property.
+              for (final category in _userFacingNotificationCategories) {
+                await into(notificationCategorySettings).insert(
+                  NotificationCategorySettingsCompanion.insert(
+                    category: category,
+                    enabled: const Value(true),
+                  ),
+                  mode: InsertMode.insertOrIgnore,
+                );
+              }
+              await into(notificationPreferences).insert(
+                NotificationPreferencesCompanion.insert(
+                  id: const Value(0),
+                  privacyLevel: const Value('hidden'),
+                ),
+                mode: InsertMode.insertOrIgnore,
+              );
             });
           }
         },

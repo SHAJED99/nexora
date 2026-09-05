@@ -190,6 +190,32 @@ class PrekeyExchangeCounters {
   int timeouts = 0;
 }
 
+/// One observable connection-request event on
+/// [PrekeyExchange.connectionRequests] (E10-T05, task file §3) -- the only
+/// new public surface this task adds to this E06-owned class, and
+/// observation only: nothing that reads this stream can influence
+/// [PrekeyExchange]'s own evaluation, acceptance or session-establishment
+/// logic (no behavioural line moves). Carries nothing beyond the decision
+/// [EvaluateConnectionRequestUseCase] already made -- no key material, and
+/// no other peer/session detail (task file §6).
+///
+/// Emitted for EVERY [RelationshipState], including
+/// [RelationshipState.blocked], BY DESIGN (task file §6 risk: "emitting
+/// before the filter is the design") -- so the "blocked never notifies"
+/// rule is asserted by a test on the consuming
+/// `ConnectionRequestNotificationSource`, not made invisible because the
+/// event never existed. The filter to `unknown`-only lives entirely in that
+/// source, never here.
+class ConnectionRequestNotice {
+  const ConnectionRequestNotice({
+    required this.peerDeviceId,
+    required this.state,
+  });
+
+  final String peerDeviceId;
+  final RelationshipState state;
+}
+
 /// One outstanding outbound `bundleRequest` this device is waiting on.
 /// `completer` resolves with the serialized bundle bytes on
 /// `bundleResponse`, or `null` on `bundleUnavailable`.
@@ -349,6 +375,40 @@ class PrekeyExchange {
 
   final PrekeyExchangeCounters counters = PrekeyExchangeCounters();
 
+  /// E10-T05's own observation seam (task file §3) — broadcast so a
+  /// notification producer registering after this device has already
+  /// evaluated requests in flight, or a second listener, never steals
+  /// events from the other. Closed by [dispose].
+  final StreamController<ConnectionRequestNotice> _connectionRequests =
+      StreamController<ConnectionRequestNotice>.broadcast();
+
+  /// Broadcast stream of connection-request evaluation events (E10-T05,
+  /// task file §3) — observation only, never control. Emits at BOTH
+  /// evaluation sites ([_ensureSessionUncoalesced] and
+  /// [_handleBundleRequest]), for every [RelationshipState] — see
+  /// [ConnectionRequestNotice]'s own doc comment for why the filter is
+  /// deliberately not applied here.
+  Stream<ConnectionRequestNotice> get connectionRequests =>
+      _connectionRequests.stream;
+
+  /// Publishes one [ConnectionRequestNotice] on [connectionRequests]
+  /// (E10-T05). A closed controller (post-[dispose]) silently drops the
+  /// event rather than throwing — mirrors `CallSignaling._emitNotice`'s own
+  /// "closed controller -> no-op" discipline (E10-T04). A run with no
+  /// notification producer registered at all (every pre-existing test in
+  /// this suite) simply has no listener, which is equally silent — this
+  /// task's own "additive, changes no evaluation/acceptance/session
+  /// behaviour" contract (task file §2) is satisfied either way.
+  void _emitConnectionRequestNotice(
+    String peerDeviceId,
+    RelationshipState state,
+  ) {
+    if (_connectionRequests.isClosed) return;
+    _connectionRequests.add(
+      ConnectionRequestNotice(peerDeviceId: peerDeviceId, state: state),
+    );
+  }
+
   /// One in-flight [ensureSession] future per peer — the coalescing map
   /// this file's header describes. Never awaited-into from inside
   /// [ensureSession] itself before the map write; see that method.
@@ -411,6 +471,10 @@ class PrekeyExchange {
       }
 
       final relationship = await _evaluateConnectionRequest(peerDeviceId);
+      // E10-T05: emitted AFTER the relationship resolves, for every state
+      // (task file §3/§6) — see [ConnectionRequestNotice]'s own doc comment
+      // for why the filter is not applied here.
+      _emitConnectionRequestNotice(peerDeviceId, relationship);
       if (relationship == RelationshipState.blocked) {
         throw const AppFailure('messaging.peer_blocked');
       }
@@ -481,6 +545,9 @@ class PrekeyExchange {
     String requestId,
   ) async {
     final relationship = await _evaluateConnectionRequest(peerDeviceId);
+    // E10-T05: emitted AFTER the relationship resolves, for every state
+    // (task file §3/§6) — same as the other evaluation site above.
+    _emitConnectionRequestNotice(peerDeviceId, relationship);
     if (relationship == RelationshipState.blocked) {
       // Silence, not a refusal frame -- task file §5: blocking must not be
       // remotely probeable.
@@ -582,5 +649,18 @@ class PrekeyExchange {
     // devices reachable right now, so there is nothing to queue for later
     // (this file's header).
     await _stack.transport.send(peerDeviceId, frame.serialize());
+  }
+
+  /// Closes [_connectionRequests] (E10-T05, task file §7: "controller
+  /// closed in the existing teardown"). `PrekeyExchange` had no dispose
+  /// method of its own before this task — mirrors `CallSignaling.dispose()`'s
+  /// identical "no composition-root call site yet" gap (E10-T04, that
+  /// file's own doc comment): `MessagingStack.dispose()`
+  /// (`messaging_stack.dart:605`) never calls anything on `prekeyExchange`
+  /// today, and wiring that cross-file call site is outside this task's own
+  /// `files:` fence, so it is not wired here — disclosed as a Deviation in
+  /// this task's own self-review, same disclosure shape as E10-T04's.
+  Future<void> dispose() async {
+    await _connectionRequests.close();
   }
 }
