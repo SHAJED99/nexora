@@ -200,7 +200,8 @@ void main() {
       );
       await seedingService.refresh();
 
-      final violatingPayload = _validPayload()..addAll({'extra': 'nope'});
+      final violatingPayload = _validPayload(minimumSupportedBuild: 999)
+        ..addAll({'extra': 'nope'});
       final violatingService = _FixedReadVersionPolicyService(
         database: database,
         payload: violatingPayload,
