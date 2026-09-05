@@ -1,11 +1,9 @@
 # E13 · Abuse Prevention & Diagnostics · Progress
 
-**Status:** in progress — 4/7 tasks done and merged into `epic_13`
-(T01, T02, T04, T06); T03 resumed after a human decision on its rate-limit
-key (`Q-E13-T03-1` resolved); T05 blocked on T03; T07 (new, P1) added to
-close a real gap T02's review found — the built rate limiter has zero
-live production call site. · **Started:** 2026-09-05 · **Completed:** — ·
-**Progress:** 4/7 tasks done
+**Status:** all 7 tasks done and merged into `epic_13`. Not yet merged into
+`development` — awaiting an epic-level bug sweep first (see
+`skills/bug-sweep`). · **Started:** 2026-09-05 · **Completed:** 2026-09-06 ·
+**Progress:** 7/7 tasks done
 
 ## Tasks
 
@@ -13,11 +11,11 @@ live production call site. · **Started:** 2026-09-05 · **Completed:** — ·
 |---|---|---|---|
 | E13-T01 | done | — | T02, T03, T04, T05, T06 |
 | E13-T02 | done | T01 | T07 |
-| E13-T03 | review-requested | T01 | T05 |
+| E13-T03 | done | T01 | T05 |
 | E13-T04 | done | T01 | — |
-| E13-T05 | todo | T01, T03 | — |
+| E13-T05 | done | T01, T03 | — |
 | E13-T06 | done | — | — |
-| E13-T07 | todo | T01, T02 | — |
+| E13-T07 | done | T01, T02 | — |
 
 ## DAG
 
@@ -94,4 +92,36 @@ disjoint files.
   per frame evades this gate; this still stops a naive single-identity
   flooder, which is most of the realistic threat model, and is
   consistent with this codebase's existing TOFU-trust posture elsewhere
-  (same class of gap `E09-B09` already named). Resumed, in review.
+  (same class of gap `E09-B09` already named). Merged.
+- 2026-09-05 — T05 (storage-volume admission) merged, cross-model
+  reviewed APPROVE after fixing a real fail-open bug: the byte-volume
+  gate's rollover branch (fresh bucket / elapsed window) never compared
+  the packet's own size against the budget, so a single oversized packet
+  sailed through on the first hit of every window. Fixed with an explicit
+  pre-check before calling `RateLimiter.allow`. Verified via falsification
+  by both the implementer and an independent round-2 reviewer (adversarial
+  pass: two sub-threshold packets summing over budget, exact-boundary
+  test, denial-doesn't-poison-bucket test) — no remaining gap.
+- 2026-09-06 — T07 (wire the rate limiter into production, P1) merged
+  (PR #116) after 3 review rounds. Wired all 4 real construction sites
+  (closing `OQ-E13-T02-1`, including the one site the original Open
+  Question missed) and resolved `OQ-E13-T01-1` (stale-row eviction inside
+  `RateLimiter.allow`'s own transaction). Round 2 found a real S1/S2
+  lockout bug: sign-in minted a brand-new local device identity on every
+  launch, so a returning user hit the 5/24h registration rate limit after
+  6 launches in a day and was silently stuck. Human-decided fix: reuse
+  the existing local device identity when one exists, only rate-limiting
+  genuinely new registrations. Round 2's own fix then introduced a
+  narrower bug (F6): the identity read sat outside `_signIn`'s `try`
+  block, so a thrown error there would hang the sign-in screen forever
+  with nothing logged — fixed in round 3, independently falsified twice.
+  Final verdict APPROVE; 🧍 `auth_or_payment_code` gate human-approved
+  2026-09-06. **E13 is now 7/7, complete.**
+- **Carried-forward observation (T07's reviewer, non-blocking)**:
+  `SignInUseCase.call` matches on `deviceId` only, never on account. If
+  two different accounts ever sign in on the same device (no sign-out/
+  logout path exists anywhere in `lib/` today, so unreachable), the
+  second account's sign-in would silently reuse and rewrite the first
+  account's device-identity row, and its registration would never be
+  counted by the rate limiter. Needs a reader before any account-switch
+  or logout feature lands.
