@@ -191,4 +191,57 @@ void main() {
       await db.close();
     },
   );
+
+  test(
+    'test_EARS_ABUSE_5_returning_device_reuses_identity_and_is_never_rate_limited',
+    () async {
+      // F1 fix (E13-T07 review round 2, S1/S2): before this fix,
+      // `LoginController._signIn` minted a brand-new random device id on
+      // EVERY app launch and always called through `SignInUseCase.call`'s
+      // full registration path — so a normal user relaunching the app more
+      // than `_maxDeviceRegistrationsPerWindow` (5) times in 24h got
+      // silently denied on launch 6, even though it is the SAME device
+      // every time. This proves the fix's actual mechanism: once
+      // `call(deviceId)` is invoked with THIS device's own existing id
+      // (exactly what `LoginController` now does via `existingDeviceId()`
+      // before minting fresh), it recognizes a returning device and never
+      // touches `createDeviceIdentity`/the rate limiter again — proven
+      // across 10 consecutive "launches", well past the 5/24h cap that
+      // would otherwise fire.
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final repository = DeviceIdentityRepository(
+        db,
+        rateLimiter: RateLimiter(db),
+      );
+      const accountUid = 'firebase-uid-returning-device';
+      final useCase = SignInUseCase(
+        repository,
+        authService: FakeGoogleAuthService.success(accountUid),
+      );
+
+      // Launch 1: fresh install, no existing identity yet — mints and
+      // registers, exactly like today.
+      final firstDeviceId = await useCase.existingDeviceId();
+      expect(firstDeviceId, isNull);
+      await useCase('mint-device-0');
+
+      // Launches 2-10: `LoginController`'s own logic — read the existing
+      // id back, reuse it instead of minting — repeated well past the
+      // 5/24h cap.
+      for (var launch = 0; launch < 9; launch++) {
+        final existingDeviceId = await useCase.existingDeviceId();
+        expect(existingDeviceId, 'mint-device-0');
+        await expectLater(useCase(existingDeviceId!), completes);
+      }
+
+      // Exactly ONE row was ever written — every later "launch" reused it,
+      // never registered a new one.
+      final rows = await db.select(db.deviceIdentities).get();
+      expect(rows, hasLength(1));
+      expect(rows.single.deviceId, 'mint-device-0');
+      expect(rows.single.signedIn, isTrue);
+
+      await db.close();
+    },
+  );
 }

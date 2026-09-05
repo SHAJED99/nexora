@@ -51,7 +51,20 @@ class LoginController extends GetxController {
 
   Future<void> _signIn() async {
     signingIn.value = true;
-    final deviceId = generateSecureDeviceId();
+    // F1 fix (E13-T07 review round 2, S1/S2): reuse this device's own
+    // already-registered id when one exists, rather than unconditionally
+    // minting a fresh one on every launch — minting fresh every time made
+    // every relaunch look like a brand-new device registering, which
+    // silently exhausted `DeviceIdentityRepository`'s per-account
+    // registration rate limit (5/24h) after just 5 launches. `_signInUseCase
+    // .existingDeviceId()` is a thin passthrough to
+    // `DeviceIdentityRepository.latestDeviceIdentity()` (same signal
+    // `lib/app/main.dart` already reads to seed `selfDeviceId`); `call`
+    // recognizes a reused id as a returning device and skips the
+    // registration/rate-limit path entirely for it (see
+    // `sign_in_use_case.dart`'s header + `call`'s own doc comment).
+    final existingDeviceId = await _signInUseCase.existingDeviceId();
+    final deviceId = existingDeviceId ?? generateSecureDeviceId();
     try {
       await _signInUseCase(deviceId);
       signingIn.value = false;
