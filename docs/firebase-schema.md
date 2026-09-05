@@ -21,7 +21,7 @@ accepted option 2).
 | `users/$uid/devices/$deviceId/revocation` | live | `revokedAt:int(ServerValue)`, `revokedByDeviceId:String` | revocation information | `E11-T04` | structural (`.validate` + `$other` deny) — `E11-T04` |
 | `users/$uid/relationships/$peerDeviceId` | live | `state:String` (one of `trusted`/`allowed`/`unknown`/`blocked`), `updatedAt:int(ServerValue)` | trust metadata, block metadata | `E11-T05` | structural (`.validate` + `$other` deny) — `E11-T05` |
 | `users/$uid/push/$deviceId` | reserved (no owner) | — | push notification information | ⏳ `OQ-E11-2` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
-| `config/version_policy` | reserved (no owner) | — | application version policy | ⏳ `OQ-E11-2` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
+| `config/version_policy` | live | `minimumSupportedBuild:int`, `currentBuild:int`, `updateAvailableBuild:int`, `signature:String`, `updatedAt:int` | application version policy | `E14-T01` | structural (`.validate` + `$other` deny), any-authenticated-account read, `.write: false` for every client — `E14-T01` |
 | `directory/$deviceId` | live | `identityPublicKey:String` (base64), `prekeyBundle:String` (base64 `PreKeyBundleCodec` v1), `revokedAt:int?` | device public identity information | `E11-T06` (`ADR-0008` accepted, option 2) | structural (`.validate` + `$other` deny), cross-account exact-id read; write requires the caller's `auth.uid` to match `directory_private/$deviceId/ownerUid` — `E11-T06`, fixed by `E11-B06` |
 | `directory_private/$deviceId` | live | `ownerUid:String` | write-ownership marker for the corresponding `directory/$deviceId` entry | `E11-T06` (fix: `E11-B06`) | structural (`.validate` + `$other` deny), owner-only read (`auth.uid === ` the stored value), immutable write (first-writer-wins) |
 
@@ -99,6 +99,20 @@ owning task flips to `live` — this is the anti-collision mechanism for
 this shared doc, not a promise of behaviour (see
 `epics/E11-firebase-sync/epic.md` §Analyze gate, "Contract sanity").
 
+The seventh `live` row (`config/version_policy`) is `E14-T01`'s own
+deliverable, claiming `OQ-E11-2`'s reserved node. Like `directory/
+$deviceId`, it is a top-level node, NOT under `users/$uid` — but unlike
+`directory/$deviceId` (per-device, cross-account-readable by exact id
+only), this is one single shared node every authenticated account reads
+the same value from: server/ops-published minimum-build policy
+(`FR-VER-005`, `FR-VER-008`, `FR-VER-010`), never per-account data.
+`.write: false` for every client, no exception — this node is published
+by a server/ops process outside this app's own client code (an
+Admin-SDK/Cloud Function or console write, out of this task's own build
+per its §4), never by anything running on a device. `signature` is
+stored as raw, unverified data in this build — signature verification
+(`FR-VER-011`) is `E14-T05`'s own task.
+
 ## Path registry and field-allowlist code
 
 - Paths: `lib/core/services/firebase_paths.dart` — `FirebasePaths.device`,
@@ -110,9 +124,9 @@ this shared doc, not a promise of behaviour (see
   `FirebasePaths.relationship` (E11-T05), `FirebasePaths.directoryRoot`
   (the parent `directory` node — never passed to a live `.ref(...)` call,
   only used by the rules test to prove a read there is denied),
-  `FirebasePaths.directoryEntry` (E11-T06) and
-  `FirebasePaths.directoryPrivateOwnerUid` (`E11-B06` fix). Pure
-  functions, no I/O.
+  `FirebasePaths.directoryEntry` (E11-T06),
+  `FirebasePaths.directoryPrivateOwnerUid` (`E11-B06` fix) and
+  `FirebasePaths.versionPolicy` (`E14-T01`). Pure functions, no I/O.
 - Allowed fields: `lib/core/services/firebase_boundary.dart` —
   `FirebaseBoundary.allowedFields(FirebaseNodeKind)` and
   `FirebaseBoundary.assertAllowedFields(FirebaseNodeKind, Map<String, Object?>)`,

@@ -516,11 +516,19 @@ void main() {
       // this string comparison (a bare `startsWith('/directory')` would
       // wrongly swallow `/directory_private/...` too, since that string
       // also starts with the literal characters "/directory").
+      // `config/version_policy` (`E14-T01`) is excluded for the same
+      // reason again -- it is `FR-VER-005`/`FR-VER-008`'s deliberate,
+      // reviewed second exception to "every read is scoped to
+      // auth.uid === $uid": every authenticated account needs this shared
+      // server/ops-published policy, it is not per-account data. Its own
+      // read/write shape is asserted exhaustively by
+      // `test_EARS_FB_21_version_policy_rules` below.
       final outsideDirectory = found
           .where(
             (entry) =>
                 !entry.key.startsWith('/directory/') &&
-                !entry.key.startsWith('/directory_private/'),
+                !entry.key.startsWith('/directory_private/') &&
+                !entry.key.startsWith('/config/'),
           )
           .toList();
       expect(outsideDirectory, isNotEmpty);
@@ -816,6 +824,111 @@ void main() {
               ".child(\$deviceId).child('ownerUid')",
         ),
         isTrue,
+      );
+    });
+  });
+
+  group('test_EARS_FB_21_version_policy_rules', () {
+    // E14-T01: claims `OQ-E11-2`'s reserved `config/version_policy` node
+    // (`FR-VER-005`/`FR-VER-008`/`FR-VER-010`) -- a top-level node, sibling
+    // of `users`/`directory`, not nested under any uid: this is
+    // server/ops-published policy shared by every account, never
+    // per-account data.
+    late Map<String, dynamic> rules;
+    late Map<String, dynamic> versionPolicyNode;
+
+    setUpAll(() {
+      rules = jsonDecode(rulesFile.readAsStringSync()) as Map<String, dynamic>;
+      versionPolicyNode = _navigate(rules, ['config', 'version_policy']);
+    });
+
+    test('grants read to any authenticated user -- exact string, not merely '
+        '"contains"', () {
+      expect(versionPolicyNode['.read'], 'auth != null');
+    });
+
+    test('denies write for every client -- no client, this build included, '
+        'ever writes this node (task §2/§4: an ops process outside this '
+        'app publishes it)', () {
+      expect(versionPolicyNode['.write'], isFalse);
+    });
+
+    test('carries exactly minimumSupportedBuild, currentBuild, '
+        'updateAvailableBuild, signature, updatedAt', () {
+      expect(
+        _declaredFieldKeys(versionPolicyNode),
+        {
+          'minimumSupportedBuild',
+          'currentBuild',
+          'updateAvailableBuild',
+          'signature',
+          'updatedAt',
+        },
+      );
+    });
+
+    test('.validate requires every one of those fields on every write', () {
+      final validate = versionPolicyNode['.validate'] as String;
+      for (final field in [
+        'minimumSupportedBuild',
+        'currentBuild',
+        'updateAvailableBuild',
+        'signature',
+        'updatedAt',
+      ]) {
+        expect(validate.contains("'$field'"), isTrue,
+            reason: '.validate does not require "$field"');
+      }
+    });
+
+    test('rejects any other field via \$other.validate == false', () {
+      expect(versionPolicyNode.containsKey(r'$other'), isTrue);
+      expect(
+        (versionPolicyNode[r'$other'] as Map<String, dynamic>)['.validate'],
+        isFalse,
+      );
+    });
+
+    test(
+      'an authenticated caller reading the bare "config" parent node is '
+      'DENIED -- proven by simulating the RTDB read-cascade (root -> '
+      'config), same property `test_EARS_FB_18` proves for `directory`: a '
+      'rule granted one level too high here would let any authenticated '
+      'user crawl every future sibling node config/ ever grows',
+      () {
+        expect(_cascadingReadGranted(rules, ['config']), isFalse);
+      },
+    );
+
+    test(
+      'the SAME cascade walk one level deeper, at config/version_policy, '
+      'IS granted -- proves the denial above is because no rule grants a '
+      'read at "config" specifically, not because the whole subtree is '
+      'unreachable by this simulator',
+      () {
+        expect(
+          _cascadingReadGranted(rules, ['config', 'version_policy']),
+          isTrue,
+        );
+      },
+    );
+
+    test('the only rules under config/ are the exact ones this task '
+        'documents -- this test cannot be satisfied by silently adding a '
+        'second, broader grant somewhere else under config/', () {
+      final root = rules['rules'] as Map<String, dynamic>;
+      final found = <MapEntry<String, dynamic>>[];
+      _collectReadWriteRules(root, '', found);
+      final underConfig =
+          found.where((entry) => entry.key.startsWith('/config/')).toList();
+
+      expect(underConfig, hasLength(2));
+      expect(
+        underConfig.map((e) => e.key).toSet(),
+        {
+          '/config/version_policy/.read',
+          '/config/version_policy/.write',
+        },
       );
     });
   });

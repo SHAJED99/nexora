@@ -20,6 +20,7 @@ enum FirebaseNodeKind {
   relationship,
   directory,
   directoryPrivate,
+  versionPolicy,
 }
 
 /// Thrown by [FirebaseBoundary.assertAllowedFields] when a payload carries a
@@ -98,6 +99,19 @@ class FirebaseBoundary {
     // cross-account `ownerUid`-readability leak).
     FirebaseNodeKind.directoryPrivate: {
       'ownerUid',
+    },
+    // `config/version_policy` — server/ops-published version policy
+    // (`VersionPolicyService`, E14-T01, `FR-VER-005`/`FR-VER-008`). Read-
+    // only for every client in this build (task §2/§4) — this allow-list
+    // exists for `assertAllowedFields` to check whatever the read path
+    // parses the remote payload into, not to gate a `.set()` call; there
+    // is no write path for this node in this build (task §6 Risks).
+    FirebaseNodeKind.versionPolicy: {
+      'minimumSupportedBuild',
+      'currentBuild',
+      'updateAvailableBuild',
+      'signature',
+      'updatedAt',
     },
   };
 

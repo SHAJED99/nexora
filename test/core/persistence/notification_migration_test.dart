@@ -384,6 +384,10 @@ void main() {
       // renumbering, not 16) -- opening this v15 handle therefore also
       // runs the `from < 17` step, so the exact-set diff below legitimately
       // includes `device_revocations` too.
+      //
+      // E14-T01 note: same widening again -- current `schemaVersion` is
+      // now 18, so opening this v15 handle also runs the `from < 18` step,
+      // adding `version_policy_cache` to the diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -391,10 +395,11 @@ void main() {
           'notification_category_settings',
           'notification_preferences',
           'device_revocations',
+          'version_policy_cache',
         },
         reason: 'the v15->current-version upgrade must add exactly these '
             'tables (notifications from v15->v16, device_revocations from '
-            'v16->v17)',
+            'v16->v17, version_policy_cache from v17->v18)',
       );
 
       // Nine user-facing categories, every one enabled -- no

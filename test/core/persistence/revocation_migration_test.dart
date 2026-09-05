@@ -418,11 +418,19 @@ void main() {
       // Exactly one new table -- `device_revocations`, no index (task §5,
       // sync_tables.dart's "point lookup by PK needs no secondary index"
       // reasoning applies identically here).
+      //
+      // E14-T01 note: `AppDatabase.forTesting` always migrates a raw
+      // database up to the *current* `schemaVersion` (18 as of this task,
+      // not 17) -- opening this v16 handle therefore also runs the
+      // `from < 18` step, so the exact-set diff below legitimately
+      // includes `version_policy_cache` too.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
-        {'device_revocations'},
-        reason: 'the v16->v17 step must add exactly this one table',
+        {'device_revocations', 'version_policy_cache'},
+        reason: 'the v16->current-version upgrade must add exactly these '
+            'tables (device_revocations from v16->v17, '
+            'version_policy_cache from v17->v18)',
       );
 
       // The new table is usable through the real Dart definition.
