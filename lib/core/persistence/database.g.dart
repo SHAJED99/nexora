@@ -9067,6 +9067,284 @@ class DeviceRevocationsCompanion extends UpdateCompanion<DeviceRevocationRow> {
   }
 }
 
+class $RateLimitCountersTable extends RateLimitCounters
+    with TableInfo<$RateLimitCountersTable, RateLimitCounterRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RateLimitCountersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _bucketKeyMeta = const VerificationMeta(
+    'bucketKey',
+  );
+  @override
+  late final GeneratedColumn<String> bucketKey = GeneratedColumn<String>(
+    'bucket_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _windowStartMsMeta = const VerificationMeta(
+    'windowStartMs',
+  );
+  @override
+  late final GeneratedColumn<int> windowStartMs = GeneratedColumn<int>(
+    'window_start_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _countMeta = const VerificationMeta('count');
+  @override
+  late final GeneratedColumn<int> count = GeneratedColumn<int>(
+    'count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [bucketKey, windowStartMs, count];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'rate_limit_counters';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RateLimitCounterRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('bucket_key')) {
+      context.handle(
+        _bucketKeyMeta,
+        bucketKey.isAcceptableOrUnknown(data['bucket_key']!, _bucketKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bucketKeyMeta);
+    }
+    if (data.containsKey('window_start_ms')) {
+      context.handle(
+        _windowStartMsMeta,
+        windowStartMs.isAcceptableOrUnknown(
+          data['window_start_ms']!,
+          _windowStartMsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_windowStartMsMeta);
+    }
+    if (data.containsKey('count')) {
+      context.handle(
+        _countMeta,
+        count.isAcceptableOrUnknown(data['count']!, _countMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_countMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {bucketKey};
+  @override
+  RateLimitCounterRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RateLimitCounterRow(
+      bucketKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}bucket_key'],
+      )!,
+      windowStartMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}window_start_ms'],
+      )!,
+      count: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}count'],
+      )!,
+    );
+  }
+
+  @override
+  $RateLimitCountersTable createAlias(String alias) {
+    return $RateLimitCountersTable(attachedDatabase, alias);
+  }
+}
+
+class RateLimitCounterRow extends DataClass
+    implements Insertable<RateLimitCounterRow> {
+  final String bucketKey;
+
+  /// Epoch-ms, this device's clock, when the current window started.
+  final int windowStartMs;
+
+  /// Cumulative count (or cumulative quantity, e.g. bytes) admitted so far
+  /// within the current window.
+  final int count;
+  const RateLimitCounterRow({
+    required this.bucketKey,
+    required this.windowStartMs,
+    required this.count,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['bucket_key'] = Variable<String>(bucketKey);
+    map['window_start_ms'] = Variable<int>(windowStartMs);
+    map['count'] = Variable<int>(count);
+    return map;
+  }
+
+  RateLimitCountersCompanion toCompanion(bool nullToAbsent) {
+    return RateLimitCountersCompanion(
+      bucketKey: Value(bucketKey),
+      windowStartMs: Value(windowStartMs),
+      count: Value(count),
+    );
+  }
+
+  factory RateLimitCounterRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RateLimitCounterRow(
+      bucketKey: serializer.fromJson<String>(json['bucketKey']),
+      windowStartMs: serializer.fromJson<int>(json['windowStartMs']),
+      count: serializer.fromJson<int>(json['count']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'bucketKey': serializer.toJson<String>(bucketKey),
+      'windowStartMs': serializer.toJson<int>(windowStartMs),
+      'count': serializer.toJson<int>(count),
+    };
+  }
+
+  RateLimitCounterRow copyWith({
+    String? bucketKey,
+    int? windowStartMs,
+    int? count,
+  }) => RateLimitCounterRow(
+    bucketKey: bucketKey ?? this.bucketKey,
+    windowStartMs: windowStartMs ?? this.windowStartMs,
+    count: count ?? this.count,
+  );
+  RateLimitCounterRow copyWithCompanion(RateLimitCountersCompanion data) {
+    return RateLimitCounterRow(
+      bucketKey: data.bucketKey.present ? data.bucketKey.value : this.bucketKey,
+      windowStartMs: data.windowStartMs.present
+          ? data.windowStartMs.value
+          : this.windowStartMs,
+      count: data.count.present ? data.count.value : this.count,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RateLimitCounterRow(')
+          ..write('bucketKey: $bucketKey, ')
+          ..write('windowStartMs: $windowStartMs, ')
+          ..write('count: $count')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(bucketKey, windowStartMs, count);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RateLimitCounterRow &&
+          other.bucketKey == this.bucketKey &&
+          other.windowStartMs == this.windowStartMs &&
+          other.count == this.count);
+}
+
+class RateLimitCountersCompanion extends UpdateCompanion<RateLimitCounterRow> {
+  final Value<String> bucketKey;
+  final Value<int> windowStartMs;
+  final Value<int> count;
+  final Value<int> rowid;
+  const RateLimitCountersCompanion({
+    this.bucketKey = const Value.absent(),
+    this.windowStartMs = const Value.absent(),
+    this.count = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RateLimitCountersCompanion.insert({
+    required String bucketKey,
+    required int windowStartMs,
+    required int count,
+    this.rowid = const Value.absent(),
+  }) : bucketKey = Value(bucketKey),
+       windowStartMs = Value(windowStartMs),
+       count = Value(count);
+  static Insertable<RateLimitCounterRow> custom({
+    Expression<String>? bucketKey,
+    Expression<int>? windowStartMs,
+    Expression<int>? count,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (bucketKey != null) 'bucket_key': bucketKey,
+      if (windowStartMs != null) 'window_start_ms': windowStartMs,
+      if (count != null) 'count': count,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RateLimitCountersCompanion copyWith({
+    Value<String>? bucketKey,
+    Value<int>? windowStartMs,
+    Value<int>? count,
+    Value<int>? rowid,
+  }) {
+    return RateLimitCountersCompanion(
+      bucketKey: bucketKey ?? this.bucketKey,
+      windowStartMs: windowStartMs ?? this.windowStartMs,
+      count: count ?? this.count,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (bucketKey.present) {
+      map['bucket_key'] = Variable<String>(bucketKey.value);
+    }
+    if (windowStartMs.present) {
+      map['window_start_ms'] = Variable<int>(windowStartMs.value);
+    }
+    if (count.present) {
+      map['count'] = Variable<int>(count.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RateLimitCountersCompanion(')
+          ..write('bucketKey: $bucketKey, ')
+          ..write('windowStartMs: $windowStartMs, ')
+          ..write('count: $count, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -9114,6 +9392,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $NotificationPreferencesTable(this);
   late final $DeviceRevocationsTable deviceRevocations =
       $DeviceRevocationsTable(this);
+  late final $RateLimitCountersTable rateLimitCounters =
+      $RateLimitCountersTable(this);
   late final Index idxMessagesConversationCreatedAt = Index(
     'idx_messages_conversation_created_at',
     'CREATE INDEX idx_messages_conversation_created_at ON messages (conversation_id, created_at)',
@@ -9173,6 +9453,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     notificationCategorySettings,
     notificationPreferences,
     deviceRevocations,
+    rateLimitCounters,
     idxMessagesConversationCreatedAt,
     idxGroupMembersCurrent,
     idxGroupSingleOwner,
@@ -14292,6 +14573,183 @@ typedef $$DeviceRevocationsTableProcessedTableManager =
       DeviceRevocationRow,
       PrefetchHooks Function()
     >;
+typedef $$RateLimitCountersTableCreateCompanionBuilder =
+    RateLimitCountersCompanion Function({
+      required String bucketKey,
+      required int windowStartMs,
+      required int count,
+      Value<int> rowid,
+    });
+typedef $$RateLimitCountersTableUpdateCompanionBuilder =
+    RateLimitCountersCompanion Function({
+      Value<String> bucketKey,
+      Value<int> windowStartMs,
+      Value<int> count,
+      Value<int> rowid,
+    });
+
+class $$RateLimitCountersTableFilterComposer
+    extends Composer<_$AppDatabase, $RateLimitCountersTable> {
+  $$RateLimitCountersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get bucketKey => $composableBuilder(
+    column: $table.bucketKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get windowStartMs => $composableBuilder(
+    column: $table.windowStartMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get count => $composableBuilder(
+    column: $table.count,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RateLimitCountersTableOrderingComposer
+    extends Composer<_$AppDatabase, $RateLimitCountersTable> {
+  $$RateLimitCountersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get bucketKey => $composableBuilder(
+    column: $table.bucketKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get windowStartMs => $composableBuilder(
+    column: $table.windowStartMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get count => $composableBuilder(
+    column: $table.count,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RateLimitCountersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RateLimitCountersTable> {
+  $$RateLimitCountersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get bucketKey =>
+      $composableBuilder(column: $table.bucketKey, builder: (column) => column);
+
+  GeneratedColumn<int> get windowStartMs => $composableBuilder(
+    column: $table.windowStartMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get count =>
+      $composableBuilder(column: $table.count, builder: (column) => column);
+}
+
+class $$RateLimitCountersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RateLimitCountersTable,
+          RateLimitCounterRow,
+          $$RateLimitCountersTableFilterComposer,
+          $$RateLimitCountersTableOrderingComposer,
+          $$RateLimitCountersTableAnnotationComposer,
+          $$RateLimitCountersTableCreateCompanionBuilder,
+          $$RateLimitCountersTableUpdateCompanionBuilder,
+          (
+            RateLimitCounterRow,
+            BaseReferences<
+              _$AppDatabase,
+              $RateLimitCountersTable,
+              RateLimitCounterRow
+            >,
+          ),
+          RateLimitCounterRow,
+          PrefetchHooks Function()
+        > {
+  $$RateLimitCountersTableTableManager(
+    _$AppDatabase db,
+    $RateLimitCountersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RateLimitCountersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RateLimitCountersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RateLimitCountersTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> bucketKey = const Value.absent(),
+                Value<int> windowStartMs = const Value.absent(),
+                Value<int> count = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RateLimitCountersCompanion(
+                bucketKey: bucketKey,
+                windowStartMs: windowStartMs,
+                count: count,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String bucketKey,
+                required int windowStartMs,
+                required int count,
+                Value<int> rowid = const Value.absent(),
+              }) => RateLimitCountersCompanion.insert(
+                bucketKey: bucketKey,
+                windowStartMs: windowStartMs,
+                count: count,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RateLimitCountersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RateLimitCountersTable,
+      RateLimitCounterRow,
+      $$RateLimitCountersTableFilterComposer,
+      $$RateLimitCountersTableOrderingComposer,
+      $$RateLimitCountersTableAnnotationComposer,
+      $$RateLimitCountersTableCreateCompanionBuilder,
+      $$RateLimitCountersTableUpdateCompanionBuilder,
+      (
+        RateLimitCounterRow,
+        BaseReferences<
+          _$AppDatabase,
+          $RateLimitCountersTable,
+          RateLimitCounterRow
+        >,
+      ),
+      RateLimitCounterRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -14358,4 +14816,6 @@ class $AppDatabaseManager {
       );
   $$DeviceRevocationsTableTableManager get deviceRevocations =>
       $$DeviceRevocationsTableTableManager(_db, _db.deviceRevocations);
+  $$RateLimitCountersTableTableManager get rateLimitCounters =>
+      $$RateLimitCountersTableTableManager(_db, _db.rateLimitCounters);
 }

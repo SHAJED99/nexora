@@ -410,19 +410,26 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
       addTearDown(db.close);
 
-      // Opening at target schemaVersion 17 triggers onUpgrade(from: 16,
-      // to: 17). Force the lazy migration to run before inspecting
-      // sqlite_master.
+      // `AppDatabase.forTesting` always migrates a raw database up to the
+      // *current* `schemaVersion` (18 as of E13-T01, not 17) -- opening
+      // this v16 handle therefore also runs the `from < 18` step, so the
+      // exact-set diff below legitimately includes `rate_limit_counters`
+      // too (same widening `database_migration_test.dart`/
+      // `notification_migration_test.dart` already document). Force the
+      // lazy migration to run before inspecting sqlite_master.
       await db.customSelect('SELECT 1').get();
 
-      // Exactly one new table -- `device_revocations`, no index (task §5,
-      // sync_tables.dart's "point lookup by PK needs no secondary index"
-      // reasoning applies identically here).
+      // Exactly these two new tables -- `device_revocations` (v16->v17, no
+      // index, task §5, sync_tables.dart's "point lookup by PK needs no
+      // secondary index" reasoning applies identically here) and
+      // `rate_limit_counters` (v17->v18, E13-T01, same no-index reasoning).
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
-        {'device_revocations'},
-        reason: 'the v16->v17 step must add exactly this one table',
+        {'device_revocations', 'rate_limit_counters'},
+        reason: 'the v16->current-version upgrade must add exactly these '
+            'tables (device_revocations from v16->v17, rate_limit_counters '
+            'from v17->v18)',
       );
 
       // The new table is usable through the real Dart definition.
