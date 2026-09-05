@@ -1,24 +1,47 @@
-// EARS-VER-11/12 (FR-VER-006, FR-VER-007) — E14-T04.
+// EARS-VER-10/11/12 (FR-VER-006, FR-VER-007) — E14-T04.
 //
 // `EARS-VER-10` (WHEN `UPDATE_REQUIRED` at launch THE system SHALL route
-// to `/version-update-required`) is NOT tested here — that wiring lives in
-// `app/main.dart` and needs a REAL `InstalledBuildProvider`
-// (`EvaluateVersionStateUseCase`'s own injected seam, E14-T02), itself
-// blocked on a `pubspec.yaml` 🧍 `new_dependency` gate this task has no
-// authority to clear (see `## Open Questions`). What IS fully testable
-// without either blocked dependency is this controller's OWN behaviour:
-// it starts whatever launcher it is given (EARS-VER-12), and it never
-// exposes any way to navigate away on its own (EARS-VER-11's controller
-// half — the view's own non-dismissibility, `PopScope(canPop: false)`, is
-// a widget-tree property asserted directly against `VersionUpdateView`
-// below, not something a plain `GetxController` unit test could reach).
+// to `/version-update-required`) is proven against `app/main.dart`'s own
+// `initialRouteFor(VersionState)` — the pure mapping pulled out of `main()`
+// specifically so this fenced test file can assert it directly, without
+// booting Firebase/`AppDatabase`/`MessagingStack` the way running `main()`
+// itself would require (`Q-E14-T04-1`, resolved 2026-09-05: both
+// `package_info_plus` and `in_app_update` are now human-approved and
+// wired). What is fully testable independent of either dependency is this
+// controller's OWN behaviour: it starts whatever launcher it is given
+// (EARS-VER-12), and it never exposes any way to navigate away on its own
+// (EARS-VER-11's controller half — the view's own non-dismissibility,
+// `PopScope(canPop: false)`, is a widget-tree property asserted directly
+// against `VersionUpdateView` below, not something a plain `GetxController`
+// unit test could reach).
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:nexora/app/main.dart' show initialRouteFor;
+import 'package:nexora/app/routes.dart';
+import 'package:nexora/features/version/domain/version_state.dart';
 import 'package:nexora/features/version/presentation/version_update_controller.dart';
 import 'package:nexora/features/version/presentation/version_update_view.dart';
 
 void main() {
+  group('initialRouteFor (EARS-VER-10)', () {
+    test(
+        'test_EARS_VER_10_update_required_routes_to_mandatory_screen',
+        () {
+      expect(
+        initialRouteFor(VersionState.updateRequired),
+        Routes.versionUpdateRequired,
+      );
+    });
+
+    test(
+        'test_up_to_date_and_update_available_route_to_the_normal_startup_flow',
+        () {
+      expect(initialRouteFor(VersionState.upToDate), Routes.welcome);
+      expect(initialRouteFor(VersionState.updateAvailable), Routes.welcome);
+    });
+  });
+
   group('VersionUpdateController', () {
     test('test_EARS_VER_12_update_now_starts_immediate_update_flow',
         () async {

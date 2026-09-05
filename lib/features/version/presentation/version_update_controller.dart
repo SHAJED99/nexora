@@ -5,20 +5,16 @@
 // Play in-app update "Immediate Update" flow (task file §5's one function,
 // `startImmediateUpdate()`).
 //
-// **Blocked dependency (task file §2/§6, rule 3 🧍 `new_dependency`):** the
-// real Immediate Update flow needs the `in_app_update` package (or
-// equivalent) — there is no first-party Flutter binding for the Google Play
-// in-app update API in this project today, and adding one to `pubspec.yaml`
-// is a human gate this task has no authority to clear unilaterally. Rather
-// than block this controller's own logic on that gate, the actual platform
-// call is taken as an injected [ImmediateUpdateLauncher] — the same shape
-// `EvaluateVersionStateUseCase` (E14-T02) already uses for its own
-// `InstalledBuildProvider`/`CachedPolicyProvider` — so this file's own
-// behaviour (start the flow, log+swallow a failure, never crash, never
-// navigate away) is fully built and tested now. Whichever task wires a real
-// `in_app_update`-backed launcher in supplies it here and is the one that
-// must clear the `pubspec.yaml` gate — not this task, and not silently. See
-// this task's `## Open Questions` for the exact blocking detail.
+// The actual platform call is taken as an injected [ImmediateUpdateLauncher]
+// — the same shape `EvaluateVersionStateUseCase` (E14-T02) already uses for
+// its own `InstalledBuildProvider`/`CachedPolicyProvider` — rather than this
+// controller calling the `in_app_update` package directly, so this file's
+// own behaviour (start the flow, log+swallow a failure, never crash, never
+// navigate away) is independently unit-testable without a platform channel.
+// `lib/app/routes.dart`'s `_VersionUpdateBinding` supplies the real,
+// `in_app_update`-backed launcher (`Q-E14-T04-1`, human-approved
+// 2026-09-05) — this file itself needs no change now that dependency is
+// wired.
 import 'package:get/get.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 
