@@ -30,17 +30,22 @@ input (idea|PRD|SRS|design|code) ─▶ intake + questions ─▶ knowledge map 
    never silently invent one.
 3. **The human decides foundations and business fit.** Stack, architecture,
    datastore, auth strategy, schema migrations, new dependencies, secrets,
-   deletions >50 lines, auth/payment code, and every merge into `development`
-   or `main` are human calls. On a foundational choice the agent PRESENTS
-   options with honest trade-offs and an advisory recommendation, then STOPS
-   (ADR stays `⏳ AWAITING HUMAN`). Choices *within* an accepted ADR are the
-   agent's.
+   deletions >50 lines, auth/payment code, and every merge into `main` are
+   human calls. On a foundational choice the agent PRESENTS options with
+   honest trade-offs and an advisory recommendation, then STOPS (ADR stays
+   `⏳ AWAITING HUMAN`). Choices *within* an accepted ADR are the agent's.
+   **Epic→`development` merges are delegated to the agent** (human decision,
+   2026-09-05) once rule 5's gate has genuinely passed — see rule 5. This
+   delegation covers only that one merge point; it is not a standing grant to
+   skip any other rule-3 stop, and `development`→`main` remains human-only.
 4. **One task = one branch = one worktree.** `development` (integration) →
    `epic_<NN>` → `epic_<NN>_task_<MM>`. Never commit directly to `main`,
    `development`, or an epic branch. Promotion is by PR only.
 5. **Every merge passes the gate.** `reviewed_by` ≠ `executed_by` — a
    different model reviews than implemented. Task PR → review gate → epic
-   branch. Epic complete → bug sweep → human gate → `development`.
+   branch. Epic complete → bug sweep → P1/P2 = 0 → epic→`development` PR,
+   merged by the agent per rule 3's 2026-09-05 delegation. `development` →
+   `main` stays a human gate, unaffected by that delegation.
 6. **The task file is the contract.** `files:`, `api_contracts:`, `functions:`
    and `## What this task does NOT do` are binding. Never invent APIs, fields
    or paths; never refactor outside scope; never upgrade deps. Deviation =

@@ -36,8 +36,8 @@ Your sign-off flips reviewed tasks from `done` → `verified`.
 | **Analyze report** | before tasks dispatch | are the specs complete and consistent |
 | **Bug priorities** | after each sweep | severity is the reviewer's; **priority is yours** |
 | **Retro promotions** | after each retro | approve skill/rule edits — they're code |
-| **Epic → development** | epic done | does this match what the business needs |
-| **Release (dev → main)** | on release | ship it? |
+| **Epic → development** | epic done | delegated to the agent, 2026-09-05 (once P1/P2 = 0 and rule 5's review gate has passed) — no longer a human click, but merges here are reversible and visible in the epic's own tracker/retro |
+| **Release (dev → main)** | on release | ship it? — still yours |
 | **Anything in `harness.yaml: human_gates`** | anytime | migrations, deps, secrets, auth |
 
 Everything else runs agent-to-agent. You review *reviewed* work — your time goes
