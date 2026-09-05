@@ -41,6 +41,7 @@ protocol security.
 | E13-T04 | Rate-limit group-invitation spam |
 | E13-T05 | Byte-volume admission control against storage-exhausting inbound data |
 | E13-T06 | Real observability client (Sentry-or-equivalent) replacing the console-log stub |
+| E13-T07 | Wire the rate limiter into production — filed 2026-09-05 out of T02's own review finding (P1) |
 
 ## Open Questions
 None new at the epic level (each task's own Open Questions section, if
