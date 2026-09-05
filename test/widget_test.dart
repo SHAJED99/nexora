@@ -21,7 +21,10 @@ import 'package:drift/native.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:nexora/app/bindings.dart';
+import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/login/data/device_identity_repository.dart';
 import 'package:nexora/features/login/domain/sign_in_use_case.dart';
 import 'package:nexora/features/login/presentation/login_controller.dart';
@@ -30,6 +33,41 @@ import 'package:nexora/features/welcome/presentation/welcome_controller.dart';
 import 'package:nexora/features/welcome/presentation/welcome_view.dart';
 
 import 'support/fake_google_auth_service.dart';
+
+/// E14-B02's own instrumentation, mirroring
+/// `messaging_coordinator_test.dart`'s `_ControlledSendTransport` pattern
+/// (a `TransportService` subclass built over the same mocked Pigeon
+/// channel, never a from-scratch fake). `InboundPipeline.start()`
+/// (`inbound_pipeline.dart:295`) and `MessagingCoordinator.start()`
+/// (`messaging_coordinator.dart:287`) are the ONLY two production call
+/// sites anywhere in `lib/` that read `.discoveredDevices` before the app
+/// navigates to a route that constructs a screen controller (`devices
+/// _controller.dart`/`dashboard_controller.dart` also read it, but neither
+/// is built by `AppBinding.dependencies()` itself — both are `lazyPut`,
+/// resolved only once their own screen is opened, which this test never
+/// does). So counting accesses to this one getter during
+/// `AppBinding.dependencies()` is a direct, non-fragile proxy for "did the
+/// messaging mesh's transport-data intake actually get subscribed" —
+/// without needing to drive a full discover -> connect -> incoming-data
+/// event sequence through the mocked native channel just to prove a
+/// negative. Per `L-feedback`/this project's own lesson on `fail()` inside
+/// injected seams (a broad catch in the SUT can swallow it silently), this
+/// is a plain counter asserted with `expect(..., 0)`/`expect(..., greaterThan(0))`,
+/// never a `fail()` planted inside the seam itself.
+class _CountingTransportService extends TransportService {
+  _CountingTransportService({
+    required super.binaryMessenger,
+    required super.messageChannelSuffix,
+  });
+
+  int discoveredDevicesAccessCount = 0;
+
+  @override
+  Stream<TransportDevice> get discoveredDevices {
+    discoveredDevicesAccessCount++;
+    return super.discoveredDevices;
+  }
+}
 
 void main() {
   setUp(() => Get.testMode = true);
@@ -92,4 +130,84 @@ void main() {
       await db.close();
     },
   );
+
+  group('E14-B02 — AppBinding.blockCommunication gates the four starts', () {
+    final TestDefaultBinaryMessenger messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    var suffixCounter = 0;
+    String nextSuffix() => 'e14-b02-${suffixCounter++}';
+
+    /// Builds a ready `MessagingStack` over a `_CountingTransportService`, so
+    /// each test can read `transport.discoveredDevicesAccessCount` after
+    /// exercising `AppBinding.dependencies()`.
+    Future<MessagingStack> buildStack() async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final transport = _CountingTransportService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: nextSuffix(),
+      );
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'device-b02-test',
+        transport: transport,
+      );
+      expect(
+        stack.status,
+        const MessagingStackStatus.ready(),
+        reason: 'a degraded stack would never start anything either way, '
+            'which would make this test pass for the wrong reason',
+      );
+      return stack;
+    }
+
+    tearDown(Get.reset);
+
+    test(
+        'test_EARS_VER_1_FR_VER_006_update_required_does_not_start_the_'
+        'inbound_pipeline', () async {
+      final stack = await buildStack();
+      addTearDown(stack.dispose);
+
+      AppBinding(
+        db: stack.db,
+        messagingStack: stack,
+        blockCommunication: true,
+      ).dependencies();
+
+      final transport = stack.transport as _CountingTransportService;
+      expect(
+        transport.discoveredDevicesAccessCount,
+        0,
+        reason: 'under VersionState.updateRequired, neither '
+            'MessagingCoordinator.start() nor InboundPipeline.start() may '
+            'ever subscribe to live transport data',
+      );
+    });
+
+    test(
+        'test_up_to_date_and_update_available_still_start_the_inbound_'
+        'pipeline_mirror_image', () async {
+      // The mirror-image assertion the bug's own regression-test note
+      // requires: this proves the fix cannot pass by breaking startup
+      // generally -- the default (`blockCommunication: false`, matching
+      // both VersionState.upToDate and VersionState.updateAvailable, per
+      // `main.dart`'s own `versionState == VersionState.updateRequired`
+      // computation) must still start everything, exactly as before this
+      // fix.
+      final stack = await buildStack();
+      addTearDown(stack.dispose);
+      addTearDown(stack.coordinator.stop);
+
+      AppBinding(db: stack.db, messagingStack: stack).dependencies();
+
+      final transport = stack.transport as _CountingTransportService;
+      expect(
+        transport.discoveredDevicesAccessCount,
+        greaterThan(0),
+        reason: 'under VersionState.upToDate/updateAvailable, the mesh '
+            'must keep starting exactly as it always has -- this is what '
+            'stops the fix from passing by disabling startup unconditionally',
+      );
+    });
+  });
 }

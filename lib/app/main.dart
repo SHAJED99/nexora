@@ -59,18 +59,12 @@ Future<void> main() async {
   // separate follow-up) against `E14-T01`'s already-cached version policy.
   // `VersionPolicyService(database: db)` reads the SAME `db` instance
   // constructed above — never a second `AppDatabase`, same "exactly one"
-  // discipline this file already documents for `MessagingStack`. Only
-  // `.cached()` is consulted here: `.refresh()` has no caller in this task,
-  // matching `EvaluateVersionStateUseCase`'s own scope fence ("does NOT
-  // call refresh() … deciding when to refresh is E14-T04's own wiring
-  // concern") — this task wires the consumer, not a new remote-fetch
-  // trigger.
+  // discipline this file already documents for `MessagingStack`.
   final versionPolicyService = VersionPolicyService(database: db);
-  final evaluateVersionState = EvaluateVersionStateUseCase(
-    cachedPolicyProvider: versionPolicyService.cached,
-    installedBuildProvider: _readInstalledBuildNumber,
+  final versionState = await evaluateVersionStateAtLaunch(
+    versionPolicyService,
+    _readInstalledBuildNumber,
   );
-  final versionState = await evaluateVersionState.call();
   final initialRoute = initialRouteFor(versionState);
 
   runApp(
@@ -78,8 +72,42 @@ Future<void> main() async {
       db: db,
       messagingStack: messagingStack,
       initialRoute: initialRoute,
+      // E14-B02 (FR-VER-006's "block application communication" clause):
+      // the same already-evaluated `versionState` also decides whether
+      // `AppBinding` may start the mesh -- see `bindings.dart`'s own
+      // `blockCommunication` doc comment for exactly what this gates.
+      blockCommunication: versionState == VersionState.updateRequired,
     ),
   );
+}
+
+/// E14-B01: the exact launch-time composition `main()` runs to decide
+/// [VersionState] — pulled out to a named, top-level function (same reason
+/// `initialRouteFor` below already is one) so
+/// `test/features/version/presentation/version_update_controller_test.dart`
+/// (this bug's own fenced test file) can call THIS SAME function, not a
+/// re-implementation of it, and so a regression that removes the
+/// `.refresh()` call below fails that test rather than silently passing.
+///
+/// `refresh()` had zero production callers anywhere in `lib/` before this
+/// fix — `E14-T01`/`E14-T02`/`E14-T04` each fenced the call site out to one
+/// of the other two, and the sum was that `.cached()` below always read an
+/// empty table (`VersionState.upToDate` always won by fail-open default).
+/// Launch-time only (no polling timer, no periodic refresh — matches
+/// `E14-T04`'s own fence): `refresh()` is already best-effort, timeout
+/// -bounded and never-throwing (`EARS-VER-4`), so awaiting it here degrades
+/// a no-network launch to exactly the previous (broken-but-safe) fail-open
+/// behaviour, never a hang or a crash.
+Future<VersionState> evaluateVersionStateAtLaunch(
+  VersionPolicyService versionPolicyService,
+  Future<int> Function() installedBuildProvider,
+) async {
+  await versionPolicyService.refresh();
+  final evaluateVersionState = EvaluateVersionStateUseCase(
+    cachedPolicyProvider: versionPolicyService.cached,
+    installedBuildProvider: installedBuildProvider,
+  );
+  return evaluateVersionState.call();
 }
 
 /// `EARS-VER-10` (FR-VER-006): the launch-time routing decision itself, as
@@ -128,6 +156,7 @@ class NexoraApp extends StatelessWidget {
     required this.db,
     required this.messagingStack,
     this.initialRoute = Routes.welcome,
+    this.blockCommunication = false,
   });
 
   final AppDatabase db;
@@ -140,12 +169,24 @@ class NexoraApp extends StatelessWidget {
   /// one explicitly).
   final String initialRoute;
 
+  /// E14-B02 (FR-VER-006): `true` exactly when `main()`'s own
+  /// `versionState == VersionState.updateRequired` — threaded straight
+  /// into `AppBinding.blockCommunication`, see that field's own doc
+  /// comment for what it gates. Defaults `false` (the pre-existing
+  /// behaviour) for any caller — e.g. a widget test — that does not pass
+  /// one explicitly.
+  final bool blockCommunication;
+
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
       title: 'NEXORA',
       debugShowCheckedModeBanner: false,
-      initialBinding: AppBinding(db: db, messagingStack: messagingStack),
+      initialBinding: AppBinding(
+        db: db,
+        messagingStack: messagingStack,
+        blockCommunication: blockCommunication,
+      ),
       initialRoute: initialRoute,
       getPages: appPages,
     );

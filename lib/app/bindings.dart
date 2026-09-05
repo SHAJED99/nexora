@@ -62,6 +62,7 @@ class AppBinding extends Bindings {
   AppBinding({
     required this.db,
     required this.messagingStack,
+    this.blockCommunication = false,
     BackgroundControl? backgroundControl,
   }) : _backgroundControl = // ignore: prefer_initializing_formals
       backgroundControl;
@@ -75,6 +76,22 @@ class AppBinding extends Bindings {
   /// `MessagingStack.create`'s own contract: construction never throws, a
   /// degraded device is reported via `messagingStack.status` instead.
   final MessagingStack messagingStack;
+
+  /// E14-B02 (`FR-VER-006`'s "block application communication" clause,
+  /// `EARS-VER-1`): `true` exactly when `main.dart`'s own launch-time
+  /// `VersionState` evaluation is `updateRequired`. Gates ONLY the four
+  /// lifecycle `.start()` calls below (`messagingStack.coordinator`, the
+  /// `LinkQualityFeed`, `backgroundObserver`, `notificationDispatcher`) —
+  /// every construction/registration in this method (`messagingStack`
+  /// itself, `MessagingStack.create`, every `Get.put` below) stays
+  /// unconditional, matching `MessagingStack.create`'s own "does NOT start
+  /// anything" contract and the single-instance discipline this file's
+  /// header already documents: only the *starts* are suppressed, never the
+  /// composition root's construction. Defaults `false` (today's
+  /// pre-existing behaviour) so every other caller of this binding —
+  /// production callers that predate this bug fix, and every existing test
+  /// that constructs `AppBinding` directly — is unaffected.
+  final bool blockCommunication;
 
   /// E10-T10: test-only override for the real, Pigeon-backed
   /// `BackgroundService` -- mirrors `MessagingStack.create`'s own `transport`
@@ -127,7 +144,18 @@ class AppBinding extends Bindings {
     // EARS-MSG-1 stays true only in E06-T06's own tests, never in the app a
     // user runs. No new binding, no new singleton, no other change to this
     // file's existing registrations.
-    messagingStack.coordinator.start();
+    //
+    // E14-B02: gated on `blockCommunication` — this is the first of the
+    // four subsystems `FR-VER-006`'s "block application communication"
+    // clause requires suppressed under `VersionState.updateRequired`.
+    // `messagingStack.coordinator.start()` is what actually calls
+    // `inbound.start()` (`messaging_coordinator.dart`), so skipping it here
+    // is what keeps the inbound pipeline's `discoveredDevices` subscription
+    // — and therefore every downstream `incomingData` subscription it would
+    // open per connected peer — from ever being opened at all.
+    if (!blockCommunication) {
+      messagingStack.coordinator.start();
+    }
     Get.put(messagingStack.sendMessage, permanent: true);
     Get.put(messagingStack.receiveMessage, permanent: true);
     Get.put(messagingStack.syncCursors, permanent: true);
@@ -151,13 +179,20 @@ class AppBinding extends Bindings {
     // device — every other messaging task is downstream of this being
     // true. Constructed from the already-registered singletons above
     // (never a second `TransportService`/`RoutingEngine`), started once.
-    Get.put(
+    // E14-B02: construction/registration stays unconditional (a future
+    // screen resolving `Get.find<LinkQualityFeed>()` must not fail merely
+    // because communication is blocked); only `.start()` — which subscribes
+    // to live transport link-quality events — is gated.
+    final linkQualityFeed = Get.put(
       LinkQualityFeed(
         transport: messagingStack.transport,
         routing: messagingStack.routingEngine,
       ),
       permanent: true,
-    ).start();
+    );
+    if (!blockCommunication) {
+      linkQualityFeed.start();
+    }
 
     // E08-T06: the storage-retention composition root. Built AFTER `db`
     // above (StorageInventory/StorageSettingsRepository/RetentionExecutor/
@@ -221,7 +256,14 @@ class AppBinding extends Bindings {
       service: _backgroundControl ?? BackgroundService(),
     );
     Get.put(backgroundObserver, permanent: true);
-    backgroundObserver.start();
+    // E14-B02: same construction-unconditional/start-gated split as
+    // `messagingStack.coordinator`/`linkQualityFeed` above —
+    // `backgroundObserver.start()` is what attaches the app-lifecycle
+    // observer and can go on to start the foreground service/discovery, so
+    // it is one of the four subsystems `FR-VER-006` requires suppressed.
+    if (!blockCommunication) {
+      backgroundObserver.start();
+    }
 
     // E10-T03: the notification composition root. `NotificationService`
     // itself is E10-T01's Pigeon-backed facade (never constructed a second
@@ -338,14 +380,18 @@ class AppBinding extends Bindings {
     // well after that test has already completed. `_measureDatabaseFileBytes`
     // above guards the identical "platform channel unavailable in this
     // test's zone" shape for the same reason.
-    unawaited(
-      notificationDispatcher.start().catchError((Object e) {
-        ObservabilityService.instance.logError(
-          'notification.dispatcher_start_failed',
-          cause: e,
-        );
-      }),
-    );
+    // E14-B02: same construction-unconditional/start-gated split as the
+    // three subsystems above — the fourth and last `FR-VER-006` names.
+    if (!blockCommunication) {
+      unawaited(
+        notificationDispatcher.start().catchError((Object e) {
+          ObservabilityService.instance.logError(
+            'notification.dispatcher_start_failed',
+            cause: e,
+          );
+        }),
+      );
+    }
     Get.put(notificationDispatcher, permanent: true);
   }
 
