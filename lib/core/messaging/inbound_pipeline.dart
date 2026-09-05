@@ -116,12 +116,27 @@
 // those named-argument keywords to the private field names, breaking every
 // call site (relay_engine.dart's header already documents this same
 // deliberate exclusion for the identical reason).
+//
+// **E13-T03 addition: per-claimed-sender relay rate limiting.** `Q-E13-T03-1`
+// (this task file's own Open Questions) found that `RelayEngine.enqueue` has
+// no sender-identity parameter or column to gate on at all — the human's
+// resolution (recorded there) moves the gate to THIS file's forward branch
+// instead, the one caller that actually has an identity in scope:
+// `frame.source`. `frame.source` is unverified/attacker-claimed (same class
+// of issue as the TOFU finding in E09-B09) — this still stops a naive
+// flooder using one claimed identity, which is most of the realistic threat
+// model; an attacker rotating claimed source ids per frame evades it, which
+// is a known, accepted limitation, not a defect this task solves. No schema
+// migration: `E13-T01`'s `RateLimiter` keeps its own `rate_limit_counters`
+// table, keyed by an arbitrary string bucket key — nothing about
+// `relay_packets` changes.
 // ignore_for_file: prefer_initializing_formals
 import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:drift/drift.dart';
 
+import '../abuse/rate_limiter.dart';
 import '../auth/google_auth_service.dart' show AppFailure;
 import '../crypto/crypto_failures.dart';
 import '../persistence/database.dart';
@@ -146,6 +161,17 @@ import 'relay_packet_frame.dart';
 /// This typedef's signature is otherwise unchanged from E06-T05/T07: only
 /// the dispatch mechanism above it changed, not what a handler is handed.
 typedef ControlHandler = Future<void> Function(RelayPacketFrame frame);
+
+/// Per-claimed-sender relay admission limit (`FR-ABUSE-001`, E13-T03's own
+/// decision — see the task's Run log). 60 forwarded packets per claimed
+/// `frame.source` per rolling minute is ~1/second sustained: generous enough
+/// that a busy group chat's own relay traffic through this device is never
+/// mistaken for flooding (E13-T02's sibling task documents the same
+/// "realistic legitimate traffic" reasoning for its own bucket choices), while
+/// still bounding what a naive single-identity flooder can force this device
+/// to do (queue writes, wake radios) before being denied.
+const int _relayRateLimitMaxCount = 60;
+const Duration _relayRateLimitWindow = Duration(minutes: 1);
 
 /// Silent-drop counters (task file §5) — the bug sweep's and the Dashboard's
 /// only handle on this loop, since a bad packet is dropped, not surfaced.
@@ -206,6 +232,14 @@ class InboundCounters {
   /// on it), and distinct from [groupNoChain] (task file §6: "make the
   /// counter and the failure code distinct enough that it is diagnosable").
   int groupEpochUnknown = 0;
+
+  // --- E13-T03: relay-flooding admission control -----------------------
+
+  /// The forward branch's claimed sender (`frame.source`) was over its
+  /// relay rate limit (`FR-ABUSE-001`, `Q-E13-T03-1`'s resolution) — the
+  /// packet is denied `enqueue` entirely: never queued, never counted
+  /// toward [forwarded].
+  int rateLimited = 0;
 }
 
 /// The receive half of the messaging wedge (see this file's header).
@@ -216,8 +250,16 @@ class InboundPipeline {
   InboundPipeline({
     required MessagingStack stack,
     DateTime Function() clock = DateTime.now,
+    // E13-T03: constructor-injected, defaulting to a fresh `RateLimiter`
+    // bound to this same stack's own `db` — matches this codebase's
+    // established "optional named param with a real default, overridable
+    // for tests" DI pattern (mirrors `MessagingStack.create`'s own
+    // `transport`/`store`/`cryptoService` params) rather than requiring
+    // every existing call site to thread one through by hand.
+    RateLimiter? rateLimiter,
   })  : _stack = stack,
-        _clock = clock {
+        _clock = clock,
+        _rateLimiter = rateLimiter ?? RateLimiter(stack.db) {
     // E07-T06: self-registered rather than externally wired from
     // `messaging_stack.dart` — see this file's header for why. The closure
     // (not a bare tear-off) defers every `_stack.*` read to invocation time,
@@ -230,6 +272,11 @@ class InboundPipeline {
 
   final MessagingStack _stack;
   final DateTime Function() _clock;
+
+  /// E13-T03: the per-claimed-sender relay-flooding admission gate, checked
+  /// at the top of the forward branch in [_handleBuffer], before
+  /// `RelayEngine.enqueue` is ever called.
+  final RateLimiter _rateLimiter;
 
   bool _started = false;
 
@@ -377,6 +424,19 @@ class InboundPipeline {
       // Nothing past this point in this branch touches `frame.payload`,
       // calls `CiphertextCodec.decode`, calls `decrypt`, or constructs a
       // `Message`.
+      // E13-T03 (`Q-E13-T03-1`'s resolution): admission-gate BEFORE
+      // `enqueue`, keyed by the claimed sender (`frame.source`) — a denied
+      // packet is dropped here, never queued, never counted as forwarded.
+      final bool relayAllowed = await _rateLimiter.allow(
+        'relay:${frame.source}',
+        maxCount: _relayRateLimitMaxCount,
+        window: _relayRateLimitWindow,
+      );
+      if (!relayAllowed) {
+        counters.rateLimited++;
+        return;
+      }
+
       final Duration remainingTtl =
           Duration(milliseconds: frame.expiresAtMs - nowMs);
       await _stack.relayEngine.enqueue(
