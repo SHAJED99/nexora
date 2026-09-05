@@ -1,9 +1,11 @@
 # E13 · Abuse Prevention & Diagnostics · Progress
 
-**Status:** all 7 tasks done and merged into `epic_13`. Not yet merged into
-`development` — awaiting an epic-level bug sweep first (see
-`skills/bug-sweep`). · **Started:** 2026-09-05 · **Completed:** 2026-09-06 ·
-**Progress:** 7/7 tasks done
+**Status:** all 7 tasks done and merged into `epic_13`. Epic-level bug
+sweep run 2026-09-06: **P1/P2 = 0** (two findings, `E13-B01` S3 and
+`E13-B02` S4; no S1, no S2). Not yet merged into `development` — awaiting
+the 🧍 `bug_priorities` gate on those two severities. · **Started:**
+2026-09-05 · **Completed:** 2026-09-06 · **Progress:** 7/7 tasks done, 2
+bugs open (S3/S4)
 
 ## Tasks
 
@@ -105,8 +107,9 @@ disjoint files.
 - 2026-09-06 — T07 (wire the rate limiter into production, P1) merged
   (PR #116) after 3 review rounds. Wired all 4 real construction sites
   (closing `OQ-E13-T02-1`, including the one site the original Open
-  Question missed) and resolved `OQ-E13-T01-1` (stale-row eviction inside
-  `RateLimiter.allow`'s own transaction). Round 2 found a real S1/S2
+  Question missed) and bounded `OQ-E13-T01-1` (stale-row eviction inside
+  `RateLimiter.allow`'s own transaction — bounded to a rolling 2 days,
+  not resolved in-window; see the 2026-09-06 sweep entries and `E13-B01`). Round 2 found a real S1/S2
   lockout bug: sign-in minted a brand-new local device identity on every
   launch, so a returning user hit the 5/24h registration rate limit after
   6 launches in a day and was silently stuck. Human-decided fix: reuse
@@ -117,6 +120,44 @@ disjoint files.
   with nothing logged — fixed in round 3, independently falsified twice.
   Final verdict APPROVE; 🧍 `auth_or_payment_code` gate human-approved
   2026-09-06. **E13 is now 7/7, complete.**
+- 2026-09-06 — **Epic-level bug sweep run** (`skills/bug-sweep`,
+  independent reviewer, cross-model, claude-opus-5, isolated worktree off
+  `origin/epic_13` @ `b5c3f99`). Full suite **1187/1187 green**,
+  `flutter analyze` clean (one pre-existing `annotate_overrides` info in
+  `test/core/calls/call_migration_controller_test.dart`, unrelated to
+  E13). All 5 production `RateLimiter` wiring sites re-verified composed
+  correctly after the merge: `bindings.dart:98-100`
+  (`DeviceIdentityRepository`), `messaging_stack.dart:281-283` +
+  `devices_controller.dart:50-52` (`EvaluateConnectionRequestUseCase`,
+  two independent instances sharing one DB-backed bucket — shared, not
+  double-counted), `inbound_pipeline.dart:309` (both gates),
+  `group_membership_service.dart:314`. T05's fail-open fix and T07's
+  device-identity-reuse fix were each falsified by the sweep (removing
+  the fix makes exactly the right test fail: T05's
+  `test_EARS_ABUSE_10_single_oversized_packet_denied_on_fresh_window`;
+  T07's fix is guarded at three altitudes — use case, controller, and the
+  full `widget_test.dart` journey) and restored. **Two findings, both
+  filed: `E13-B01` (S3) and `E13-B02` (S4). Zero S1, zero S2.** Priority
+  stamps pending the 🧍 `bug_priorities` human gate; with no S1/S2 the
+  epic→`development` PR is unblocked once that gate lands.
+- 2026-09-06 — Sweep dispositions for each carried-forward observation:
+  **T02** closed by T07 (all 4 construction sites wired, verified).
+  **T03**'s rotating-`frame.source` evasion — confirmed still an accepted
+  limitation, not a defect; its second-order cost is `E13-B01`.
+  **T04** — `GroupMembershipService.createGroup` confirmed still to have
+  zero `lib/` callers, but so does every other group-membership entry
+  point (no group-management UI exists yet), so the gate is correctly
+  pre-placed rather than orphaned; the rate-gate-before-permission-check
+  ordering on `addMember` is confirmed cosmetic (the bucket is keyed on
+  the LOCAL device id, so it is not remotely probeable). No bug filed for
+  either. **T05** — re-confirmed fixed, falsified independently. **T07**'s
+  `deviceId`-only match — confirmed still accurate and still unreachable:
+  `grep` over all of `lib/` for any sign-out/logout/account-switch path
+  returns nothing. Stays a carried-forward note. **`OQ-E13-T01-1`** —
+  eviction verified working end to end (50 three-day-old rows plus one
+  `allow()` leaves exactly 1 row), but growth is bounded only across a
+  rolling 2 days, not in-window: 500 rotated keys still produce 500 rows
+  and zero denials. Corrected below and folded into `E13-B01`.
 - **Carried-forward observation (T07's reviewer, non-blocking)**:
   `SignInUseCase.call` matches on `deviceId` only, never on account. If
   two different accounts ever sign in on the same device (no sign-out/
