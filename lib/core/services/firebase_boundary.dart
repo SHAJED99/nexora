@@ -19,6 +19,7 @@ enum FirebaseNodeKind {
   deviceRevocation,
   relationship,
   directory,
+  directoryPrivate,
 }
 
 /// Thrown by [FirebaseBoundary.assertAllowedFields] when a payload carries a
@@ -80,14 +81,22 @@ class FirebaseBoundary {
     // `directory/$deviceId` — public device identity information: a
     // device's public identity key, its current (public) prekey bundle,
     // and its revocation flag (`DeviceDirectoryService.publish`, E11-T06,
-    // `ADR-0008` option 2). `ownerUid` is the write-ownership marker the
-    // rules file checks — never a private key, session key, or session
+    // `ADR-0008` option 2) — never a private key, session key, or session
     // state; only public-by-construction material may ever reach this set
-    // (task §2, non-negotiable).
+    // (task §2, non-negotiable). `ownerUid` is deliberately NOT in this
+    // set (`E11-B06` fix) — it moved to its own node, below, so it is
+    // never cross-account readable alongside the public entry.
     FirebaseNodeKind.directory: {
       'identityPublicKey',
       'prekeyBundle',
       'revokedAt',
+    },
+    // `directory_private/$deviceId` — the write-ownership marker for the
+    // corresponding `directory/$deviceId` entry, split into its own node
+    // so it is readable only by the owning account
+    // (`DeviceDirectoryService.publish`, `E11-B06` fix for the
+    // cross-account `ownerUid`-readability leak).
+    FirebaseNodeKind.directoryPrivate: {
       'ownerUid',
     },
   };

@@ -1,5 +1,6 @@
-// E11-T02/E11-T04/E11-T05/E11-T06 — structural tests for
-// `database.rules.json` (EARS-FB-4, FB-5, FB-6, FB-13, FB-16, FB-18, FB-19).
+// E11-T02/E11-T04/E11-T05/E11-T06/E11-B06 — structural tests for
+// `database.rules.json` (EARS-FB-4, FB-5, FB-6, FB-13, FB-16, FB-18, FB-19,
+// FB-20).
 //
 // These tests prove the rules FILE SAYS the right thing: they parse
 // `database.rules.json` and cross-check it against `docs/firebase-schema.md`
@@ -488,8 +489,9 @@ void main() {
   });
 
   group('test_EARS_FB_6_no_cross_account_access', () {
-    test('every .read/.write outside directory/ is either false or scoped '
-        'to auth.uid === \$uid; none is the literal true', () {
+    test('every .read/.write outside directory/ and directory_private/ is '
+        'either false or scoped to auth.uid === \$uid; none is the '
+        'literal true', () {
       final rules =
           jsonDecode(rulesFile.readAsStringSync()) as Map<String, dynamic>;
       final root = rules['rules'] as Map<String, dynamic>;
@@ -505,8 +507,22 @@ void main() {
       // here does not weaken this test: it narrows what this test is FOR
       // (proving every node that is NOT the directory stays owner-scoped)
       // rather than silently accepting a cross-account grant anywhere.
-      final outsideDirectory =
-          found.where((entry) => !entry.key.startsWith('/directory')).toList();
+      // `directory_private/$deviceId/ownerUid` (`E11-B06` fix) is excluded
+      // for the same reason -- its own shape (owner-only read, NOT
+      // `auth.uid === $uid` since there is no `$uid` segment on this path)
+      // is asserted exhaustively by `test_EARS_FB_20_directory_private_rules`
+      // below. The prefix check uses a trailing "/" so
+      // "directory_private" is never mistaken for a "directory" match by
+      // this string comparison (a bare `startsWith('/directory')` would
+      // wrongly swallow `/directory_private/...` too, since that string
+      // also starts with the literal characters "/directory").
+      final outsideDirectory = found
+          .where(
+            (entry) =>
+                !entry.key.startsWith('/directory/') &&
+                !entry.key.startsWith('/directory_private/'),
+          )
+          .toList();
       expect(outsideDirectory, isNotEmpty);
       for (final entry in outsideDirectory) {
         final value = entry.value;
@@ -536,13 +552,41 @@ void main() {
       final root = rules['rules'] as Map<String, dynamic>;
       final found = <MapEntry<String, dynamic>>[];
       _collectReadWriteRules(root, '', found);
-      final underDirectory =
-          found.where((entry) => entry.key.startsWith('/directory')).toList();
+      // Trailing "/" so this does not also sweep up
+      // "/directory_private/..." (that string also starts with the
+      // literal characters "/directory") -- checked separately, exactly,
+      // below.
+      final underDirectory = found
+          .where((entry) => entry.key.startsWith('/directory/'))
+          .toList();
 
       expect(underDirectory, hasLength(2));
       expect(
         underDirectory.map((e) => e.key).toSet(),
         {r'/directory/$deviceId/.read', r'/directory/$deviceId/.write'},
+      );
+    });
+
+    test('the only rules under directory_private/ are the exact ones '
+        'E11-B06 documents -- this test cannot be satisfied by silently '
+        'adding a second, broader grant somewhere else under '
+        'directory_private/', () {
+      final rules =
+          jsonDecode(rulesFile.readAsStringSync()) as Map<String, dynamic>;
+      final root = rules['rules'] as Map<String, dynamic>;
+      final found = <MapEntry<String, dynamic>>[];
+      _collectReadWriteRules(root, '', found);
+      final underDirectoryPrivate = found
+          .where((entry) => entry.key.startsWith('/directory_private/'))
+          .toList();
+
+      expect(underDirectoryPrivate, hasLength(2));
+      expect(
+        underDirectoryPrivate.map((e) => e.key).toSet(),
+        {
+          r'/directory_private/$deviceId/ownerUid/.read',
+          r'/directory_private/$deviceId/ownerUid/.write',
+        },
       );
     });
   });
@@ -611,11 +655,12 @@ void main() {
       deviceIdNode = _navigate(rules, ['directory', r'$deviceId']);
     });
 
-    test('carries only identityPublicKey, prekeyBundle, revokedAt, '
-        'ownerUid', () {
+    test('carries only identityPublicKey, prekeyBundle, revokedAt -- '
+        'ownerUid moved to directory_private/\$deviceId (E11-B06 fix, so '
+        'it is never cross-account readable alongside these fields)', () {
       expect(
         _declaredFieldKeys(deviceIdNode),
-        {'identityPublicKey', 'prekeyBundle', 'revokedAt', 'ownerUid'},
+        {'identityPublicKey', 'prekeyBundle', 'revokedAt'},
       );
     });
 
@@ -627,48 +672,148 @@ void main() {
       );
     });
 
-    test('.validate requires identityPublicKey/prekeyBundle/ownerUid on '
-        'every write (revokedAt stays optional -- absent when not '
-        'revoked)', () {
+    test('.validate requires identityPublicKey/prekeyBundle on every write '
+        '(revokedAt stays optional -- absent when not revoked; ownerUid '
+        'is no longer one of this node\'s own fields, E11-B06 fix)', () {
       final validate = deviceIdNode['.validate'] as String;
-      for (final field in ['identityPublicKey', 'prekeyBundle', 'ownerUid']) {
+      for (final field in ['identityPublicKey', 'prekeyBundle']) {
         expect(validate.contains("'$field'"), isTrue,
             reason: '.validate does not require "$field"');
       }
       expect(validate.contains("'revokedAt'"), isFalse,
           reason: '.validate must not require "revokedAt" -- it is null/'
               'absent when a device has never been revoked');
+      expect(validate.contains("'ownerUid'"), isFalse,
+          reason: '.validate must not require "ownerUid" -- it is no '
+              'longer a field of this node (E11-B06 fix)');
     });
 
-    test('.write requires the caller to write their OWN uid as ownerUid '
-        '(non-owner write denied, EARS-FB-19) -- exact string, not merely '
-        '"contains"', () {
+    test('.write checks ownership against directory_private/\$deviceId/'
+        'ownerUid (E11-B06 fix), not a field on this node -- exact string, '
+        'not merely "contains"', () {
+      // Round 1 review (Opus, emulator-verified) found the original
+      // `root.child(...)` shape here permanently denies every new device's
+      // first publish: `root` in a multi-location `update()` reflects the
+      // PRE-write snapshot, never the sibling paths being written in the
+      // SAME update. `newData.parent().parent()` -- walking up from this
+      // rule's own location (`directory/$deviceId`) through `directory`
+      // to the update's merged root -- is the Firebase-documented idiom
+      // for exactly this, and was verified against a real
+      // `@firebase/rules-unit-testing` emulator (not assumed) before this
+      // string was written: a brand-new device's atomic
+      // {directory/$id, directory_private/$id/ownerUid} update succeeds,
+      // a second account's squat attempt on an existing entry is denied,
+      // and the true owner's own re-publish/rotation still succeeds.
+      //
+      // Round 3 review (Opus, emulator-verified) found this refactor had
+      // silently DROPPED a property the old self-contained `ownerUid`
+      // check used to carry for free: when deleting a node, `newData` at
+      // that node is null, so the OLD `newData.child('ownerUid').val() ===
+      // auth.uid` check (comparing null.child(...) against a uid) was
+      // never true, denying deletion. The new expression never reads
+      // `newData` at THIS node's own value at all, so a delete sailed
+      // through unnoticed -- reopening finding 3's "revoke, don't delete,
+      // permanent" human decision as an unreviewed side effect, not a
+      // choice. `newData.exists() &&` restores it explicitly, verified
+      // against the same emulator: the owner's own `remove()` and a
+      // multi-location `update({'directory/$id': null})` are both denied,
+      // while every other case above still passes.
       expect(
         deviceIdNode['.write'],
-        "auth != null && newData.child('ownerUid').val() === auth.uid && "
-            "(!data.exists() || data.child('ownerUid').val() === auth.uid)",
+        "auth != null && newData.exists() && newData.parent().parent()"
+            ".child('directory_private').child(\$deviceId).child('ownerUid')"
+            ".val() === auth.uid",
+      );
+    });
+
+    test('.write denies deletion of an existing entry -- finding 3\'s '
+        '"revoke, don\'t delete, permanent" human decision (ADR-0008 '
+        'addendum), re-derived independently of the exact-string test '
+        'above so a future edit to the ownership clause cannot silently '
+        'drop this one too', () {
+      final write = deviceIdNode['.write'] as String;
+      // On a delete, `newData` at this node is null/absent -- `.exists()`
+      // is false regardless of who is deleting or what the ownership
+      // check would otherwise say, so this clause alone is what denies
+      // every delete, not an accident of how the ownership check happens
+      // to evaluate against a null newData. Verified against a real
+      // `@firebase/rules-unit-testing` emulator (round 3 review): the
+      // owner's own `remove()` and a multi-location
+      // `update({'directory/$id': null})` are both denied with this
+      // clause present, and both succeed if it is removed -- this is not
+      // a rules-language assumption, it was falsified both ways.
+      expect(write.contains('newData.exists()'), isTrue,
+          reason: '.write has no newData.exists() guard -- a delete of an '
+              'existing directory/\$deviceId entry would silently succeed, '
+              'reopening finding 3\'s decision as an unreviewed side '
+              'effect (E11-B06 round 3)');
+    });
+  });
+
+  group('test_EARS_FB_20_directory_private_rules', () {
+    // E11-B06 fix: `ownerUid` moved out of the cross-account-readable
+    // `directory/$deviceId` node into its own node, readable only by the
+    // caller whose uid it already names. This group is
+    // `test_EARS_FB_19_directory_write_rules`'s own former "ownerUid
+    // immutability" tests, re-targeted at the node that now actually
+    // carries the field.
+    late Map<String, dynamic> rules;
+    late Map<String, dynamic> ownerUidNode;
+
+    setUpAll(() {
+      rules = jsonDecode(rulesFile.readAsStringSync()) as Map<String, dynamic>;
+      ownerUidNode =
+          _navigate(rules, ['directory_private', r'$deviceId', 'ownerUid']);
+    });
+
+    test('.read restricts this node to the caller whose auth.uid already '
+        'equals the stored value -- never any other authenticated '
+        'account -- exact string, not merely "contains"', () {
+      expect(
+        ownerUidNode['.read'],
+        "auth != null && data.val() === auth.uid",
+      );
+    });
+
+    test('.write requires the caller to write their OWN uid (non-owner '
+        'write denied) -- exact string, not merely "contains"', () {
+      expect(
+        ownerUidNode['.write'],
+        "auth != null && newData.val() === auth.uid && "
+            "(!data.exists() || data.val() === auth.uid)",
       );
     });
 
     test('.write makes ownerUid immutable after first write: a caller '
-        'whose uid does not match the EXISTING ownerUid is denied '
-        'regardless of what they write, and a caller who does match can '
-        'never write a DIFFERENT ownerUid than their own -- both '
-        'consequences fall out of the single conjunction above, verified '
-        'here by re-deriving each clause independently', () {
-      final write = deviceIdNode['.write'] as String;
-      // Clause 1: every write's new ownerUid must equal the caller's uid --
-      // this alone already forces ownerUid to only ever be the writer's
+        'whose uid does not match the EXISTING value is denied regardless '
+        'of what they write, and a caller who does match can never write '
+        'a DIFFERENT uid than their own -- both consequences fall out of '
+        'the single conjunction above, verified here by re-deriving each '
+        'clause independently', () {
+      final write = ownerUidNode['.write'] as String;
+      // Clause 1: every write's new value must equal the caller's uid --
+      // this alone already forces the value to only ever be the writer's
       // own uid, on every single write, first or not.
-      expect(write.contains("newData.child('ownerUid').val() === auth.uid"),
-          isTrue);
-      // Clause 2: once the node exists, the EXISTING ownerUid must also
-      // equal the caller's uid -- so a second account can never overwrite
-      // a first account's entry, which is exactly the "whoever publishes
-      // first wins a race that should not be a race" risk task §6 names.
+      expect(write.contains('newData.val() === auth.uid'), isTrue);
+      // Clause 2: once the node exists, the EXISTING value must also equal
+      // the caller's uid -- so a second account can never overwrite a
+      // first account's entry, which is exactly the "whoever publishes
+      // first wins a race that should not be a race" risk `E11-B06` names.
+      expect(
+        write.contains('(!data.exists() || data.val() === auth.uid)'),
+        isTrue,
+      );
+    });
+
+    test('the parent directory/\$deviceId node reads exactly this path to '
+        'authorize its own write -- proves the two nodes are actually '
+        'wired together, not just independently correct', () {
+      final deviceIdNode = _navigate(rules, ['directory', r'$deviceId']);
+      final write = deviceIdNode['.write'] as String;
       expect(
         write.contains(
-          "(!data.exists() || data.child('ownerUid').val() === auth.uid)",
+          "newData.parent().parent().child('directory_private')"
+              ".child(\$deviceId).child('ownerUid')",
         ),
         isTrue,
       );

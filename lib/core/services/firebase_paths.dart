@@ -77,4 +77,18 @@ class FirebasePaths {
   /// [directoryRoot] must never grant that same read (task §2/§6 Risks —
   /// the entire privacy argument for this node rests on that asymmetry).
   static String directoryEntry(String deviceId) => 'directory/$deviceId';
+
+  /// `directory_private/<deviceId>/ownerUid` — the write-ownership marker
+  /// for [deviceId]'s [directoryEntry], deliberately NOT stored alongside
+  /// the public entry (`E11-B06` fix). `directory/$deviceId` is readable by
+  /// any authenticated account (task §2/§6 Risks above); co-locating
+  /// `ownerUid` there let any authenticated account learn whether two
+  /// device ids belong to the same Firebase account, a cross-account
+  /// correlation `ADR-0008`'s cost analysis never priced in (`E11-B06`
+  /// finding 2). This node's own `.read` restricts it to the caller whose
+  /// `auth.uid` already equals the stored value; `directory/$deviceId`'s
+  /// `.write` rule reads this node (not its own child) to decide whether a
+  /// write is from the entry's true owner.
+  static String directoryPrivateOwnerUid(String deviceId) =>
+      'directory_private/$deviceId/ownerUid';
 }

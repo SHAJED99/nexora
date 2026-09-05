@@ -30,16 +30,19 @@ class _CapturingDeviceDirectoryService extends DeviceDirectoryService {
   });
 
   String? capturedDeviceId;
+  String? capturedUid;
   Map<String, dynamic>? capturedData;
   var writeCalls = 0;
 
   @override
   Future<void> writeDirectoryData(
     String deviceId,
+    String uid,
     Map<String, dynamic> data,
   ) async {
     writeCalls++;
     capturedDeviceId = deviceId;
+    capturedUid = uid;
     capturedData = data;
   }
 }
@@ -53,7 +56,11 @@ class _ThrowingWriteDeviceDirectoryService extends DeviceDirectoryService {
   });
 
   @override
-  Future<void> writeDirectoryData(String deviceId, Map<String, dynamic> data) {
+  Future<void> writeDirectoryData(
+    String deviceId,
+    String uid,
+    Map<String, dynamic> data,
+  ) {
     throw Exception('realtime database unavailable');
   }
 }
@@ -122,8 +129,9 @@ void main() {
   tearDown(() => db.close());
 
   group('test_EARS_FB_17_publish', () {
-    test('writes identityPublicKey/prekeyBundle/ownerUid, no revokedAt when '
-        'never revoked', () async {
+    test('writes identityPublicKey/prekeyBundle, no revokedAt when never '
+        'revoked -- and writes ownerUid to its own node, not the public '
+        'payload (E11-B06 fix)', () async {
       final service = _CapturingDeviceDirectoryService(
         identityService: identityService,
         database: db,
@@ -133,9 +141,9 @@ void main() {
 
       expect(service.writeCalls, 1);
       expect(service.capturedDeviceId, 'device-1');
+      expect(service.capturedUid, 'uid-1');
       final data = service.capturedData!;
-      expect(data.keys.toSet(), {'identityPublicKey', 'prekeyBundle', 'ownerUid'});
-      expect(data['ownerUid'], 'uid-1');
+      expect(data.keys.toSet(), {'identityPublicKey', 'prekeyBundle'});
       expect(data['identityPublicKey'], isA<String>());
       expect(data['prekeyBundle'], isA<String>());
 
@@ -187,7 +195,7 @@ void main() {
           utf8.encode(
             (data['identityPublicKey'] as String) +
                 (data['prekeyBundle'] as String) +
-                (data['ownerUid'] as String),
+                service.capturedUid!,
           ),
         );
 
@@ -380,7 +388,6 @@ void main() {
           'prekeyBundle': base64Encode(
             PreKeyBundleCodec.serialize(await identityService.getLocalPreKeyBundle()),
           ),
-          'ownerUid': 'uid-1',
           'revokedAt': 555000,
         },
       );
@@ -469,7 +476,6 @@ void main() {
         final forgedEntry = <String, Object?>{
           'identityPublicKey': base64Encode(bundleA.getIdentityKey().serialize()),
           'prekeyBundle': base64Encode(PreKeyBundleCodec.serialize(bundleB)),
-          'ownerUid': 'attacker-uid',
         };
 
         final lookup = _RespondingReadDeviceDirectoryService(
@@ -492,7 +498,6 @@ void main() {
         final consistentEntry = <String, Object?>{
           'identityPublicKey': base64Encode(bundleA.getIdentityKey().serialize()),
           'prekeyBundle': base64Encode(PreKeyBundleCodec.serialize(bundleA)),
-          'ownerUid': 'uid-1',
         };
 
         final lookup = _RespondingReadDeviceDirectoryService(
