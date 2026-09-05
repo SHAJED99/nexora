@@ -53,13 +53,15 @@ class DevicesController extends GetxController {
     EvaluateConnectionRequestUseCase? evaluateConnectionRequestUseCase,
     FirebaseMetadataService? firebaseMetadataService,
     Future<String?> Function()? currentAccountUid,
+    Future<String?> Function()? thisDeviceId,
   })  : _repository = repository,
         _transportService = transportService ?? TransportService(),
         _evaluateConnectionRequestUseCase = evaluateConnectionRequestUseCase ??
             EvaluateConnectionRequestUseCase(repository),
         _firebaseMetadataService =
             firebaseMetadataService ?? FirebaseMetadataService(),
-        _currentAccountUid = currentAccountUid ?? _defaultCurrentAccountUid;
+        _currentAccountUid = currentAccountUid ?? _defaultCurrentAccountUid,
+        _thisDeviceId = thisDeviceId ?? _defaultThisDeviceId;
 
   final RelationshipRepository _repository;
   final BlockUseCase _blockUseCase;
@@ -67,6 +69,16 @@ class DevicesController extends GetxController {
   final EvaluateConnectionRequestUseCase _evaluateConnectionRequestUseCase;
   final FirebaseMetadataService _firebaseMetadataService;
   final Future<String?> Function() _currentAccountUid;
+
+  /// `E12-B02`'s own collaborator: this device's OWN id (the approving
+  /// device, not the enrolling one) -- needed as `approvedByDeviceId` when
+  /// `verify()` writes a grant record for a pending enrollment. Same
+  /// injectable-with-production-default shape as [_currentAccountUid]
+  /// (task §5 of `E12-T02`'s own precedent), for the same reason: this
+  /// controller's `files:` scope has no constructor path to
+  /// `DeviceIdentityRepository` the way `devices_binding.dart` explicitly
+  /// wires `TransportService`.
+  final Future<String?> Function() _thisDeviceId;
 
   final RxList<Relationship> relationships = <Relationship>[].obs;
 
@@ -186,7 +198,23 @@ class DevicesController extends GetxController {
   /// relationship to Allowed. The richer trust-config flow FR-TRUST-006
   /// would otherwise gate is not built yet; this is the minimal safe
   /// transition the design contract shows (task §3).
+  ///
+  /// `E12-B02` fix: when [deviceId] is a pending ENROLLMENT request (not an
+  /// ordinary stranger's `Unknown`/`Verify` row), this ALSO mirrors the
+  /// approval to Firebase via `FirebaseMetadataService.writeEnrollmentGrant`
+  /// -- the dedicated channel `E12-B03`'s human decision names (a new
+  /// path, never merged through `RelationshipSyncService.pull`/
+  /// `ConflictResolver`). Gated on `wasPendingEnrollment`, captured BEFORE
+  /// the local upsert/removal below, because an ordinary `Verify` of a
+  /// stranger has no enrollment to grant -- writing a grant record for a
+  /// non-enrolling peer would be a category error, the same one `E12-B03`
+  /// itself diagnoses for `ConflictResolver`. Deliberately does NOT call
+  /// `RelationshipSyncService.push` or touch `users/$uid/relationships/*`
+  /// -- that channel is unrelated and unchanged (`E12-B02`'s own "does not
+  /// change push's own implementation or path" fence).
   Future<void> verify(String deviceId) async {
+    final bool wasPendingEnrollment =
+        pendingEnrollments.any((d) => d.id == deviceId);
     await _repository.upsert(deviceId, RelationshipState.allowed);
     // EARS-RECOVER-7: `Approve` (a pending-enrollment row's trailing
     // button) calls this SAME existing method -- once trust is recorded,
@@ -198,6 +226,21 @@ class DevicesController extends GetxController {
     // other caller of `verify`).
     pendingEnrollments.removeWhere((d) => d.id == deviceId);
     await load();
+    if (wasPendingEnrollment) {
+      final String? uid = await _currentAccountUid();
+      final String? myDeviceId = await _thisDeviceId();
+      // Best-effort, same degraded-case framing as `readOwnDeviceIds`
+      // (task §6 risk): an unknown uid/own-device-id (not signed in yet,
+      // or the repository lookup fails) simply skips the mirror -- local
+      // trust is still recorded either way, never blocked on this.
+      if (uid != null && myDeviceId != null) {
+        await _firebaseMetadataService.writeEnrollmentGrant(
+          uid,
+          deviceId,
+          myDeviceId,
+        );
+      }
+    }
   }
 
   /// "Discover" button (element 6) — starts real nearby-device discovery
@@ -387,6 +430,20 @@ class DevicesController extends GetxController {
       final identity =
           await Get.find<DeviceIdentityRepository>().latestDeviceIdentity();
       return identity?.accountUid;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Default [_thisDeviceId]: same singleton lookup as
+  /// [_defaultCurrentAccountUid], reading [DeviceIdentity.deviceId] instead
+  /// of `accountUid` -- this is the APPROVING device's own id, `E12-B02`'s
+  /// `approvedByDeviceId`. Never throws, for the same reason.
+  static Future<String?> _defaultThisDeviceId() async {
+    try {
+      final identity =
+          await Get.find<DeviceIdentityRepository>().latestDeviceIdentity();
+      return identity?.deviceId;
     } catch (_) {
       return null;
     }

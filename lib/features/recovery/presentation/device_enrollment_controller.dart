@@ -3,16 +3,26 @@
 //
 // E12-T03 (FR-RECOVER-001/FR-RECOVER-002): the new device's own waiting
 // screen, reached from `LoginController._signIn()` when this account
-// already owns other registered devices. It has no new wire mechanism of
-// its own — `checkApproval()` is a thin read-only consumer of two
-// collaborators E11/E12 already built:
-//   - `RelationshipSyncService.pull(uid)` (E11-T05) reconciles
-//     `users/$uid/relationships/*` (written by a trusted device's own
-//     `push`, E12-T02) into this device's LOCAL `relationships` table.
-//   - `RelationshipRepository.get(thisDeviceId)` (E02-T01) then reads that
-//     merged local state back for THIS device's own id — which is exactly
-//     the entry a trusted device's `push(uid, thisDeviceId, state)` would
-//     have written, once pulled.
+// already owns other registered devices.
+//
+// E12-B03 fix (human decision, 2026-09-06): `checkApproval()` used to be a
+// `pull()`-then-read-local check against `users/$uid/relationships/*` --
+// but `RelationshipSyncService.pull` merges every remote state through
+// `ConflictResolver.resolveTrust` (`FR-MSG-007`, "more restrictive state
+// wins"), and an enrolling device has no local relationship row, so
+// `resolveTrust(unknown, allowed)` resolved to `unknown` and the approval
+// was silently discarded -- `checkApproval()` could never return `true`.
+// An enrollment approval is an authorization GRANT from a trusted device
+// to a specific new device, not a peer-trust OPINION to reconcile, so
+// running it through the conflict resolver was a category error, not a
+// wiring bug. `checkApproval()` now reads
+// `FirebaseMetadataService.readEnrollmentGrant` directly -- a plain
+// existence/value check at the dedicated
+// `users/$uid/device_enrollment_grants/$thisDeviceId` node
+// (`FirebasePaths.deviceEnrollmentGrant`), never merged through `pull`/
+// `ConflictResolver`. This does NOT loosen `ConflictResolver.resolveTrust`
+// or `FR-MSG-007` for the general peer-relationship case -- both stay
+// exactly as they were.
 //
 // Polling discipline (task §6 Risks, E08-T06/E10-T08's one-tick precedent):
 // a single bounded-interval `Timer.periodic`, started in `onInit`, stopped
@@ -25,9 +35,7 @@
 import 'dart:async';
 
 import 'package:get/get.dart';
-import 'package:nexora/core/services/relationship_sync_service.dart';
-import 'package:nexora/features/trust/data/relationship_repository.dart';
-import 'package:nexora/features/trust/domain/relationship.dart';
+import 'package:nexora/core/services/firebase_metadata_service.dart';
 
 /// The three states `design/screens/device-enrollment.md` requires.
 enum EnrollmentState { waiting, denied, noRecoveryNotice }
@@ -42,37 +50,27 @@ class DeviceEnrollmentController extends GetxController {
   ///
   /// `accountUid`/`thisDeviceId` default to `Get.arguments` (a `Map` with
   /// `'uid'`/`'deviceId'` keys) — exactly what `LoginController._signIn()`
-  /// passes when it routes here. `relationshipRepository` defaults to the
-  /// app-wide permanent `RelationshipRepository` singleton
-  /// (`AppBinding.dependencies()`, `Get.find` — safe for the same reason
-  /// `LoginController`'s own `DeviceIdentityRepository` default is: a
-  /// lookup, never a second construction). `relationshipSyncService`
-  /// defaults to a fresh `RelationshipSyncService` wired to that same
-  /// repository — this service is not itself a registered singleton
-  /// anywhere in the app.
+  /// passes when it routes here. `firebaseMetadataService` defaults to a
+  /// fresh `FirebaseMetadataService` (`E12-B03` fix) — not itself a
+  /// registered singleton anywhere in the app, same "resolved lazily,
+  /// never touches a live `FirebaseDatabase` until actually used" shape
+  /// its own constructor already documents.
   DeviceEnrollmentController({
     String? accountUid,
     String? thisDeviceId,
-    RelationshipRepository? relationshipRepository,
-    RelationshipSyncService? relationshipSyncService,
+    FirebaseMetadataService? firebaseMetadataService,
     Duration? pollInterval,
     int? maxPolls,
   })  : _accountUid = accountUid ?? _stringArgument('uid') ?? '',
         _thisDeviceId = thisDeviceId ?? _stringArgument('deviceId') ?? '',
-        _relationshipRepository =
-            relationshipRepository ?? Get.find<RelationshipRepository>(),
-        _relationshipSyncService = relationshipSyncService ??
-            RelationshipSyncService(
-              repository:
-                  relationshipRepository ?? Get.find<RelationshipRepository>(),
-            ),
+        _firebaseMetadataService =
+            firebaseMetadataService ?? FirebaseMetadataService(),
         _pollInterval = pollInterval ?? const Duration(seconds: 4),
         _maxPolls = maxPolls ?? 8;
 
   final String _accountUid;
   final String _thisDeviceId;
-  final RelationshipRepository _relationshipRepository;
-  final RelationshipSyncService _relationshipSyncService;
+  final FirebaseMetadataService _firebaseMetadataService;
   final Duration _pollInterval;
   final int _maxPolls;
 
@@ -127,18 +125,19 @@ class DeviceEnrollmentController extends GetxController {
     }
   }
 
-  /// The waiting state's own poll/check step (task §5 contract). Pulls
-  /// remote relationship state for this account, then checks whether THIS
-  /// device's own local relationship has become trusted/allowed. A `pull()`
-  /// failure (offline, timeout) is best-effort by design — it simply leaves
-  /// the local state untouched, so this reads as "not yet approved," never
-  /// a thrown error (task §5 "UI" note: no dedicated error state).
+  /// The waiting state's own poll/check step (task §5 contract). `E12-B03`
+  /// fix: reads `FirebaseMetadataService.readEnrollmentGrant` directly --
+  /// the dedicated `users/$uid/device_enrollment_grants/$thisDeviceId` node
+  /// -- NEVER through `RelationshipSyncService.pull`/
+  /// `ConflictResolver.resolveTrust`. A read failure/timeout is best-effort
+  /// by design, same as the read it replaces — it simply reads as "not yet
+  /// approved," never a thrown error (task §5 "UI" note: no dedicated
+  /// error state).
   Future<bool> checkApproval() async {
-    await _relationshipSyncService.pull(_accountUid);
-    final relationship = await _relationshipRepository.get(_thisDeviceId);
-    final peerState = relationship?.state;
-    return peerState == RelationshipState.trusted ||
-        peerState == RelationshipState.allowed;
+    return _firebaseMetadataService.readEnrollmentGrant(
+      _accountUid,
+      _thisDeviceId,
+    );
   }
 
   /// "Continue without history" (`waiting`/`denied`) — EARS-RECOVER-11.

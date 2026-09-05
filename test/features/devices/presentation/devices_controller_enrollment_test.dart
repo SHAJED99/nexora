@@ -51,6 +51,8 @@ void main() {
     String suffix, {
     required Set<String> ownDeviceIds,
     bool signedIn = true,
+    _StubFirebaseMetadataService? firebaseMetadataService,
+    String? thisDeviceId,
   }) {
     messenger.setMockMessageHandler(
       'dev.flutter.pigeon.nexora.TransportApi.startDiscovery.$suffix',
@@ -80,7 +82,11 @@ void main() {
       // full DI container" seam `evaluateConnectionRequestUseCase` already
       // uses above.
       currentAccountUid: () async => signedIn ? 'uid-1' : null,
-      firebaseMetadataService: _StubFirebaseMetadataService(ownDeviceIds),
+      // `E12-B02`: same injectable-stub seam as `currentAccountUid` above,
+      // for the approving device's OWN id (`approvedByDeviceId`).
+      thisDeviceId: () async => signedIn ? (thisDeviceId ?? 'approver-device') : null,
+      firebaseMetadataService:
+          firebaseMetadataService ?? _StubFirebaseMetadataService(ownDeviceIds),
     );
   }
 
@@ -248,6 +254,85 @@ void main() {
     );
     final denied = await repository.get('device-b');
     expect(denied!.state, RelationshipState.blocked);
+  });
+
+  test(
+      'test_EARS_RECOVER_7_E12_B02_approving_a_pending_enrollment_writes_a_real_grant',
+      () async {
+    // E12-B02 regression: before this fix, `verify()` wrote ONLY the local
+    // Drift row and nothing ever reached Firebase (`RelationshipSyncService
+    // .push` had zero production callers). This proves the dedicated
+    // enrollment-grant channel now actually receives a write when
+    // `Approve` (== `verify()`) resolves a genuine pending-enrollment row.
+    const String suffix = 'enrollment-grant-write';
+    final stub = _StubFirebaseMetadataService({'device-a'});
+    final controller = buildController(
+      suffix,
+      ownDeviceIds: {'device-a'},
+      firebaseMetadataService: stub,
+      thisDeviceId: 'my-approving-device',
+    );
+
+    controller.discover();
+    await Future<void>.delayed(Duration.zero);
+    pushDiscoveredDevice(
+      suffix,
+      TransportDevice(
+        id: 'device-a',
+        displayName: 'Approve Me',
+        type: TransportType.bluetooth,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.pendingEnrollments, hasLength(1));
+
+    await controller.verify('device-a');
+
+    expect(stub.writeEnrollmentGrantCallCount, 1);
+    expect(stub.capturedGrantUid, 'uid-1');
+    expect(stub.capturedGrantNewDeviceId, 'device-a');
+    expect(
+      stub.capturedGrantData!['approvedByDeviceId'],
+      'my-approving-device',
+    );
+  });
+
+  test(
+      'an ordinary Verify of a ordinary Unknown stranger (not a pending '
+      'enrollment) does NOT write an enrollment grant',
+      () async {
+    // Control arm for the regression test above: writing a grant record
+    // for a peer that was never classified as a pending enrollment would
+    // be a category error (there is no enrollment to grant) -- the same
+    // shape of mistake E12-B03 diagnoses for ConflictResolver, just on the
+    // write side instead of the read side.
+    const String suffix = 'enrollment-grant-no-write-for-stranger';
+    final stub = _StubFirebaseMetadataService({'some-other-own-device'});
+    final controller = buildController(
+      suffix,
+      ownDeviceIds: {'some-other-own-device'},
+      firebaseMetadataService: stub,
+    );
+
+    controller.discover();
+    await Future<void>.delayed(Duration.zero);
+    pushDiscoveredDevice(
+      suffix,
+      TransportDevice(
+        id: 'stranger-device',
+        displayName: 'Nearby Phone',
+        type: TransportType.bluetooth,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.pendingEnrollments, isEmpty);
+    expect(controller.relationships, hasLength(1));
+
+    await controller.verify('stranger-device');
+
+    expect(stub.writeEnrollmentGrantCallCount, 0);
   });
 
   test(
@@ -521,6 +606,14 @@ class _StubFirebaseMetadataService extends FirebaseMetadataService {
   final Set<String> _ids;
   int callCount = 0;
 
+  /// `E12-B02` regression evidence: captures whether/what `verify()`
+  /// actually wrote to the dedicated enrollment-grant channel, instead of
+  /// touching a real `FirebaseDatabase`/platform channel.
+  int writeEnrollmentGrantCallCount = 0;
+  String? capturedGrantUid;
+  String? capturedGrantNewDeviceId;
+  Map<String, dynamic>? capturedGrantData;
+
   @override
   Future<Set<String>> readOwnDeviceIds(String uid) async {
     callCount++;
@@ -533,5 +626,17 @@ class _StubFirebaseMetadataService extends FirebaseMetadataService {
     // to contain -- masking whether a fix actually re-fetches instead of
     // just re-reading the same resolved Future's now-mutated value.
     return Set<String>.of(_ids);
+  }
+
+  @override
+  Future<void> writeEnrollmentGrantData(
+    String uid,
+    String newDeviceId,
+    Map<String, dynamic> data,
+  ) async {
+    writeEnrollmentGrantCallCount++;
+    capturedGrantUid = uid;
+    capturedGrantNewDeviceId = newDeviceId;
+    capturedGrantData = data;
   }
 }
