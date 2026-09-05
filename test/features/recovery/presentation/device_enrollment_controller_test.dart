@@ -1,10 +1,11 @@
 // features/recovery/presentation — E12-T03 (FR-RECOVER-001/
-// FR-RECOVER-002). `RelationshipSyncService.pull` is stubbed at the same
-// raw-read seam `relationship_sync_service_test.dart` already uses
-// (`readRelationshipsData`) so these tests never touch a real
-// `FirebaseDatabase`/platform channel -- `RelationshipRepository` runs
-// against a real in-memory Drift database throughout, exactly like that
-// file's own tests.
+// FR-RECOVER-002), fixed by E12-B03.
+//
+// `FirebaseMetadataService.readEnrollmentGrant` is stubbed at its own raw
+// read seam (`readEnrollmentGrantData`) so these tests never touch a real
+// `FirebaseDatabase`/platform channel -- same seam-stubbing pattern
+// `firebase_metadata_service_test.dart` already uses for its own reader
+// tests.
 //
 // Navigation (EARS-RECOVER-10) is proven with a real `GetMaterialApp`,
 // same pattern `conversations_groups_test.dart`/
@@ -19,35 +20,28 @@
 // `background_policy_test.dart`'s composition tests document for their own
 // real `Timer.periodic`, which uses real delays instead because it runs
 // under plain `test()`, not `testWidgets()`).
-import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:nexora/core/persistence/database.dart';
-import 'package:nexora/core/services/relationship_sync_service.dart';
+import 'package:nexora/core/services/firebase_metadata_service.dart';
 import 'package:nexora/features/recovery/presentation/device_enrollment_controller.dart';
-import 'package:nexora/features/trust/data/relationship_repository.dart';
-import 'package:nexora/features/trust/domain/relationship.dart';
 
-/// Never returns any remote relationship data -- `pull` becomes a
-/// deterministic no-op that never touches local state, so a test can
-/// pre-seed `RelationshipRepository` directly and know `pull` will not
-/// disturb it. Counts calls so the dispose test can prove polling actually
-/// stopped.
-class _NoOpRelationshipSyncService extends RelationshipSyncService {
-  _NoOpRelationshipSyncService({required super.repository});
+/// A test double for `FirebaseMetadataService.readEnrollmentGrant` (E12-B03)
+/// -- reports a fixed, controllable grant-node value instead of touching a
+/// real `FirebaseDatabase`/platform channel. Counts calls so the dispose
+/// test can prove polling actually stopped.
+class _StubFirebaseMetadataService extends FirebaseMetadataService {
+  _StubFirebaseMetadataService(this._raw);
 
-  int pullCalls = 0;
+  final Object? _raw;
+  int readCalls = 0;
 
   @override
-  Future<Object?> readRelationshipsData(String uid) async {
-    pullCalls++;
-    return null;
+  Future<Object?> readEnrollmentGrantData(String uid, String newDeviceId) async {
+    readCalls++;
+    return _raw;
   }
 }
-
-AppDatabase _openTestDatabase() =>
-    AppDatabase.forTesting(NativeDatabase.memory());
 
 void main() {
   setUp(() {
@@ -94,20 +88,18 @@ void main() {
     await tester.pump();
   }
 
-  group('checkApproval', () {
+  group('checkApproval (E12-B03)', () {
     test(
-      'trusted local state after pull reads as approved',
+      'test_EARS_RECOVER_1_a_real_grant_node_reads_as_approved',
       () async {
-        final db = _openTestDatabase();
-        addTearDown(db.close);
-        final repository = RelationshipRepository(db);
-        await repository.upsert('this-device', RelationshipState.trusted);
-        final sync = _NoOpRelationshipSyncService(repository: repository);
+        final stub = _StubFirebaseMetadataService({
+          'approvedByDeviceId': 'trusted-device',
+          'approvedAt': 1000,
+        });
         final controller = DeviceEnrollmentController(
           accountUid: 'uid-1',
           thisDeviceId: 'this-device',
-          relationshipRepository: repository,
-          relationshipSyncService: sync,
+          firebaseMetadataService: stub,
         );
         addTearDown(controller.onClose);
 
@@ -116,37 +108,19 @@ void main() {
     );
 
     test(
-      'allowed local state after pull also reads as approved',
+      'test_EARS_RECOVER_1_no_grant_node_reads_as_not_approved',
       () async {
-        final db = _openTestDatabase();
-        addTearDown(db.close);
-        final repository = RelationshipRepository(db);
-        await repository.upsert('this-device', RelationshipState.allowed);
-        final sync = _NoOpRelationshipSyncService(repository: repository);
+        // E12-B03 regression: before this fix, `checkApproval()` went
+        // through `RelationshipSyncService.pull`/`ConflictResolver
+        // .resolveTrust`, which could never raise trust for a device with
+        // no local relationship row -- this and the tests below prove the
+        // NEW mechanism (a direct grant-node read) behaves correctly
+        // instead, independent of that broken path.
+        final stub = _StubFirebaseMetadataService(null);
         final controller = DeviceEnrollmentController(
           accountUid: 'uid-1',
           thisDeviceId: 'this-device',
-          relationshipRepository: repository,
-          relationshipSyncService: sync,
-        );
-        addTearDown(controller.onClose);
-
-        expect(await controller.checkApproval(), isTrue);
-      },
-    );
-
-    test(
-      'no local relationship yet reads as not approved',
-      () async {
-        final db = _openTestDatabase();
-        addTearDown(db.close);
-        final repository = RelationshipRepository(db);
-        final sync = _NoOpRelationshipSyncService(repository: repository);
-        final controller = DeviceEnrollmentController(
-          accountUid: 'uid-1',
-          thisDeviceId: 'this-device',
-          relationshipRepository: repository,
-          relationshipSyncService: sync,
+          firebaseMetadataService: stub,
         );
         addTearDown(controller.onClose);
 
@@ -155,22 +129,26 @@ void main() {
     );
 
     test(
-      'a blocked local state reads as not approved',
+      'malformed grant data (not a Map, or missing approvedByDeviceId) '
+      'reads as not approved, never throws',
       () async {
-        final db = _openTestDatabase();
-        addTearDown(db.close);
-        final repository = RelationshipRepository(db);
-        await repository.upsert('this-device', RelationshipState.blocked);
-        final sync = _NoOpRelationshipSyncService(repository: repository);
-        final controller = DeviceEnrollmentController(
+        final controllerA = DeviceEnrollmentController(
           accountUid: 'uid-1',
           thisDeviceId: 'this-device',
-          relationshipRepository: repository,
-          relationshipSyncService: sync,
+          firebaseMetadataService:
+              _StubFirebaseMetadataService('not-a-map'),
         );
-        addTearDown(controller.onClose);
+        addTearDown(controllerA.onClose);
+        expect(await controllerA.checkApproval(), isFalse);
 
-        expect(await controller.checkApproval(), isFalse);
+        final controllerB = DeviceEnrollmentController(
+          accountUid: 'uid-1',
+          thisDeviceId: 'this-device',
+          firebaseMetadataService:
+              _StubFirebaseMetadataService({'approvedAt': 1000}),
+        );
+        addTearDown(controllerB.onClose);
+        expect(await controllerB.checkApproval(), isFalse);
       },
     );
   });
@@ -178,16 +156,14 @@ void main() {
   testWidgets(
     'test_EARS_RECOVER_10_approval_detected_navigates_to_dashboard',
     (tester) async {
-      final db = _openTestDatabase();
-      addTearDown(db.close);
-      final repository = RelationshipRepository(db);
-      await repository.upsert('this-device', RelationshipState.trusted);
-      final sync = _NoOpRelationshipSyncService(repository: repository);
+      final stub = _StubFirebaseMetadataService({
+        'approvedByDeviceId': 'trusted-device',
+        'approvedAt': 1000,
+      });
       final controller = DeviceEnrollmentController(
         accountUid: 'uid-1',
         thisDeviceId: 'this-device',
-        relationshipRepository: repository,
-        relationshipSyncService: sync,
+        firebaseMetadataService: stub,
         pollInterval: const Duration(milliseconds: 10),
       );
 
@@ -205,15 +181,11 @@ void main() {
     'not yet approved stays in waiting and keeps polling on the bounded '
     'interval',
     (tester) async {
-      final db = _openTestDatabase();
-      addTearDown(db.close);
-      final repository = RelationshipRepository(db);
-      final sync = _NoOpRelationshipSyncService(repository: repository);
+      final stub = _StubFirebaseMetadataService(null);
       final controller = DeviceEnrollmentController(
         accountUid: 'uid-1',
         thisDeviceId: 'this-device',
-        relationshipRepository: repository,
-        relationshipSyncService: sync,
+        firebaseMetadataService: stub,
         pollInterval: const Duration(milliseconds: 10),
         maxPolls: 100,
       );
@@ -224,7 +196,7 @@ void main() {
 
       expect(controller.state.value, EnrollmentState.waiting);
       expect(reached, isEmpty);
-      expect(sync.pullCalls, greaterThan(1));
+      expect(stub.readCalls, greaterThan(1));
     },
   );
 
@@ -232,15 +204,11 @@ void main() {
     'exhausting the bounded poll budget with no approval moves to denied '
     'and stops polling',
     (tester) async {
-      final db = _openTestDatabase();
-      addTearDown(db.close);
-      final repository = RelationshipRepository(db);
-      final sync = _NoOpRelationshipSyncService(repository: repository);
+      final stub = _StubFirebaseMetadataService(null);
       final controller = DeviceEnrollmentController(
         accountUid: 'uid-1',
         thisDeviceId: 'this-device',
-        relationshipRepository: repository,
-        relationshipSyncService: sync,
+        firebaseMetadataService: stub,
         pollInterval: const Duration(milliseconds: 5),
         maxPolls: 3,
       );
@@ -250,26 +218,23 @@ void main() {
       await tester.pump(const Duration(milliseconds: 60));
 
       expect(controller.state.value, EnrollmentState.denied);
-      final callsAtDenied = sync.pullCalls;
+      final callsAtDenied = stub.readCalls;
       expect(callsAtDenied, greaterThanOrEqualTo(3));
 
-      // Bounded: further ticks must not keep calling pull once denied.
+      // Bounded: further ticks must not keep calling readEnrollmentGrant
+      // once denied.
       await tester.pump(const Duration(milliseconds: 60));
-      expect(sync.pullCalls, callsAtDenied);
+      expect(stub.readCalls, callsAtDenied);
     },
   );
 
   group('test_EARS_RECOVER_11_continue_without_history_shows_no_recovery_notice', () {
     test('from waiting', () async {
-      final db = _openTestDatabase();
-      addTearDown(db.close);
-      final repository = RelationshipRepository(db);
-      final sync = _NoOpRelationshipSyncService(repository: repository);
+      final stub = _StubFirebaseMetadataService(null);
       final controller = DeviceEnrollmentController(
         accountUid: 'uid-1',
         thisDeviceId: 'this-device',
-        relationshipRepository: repository,
-        relationshipSyncService: sync,
+        firebaseMetadataService: stub,
         pollInterval: const Duration(seconds: 30),
       );
       addTearDown(controller.onClose);
@@ -281,15 +246,11 @@ void main() {
     });
 
     test('from denied', () async {
-      final db = _openTestDatabase();
-      addTearDown(db.close);
-      final repository = RelationshipRepository(db);
-      final sync = _NoOpRelationshipSyncService(repository: repository);
+      final stub = _StubFirebaseMetadataService(null);
       final controller = DeviceEnrollmentController(
         accountUid: 'uid-1',
         thisDeviceId: 'this-device',
-        relationshipRepository: repository,
-        relationshipSyncService: sync,
+        firebaseMetadataService: stub,
         pollInterval: const Duration(seconds: 30),
       );
       addTearDown(controller.onClose);
@@ -306,15 +267,11 @@ void main() {
   test(
     'test_device_enrollment_poll_stops_on_dispose',
     () async {
-      final db = _openTestDatabase();
-      addTearDown(db.close);
-      final repository = RelationshipRepository(db);
-      final sync = _NoOpRelationshipSyncService(repository: repository);
+      final stub = _StubFirebaseMetadataService(null);
       final controller = DeviceEnrollmentController(
         accountUid: 'uid-1',
         thisDeviceId: 'this-device',
-        relationshipRepository: repository,
-        relationshipSyncService: sync,
+        firebaseMetadataService: stub,
         pollInterval: const Duration(milliseconds: 10),
         maxPolls: 1000,
       );
@@ -323,15 +280,15 @@ void main() {
       // Real time here (plain test(), no FakeAsync zone) -- let a handful
       // of real polls actually happen.
       await Future<void>.delayed(const Duration(milliseconds: 45));
-      expect(sync.pullCalls, greaterThan(0));
+      expect(stub.readCalls, greaterThan(0));
 
       controller.onClose();
-      final callsAtDispose = sync.pullCalls;
+      final callsAtDispose = stub.readCalls;
 
       // Long enough for several more intervals to have fired if the timer
       // were still alive.
       await Future<void>.delayed(const Duration(milliseconds: 60));
-      expect(sync.pullCalls, callsAtDispose);
+      expect(stub.readCalls, callsAtDispose);
     },
   );
 }
