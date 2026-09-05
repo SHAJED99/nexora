@@ -22,7 +22,8 @@ accepted option 2).
 | `users/$uid/relationships/$peerDeviceId` | live | `state:String` (one of `trusted`/`allowed`/`unknown`/`blocked`), `updatedAt:int(ServerValue)` | trust metadata, block metadata | `E11-T05` | structural (`.validate` + `$other` deny) — `E11-T05` |
 | `users/$uid/push/$deviceId` | reserved (no owner) | — | push notification information | ⏳ `OQ-E11-2` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
 | `config/version_policy` | reserved (no owner) | — | application version policy | ⏳ `OQ-E11-2` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
-| `directory/$deviceId` | live | `identityPublicKey:String` (base64), `prekeyBundle:String` (base64 `PreKeyBundleCodec` v1), `revokedAt:int?`, `ownerUid:String` | device public identity information | `E11-T06` (`ADR-0008` accepted, option 2) | structural (`.validate` + `$other` deny), plus cross-account exact-id read + immutable-`ownerUid` write — `E11-T06` |
+| `directory/$deviceId` | live | `identityPublicKey:String` (base64), `prekeyBundle:String` (base64 `PreKeyBundleCodec` v1), `revokedAt:int?` | device public identity information | `E11-T06` (`ADR-0008` accepted, option 2) | structural (`.validate` + `$other` deny), cross-account exact-id read; write requires the caller's `auth.uid` to match `directory_private/$deviceId/ownerUid` — `E11-T06`, fixed by `E11-B06` |
+| `directory_private/$deviceId` | live | `ownerUid:String` | write-ownership marker for the corresponding `directory/$deviceId` entry | `E11-T06` (fix: `E11-B06`) | structural (`.validate` + `$other` deny), owner-only read (`auth.uid === ` the stored value), immutable write (first-writer-wins) |
 
 `users/$uid`'s own `$other` child (any subtree not named `devices` or
 `sync_cursors`) is also denied structurally (`.validate: false`) —
@@ -48,14 +49,46 @@ never a query — per `ADR-0008` option 2. `identityPublicKey` and
 public prekey bundle); `revokedAt` mirrors this device's own local
 revocation state (`E11-T04`'s `device_revocations` table, read locally —
 not re-derived from the `users/$uid/devices/$deviceId/revocation` row,
-which only that device's owning account can read); `ownerUid` is a
-write-ownership marker and is immutable after first write
-(`database.rules.json`'s `.write` expression requires the caller's
-`auth.uid` to already match the stored `ownerUid` whenever the node
-exists, and to match the value it is writing in every case). The
-remaining `reserved` rows are declared here as placeholders their owning
-task flips to `live` — this is the anti-collision mechanism for this
-shared doc, not a promise of behaviour (see
+which only that device's owning account can read).
+
+The sixth `live` row (`directory_private/$deviceId`) is `E11-B06`'s fix
+for a defect `ADR-0008` itself did not anticipate: `ownerUid` was
+originally co-located inside `directory/$deviceId`, which is readable by
+any authenticated account — so any account holding two device ids could
+read both entries' `ownerUid` and learn whether they belong to the same
+Firebase account, a cross-account correlation `ADR-0008`'s cost analysis
+never priced in. `ownerUid` now lives in its own top-level node, `.read`
+restricted to the caller whose `auth.uid` already equals the stored
+value (never any other authenticated account), and is immutable after
+first write, same first-writer-wins shape as before
+(`database.rules.json`'s `.write` expression on this node requires the
+caller's `auth.uid` to already match the stored value whenever the node
+exists, and to match the value it is writing in every case).
+`directory/$deviceId`'s own `.write` rule reads THIS node (`root.child(
+'directory_private/'+$deviceId+'/ownerUid')`) to decide whether a write
+to the public entry is from that entry's true owner — the two nodes are
+always written together, as one atomic multi-location update
+(`DeviceDirectoryService.writeDirectoryData`), never as two separate
+writes. **`E11-B06`'s finding 1** (no cryptographic binding between
+`$deviceId` and the identity published under it, so a first writer can
+squat any id it learns) is **not** fixed by this row — RTDB security
+rules have no hash or signature-verification primitive available to
+enforce the human-approved direction (binding `$deviceId` to a derivation
+of `identityPublicKey`), which needs either a Cloud Function (a new
+dependency, its own rule-3 call) or a change to how `$deviceId` itself is
+minted (`ADR-0005`: device ids are generated before any identity key
+exists, at `lib/features/login/presentation/login_controller.dart`'s
+`generateSecureDeviceId()`, so deriving one from the other means
+reordering that bootstrap sequence across `E01`/`E03` — a protocol-level
+change, not a rules-file fix, and
+squarely `E11-B06`'s own scope fence: "does not fix anything itself...
+possibly a protocol-level decision"). **Finding 3** (no unpublish path,
+only a `revokedAt` update) is confirmed here as the deliberate, final
+design: revoke, don't delete.
+
+The remaining `reserved` rows are declared here as placeholders their
+owning task flips to `live` — this is the anti-collision mechanism for
+this shared doc, not a promise of behaviour (see
 `epics/E11-firebase-sync/epic.md` §Analyze gate, "Contract sanity").
 
 ## Path registry and field-allowlist code
@@ -68,8 +101,10 @@ shared doc, not a promise of behaviour (see
   node, used to enumerate every peer relationship in one read),
   `FirebasePaths.relationship` (E11-T05), `FirebasePaths.directoryRoot`
   (the parent `directory` node — never passed to a live `.ref(...)` call,
-  only used by the rules test to prove a read there is denied) and
-  `FirebasePaths.directoryEntry` (E11-T06). Pure functions, no I/O.
+  only used by the rules test to prove a read there is denied),
+  `FirebasePaths.directoryEntry` (E11-T06) and
+  `FirebasePaths.directoryPrivateOwnerUid` (`E11-B06` fix). Pure
+  functions, no I/O.
 - Allowed fields: `lib/core/services/firebase_boundary.dart` —
   `FirebaseBoundary.allowedFields(FirebaseNodeKind)` and
   `FirebaseBoundary.assertAllowedFields(FirebaseNodeKind, Map<String, Object?>)`,

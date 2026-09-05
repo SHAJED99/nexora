@@ -206,3 +206,58 @@ tracked there — this ADR does not fold it in, per `OQ-E11-4`.
 - No option 2 data is enumerable in bulk: an attacker must already know a
   target's `Random.secure()`-generated device id (E01-T01) to read anything,
   which is the deliberate trade this ADR accepts.
+
+## Addendum (E11-B06, 2026-09-05) — two gaps this ADR's original text left open
+
+A cross-model re-review of `E11-T06`'s implementation (`E11-B06`) found
+three gaps this ADR did not anticipate: (1) `directory/$deviceId`'s
+first-writer-wins write rule has no cryptographic binding between
+`$deviceId` and the identity published under it, so any authenticated
+account that learns a device id can squat it before the true owner
+publishes; (2) `ownerUid` was co-located inside the cross-account-readable
+public entry, letting any authenticated account correlate two device ids
+to one Firebase account; (3) the write rule denies deletion (only a
+`revokedAt` update is possible), an undocumented decision. Two of the
+three are decided here; the third is fixed in code, not decided:
+
+- **Finding 2 (`ownerUid` cross-account readability) is fixed in code**,
+  not merely decided — `ownerUid` now lives in its own top-level node,
+  `directory_private/$deviceId/ownerUid`, `.read`-restricted to the
+  caller whose `auth.uid` already matches the stored value. See
+  `docs/firebase-schema.md`'s `directory_private/$deviceId` row and
+  `epics/E11-firebase-sync/tasks/E11-B06.md`'s Run log for the fix
+  commit. No product behavior changes: nothing in `lookupDevice` ever
+  read `ownerUid`.
+
+- **Finding 1 (directory-entry squatting): human decision — derive
+  `$deviceId` from the identity key.** ✅ Chosen direction: `$deviceId`
+  should be a hash/derivation of `identityPublicKey` itself (or signed by
+  it), so squatting a specific id without controlling its corresponding
+  private key becomes infeasible. **Not yet implemented** — discovered
+  during implementation, and material to how this gets built: Firebase
+  Realtime Database security rules have **no cryptographic hash or
+  signature-verification primitive** (`.validate`/`.write` expressions
+  can compare, concatenate and pattern-match strings, but cannot compute
+  a hash or verify a signature). Enforcing this decision therefore cannot
+  be a `database.rules.json`-only change, unlike finding 2. It needs
+  either (a) a Cloud Function performing the actual verification
+  server-side — a new dependency, its own rule-3 call — or (b) reordering
+  when `$deviceId` is minted relative to identity-key generation, which
+  today happens in the other order: `ADR-0005`/`lib/features/login/
+  presentation/login_controller.dart`'s `generateSecureDeviceId()`
+  deliberately generates the device id **before** any Firebase call and
+  independent of any keypair; the identity keypair itself is `E03`'s
+  concern, bootstrapped separately. Deriving one from the other means a
+  bootstrap-sequencing change spanning `E01` and `E03`, not a single
+  file. Both paths are foundational (new dependency / protocol
+  bootstrap order) and need their own dedicated rule-3 pass before either
+  is implemented — this addendum records the chosen *direction*, not a
+  completed fix. `E11-B06` stays `status: blocked` on this finding until
+  that follow-up decision is made concrete enough to shard as a task.
+
+- **Finding 3 (no unpublish path): human decision — final, as shipped.**
+  ✅ "Revoke, don't delete" is confirmed as the deliberate, permanent
+  design: a `directory/$deviceId` entry can be revoked (`revokedAt` set)
+  but never removed. No code change — the existing rule already denies
+  deletion; this addendum only removes the "likely intentional,
+  undocumented" qualifier `E11-B06` originally flagged it with.

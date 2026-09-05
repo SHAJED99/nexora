@@ -91,8 +91,8 @@
     "directory": {
       "$deviceId": {
         ".read": "auth != null",
-        ".write": "auth != null && newData.child('ownerUid').val() === auth.uid && (!data.exists() || data.child('ownerUid').val() === auth.uid)",
-        ".validate": "newData.hasChildren(['identityPublicKey', 'prekeyBundle', 'ownerUid'])",
+        ".write": "auth != null && root.child('directory_private/'+$deviceId+'/ownerUid').val() === auth.uid",
+        ".validate": "newData.hasChildren(['identityPublicKey', 'prekeyBundle'])",
         "identityPublicKey": {
           ".validate": "newData.isString() && newData.val().length <= 4096"
         },
@@ -102,7 +102,17 @@
         "revokedAt": {
           ".validate": "newData.isNumber()"
         },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "directory_private": {
+      "$deviceId": {
+        ".validate": "newData.hasChildren()",
         "ownerUid": {
+          ".read": "auth != null && data.val() === auth.uid",
+          ".write": "auth != null && newData.val() === auth.uid && (!data.exists() || data.val() === auth.uid)",
           ".validate": "newData.isString() && newData.val().length <= 128"
         },
         "$other": {

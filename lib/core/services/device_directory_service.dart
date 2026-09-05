@@ -45,9 +45,12 @@
 // methods below mirror `DeviceRevocationService`/`RelationshipSyncService`'s
 // exact pattern (E11-T04/E11-T05) -- best-effort, bounded timeout via
 // `.timeout()`, catch-and-log via `ObservabilityService`, never throws to
-// the caller. Only `identityPublicKey`/`prekeyBundle`/`revokedAt`/`ownerUid`
-// are ever written -- never anything outside `FirebaseBoundary`'s allow-list
-// for this node.
+// the caller. Only `identityPublicKey`/`prekeyBundle`/`revokedAt` are ever
+// written to the public `directory/$deviceId` node -- never anything
+// outside `FirebaseBoundary`'s allow-list for it. `ownerUid` (`E11-B06`
+// fix) is written to its own node, `directory_private/$deviceId/ownerUid`,
+// in the SAME atomic multi-location update -- never co-located with the
+// public entry, so it is never cross-account readable alongside it.
 //
 // Scope fence (task §4): does NOT touch `DriftSignalProtocolStore.
 // isTrustedIdentity` or anything in `E07`; does NOT wire `lookupDevice` into
@@ -136,11 +139,12 @@ class DeviceDirectoryService {
   /// change what should be published (task §2/§3) -- never from a Timer or
   /// any other polling driver.
   ///
-  /// [uid] is written into `ownerUid` on every call, including the first --
-  /// `database.rules.json` makes that field immutable after the node's
-  /// first write, so every subsequent call from the true owner must (and
-  /// does) keep passing the same value, and any other caller's write is
-  /// rejected server-side regardless of what this method sends.
+  /// [uid] is written into `directory_private/$deviceId/ownerUid` on every
+  /// call, including the first (`E11-B06` fix) -- `database.rules.json`
+  /// makes that field immutable after the node's first write, so every
+  /// subsequent call from the true owner must (and does) keep passing the
+  /// same value, and any other caller's write is rejected server-side
+  /// regardless of what this method sends.
   ///
   /// Never throws: any failure -- including
   /// `IdentityService.getLocalPreKeyBundle()` throwing `StateError` because
@@ -171,7 +175,6 @@ class DeviceDirectoryService {
     final data = <String, Object?>{
       'identityPublicKey': identityPublicKey,
       'prekeyBundle': serializedBundle,
-      'ownerUid': uid,
       if (revocationRow != null)
         'revokedAt': revocationRow.revokedAt.millisecondsSinceEpoch,
     };
@@ -180,7 +183,14 @@ class DeviceDirectoryService {
     // get caught and logged as "just another Firebase error" (same
     // reasoning as DeviceRevocationService.revoke/RelationshipSyncService.push).
     FirebaseBoundary.assertAllowedFields(FirebaseNodeKind.directory, data);
-    await writeDirectoryData(deviceId, data);
+    // `ownerUid` (`E11-B06` fix) is boundary-checked separately against its
+    // own, narrower allow-list -- it is never part of the public payload
+    // above.
+    FirebaseBoundary.assertAllowedFields(
+      FirebaseNodeKind.directoryPrivate,
+      {'ownerUid': uid},
+    );
+    await writeDirectoryData(deviceId, uid, data);
   }
 
   /// Performs the actual Realtime Database write. Split out from [publish]
@@ -188,10 +198,24 @@ class DeviceDirectoryService {
   /// platform-channel test harness to construct in tests, so tests seam
   /// here instead (mirrors `DeviceRevocationService.writeRevocationData`).
   ///
-  /// Path from [FirebasePaths.directoryEntry] (E11-T06) --
-  /// `directory/$deviceId`.
-  Future<void> writeDirectoryData(String deviceId, Map<String, dynamic> data) {
-    return _firebaseDatabase.ref(FirebasePaths.directoryEntry(deviceId)).set(data);
+  /// Writes [data] to [FirebasePaths.directoryEntry] (the public entry) and
+  /// [uid] to [FirebasePaths.directoryPrivateOwnerUid] (the write-ownership
+  /// marker, `E11-B06` fix) as ONE atomic multi-location update -- never
+  /// two separate `.set()` calls. `directory/$deviceId`'s own `.write` rule
+  /// reads the private node's value to authorize the public write, so both
+  /// paths must land together: a crash between two separate writes could
+  /// otherwise leave a public entry with no ownership marker at all
+  /// (permanently unwritable afterward, since no caller's uid would then
+  /// ever match).
+  Future<void> writeDirectoryData(
+    String deviceId,
+    String uid,
+    Map<String, dynamic> data,
+  ) {
+    return _firebaseDatabase.ref().update({
+      FirebasePaths.directoryEntry(deviceId): data,
+      FirebasePaths.directoryPrivateOwnerUid(deviceId): uid,
+    });
   }
 
   /// Reads `directory/$deviceId` for one already-known, exact [deviceId]
