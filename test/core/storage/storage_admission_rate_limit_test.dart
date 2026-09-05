@@ -217,10 +217,10 @@ void main() {
     await _connectPeer(messenger, suffix, 'device-a');
 
     // device-a is already at T03's own count limit (60) but nowhere near
-    // this task's byte-volume budget -- a single small frame must still be
-    // admitted by count... no, it must be DENIED by T03's count gate (fails
-    // count, would pass volume) to prove the two gates are independent and
-    // ANY one denying is enough to reject the forward.
+    // this task's byte-volume budget -- a single small frame passes the
+    // byte-volume gate but must still be DENIED by T03's count gate, proving
+    // the two gates are independent and ANY one denying is enough to reject
+    // the forward.
     await receiver.db
         .into(receiver.db.rateLimitCounters)
         .insert(
@@ -273,4 +273,51 @@ void main() {
     expect(relayRows.single.destinationId, 'device-c');
     expect(pipeline.counters.forwarded, 1);
   });
+
+  test(
+    'test_EARS_ABUSE_10_single_oversized_packet_denied_on_fresh_window',
+    () async {
+      // Regression for the fail-open gap a cross-model review found:
+      // `RateLimiter.allow`'s rollover branch (no existing bucket row, or the
+      // window has just elapsed) inserts `count: increment` and returns
+      // `true` UNCONDITIONALLY, without ever comparing `increment` itself
+      // against `maxCount`. A single packet far larger than the whole
+      // per-minute budget was therefore admitted on the very first hit of
+      // every rolling window. Unlike the other tests in this file, this one
+      // does NOT pre-seed `storage_volume:device-a` -- the bucket is
+      // genuinely fresh, which is exactly the state that let the bug through.
+      final suffix = nextSuffix();
+      final receiver = await newStack('device-b', suffix);
+      addTearDown(receiver.dispose);
+
+      final pipeline = InboundPipeline(stack: receiver);
+      addTearDown(pipeline.stop);
+      pipeline.start();
+      await _connectPeer(messenger, suffix, 'device-a');
+
+      // 6 MiB: bigger than the entire 5 MiB/minute budget, sent as a single
+      // packet on a brand-new bucket.
+      final frame = _foreignFrame(
+        packetId: 'pkt-fresh-oversized-1',
+        source: 'device-a',
+        destination: 'device-c',
+        payloadLen: 6 * 1024 * 1024,
+      );
+      _pushIncomingData(messenger, suffix, 'device-a', frame.serialize());
+      await _settle();
+      await _settle();
+
+      final relayRows =
+          await receiver.db.select(receiver.db.relayPackets).get();
+      expect(
+        relayRows,
+        isEmpty,
+        reason:
+            'a single packet larger than the whole byte-volume budget must '
+            'never be admitted, even on a fresh/rolled-over bucket',
+      );
+      expect(pipeline.counters.forwarded, 0);
+      expect(pipeline.counters.rateLimited, 1);
+    },
+  );
 }

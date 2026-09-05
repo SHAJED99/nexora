@@ -494,6 +494,19 @@ class InboundPipeline {
       // payload. Either gate denying is enough to reject the forward
       // (task file §3); this check never substitutes for the count check
       // above, and is never itself substituted for by it.
+      // Fail-open fix (post-merge cross-model review, CHANGES verdict):
+      // RateLimiter.allow inserts a fresh/rolled-over bucket with
+      // count: increment and returns true unconditionally on that branch --
+      // it never compares increment itself against maxCount. So a single
+      // packet larger than the entire per-minute budget was admitted on
+      // the first hit of every rolling window. This explicit pre-check
+      // catches an oversized single packet regardless of the rate
+      // limiter's current bucket state, independent of allow's rollover
+      // behaviour.
+      if (bytes.length > _storageVolumeRateLimitMaxBytes) {
+        counters.rateLimited++;
+        return;
+      }
       final bool volumeAllowed = await _rateLimiter.allow(
         'storage_volume:${frame.source}',
         maxCount: _storageVolumeRateLimitMaxBytes,
