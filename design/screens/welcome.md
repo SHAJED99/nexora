@@ -94,7 +94,14 @@ character; a case or spacing change is a finding, not a nit.
 > above, log each one in `design/gaps.md`, and get 🧍 human approval before
 > building. Do not invent silently.
 
-- (none identified yet)
+- **GAP-029 (E14, `FR-VER-006`)** — a mandatory (`UPDATE_REQUIRED`)
+  version block has no screen anywhere in this design. Proposed: a new
+  `design/screens/version-update-required.md` full-screen state, in this
+  screen's own centred single-focus layout — reached wherever the
+  version-check actually runs (at launch and/or mid-session, a behavioral
+  decision for whichever task builds it, not a placement this contract
+  settles) — full derivation in `design/gaps.md` GAP-029. 🟡 proposed,
+  not yet approved.
 
 ## Notes for the implementing agent
 - (exact copy quirks, dynamic data, anything the probe cannot see)

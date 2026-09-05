@@ -170,7 +170,14 @@ character; a case or spacing change is a finding, not a nit.
 > above, log each one in `design/gaps.md`, and get 🧍 human approval before
 > building. Do not invent silently.
 
-- (none identified yet)
+- **GAP-028 (E12, `FR-RECOVER-001`)** — a pending new-device enrollment
+  request has no row here. Proposed: a new row at the top of this list,
+  reusing this screen's own status-chip + trailing-button treatment
+  (the `Unknown`/`Verify` row is the closest existing shape), with
+  `Approve`/`Deny` in place of the single `Verify` action — full
+  derivation in `design/gaps.md` GAP-028 and the new
+  `design/screens/device-enrollment-approval.md` contract. 🟡 proposed,
+  not yet approved.
 
 ## Notes for the implementing agent
 - (exact copy quirks, dynamic data, anything the probe cannot see)

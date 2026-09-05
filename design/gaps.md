@@ -13,6 +13,24 @@ the already-approved, already-measured `conversations.md` contract and
 closes GAP-006, which was approved on 2026-08-29 with "rows deferred to
 E07" written into it.)
 
+> **E12/E14 reopening, ⏳ AWAITING HUMAN.** E12 (Account Recovery & Device
+> Enrollment) and E14 (Version & Update Management) task-sharding reopened
+> this gate for **GAP-028** and **GAP-029**. GAP-028: new-device
+> enrollment and the "no recovery" notice, neither shown anywhere in the
+> design — two derived screens proposed, `device-enrollment.md` (the new
+> device's own journey) and `device-enrollment-approval.md` (the existing
+> trusted device's approval prompt), both derived from `devices.md`'s
+> row/status-chip vocabulary and `welcome.md`'s centred single-focus
+> layout. GAP-029: the mandatory-update block, also absent from the
+> design — one derived full-screen state, `version-update-required.md`,
+> deliberately NOT a dialog (this design draws no dialog/sheet primitive
+> anywhere, same finding `GAP-025` already recorded). See each gap's own
+> entry for the full derivation. Nothing in either epic is sharded past
+> this point until approved (task-sharding's own precondition: a frontend
+> task with no `design_contract:` is not shardable). `E14` separately
+> carries its own `OQ-E14-1` (an unrelated scope-placement question, no
+> UI surface) still open regardless of this gate.
+
 > **E08 reopening, cleared 2026-09-02.** `E08-T07`'s design gap pass
 > reopened this gate for **GAP-024 · GAP-025 · GAP-026 · GAP-027** (the
 > Storage settings sub-screen, the dashboard warning's expanded state,
@@ -1224,6 +1242,135 @@ and that is the strongest single argument for this disposition.**
   since nothing was ever going to be built for it.
 - **approved by:** human, 2026-09-02
 - **built:** not built
+
+## GAP-028 — new-device enrollment and the "no recovery" notice have no design source at all
+
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/device-enrollment.md` (the
+  NEW device's own journey) and `design/screens/device-enrollment-approval.md`
+  (the EXISTING trusted device's approval prompt)
+- **spec:** `FR-RECOVER-001` ("a new device shall be registerable using the
+  user's authenticated account; where possible, an existing trusted device
+  shall authorize the new device's enrollment"), `FR-RECOVER-002` ("if all
+  cryptographic keys are permanently lost, encrypted historical content
+  shall not be recoverable — intentional, not a defect");
+  `spec/feature-list.md` → "Feature: Device Enrollment via Trusted Device".
+- **design shows:** nothing. `login.md`/`welcome.md` cover Google sign-in
+  only and stop at the dashboard redirect (E01-T01's own walking-skeleton
+  scope) — neither shows what happens when the signed-in account already
+  has other devices with local history this new device cannot read.
+  `devices.md` shows an established device list (`Trusted Node`/`Allowed`/
+  `Unknown`/`Blocked` rows) with no "a new device wants to join" state at
+  all. No screen anywhere states the FR-RECOVER-002 "no recovery"
+  property to a user.
+- **derived from:** `devices.md`'s own row vocabulary is the closest fit
+  for both derived screens — its status-chip treatment (`check_circle` /
+  `rgb(78, 222, 163)` "Trusted Node"; `warning` / `rgb(245, 158, 11)`
+  "Unknown" + a `Verify` button at `11px · rgb(53, 37, 205) · r4px`) is
+  exactly the "peer needs a decision from me" shape `device-enrollment-approval.md`
+  needs, just re-labelled. `welcome.md`'s centred-icon/heading/subtitle
+  treatment (`60px`/`57px` display type, `14px rgb(211, 228, 254)` body)
+  is the closest fit for `device-enrollment.md`'s waiting/notice states,
+  since both are full-screen, single-focus moments before the dashboard
+  is reached. `settings.md`'s row/subtitle shape covers the entry point
+  (see below).
+- **proposal — two screens, one journey:**
+  1. **`device-enrollment.md`** (new device, reached after Google sign-in
+     when the account already owns other devices, before the dashboard
+     redirect): a choice state — "Ask a trusted device to let this one
+     in" vs. "Continue without history" — in `welcome.md`'s centred
+     layout with two stacked buttons (primary/secondary, reusing
+     `welcome.md`'s own button treatment); a waiting state (spinner +
+     a short device fingerprint/code, cancel action) once enrollment is
+     requested; a success state (brief confirmation, then the existing
+     dashboard redirect, no new screen needed); a denied/timeout state
+     (plain restatement of the choice, no blame copy); and the **no
+     recovery notice** — shown either after choosing "Continue without
+     history" or after a timeout with no trusted device reachable,
+     stating plainly that historical content on other devices cannot be
+     recovered here (`FR-RECOVER-002`'s own "intentional, not a defect"
+     framing belongs in this copy, not left implicit).
+  2. **`device-enrollment-approval.md`** (existing trusted device,
+     reachable while the app is foregrounded or via a notification per
+     `E10`'s existing per-source notification mechanism — this screen
+     covers the in-app prompt only, not the notification copy itself,
+     which is `E10`'s own concern if this becomes a real notification
+     category): one row, `devices.md`'s row shape, labelled with the
+     requesting device's platform + a short fingerprint, an `Approve`
+     button (primary treatment) and a `Deny` button (`devices.md`'s
+     `Blocked`-row-adjacent red, `rgb(186, 26, 26)`, for the destructive
+     option) side by side where `devices.md`'s single `Verify` button
+     sits today.
+  3. **Entry point**: `devices.md`'s existing "Journey gaps" section
+     (currently "(none identified yet)") is the anchor — a pending
+     enrollment request, once one exists, appears as a new row at the
+     TOP of the existing device list using `device-enrollment-approval.md`'s
+     row, not a separate screen navigation. This keeps `devices.md`
+     itself the one place trust decisions about other devices are made,
+     consistent with its own existing `Verify`/`Blocked` rows. **Not
+     proposed here**: whether a push notification (E10) accompanies this,
+     left to whichever task builds it, same reasoning `GAP-018` used for
+     deferring `conversations.md`'s own entry-point affordance.
+  4. States needed on `device-enrollment.md`: choice, waiting, denied/
+     timeout, no-recovery-notice (success has no new screen — it falls
+     through to the existing dashboard redirect). States needed on
+     `device-enrollment-approval.md`: the one row (no separate loading/
+     error state — this is a synchronous local decision, not a network
+     round-trip in the UI's own terms, whatever the backend does
+     underneath is out of this screen's concern).
+- **approved by:** _(pending — 🧍 human)_
+- **built:** not built.
+
+## GAP-029 — the mandatory-update block has no design source at all
+
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/version-update-required.md`
+- **spec:** `FR-VER-006` ("WHEN installed version is UPDATE_REQUIRED, the
+  system SHALL block communication and present a non-dismissible mandatory
+  update prompt via Google Play"), `FR-VER-009` ("mandatory updates SHALL
+  NOT delete local messages, recordings, attachments, settings, or
+  history" — a behavioral constraint, not a visual one, noted here only
+  so the copy doesn't imply data loss). `spec/srs.md`'s `FR-VER` block.
+- **design shows:** nothing. No screen in this design draws a mandatory,
+  non-dismissible block of any kind, and — material to how this must be
+  derived — **the design draws no dialog or bottom-sheet primitive
+  anywhere in the whole measured set** (`dashboard.md`'s own
+  `warning-expanded` derived state, `GAP-025`, established this same
+  finding: "the design draws no dialog or sheet primitive anywhere, and
+  inventing one would be inventing a visual language"). A mandatory
+  update block is at least as blocking as that state and must be derived
+  the same way — as a full-screen state, never an invented dialog.
+- **derived from:** `welcome.md`'s centred single-focus layout (icon,
+  `28px`/`22px` heading sizes, `14px` body, stacked primary button) is
+  this design's only existing "one decision, nothing else on screen"
+  shape and the closest fit for a blocking, non-dismissible state.
+  `devices.md`'s `warning` icon token (`rgb(245, 158, 11)`) is this
+  design's own vocabulary for "needs attention," reused here rather than
+  inventing a new severity colour.
+- **proposal:** one screen, one state (this condition has no sub-states —
+  it is reached, blocks, and is left only by actually updating): the
+  `warning` icon at `welcome.md`'s icon size, a heading stating the app
+  cannot be used until updated, body copy naming that local data is
+  preserved (`FR-VER-009`, stated plainly so a blocked user is not left
+  guessing whether updating will erase their history), and ONE primary
+  button that opens Google Play's in-app update flow — no secondary
+  button, no back navigation, no dismiss affordance of any kind (`FR-VER-006`'s
+  "non-dismissible" is a structural absence, not a disabled-looking
+  button — there is nothing else on this screen to tap). System back
+  gesture/button handling (whether it's suppressed entirely or a no-op)
+  is a behavioral decision for whichever task builds this, not a visual
+  one this contract needs to settle.
+- **out of scope for this gap:** the `UPDATE_AVAILABLE` (non-blocking,
+  dismissible) state `FR-VER`'s own state machine also implies — this
+  gap covers only the `UPDATE_REQUIRED` block `EARS-VER-1` names as its
+  epic-level criterion. A dismissible "update available" nudge, if the
+  design needs one, is a separate, smaller gap (likely a `settings.md` or
+  `dashboard.md` row, not a full screen) and is not proposed here.
+- **note:** `E14`'s own `OQ-E14-1` (where `FR-VER-004`'s simulation
+  framework lives, this epic or `E04`) is unrelated to this gap and does
+  not block it — that question has no UI surface either way.
+- **approved by:** _(pending — 🧍 human)_
+- **built:** not built.
 
 ## The usual suspects
 
