@@ -19,8 +19,11 @@
 // or ciphertext.
 import 'package:drift/drift.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/services/firebase_boundary.dart';
+import 'package:nexora/core/services/firebase_paths.dart';
 
 /// Immutable value object mirroring a `sync_cursors` row in domain terms.
 class SyncCursor {
@@ -200,15 +203,56 @@ class SyncCursorService {
   /// FR-FB-002). Never throws: any Realtime Database error (including being
   /// offline) is caught and logged via [ObservabilityService], same pattern
   /// as `FirebaseMetadataService.registerDevice`.
+  ///
+  /// EARS-FB-2 (E11-T01): the payload is checked against
+  /// [FirebaseBoundary.assertAllowedFields] *before* the `try` inside
+  /// [guardedWriteCursorData] below -- a boundary violation is a
+  /// programming error and must propagate, not get caught and logged as
+  /// "just another Firebase error" (task §6 Risks, same reasoning as
+  /// `FirebaseMetadataService.registerDevice`).
   Future<void> writeCursorToFirebase(String uid, SyncCursor cursor) async {
+    final data = {
+      'localDeviceId': cursor.localDeviceId,
+      'remoteDeviceId': cursor.remoteDeviceId,
+      'conversationId': cursor.conversationId,
+      'lastConfirmedSequenceNumber': cursor.lastConfirmedSequenceNumber,
+      'updatedAt': cursor.updatedAt,
+    };
+    await guardedWriteCursorData(uid, cursor, data);
+  }
+
+  /// E11-B04 round-2 (Opus review): the actual guard-then-write sequence,
+  /// extracted so a test can drive it with an arbitrary payload -- see the
+  /// identical reasoning on `FirebaseMetadataService.guardedWriteDeviceMetadata`.
+  ///
+  /// The `try` wraps ONLY the write call, not [FirebaseBoundary
+  /// .assertAllowedFields] above it -- that ordering is what makes both
+  /// halves of this method's contract hold at once: `assertAllowedFields`
+  /// throws synchronously, before the `try` block is ever entered (true
+  /// even though this whole method is `async` -- synchronous code ahead of
+  /// a `try` in an async function body still runs, and still throws,
+  /// before that `try`'s dynamic extent begins), so a boundary violation
+  /// propagates as a programming error exactly as task §6 Risks requires;
+  /// a genuine write-layer failure (timeout, offline, a thrown
+  /// `DatabaseException`) originates *inside* the `try` and is caught and
+  /// logged, never thrown to the caller, per this class's existing
+  /// EARS-MSG-6 contract. Round 1 of this fix put the `try` around the
+  /// call to this method from `writeCursorToFirebase` instead of inside
+  /// it -- that let a synchronous write-layer throw (a realistic shape;
+  /// this repo's own `_ThrowingWriteSyncCursorService` test fixture
+  /// throws synchronously, not via `async`) escape uncaught, the opposite
+  /// defect from what round 1 was fixing. `@visibleForTesting` —
+  /// production behavior (guard call, then write call, same order,
+  /// write-layer errors still caught) is unchanged from before E11-B04.
+  @visibleForTesting
+  Future<void> guardedWriteCursorData(
+    String uid,
+    SyncCursor cursor,
+    Map<String, dynamic> data,
+  ) async {
+    FirebaseBoundary.assertAllowedFields(FirebaseNodeKind.syncCursor, data);
     try {
-      await writeCursorData(uid, cursor, {
-        'localDeviceId': cursor.localDeviceId,
-        'remoteDeviceId': cursor.remoteDeviceId,
-        'conversationId': cursor.conversationId,
-        'lastConfirmedSequenceNumber': cursor.lastConfirmedSequenceNumber,
-        'updatedAt': cursor.updatedAt,
-      }).timeout(_timeout);
+      await writeCursorData(uid, cursor, data).timeout(_timeout);
     } catch (e) {
       ObservabilityService.instance.logError(
         'firebase.sync_cursor_write_failed',
@@ -222,14 +266,17 @@ class SyncCursorService {
   /// `DatabaseReference` need a live platform-channel test harness to
   /// construct in tests, so tests seam here instead (mirrors
   /// `FirebaseMetadataService.writeDeviceMetadata`).
+  ///
+  /// Path from [FirebasePaths.syncCursor] (E11-T01) -- byte-identical to
+  /// the inline `_cursorPath` this replaced (EARS-FB-3).
   Future<void> writeCursorData(
     String uid,
     SyncCursor cursor,
     Map<String, dynamic> data,
   ) {
     return _firebaseDatabase
-        .ref(_cursorPath(uid, cursor.localDeviceId, cursor.conversationId,
-            cursor.remoteDeviceId))
+        .ref(FirebasePaths.syncCursor(uid, cursor.localDeviceId,
+            cursor.conversationId, cursor.remoteDeviceId))
         .set(data);
   }
 
@@ -261,27 +308,18 @@ class SyncCursorService {
   /// [localDeviceId] as *its* remote device. Split out from
   /// [readRemoteCursorFromFirebase] for the same test-seam reason as
   /// [writeCursorData].
+  ///
+  /// Path from [FirebasePaths.syncCursor] (E11-T01) -- byte-identical to
+  /// the inline `_cursorPath` this replaced (EARS-FB-3).
   Future<Object?> readCursorData(
     String uid,
     String remoteDeviceId,
     String conversationId,
   ) async {
     final snapshot = await _firebaseDatabase
-        .ref(_cursorPath(uid, remoteDeviceId, conversationId, localDeviceId))
+        .ref(FirebasePaths.syncCursor(
+            uid, remoteDeviceId, conversationId, localDeviceId))
         .get();
     return snapshot.value;
   }
-
-  /// `users/$uid/sync_cursors/$writerDeviceId/$conversationId/$aboutDeviceId`
-  /// -- consistent with the existing `users/$uid/devices/$deviceId`
-  /// convention (`FirebaseMetadataService`). [writerDeviceId] is whichever
-  /// device produced this cursor entry; [aboutDeviceId] is the device that
-  /// entry's `last_confirmed_sequence_number` is tracking progress against.
-  String _cursorPath(
-    String uid,
-    String writerDeviceId,
-    String conversationId,
-    String aboutDeviceId,
-  ) =>
-      'users/$uid/sync_cursors/$writerDeviceId/$conversationId/$aboutDeviceId';
 }

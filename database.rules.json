@@ -3,7 +3,111 @@
     "users": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren()",
+        "devices": {
+          ".validate": "newData.hasChildren()",
+          "$deviceId": {
+            ".validate": "newData.hasChildren(['deviceId', 'createdAt', 'lastSeenAt', 'platform'])",
+            "deviceId": {
+              ".validate": "newData.isString() && newData.val().length <= 128 && newData.val() === $deviceId"
+            },
+            "createdAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "lastSeenAt": {
+              ".validate": "newData.isNumber() && newData.val() >= newData.parent().child('createdAt').val()"
+            },
+            "platform": {
+              ".validate": "newData.isString() && newData.val().length <= 32"
+            },
+            "revocation": {
+              ".validate": "newData.hasChildren(['revokedAt', 'revokedByDeviceId'])",
+              "revokedAt": {
+                ".validate": "newData.isNumber()"
+              },
+              "revokedByDeviceId": {
+                ".validate": "newData.isString() && newData.val().length <= 128"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "relationships": {
+          ".validate": "newData.hasChildren()",
+          "$peerDeviceId": {
+            ".validate": "newData.hasChildren(['state', 'updatedAt'])",
+            "state": {
+              ".validate": "newData.isString() && (newData.val() === 'trusted' || newData.val() === 'allowed' || newData.val() === 'unknown' || newData.val() === 'blocked')"
+            },
+            "updatedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "sync_cursors": {
+          ".validate": "newData.hasChildren()",
+          "$writer": {
+            ".validate": "newData.hasChildren()",
+            "$conversation": {
+              ".validate": "newData.hasChildren()",
+              "$about": {
+                ".validate": "newData.hasChildren(['localDeviceId', 'remoteDeviceId', 'conversationId', 'lastConfirmedSequenceNumber', 'updatedAt'])",
+                "localDeviceId": {
+                  ".validate": "newData.isString() && newData.val().length <= 128"
+                },
+                "remoteDeviceId": {
+                  ".validate": "newData.isString() && newData.val().length <= 128"
+                },
+                "conversationId": {
+                  ".validate": "newData.isString() && newData.val().length <= 128"
+                },
+                "lastConfirmedSequenceNumber": {
+                  ".validate": "newData.isNumber() && newData.val() >= 0"
+                },
+                "updatedAt": {
+                  ".validate": "newData.isNumber()"
+                },
+                "$other": {
+                  ".validate": false
+                }
+              }
+            }
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "directory": {
+      "$deviceId": {
+        ".read": "auth != null",
+        ".write": "auth != null && newData.child('ownerUid').val() === auth.uid && (!data.exists() || data.child('ownerUid').val() === auth.uid)",
+        ".validate": "newData.hasChildren(['identityPublicKey', 'prekeyBundle', 'ownerUid'])",
+        "identityPublicKey": {
+          ".validate": "newData.isString() && newData.val().length <= 4096"
+        },
+        "prekeyBundle": {
+          ".validate": "newData.isString() && newData.val().length <= 16384"
+        },
+        "revokedAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "ownerUid": {
+          ".validate": "newData.isString() && newData.val().length <= 128"
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     },
     "$other": {

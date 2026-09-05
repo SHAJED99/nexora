@@ -36,10 +36,46 @@ const int _localDeviceId = 1;
 /// it into a [PreKeyBundle]; it never invents its own serialization format
 /// or persistence path.
 class IdentityService {
-  IdentityService(this._db, this._store);
+  /// [onKeyMaterialChanged], if given, is invoked (best-effort — any error
+  /// it throws is swallowed, never propagated to this class's own callers)
+  /// whenever [ensureSignedPreKey] or [replenishOneTimePreKeys] actually
+  /// runs (E11-T06, `ADR-0008` option 2's publish trigger). Deliberately a
+  /// generic callback rather than a direct `DeviceDirectoryService`
+  /// dependency: `core/crypto` does not import `core/services` (this
+  /// file's own header — "does NOT transmit the bundle anywhere"), so the
+  /// actual publish call is wired in by whoever constructs this service,
+  /// keeping this file's own layering unchanged. `null` (the default) is a
+  /// pure no-op — every existing caller/test is unaffected.
+  IdentityService(
+    this._db,
+    this._store, {
+    Future<void> Function()? onKeyMaterialChanged,
+  })  : // Named param (`onKeyMaterialChanged`) is public API; the private
+        // field below can't share that name, so `prefer_initializing_formals`
+        // doesn't apply here despite the trivial assignment -- same
+        // reasoning as `DeviceRevocationService`/`RelationshipSyncService`.
+        _onKeyMaterialChanged = onKeyMaterialChanged; // ignore: prefer_initializing_formals
 
   final AppDatabase _db;
   final DriftSignalProtocolStore _store;
+  final Future<void> Function()? _onKeyMaterialChanged;
+
+  /// Best-effort hook invocation shared by [ensureSignedPreKey] and
+  /// [replenishOneTimePreKeys] — never allowed to change either method's
+  /// own return value or throwing behaviour (task E11-T06 §3: "additive
+  /// calls only").
+  Future<void> _notifyKeyMaterialChanged() async {
+    if (_onKeyMaterialChanged == null) return;
+    try {
+      await _onKeyMaterialChanged();
+    } catch (_) {
+      // Swallowed deliberately: a directory-publish failure must never
+      // surface as an identity/prekey-bootstrap failure. The concrete
+      // hook implementation (`DeviceDirectoryService.publish`) already
+      // never throws on its own, so this is a second, redundant layer of
+      // protection against whatever hook a future caller wires in here.
+    }
+  }
 
   /// First-run identity bootstrap. Idempotent: a second (or later) call is
   /// a no-op that leaves the already-persisted identity untouched, per
@@ -64,6 +100,10 @@ class IdentityService {
     final identityKeyPair = await _store.getIdentityKeyPair();
     final record = generateSignedPreKey(identityKeyPair, _signedPreKeyId);
     await _store.storeSignedPreKey(_signedPreKeyId, record);
+    // E11-T06: only fires when a signed prekey was actually (re)generated
+    // -- the idempotent no-op branch above must not trigger a directory
+    // republish for material that did not change.
+    await _notifyKeyMaterialChanged();
   }
 
   /// Keeps the one-time prekey pool from running dry. Counts the prekeys
@@ -100,6 +140,10 @@ class IdentityService {
       final record = generatePreKeys(id, 1).single;
       await _store.storePreKey(record.id, record);
     }
+    // E11-T06: only fires when the pool was actually replenished -- the
+    // early `return 0` above (pool already at/above minimum) must not
+    // trigger a directory republish for material that did not change.
+    await _notifyKeyMaterialChanged();
     return ids.length;
   }
 
