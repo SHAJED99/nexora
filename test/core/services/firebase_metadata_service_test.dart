@@ -181,6 +181,88 @@ class _HangingReadFirebaseMetadataService extends FirebaseMetadataService {
   ) async {}
 }
 
+/// Captures the path (via uid/newDeviceId) + data a real
+/// `writeEnrollmentGrant` write would have sent, instead of touching
+/// Realtime Database.
+class _CapturingEnrollmentGrantWriteService extends FirebaseMetadataService {
+  String? capturedUid;
+  String? capturedNewDeviceId;
+  Map<String, dynamic>? capturedData;
+
+  @override
+  Future<void> writeEnrollmentGrantData(
+    String uid,
+    String newDeviceId,
+    Map<String, dynamic> data,
+  ) async {
+    capturedUid = uid;
+    capturedNewDeviceId = newDeviceId;
+    capturedData = data;
+  }
+}
+
+/// Always throws from the enrollment-grant write seam -- proves
+/// `writeEnrollmentGrant` swallows and logs rather than propagating
+/// (E12-B02, same best-effort contract as every other wrapper).
+class _ThrowingEnrollmentGrantWriteService extends FirebaseMetadataService {
+  @override
+  Future<void> writeEnrollmentGrantData(
+    String uid,
+    String newDeviceId,
+    Map<String, dynamic> data,
+  ) {
+    throw Exception('realtime database unavailable');
+  }
+}
+
+/// Never completes from the enrollment-grant write seam -- proves
+/// `writeEnrollmentGrant` is bounded by its timeout, not an indefinite hang.
+class _HangingEnrollmentGrantWriteService extends FirebaseMetadataService {
+  _HangingEnrollmentGrantWriteService({super.timeout});
+
+  @override
+  Future<void> writeEnrollmentGrantData(
+    String uid,
+    String newDeviceId,
+    Map<String, dynamic> data,
+  ) {
+    return Completer<void>().future; // never completes
+  }
+}
+
+/// Reports a stubbed raw enrollment-grant node value for
+/// `readEnrollmentGrant`, instead of touching Realtime Database.
+class _StubEnrollmentGrantReadService extends FirebaseMetadataService {
+  _StubEnrollmentGrantReadService(this._raw);
+
+  final Object? _raw;
+
+  @override
+  Future<Object?> readEnrollmentGrantData(String uid, String newDeviceId) async =>
+      _raw;
+}
+
+/// The enrollment-grant read seam always throws -- proves
+/// `readEnrollmentGrant` treats a read failure as "not approved" (`false`),
+/// never a thrown error.
+class _ThrowingEnrollmentGrantReadService extends FirebaseMetadataService {
+  @override
+  Future<Object?> readEnrollmentGrantData(String uid, String newDeviceId) {
+    throw Exception('realtime database read unavailable');
+  }
+}
+
+/// The enrollment-grant read seam never completes -- proves
+/// `readEnrollmentGrant` is bounded by its timeout, not an indefinite hang.
+class _HangingEnrollmentGrantReadService extends FirebaseMetadataService {
+  _HangingEnrollmentGrantReadService({super.timeout});
+
+  @override
+  Future<Object?> readEnrollmentGrantData(String uid, String newDeviceId) {
+    return Completer<Object?>().future; // never completes
+  }
+}
+
 void main() {
   test('test_EARS_FB_7_first_registration_writes_both_timestamps', () async {
     // EARS-FB-7: WHEN a device registers for the first time, the system
@@ -436,4 +518,146 @@ void main() {
       );
     },
   );
+
+  group('writeEnrollmentGrant (E12-B02)', () {
+    test(
+      'test_EARS_RECOVER_7_writes_approvedByDeviceId_and_a_server_timestamp',
+      () async {
+        final service = _CapturingEnrollmentGrantWriteService();
+
+        await service.writeEnrollmentGrant('uid-1', 'new-device', 'approver-device');
+
+        expect(service.capturedUid, 'uid-1');
+        expect(service.capturedNewDeviceId, 'new-device');
+        final data = service.capturedData!;
+        expect(data.keys.toSet(), {'approvedByDeviceId', 'approvedAt'});
+        expect(data['approvedByDeviceId'], 'approver-device');
+        expect(data['approvedAt'], ServerValue.timestamp);
+      },
+    );
+
+    test(
+      'the payload passes FirebaseBoundary.assertAllowedFields for '
+      'FirebaseNodeKind.deviceEnrollmentGrant',
+      () async {
+        final service = _CapturingEnrollmentGrantWriteService();
+
+        await service.writeEnrollmentGrant('uid-1', 'new-device', 'approver-device');
+
+        expect(
+          service.capturedData!.keys.toSet(),
+          FirebaseBoundary.allowedFields(FirebaseNodeKind.deviceEnrollmentGrant),
+        );
+      },
+    );
+
+    test(
+      'uses FirebasePaths.deviceEnrollmentGrant verbatim',
+      () {
+        expect(
+          FirebasePaths.deviceEnrollmentGrant('uid-1', 'new-device'),
+          'users/uid-1/device_enrollment_grants/new-device',
+        );
+      },
+    );
+
+    test(
+      'a write failure is caught and logged, never thrown',
+      () async {
+        final service = _ThrowingEnrollmentGrantWriteService();
+
+        await expectLater(
+          service.writeEnrollmentGrant('uid-1', 'new-device', 'approver-device'),
+          completes,
+        );
+      },
+    );
+
+    test(
+      'a hanging write is bounded by the timeout, never hangs the caller',
+      () async {
+        final service = _HangingEnrollmentGrantWriteService(
+          timeout: const Duration(milliseconds: 50),
+        );
+
+        await expectLater(
+          service.writeEnrollmentGrant('uid-1', 'new-device', 'approver-device'),
+          completes,
+        );
+      },
+    );
+  });
+
+  group('readEnrollmentGrant (E12-B03)', () {
+    test(
+      'test_EARS_RECOVER_1_a_real_grant_reads_as_approved',
+      () async {
+        final service = _StubEnrollmentGrantReadService({
+          'approvedByDeviceId': 'approver-device',
+          'approvedAt': 1000,
+        });
+
+        expect(
+          await service.readEnrollmentGrant('uid-1', 'new-device'),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'test_EARS_RECOVER_1_no_grant_node_reads_as_not_approved',
+      () async {
+        final service = _StubEnrollmentGrantReadService(null);
+
+        expect(
+          await service.readEnrollmentGrant('uid-1', 'new-device'),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'malformed data (not a Map, or missing approvedByDeviceId) reads as '
+      'not approved, never crashes',
+      () async {
+        expect(
+          await _StubEnrollmentGrantReadService('not-a-map')
+              .readEnrollmentGrant('uid-1', 'new-device'),
+          isFalse,
+        );
+        expect(
+          await _StubEnrollmentGrantReadService({'approvedAt': 1000})
+              .readEnrollmentGrant('uid-1', 'new-device'),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'a read failure is caught and logged, reads as not approved -- never '
+      'thrown',
+      () async {
+        final service = _ThrowingEnrollmentGrantReadService();
+
+        await expectLater(
+          service.readEnrollmentGrant('uid-1', 'new-device'),
+          completion(isFalse),
+        );
+      },
+    );
+
+    test(
+      'a hanging read is bounded by the timeout, resolves to not approved',
+      () async {
+        final service = _HangingEnrollmentGrantReadService(
+          timeout: const Duration(milliseconds: 50),
+        );
+
+        await expectLater(
+          service.readEnrollmentGrant('uid-1', 'new-device'),
+          completion(isFalse),
+        );
+      },
+    );
+  });
 }

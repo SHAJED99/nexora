@@ -20,6 +20,7 @@ enum FirebaseNodeKind {
   relationship,
   directory,
   directoryPrivate,
+  deviceEnrollmentGrant,
 }
 
 /// Thrown by [FirebaseBoundary.assertAllowedFields] when a payload carries a
@@ -98,6 +99,17 @@ class FirebaseBoundary {
     // cross-account `ownerUid`-readability leak).
     FirebaseNodeKind.directoryPrivate: {
       'ownerUid',
+    },
+    // `users/$uid/device_enrollment_grants/$newDeviceId` — the dedicated
+    // enrollment-approval channel (`FirebaseMetadataService
+    // .writeEnrollmentGrant`, `E12-B02`/`E12-B03`), deliberately separate
+    // from `FirebaseNodeKind.relationship` and never merged through
+    // `ConflictResolver` -- an authorization grant from a trusted device
+    // to a specific new device, not a peer-trust opinion (`E12-B03`'s
+    // human decision).
+    FirebaseNodeKind.deviceEnrollmentGrant: {
+      'approvedByDeviceId',
+      'approvedAt',
     },
   };
 

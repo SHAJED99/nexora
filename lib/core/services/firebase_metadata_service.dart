@@ -228,4 +228,100 @@ class FirebaseMetadataService {
     if (raw is! Map) return const {};
     return raw.keys.whereType<String>().toSet();
   }
+
+  /// `E12-B02` (`FR-RECOVER-001`, `EARS-RECOVER-7`): the approving device's
+  /// own side of the dedicated device-enrollment-grant channel
+  /// (`FirebasePaths.deviceEnrollmentGrant`, `E12-B03`'s human-decided fix
+  /// -- a new Firebase path, read directly by the enrolling device, never
+  /// merged through `RelationshipSyncService.pull`/`ConflictResolver`).
+  /// Writes once [approvedByDeviceId] (the approving device's own id, NOT
+  /// the enrolling account's uid) approves [newDeviceId]'s enrollment.
+  ///
+  /// Deliberately does NOT touch `RelationshipSyncService.push` or
+  /// `users/$uid/relationships/*` -- that channel and this one are
+  /// independent (`E12-B03`'s "does not loosen `ConflictResolver
+  /// .resolveTrust` for the general peer-relationship case" fence).
+  ///
+  /// Best-effort, same pattern as every other wrapper on this class: never
+  /// throws, any Realtime Database error (including being offline, or a
+  /// timeout) is caught and logged via [ObservabilityService].
+  Future<void> writeEnrollmentGrant(
+    String uid,
+    String newDeviceId,
+    String approvedByDeviceId,
+  ) async {
+    final data = {
+      'approvedByDeviceId': approvedByDeviceId,
+      'approvedAt': ServerValue.timestamp,
+    };
+    // The guard runs before the try below, not inside it -- a boundary
+    // violation is a programming error and must propagate, not get caught
+    // and logged as "just another Firebase error" (same reasoning as every
+    // other wrapper on this class).
+    FirebaseBoundary.assertAllowedFields(
+      FirebaseNodeKind.deviceEnrollmentGrant,
+      data,
+    );
+    try {
+      await writeEnrollmentGrantData(uid, newDeviceId, data).timeout(_timeout);
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'firebase.write_enrollment_grant_failed',
+        cause: e,
+      );
+    }
+  }
+
+  /// Performs the actual Realtime Database write. Split out from
+  /// [writeEnrollmentGrant] for the same test-seam reason as
+  /// [writeDeviceMetadata].
+  ///
+  /// Path from [FirebasePaths.deviceEnrollmentGrant] (`E12-B02`/`E12-B03`)
+  /// -- `users/$uid/device_enrollment_grants/$newDeviceId`.
+  Future<void> writeEnrollmentGrantData(
+    String uid,
+    String newDeviceId,
+    Map<String, dynamic> data,
+  ) {
+    return _database
+        .ref(FirebasePaths.deviceEnrollmentGrant(uid, newDeviceId))
+        .set(data);
+  }
+
+  /// `E12-B03` (`FR-RECOVER-001`): the enrolling device's own side -- a
+  /// plain existence/value check at the dedicated grant path, read
+  /// DIRECTLY, never through `RelationshipSyncService.pull`/
+  /// `ConflictResolver.resolveTrust`. An enrollment approval is an
+  /// authorization GRANT from a trusted device to a specific new device,
+  /// not a peer-trust OPINION to be reconciled -- `FR-MSG-007`'s "more
+  /// restrictive state wins" does not apply here (`E12-B03`'s human
+  /// decision, 2026-09-06).
+  ///
+  /// Best-effort, same pattern as every other reader on this class: any
+  /// read failure, timeout, or malformed data reads as "not yet approved"
+  /// (`false`), never a thrown error.
+  Future<bool> readEnrollmentGrant(String uid, String newDeviceId) async {
+    final Object? raw;
+    try {
+      raw = await readEnrollmentGrantData(uid, newDeviceId).timeout(_timeout);
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'firebase.read_enrollment_grant_failed',
+        cause: e,
+      );
+      return false;
+    }
+    return raw is Map && raw['approvedByDeviceId'] is String;
+  }
+
+  /// Performs the actual Realtime Database read of
+  /// `users/$uid/device_enrollment_grants/$newDeviceId`. Split out from
+  /// [readEnrollmentGrant] for the same test-seam reason as
+  /// [readOwnDevicesData].
+  Future<Object?> readEnrollmentGrantData(String uid, String newDeviceId) {
+    return _database
+        .ref(FirebasePaths.deviceEnrollmentGrant(uid, newDeviceId))
+        .get()
+        .then((snapshot) => snapshot.value);
+  }
 }

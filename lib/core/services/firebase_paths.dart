@@ -91,4 +91,20 @@ class FirebasePaths {
   /// write is from the entry's true owner.
   static String directoryPrivateOwnerUid(String deviceId) =>
       'directory_private/$deviceId/ownerUid';
+
+  /// `users/<uid>/device_enrollment_grants/<newDeviceId>` — `E12-B02`/
+  /// `E12-B03`'s dedicated enrollment-approval channel, deliberately
+  /// separate from [relationship]/[relationships]. `RelationshipSyncService
+  /// .pull` merges every remote relationship state through
+  /// `ConflictResolver.resolveTrust` (`FR-MSG-007`, "more restrictive
+  /// state wins"), which is correct for reconciling two devices'
+  /// independent OPINIONS about a peer but a category error for an
+  /// enrollment approval -- an authorization GRANT from a trusted device
+  /// to a specific new device, not an opinion to reconcile (`E12-B03`'s
+  /// human decision, 2026-09-06: a dedicated node, read directly, never
+  /// merged through `ConflictResolver`). `$newDeviceId` is the enrolling
+  /// device's own id -- the node this account's OTHER (already-trusted)
+  /// device writes to once it approves that enrollment.
+  static String deviceEnrollmentGrant(String uid, String newDeviceId) =>
+      'users/$uid/device_enrollment_grants/$newDeviceId';
 }
