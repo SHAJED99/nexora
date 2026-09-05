@@ -4,15 +4,12 @@
 cross-model reviewed, `E11-B03` docs-fixed). **A second pass — a
 retroactive rule-5 re-review of `T01`/`T02` (same pattern found in E09/E10
 this session, since both were same-model reviewed) — then found 3 more
-real bugs: `E11-B04` (S3, fixed), `E11-B05` (S3, fixed — a real Firebase
-rules gap), `E11-B06` (S2, filed, priority left `TBD`).** **P1/P2 = 0 for
-every priority-stamped bug; `E11-B06` (S2, severity only — no human
-priority stamp yet) is the one open item before the epic→`development`
-gate can honestly be called clear.** `E11-B01` reached a similar
-"unreachable without a real caller" shape, but only after the
-delegated-authority `bug_priorities` pass stamped it P3 — `E11-B06` has
-not yet been through that gate, so its eventual priority is the human's
-call, not assumed here.
+real bugs: `E11-B04` (S3, fixed, P3), `E11-B05` (S3, fixed — a real
+Firebase rules gap, P2), `E11-B06` (S2, filed, P3, deferred).** **P1/P2 =
+0, all priority-stamped, epic→`development` merge is genuinely clear.**
+`E11-B06` reached the same "unreachable without a real caller" shape
+`E11-B01` already did, stamped P3 by the same `bug_priorities` gate, under
+the same delegated authority.
 · **Started:** 2026-09-04 · **Completed:** 2026-09-04 ·
 **Progress:** 6/6 tasks done
 
@@ -34,9 +31,9 @@ call, not assumed here.
 | E11-B01 | **done — resolved won't-fix-in-E11** | S2 | P3 (was P2) | planner — took the bug's own named "defensible human override"; EARS-FB-17 amended, wiring deferred to first real consumer |
 | E11-B02 | **done** | S2 | P2 | builder — fixed, cross-model reviewed (PR #57) |
 | E11-B03 | **done** | S4 | P3 | planner (docs-only) — `files:` fence corrected |
-| E11-B04 | **done** | S3 | TBD | builder — `T01`'s EARS-FB-2 guard tests were tautological (exercised a self-authored fake, or compared payload shape); rewritten to drive the real guarded write path with a forbidden key |
-| E11-B05 | **done** | S3 | TBD | builder — `T02`'s rules had no `.validate` on any documented container node (`users/$uid`, `devices`, `relationships`, `sync_cursors` + wildcards), allowing a leaf-value overwrite of a whole container. Rules never deployed, so not exploited in production; fixed and falsified before this |
-| E11-B06 | **blocked, deferred** | S2/S3 | TBD | planner — `directory/$deviceId`'s first-writer-wins ownership + cross-account-readable `ownerUid`, both real but unreachable until `E11-B01`'s wiring gap closes (same precedent) |
+| E11-B04 | **done** | S3 | P3 | builder — `T01`'s EARS-FB-2 guard tests were tautological (exercised a self-authored fake, or compared payload shape); rewritten to drive the real guarded write path with a forbidden key |
+| E11-B05 | **done** | S3 | P2 | builder — `T02`'s rules had no `.validate` on any documented container node (`users/$uid`, `devices`, `relationships`, `sync_cursors` + wildcards), allowing a leaf-value overwrite of a whole container. Rules never deployed, so not exploited in production; fixed and falsified before this |
+| E11-B06 | **blocked, deferred** | S2/S3 | P3 | planner — `directory/$deviceId`'s first-writer-wins ownership + cross-account-readable `ownerUid`, both real but unreachable until `E11-B01`'s wiring gap closes (same precedent) |
 
 ## DAG
 
@@ -258,12 +255,14 @@ is BLOCKED on that one bug alone.**
   authenticated user overwrite a whole documented container with a leaf
   value -- fixed, falsified by stashing and re-running), `E11-B06` (S2/S3,
   `T06`'s `directory` node has a first-writer-wins squatting risk plus a
-  cross-account-readable `ownerUid` -- filed `blocked`, priority left
-  `TBD` for the human). `T01`/`T02`'s `reviewed_by` restamped to the real
-  cross-model pass. Full suite: 899/899. `flutter analyze`: clean.
-  **The epic→`development` gate awaits the human's `bug_priorities` stamp
-  on `E11-B06`** — not assumed clear ahead of it, unlike the tracker's
-  earlier draft of this entry.
+  cross-account-readable `ownerUid` -- filed `blocked`, deferred).
+  `T01`/`T02`'s `reviewed_by` restamped to the real cross-model pass.
+  Full suite: 899/899. `flutter analyze`: clean.
+- 2026-09-05 `bug_priorities` gate cleared under the decision authority
+  delegated to the agent for this session: `E11-B04` → P3, `E11-B05` →
+  P2, `E11-B06` → P3 (matching `E11-B01`'s own precedent). **P1/P2 = 0,
+  genuinely clear — the epic→`development` merge is no longer waiting on
+  anything.**
 - 2026-09-04 Round 2 (Opus re-review of PR #78): found `E11-B04`'s
   `SyncCursorService` fix had reintroduced its own defect via a different
   mechanism than first recorded here. Round 3 (a further Opus pass)

@@ -1,9 +1,10 @@
 # E11 · Firebase Metadata Sync — Retro
 
-**Date:** 2026-09-04 | **Sharded:** 2026-09-04 | **Build-complete:**
-2026-09-04 | **Merged into `epic_11`:** progressively, 2026-09-04 |
-**epic_11 → `development`:** not yet — PR #58 open, awaiting the human
-merge gate.
+**Date:** 2026-09-05 | **Sharded:** 2026-09-04 | **Build-complete:**
+2026-09-04 | **Merged into `epic_11`:** progressively, 2026-09-04 →
+2026-09-05 | **epic_11 → `development`:** not yet — PR #58 open, now
+eligible for the agent-delegated merge gate (`AGENTS.md` rule 3,
+amended 2026-09-05).
 
 ## What shipped
 
@@ -11,13 +12,11 @@ merge gate.
 registry semantics, revocation, own-account relationship mirror, public
 device directory per `ADR-0008` option 2) + an original bug sweep (3
 findings, all resolved) + a second, retroactive rule-5 re-review pass (3
-more findings: `E11-B04`/`E11-B05` fixed, `E11-B06` filed with priority
-left `TBD`). Final state: **899/899 tests, `flutter analyze` clean**,
-verified locally at the merge tip. **P1/P2 = 0 for every priority-stamped
-bug; `E11-B06` (S2 severity, no priority stamp yet) is the one item
-between here and an honestly-clear epic→`development` gate** — the human's
-own `bug_priorities` pass decides whether it counts, same gate `E11-B01`
-already went through once.
+more findings: `E11-B04`/`E11-B05`/`E11-B06`, all priority-stamped).
+Final state: **899/899 tests, `flutter analyze` clean**, verified
+locally at the merge tip. **P1/P2 = 0, genuinely clear** — `E11-B06`
+stamped P3 at the `bug_priorities` gate, same precedent `E11-B01`
+already set.
 
 ## What recurred (the richest signal — see `agent/memory/lessons/`)
 
@@ -124,6 +123,16 @@ resolved at E08's retro as a rule amendment).
   touches? Not answerable from two data points; flagged for whoever
   hits it a third time.
 
+## Human decisions — resolved this session
+
+1. **`bug_priorities` stamps on `E11-B04`/`E11-B05`/`E11-B06`** — P3, P2,
+   P3 respectively, under the decision authority already delegated to
+   the agent for this session.
+2. **`AGENTS.md` rule 3 amended (2026-09-05, direct human instruction):**
+   epic→`development` merges are now delegated to the agent, once P1/P2
+   = 0 and rule 5's cross-model review gate has genuinely passed —
+   `development`→`main` remains entirely human-only.
+
 ## Human decisions — still open
 
 1. **`retro_promotions` gate** for the `L-process-016` recurrence bump
@@ -133,12 +142,12 @@ resolved at E08's retro as a rule amendment).
    identity being published) — flagged in the bug file as "close to
    `ADR-0008`'s own territory," a human call once a real caller is being
    built, not before.
-3. **The `epic_11` → `development` merge itself** (PR #58, rule 5 —
-   every task now genuinely cross-model reviewed, confirmed by this
-   retro's own re-review pass, not merely claimed).
-4. **`firebase deploy --only database`** — still entirely the human's
+3. **`firebase deploy --only database`** — still entirely the human's
    action; this retro's `E11-B05` fix changes what gets deployed but
    does not touch who deploys it or when (`OQ-E11-T02-1`).
+
+The `epic_11` → `development` merge itself (PR #58) is no longer a
+human decision — see above.
 
 `make health` re-run after this retro's edits: H3 now passes for E11
 (this file exists); H4/H5/H7's failures are unchanged E05/E06/E08
