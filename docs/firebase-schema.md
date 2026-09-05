@@ -64,10 +64,15 @@ first write, same first-writer-wins shape as before
 (`database.rules.json`'s `.write` expression on this node requires the
 caller's `auth.uid` to already match the stored value whenever the node
 exists, and to match the value it is writing in every case).
-`directory/$deviceId`'s own `.write` rule reads THIS node (`root.child(
-'directory_private/'+$deviceId+'/ownerUid')`) to decide whether a write
-to the public entry is from that entry's true owner — the two nodes are
-always written together, as one atomic multi-location update
+`directory/$deviceId`'s own `.write` rule reads THIS node
+(`newData.parent().parent().child('directory_private').child($deviceId)
+.child('ownerUid')` — the Realtime Database idiom for reading a sibling
+path written in the SAME multi-location update; `root.child(...)` reads
+only the pre-write snapshot even inside a multi-location update and was
+caught by review, emulator-verified as permanently denying every new
+device's first publish, before merge) to decide whether a write to the
+public entry is from that entry's true owner — the two nodes are always
+written together, as one atomic multi-location update
 (`DeviceDirectoryService.writeDirectoryData`), never as two separate
 writes. **`E11-B06`'s finding 1** (no cryptographic binding between
 `$deviceId` and the identity published under it, so a first writer can

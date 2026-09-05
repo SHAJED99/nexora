@@ -255,6 +255,22 @@ three are decided here; the third is fixed in code, not decided:
   completed fix. `E11-B06` stays `status: blocked` on this finding until
   that follow-up decision is made concrete enough to shard as a task.
 
+  **Round-2 review addendum (2026-09-05): finding 2's fix made this
+  finding's attack CHEAPER, not merely unchanged.** Before finding 2's
+  fix, squatting `directory/$deviceId` required publishing a complete,
+  self-consistent public entry (`identityPublicKey` + `prekeyBundle`
+  passing `E11-B02`'s binding check) — a squatter had to construct valid
+  key material. After the fix, `ownerUid` lives at
+  `directory_private/$deviceId/ownerUid`, whose own write rule permits
+  ANY value as a first write (first-writer-wins, by design, since some
+  node must be writable by whoever gets there first) — so an attacker now
+  needs only a single string write to that one leaf to permanently lock
+  out the true owner, never touching the public entry or its identity
+  material at all. This does not change the finding's status or its
+  chosen direction above; it is recorded so whoever eventually implements
+  the `$deviceId`-derivation fix knows the current cheapest attack shape,
+  not the pre-`E11-B06` one.
+
 - **Finding 3 (no unpublish path): human decision — final, as shipped.**
   ✅ "Revoke, don't delete" is confirmed as the deliberate, permanent
   design: a `directory/$deviceId` entry can be revoked (`revokedAt` set)

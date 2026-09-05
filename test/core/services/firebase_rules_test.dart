@@ -691,10 +691,23 @@ void main() {
     test('.write checks ownership against directory_private/\$deviceId/'
         'ownerUid (E11-B06 fix), not a field on this node -- exact string, '
         'not merely "contains"', () {
+      // Round 1 review (Opus, emulator-verified) found the original
+      // `root.child(...)` shape here permanently denies every new device's
+      // first publish: `root` in a multi-location `update()` reflects the
+      // PRE-write snapshot, never the sibling paths being written in the
+      // SAME update. `newData.parent().parent()` -- walking up from this
+      // rule's own location (`directory/$deviceId`) through `directory`
+      // to the update's merged root -- is the Firebase-documented idiom
+      // for exactly this, and was verified against a real
+      // `@firebase/rules-unit-testing` emulator (not assumed) before this
+      // string was written: a brand-new device's atomic
+      // {directory/$id, directory_private/$id/ownerUid} update succeeds,
+      // a second account's squat attempt on an existing entry is denied,
+      // and the true owner's own re-publish/rotation still succeeds.
       expect(
         deviceIdNode['.write'],
-        "auth != null && root.child('directory_private/'+\$deviceId+"
-            "'/ownerUid').val() === auth.uid",
+        "auth != null && newData.parent().parent().child('directory_private')"
+            ".child(\$deviceId).child('ownerUid').val() === auth.uid",
       );
     });
   });
@@ -761,7 +774,8 @@ void main() {
       final write = deviceIdNode['.write'] as String;
       expect(
         write.contains(
-          "root.child('directory_private/'+\$deviceId+'/ownerUid')",
+          "newData.parent().parent().child('directory_private')"
+              ".child(\$deviceId).child('ownerUid')",
         ),
         isTrue,
       );

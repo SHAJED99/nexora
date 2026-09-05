@@ -200,13 +200,20 @@ class DeviceDirectoryService {
   ///
   /// Writes [data] to [FirebasePaths.directoryEntry] (the public entry) and
   /// [uid] to [FirebasePaths.directoryPrivateOwnerUid] (the write-ownership
-  /// marker, `E11-B06` fix) as ONE atomic multi-location update -- never
-  /// two separate `.set()` calls. `directory/$deviceId`'s own `.write` rule
-  /// reads the private node's value to authorize the public write, so both
-  /// paths must land together: a crash between two separate writes could
-  /// otherwise leave a public entry with no ownership marker at all
-  /// (permanently unwritable afterward, since no caller's uid would then
-  /// ever match).
+  /// marker, `E11-B06` fix) as ONE atomic multi-location update -- not
+  /// merely for crash-safety, but because it is REQUIRED for correctness:
+  /// `directory/$deviceId`'s own `.write` rule authorizes against
+  /// `newData.parent().parent().child('directory_private')...` -- the
+  /// Realtime Database idiom for reading a sibling path written in the
+  /// SAME multi-location update. A rule evaluating `root.child(...)`
+  /// instead (an earlier, broken draft of this fix, caught by review and
+  /// verified against a real `@firebase/rules-unit-testing` emulator)
+  /// sees only the PRE-write snapshot even inside a multi-location update,
+  /// which would permanently deny every new device's first publish -- the
+  /// private node would never exist yet, and no caller's uid could ever
+  /// match a value that isn't there. Two separate `.set()` calls would
+  /// break this rule's ability to see the private write at all, not just
+  /// weaken crash-safety.
   Future<void> writeDirectoryData(
     String deviceId,
     String uid,
