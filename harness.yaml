@@ -91,6 +91,11 @@ human_gates:
     #   honest work gate than an artifact gate that can never fire.
   - { key: bug_priorities,              kind: work,     owner: bug-sweep }
   - { key: epic_to_dev_merge,           kind: work,     owner: release }
+    # ^ AGENTS.md rule 3, 2026-09-05: the human delegated this specific merge
+    #   point to the agent, once P1/P2 = 0 and rule 5's cross-model review
+    #   gate has genuinely passed. The agent may clear this gate itself and
+    #   perform the merge — this is the one `human_gates` entry that is no
+    #   longer human-only. `dev_to_main_merge` below is unaffected.
   - { key: dev_to_main_merge,           kind: work,     owner: release }
   - { key: change_impact_approval,      kind: artifact, owner: change-impact,      artifact_glob: "docs/impact/*.md" }
     # ^ every markdown file in docs/impact/, not just IMP-*.md: the narrow
