@@ -1,7 +1,7 @@
 ---
 id: E10
 title: Notifications & Background Operation
-status: done (2026-09-04; 10/10 tasks + 10/10 bugs closed, priority-stamped P1/P2=0; E10-B09/B10 severity-only, priority TBD for the human bug_priorities gate before epic→development merge)
+status: done (2026-09-05; 10/10 tasks + 10/10 bugs closed, P1/P2=0, all priority-stamped — ready for epic→development merge)
 type: feature
 priority: { moscow: should, wsjf: 3.6 }
 depends_on: [E04, E06]
