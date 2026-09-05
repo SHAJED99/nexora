@@ -1320,7 +1320,10 @@ and that is the strongest single argument for this disposition.**
      round-trip in the UI's own terms, whatever the backend does
      underneath is out of this screen's concern).
 - **approved by:** human (shajed99), 2026-09-05 — approved as proposed
-- **built:** not built.
+- **built:** contracts written — `design/screens/device-enrollment.md` and
+  `design/screens/device-enrollment-approval.md` (2026-09-05). Not built
+  in code; the build tasks are prospective (`E12` task-sharding). Golden
+  is extracted **after** the build, per `design-fidelity` §3.
 
 ## GAP-029 — the mandatory-update block has no design source at all
 
@@ -1371,7 +1374,10 @@ and that is the strongest single argument for this disposition.**
   framework lives, this epic or `E04`) is unrelated to this gap and does
   not block it — that question has no UI surface either way.
 - **approved by:** human (shajed99), 2026-09-05 — approved as proposed
-- **built:** not built.
+- **built:** contract written — `design/screens/version-update-required.md`
+  (2026-09-05). Not built in code; the build task is prospective (`E14`
+  task-sharding). Golden is extracted **after** the build, per
+  `design-fidelity` §3.
 
 ## The usual suspects
 
