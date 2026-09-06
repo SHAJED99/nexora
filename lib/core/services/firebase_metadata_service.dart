@@ -184,4 +184,221 @@ class FirebaseMetadataService {
   ) {
     return _database.ref(FirebasePaths.device(uid, deviceId)).update(data);
   }
+
+  /// E12-T01 (`FR-RECOVER-001`): the whole-list reader `E12-T02`/`E12-T03`
+  /// both need -- which device ids already exist under this account's own
+  /// `users/$uid/devices` registry. Best-effort, same as every other method
+  /// on this class: any Realtime Database error, a timeout, or malformed
+  /// data all read as "no information" (an empty set), never a thrown
+  /// error, since this is a hint no caller may block on (task §6 Risks).
+  ///
+  /// Mirrors `DeviceRevocationService.pullRevocations`'s exact
+  /// timeout+catch-and-log wrapper around a raw read seam, plus a private
+  /// pure extraction function -- not a new, competing whole-subtree reader.
+  Future<Set<String>> readOwnDeviceIds(String uid) async {
+    final Object? raw;
+    try {
+      raw = await readOwnDevicesData(uid).timeout(_timeout);
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'firebase.read_own_device_ids_failed',
+        cause: e,
+      );
+      return const {};
+    }
+    return _extractDeviceIds(raw);
+  }
+
+  /// Performs the actual Realtime Database read of the whole
+  /// `users/$uid/devices` subtree. Split out from [readOwnDeviceIds] for the
+  /// same test-seam reason as [writeDeviceMetadata]/
+  /// `DeviceRevocationService.readDevicesData`: `FirebaseDatabase`/
+  /// `DatabaseReference` need a live platform-channel test harness to
+  /// construct in tests, so tests seam here instead.
+  Future<Object?> readOwnDevicesData(String uid) async {
+    final snapshot = await _database.ref(FirebasePaths.devices(uid)).get();
+    return snapshot.value;
+  }
+
+  /// Reads the set of device id keys out of the raw `users/$uid/devices`
+  /// snapshot value. Absent or malformed data (anything that isn't a `Map`)
+  /// reads as an empty set, never a thrown error -- mirrors
+  /// `DeviceRevocationService._extractRevocationFlags`'s shape.
+  static Set<String> _extractDeviceIds(Object? raw) {
+    if (raw is! Map) return const {};
+    return raw.keys.whereType<String>().toSet();
+  }
+
+  /// `E12-B02` (`FR-RECOVER-001`, `EARS-RECOVER-7`): the approving device's
+  /// own side of the dedicated device-enrollment-grant channel
+  /// (`FirebasePaths.deviceEnrollmentGrant`, `E12-B03`'s human-decided fix
+  /// -- a new Firebase path, read directly by the enrolling device, never
+  /// merged through `ConflictResolver` (nor through the since-deleted
+  /// `RelationshipSyncService.pull`, `E12-B11`).
+  /// Writes once [approvedByDeviceId] (the approving device's own id, NOT
+  /// the enrolling account's uid) approves [newDeviceId]'s enrollment.
+  ///
+  /// Deliberately does NOT touch `users/$uid/relationships/*` -- that
+  /// channel and this one are independent, and that one is now gone
+  /// entirely (`E12-B11`/`IMP-002` descoped `FR-TRUST-007`) (`E12-B03`'s "does not loosen `ConflictResolver
+  /// .resolveTrust` for the general peer-relationship case" fence).
+  ///
+  /// Best-effort, same pattern as every other wrapper on this class: never
+  /// throws, any Realtime Database error (including being offline, or a
+  /// timeout) is caught and logged via [ObservabilityService].
+  Future<void> writeEnrollmentGrant(
+    String uid,
+    String newDeviceId,
+    String approvedByDeviceId,
+  ) async {
+    final data = {
+      'approvedByDeviceId': approvedByDeviceId,
+      'approvedAt': ServerValue.timestamp,
+    };
+    // The guard runs before the try below, not inside it -- a boundary
+    // violation is a programming error and must propagate, not get caught
+    // and logged as "just another Firebase error" (same reasoning as every
+    // other wrapper on this class).
+    FirebaseBoundary.assertAllowedFields(
+      FirebaseNodeKind.deviceEnrollmentGrant,
+      data,
+    );
+    try {
+      await writeEnrollmentGrantData(uid, newDeviceId, data).timeout(_timeout);
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'firebase.write_enrollment_grant_failed',
+        cause: e,
+      );
+    }
+  }
+
+  /// Performs the actual Realtime Database write. Split out from
+  /// [writeEnrollmentGrant] for the same test-seam reason as
+  /// [writeDeviceMetadata].
+  ///
+  /// Path from [FirebasePaths.deviceEnrollmentGrant] (`E12-B02`/`E12-B03`)
+  /// -- `users/$uid/device_enrollment_grants/$newDeviceId`.
+  Future<void> writeEnrollmentGrantData(
+    String uid,
+    String newDeviceId,
+    Map<String, dynamic> data,
+  ) {
+    return _database
+        .ref(FirebasePaths.deviceEnrollmentGrant(uid, newDeviceId))
+        .set(data);
+  }
+
+  /// `E12-B03` (`FR-RECOVER-001`): the enrolling device's own side -- a
+  /// plain existence/value check at the dedicated grant path, read
+  /// DIRECTLY, never through `ConflictResolver.resolveTrust` (nor through
+  /// the since-deleted `RelationshipSyncService.pull`, `E12-B11`). An
+  /// enrollment approval is an
+  /// authorization GRANT from a trusted device to a specific new device,
+  /// not a peer-trust OPINION to be reconciled -- `FR-MSG-007`'s "more
+  /// restrictive state wins" does not apply here (`E12-B03`'s human
+  /// decision, 2026-09-06).
+  ///
+  /// Best-effort, same pattern as every other reader on this class: any
+  /// read failure, timeout, or malformed data reads as "not yet approved"
+  /// (`false`), never a thrown error.
+  Future<bool> readEnrollmentGrant(String uid, String newDeviceId) async {
+    final Object? raw;
+    try {
+      raw = await readEnrollmentGrantData(uid, newDeviceId).timeout(_timeout);
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'firebase.read_enrollment_grant_failed',
+        cause: e,
+      );
+      return false;
+    }
+    return raw is Map && raw['approvedByDeviceId'] is String;
+  }
+
+  /// Performs the actual Realtime Database read of
+  /// `users/$uid/device_enrollment_grants/$newDeviceId`. Split out from
+  /// [readEnrollmentGrant] for the same test-seam reason as
+  /// [readOwnDevicesData].
+  Future<Object?> readEnrollmentGrantData(String uid, String newDeviceId) {
+    return _database
+        .ref(FirebasePaths.deviceEnrollmentGrant(uid, newDeviceId))
+        .get()
+        .then((snapshot) => snapshot.value);
+  }
+
+  /// `E12-B09` (`FR-RECOVER-001`/`FR-TRUST-007`): removes a previously
+  /// written `users/$uid/device_enrollment_grants/$newDeviceId` node, so a
+  /// later `block()`/`deny()` (`DevicesController.block`, the SAME handler
+  /// `Deny` uses) makes an already-issued grant ineffective — the
+  /// enrolling device's next [readEnrollmentGrant] then sees no node and
+  /// reads as not-approved, same as if it had never been granted.
+  ///
+  /// Always safe to call, including for a [newDeviceId] with no grant node
+  /// at all (an ordinary "Block" of a ordinary stranger, never a pending
+  /// enrollment) — a Realtime Database `.remove()` of an already-absent
+  /// path is a silent no-op, same as every other best-effort wrapper on
+  /// this class. Never throws: any Realtime Database error (including
+  /// being offline, or a timeout) is caught and logged via
+  /// [ObservabilityService], mirroring [writeEnrollmentGrant]'s own
+  /// best-effort framing — a failed deletion here must never block the
+  /// caller's own local block/deny action.
+  ///
+  /// No [FirebaseBoundary.assertAllowedFields] guard is needed here (unlike
+  /// [writeEnrollmentGrant]): a removal carries no field payload to police,
+  /// it only ever narrows what exists at this path.
+  Future<void> deleteEnrollmentGrant(String uid, String newDeviceId) async {
+    try {
+      await deleteEnrollmentGrantData(uid, newDeviceId).timeout(_timeout);
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'firebase.delete_enrollment_grant_failed',
+        cause: e,
+      );
+    }
+  }
+
+  /// Performs the actual Realtime Database removal. Split out from
+  /// [deleteEnrollmentGrant] for the same test-seam reason as
+  /// [writeEnrollmentGrantData].
+  Future<void> deleteEnrollmentGrantData(String uid, String newDeviceId) {
+    return _database
+        .ref(FirebasePaths.deviceEnrollmentGrant(uid, newDeviceId))
+        .remove();
+  }
+
+  /// `E12-B09` (`FR-RECOVER-001`/`FR-TRUST-007`): best-effort check of
+  /// whether [deviceId] carries a `revocation` child under its own
+  /// `users/$uid/devices/$deviceId` node (`E11-T04`'s
+  /// `DeviceRevocationService.revoke`) — reuses [readDeviceMetadata]'s
+  /// existing whole-node read, since `revocation` is just one child of the
+  /// same node [readDeviceMetadata] already fetches (no new Firebase path,
+  /// no new writer). This is `checkApproval()`'s own defense against a
+  /// grant that outlived a later revocation of the same device id (the
+  /// bug's own repro step 3, "or B is revoked via
+  /// `users/$uid/devices/B/revocation`").
+  ///
+  /// Absent/malformed data (no node, no `revocation` child, or a
+  /// non-`Map` child) reads as "not revoked" — absent information, never
+  /// "unknown" — mirroring
+  /// `DeviceRevocationService._extractRevocationFlags`'s exact shape for
+  /// the same underlying data. Never throws: any read failure or timeout
+  /// also reads as "not revoked", since this is a hint an enrollment poll
+  /// may not block on (same best-effort framing as every other reader on
+  /// this class).
+  Future<bool> isDeviceRevoked(String uid, String deviceId) async {
+    final Object? raw;
+    try {
+      raw = await readDeviceMetadata(uid, deviceId).timeout(_timeout);
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'firebase.read_device_revocation_status_failed',
+        cause: e,
+      );
+      return false;
+    }
+    return raw is Map &&
+        raw['revocation'] is Map &&
+        (raw['revocation'] as Map).isNotEmpty;
+  }
 }

@@ -591,6 +591,62 @@ void main() {
     });
   });
 
+  group('test_EARS_RECOVER_1_device_enrollment_grant_node_rules', () {
+    // E12-B02/E12-B03: the dedicated enrollment-approval channel, separate
+    // from `relationships/$peerDeviceId` and never merged through
+    // `ConflictResolver` -- same own-uid-inherited read/write shape as
+    // `relationships`, structurally proven the same way.
+    late Map<String, dynamic> rules;
+    late Map<String, dynamic> grantNode;
+
+    setUpAll(() {
+      rules = jsonDecode(rulesFile.readAsStringSync()) as Map<String, dynamic>;
+      grantNode = _navigate(
+        rules,
+        ['users', r'$uid', 'device_enrollment_grants', r'$newDeviceId'],
+      );
+    });
+
+    test('carries only approvedByDeviceId and approvedAt', () {
+      expect(
+        _declaredFieldKeys(grantNode),
+        {'approvedByDeviceId', 'approvedAt'},
+      );
+    });
+
+    test('rejects any other field via \$other.validate == false', () {
+      expect(grantNode.containsKey(r'$other'), isTrue);
+      expect(
+        (grantNode[r'$other'] as Map<String, dynamic>)['.validate'],
+        isFalse,
+      );
+    });
+
+    test('own-uid read/write is inherited from the users/\$uid rule -- no '
+        'narrower .read/.write is declared at this node', () {
+      expect(grantNode.containsKey('.read'), isFalse);
+      expect(grantNode.containsKey('.write'), isFalse);
+    });
+
+    test('a foreign uid cannot read or write this node -- the only '
+        '.read/.write in the whole file scoped to this subtree is '
+        'users/\$uid\'s own auth.uid === \$uid rule', () {
+      final root = rules['rules'] as Map<String, dynamic>;
+      final users = root['users'] as Map<String, dynamic>;
+      final uidKey = users.keys.firstWhere((k) => k.startsWith(r'$'));
+      final uidNode = users[uidKey] as Map<String, dynamic>;
+      expect(uidNode['.read'], 'auth != null && auth.uid === \$uid');
+      expect(uidNode['.write'], 'auth != null && auth.uid === \$uid');
+    });
+
+    test('the parent users/\$uid node rejects an undeclared child via '
+        '\$other (device_enrollment_grants is explicitly named, not '
+        'swallowed by \$other)', () {
+      final uidNode = _navigate(rules, ['users', r'$uid']);
+      expect(uidNode.containsKey('device_enrollment_grants'), isTrue);
+    });
+  });
+
   group('test_EARS_FB_18_directory_read_rules', () {
     late Map<String, dynamic> rules;
 

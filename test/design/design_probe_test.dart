@@ -107,6 +107,7 @@ void main() {
   // ── 1. Screens dumped for `make design-probe` ───────────────────────────
   group('screen probes (make design-probe)', () {
     late AppDatabase db;
+    late TransportService transportService;
 
     setUp(() async {
       Get.testMode = true;
@@ -123,11 +124,31 @@ void main() {
       await repository.upsert('device-blocked', RelationshipState.blocked);
       Get.put<RelationshipRepository>(repository, permanent: true);
       Get.put<BlockUseCase>(BlockUseCase(repository), permanent: true);
+      // E12-B05: `DevicesBinding().dependencies()` resolves
+      // `Get.find<TransportService>()` (see its own doc comment — it must
+      // never let `DevicesController` fall back to constructing its own
+      // instance), so this probe needs one registered too, same
+      // real-`TransportService`-over-a-mocked-native-side pattern the
+      // `conversations`/`chat` probes below already use for their own
+      // `MessagingStack`. Fetched here inside `setUp`, not at group-body
+      // scope: this is the FIRST group in the file, so
+      // `TestWidgetsFlutterBinding` is not yet initialized when the group
+      // body itself runs (that only happens once this group's own
+      // `testWidgets` call is declared, further down) -- `setUp` bodies run
+      // later, at actual test-run time, well after that.
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      transportService = TransportService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: 'devices-probe',
+      );
+      Get.put<TransportService>(transportService, permanent: true);
       DevicesBinding().dependencies();
     });
 
     tearDown(() async {
       await db.close();
+      await transportService.dispose();
       Get.reset();
     });
 
@@ -137,6 +158,18 @@ void main() {
         screenId: 'devices',
         screen: GetMaterialApp(home: const DevicesView()),
       );
+      // E12-B05, F4: without this, a future regression that silently brings
+      // back `renderError: true` (e.g. a missing dependency in this `setUp`
+      // again) would still say "All tests passed" here -- this test would
+      // pass whether or not the probe actually walked anything. Real
+      // dart:io read -- must go through `runAsync` for the same reason
+      // `dumpScreenProbe`'s own file write does (see
+      // flutter_probe_dumper.dart).
+      final raw = await tester.runAsync(
+        () => File('build/design-probe/devices.json').readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
     });
   });
 

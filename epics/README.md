@@ -129,8 +129,10 @@ the wedge.
 
 ## Risks / open notes for the human gate
 
-- **Firebase dependency ordering.** `FR-TRUST-007` (E02) requires relationship
-  config to sync through Firebase where available, which presupposes *some*
+- **Firebase dependency ordering.** *(Superseded 2026-09-06: `FR-TRUST-007` is
+  ⛔ descoped — `IMP-002` / `E12-B11`. Kept as the historical record of how the
+  wave was ordered.)* `FR-TRUST-007` (E02) required relationship
+  config to sync through Firebase where available, which presupposed *some*
   Firebase client wrapper existing — but that wrapper's fuller scope (E11)
   is deferred. Recommendation: E01 or E02's task-sharding carves out a
   minimal Firebase client (auth + device/trust metadata only, per the

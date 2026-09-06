@@ -11,6 +11,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/design/tokens.dart';
+import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
 import 'package:on_process_button_widget/on_process_button_widget.dart';
 import 'devices_controller.dart';
@@ -36,18 +37,33 @@ class DevicesView extends GetView<DevicesController> {
                     const SizedBox(height: 16),
                     Expanded(
                       child: Obx(() {
+                        final pending = controller.pendingEnrollments;
                         final relationships = controller.relationships;
-                        if (relationships.isEmpty) {
+                        if (relationships.isEmpty && pending.isEmpty) {
                           return const _EmptyState();
                         }
                         return ListView.separated(
-                          itemCount: relationships.length,
+                          itemCount: pending.length + relationships.length,
                           separatorBuilder: (_, _) =>
                               const SizedBox(height: 12),
-                          itemBuilder: (context, index) => _DeviceRow(
-                            relationship: relationships[index],
-                            controller: controller,
-                          ),
+                          itemBuilder: (context, index) {
+                            // E12-T02 (device-enrollment-approval.md): a
+                            // pending enrollment request renders at the TOP
+                            // of this list, ahead of every established
+                            // device row (devices.md's own rows, unchanged
+                            // below).
+                            if (index < pending.length) {
+                              return _PendingEnrollmentRow(
+                                device: pending[index],
+                                controller: controller,
+                              );
+                            }
+                            return _DeviceRow(
+                              relationship:
+                                  relationships[index - pending.length],
+                              controller: controller,
+                            );
+                          },
                         );
                       }),
                     ),
@@ -70,7 +86,12 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: NexoraColors.devicesHeaderBg,
+      decoration: const BoxDecoration(
+        color: NexoraColors.devicesHeaderBg,
+        border: Border(
+          bottom: BorderSide(color: NexoraColors.devicesRowBorder, width: 1),
+        ),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
@@ -181,7 +202,12 @@ class _DeviceRow extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: visual.iconBackdrop,
-                  shape: BoxShape.circle,
+                  // devices.md's own token table measures this as a literal
+                  // 9999px radius (the design system's "fully round" token),
+                  // not a derived box/2 circle — BoxShape.circle renders
+                  // identically but reports as radius 20px against the
+                  // contract's 9999px (E12-B12).
+                  borderRadius: BorderRadius.circular(9999),
                 ),
                 child: Icon(Icons.devices, size: 24, color: visual.iconColor),
               ),
@@ -263,6 +289,151 @@ class _DeviceRow extends StatelessWidget {
   }
 }
 
+/// `design/screens/device-enrollment-approval.md` (`source: derived`,
+/// GAP-028) -- the pending-enrollment row for a discovered device
+/// `DevicesController` has classified as this account's OWN device
+/// enrolling (elements DEA1-DEA9). Prepended to `devices.md`'s existing
+/// list (E12-T02 §3) -- `devices.md`'s own generated element table and
+/// every other row are unchanged.
+class _PendingEnrollmentRow extends StatelessWidget {
+  const _PendingEnrollmentRow({required this.device, required this.controller});
+
+  final TransportDevice device;
+  final DevicesController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: NexoraColors.devicesRowFill,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NexoraColors.devicesRowBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // DEA1: a device platform icon -- no per-platform metadata
+              // exists yet (same GAP-003 gap `_DeviceRow` already carries),
+              // so this reuses that row's own generic fallback icon.
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: NexoraColors.devicesIconBackdropUnknown,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.devices,
+                    size: 24, color: NexoraColors.devicesMuted),
+              ),
+              const SizedBox(width: 10),
+              // DEA2/DEA3: title + short code. The name is the flexible/
+              // ellipsis child here, per E06-B01 -- a trailing button pair
+              // (DEA4/DEA5's kebab menu) follows it and must never be
+              // squeezed out.
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(device.displayName,
+                        style: NexoraTextStyles.devicesDeviceName,
+                        overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 2),
+                    Text(_shortCode(device.id),
+                        style: NexoraTextStyles.devicesDeviceSubtitle,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              // DEA4/DEA5: the devices row's own trailing more-menu slot,
+              // kept unchanged for consistency with every other row -- its
+              // "Block" action is this row's own `Deny`, same underlying
+              // `controller.block` call as the two buttons below.
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert,
+                    size: 24, color: NexoraColors.devicesMuted),
+                onSelected: (value) {
+                  if (value == 'block') {
+                    controller.block(device.id);
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem<String>(value: 'block', child: Text('Block')),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // DEA6-DEA9: status glyph + label, then Approve/Deny. The label
+          // is the flexible/ellipsis child and the button PAIR stays
+          // fixed-width at the trailing end -- the exact shape E06-B01
+          // fixed elsewhere in this file (§6 risk note).
+          Row(
+            children: [
+              const Icon(Icons.warning,
+                  size: 16, color: NexoraColors.devicesUnknownAmber),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  'Awaiting your approval',
+                  style: NexoraTextStyles.devicesBadgeLabel
+                      .copyWith(color: NexoraColors.devicesUnknownAmber),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              OnProcessButtonWidget(
+                backgroundColor: Colors.transparent,
+                borderRadius: BorderRadius.circular(4),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                constraints: const BoxConstraints(minWidth: 56, minHeight: 24),
+                onTap: () async {
+                  await controller.verify(device.id);
+                  return null;
+                },
+                child: const Text('Approve',
+                    style: NexoraTextStyles.devicesVerifyLabel),
+              ),
+              const SizedBox(width: 8),
+              OnProcessButtonWidget(
+                backgroundColor: Colors.transparent,
+                borderRadius: BorderRadius.circular(4),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                constraints: const BoxConstraints(minWidth: 56, minHeight: 24),
+                onTap: () async {
+                  await controller.block(device.id);
+                  return null;
+                },
+                child: Text(
+                  'Deny',
+                  style: NexoraTextStyles.devicesVerifyLabel
+                      .copyWith(color: NexoraColors.devicesBlockedRed),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// DEA3 -- a short fingerprint/code stood in for a real device fingerprint
+/// (no key-exchange fingerprint exists pre-`E12`'s backend tasks, same kind
+/// of placeholder GAP-003 already documents for `_DeviceRow`'s name/
+/// subtitle): the trailing 4 characters of the raw transport device id,
+/// uppercased.
+String _shortCode(String deviceId) {
+  final String code = deviceId.length >= 4
+      ? deviceId.substring(deviceId.length - 4)
+      : deviceId;
+  return 'Code: ${code.toUpperCase()}';
+}
+
 class _StateVisual {
   const _StateVisual({
     required this.iconColor,
@@ -279,8 +450,17 @@ class _StateVisual {
   final String badgeLabel;
 }
 
-/// Elements 13-14, 21-22, 29-30, 37-38 — icon/color/copy per state, exactly
-/// as the design contract's four example rows show them.
+/// Elements 8/13-14, 16/21-22, 24/29-30, 32/37-38 — icon/color/copy per
+/// state, exactly as the design contract's four example rows show them.
+/// The row's own leading glyph is intentionally NOT keyed on
+/// `RelationshipState` (reverted in E12-B12 round 2, see GAP-003):
+/// `RelationshipRepository` only stores `deviceId`/`state`/`updatedAt`, no
+/// actual device hardware type, so varying the icon by trust state would
+/// fabricate a hardware claim the data does not support (a trusted phone
+/// would show a laptop glyph; a blocked laptop would show a desktop tower).
+/// Same reasoning this file's own §Deviations already applied to the
+/// subtitle copy — kept as the honest, generic `Icons.devices` at the call
+/// site instead.
 _StateVisual _stateVisual(RelationshipState state) {
   switch (state) {
     case RelationshipState.trusted:
@@ -338,10 +518,12 @@ class _BottomNav extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(color: Color(0x14000000), blurRadius: 12, offset: Offset(0, -2)),
-        ],
+        // code.html:282 — `bg-surface-container` + `border-t
+        // border-outline-variant/10`. No shadow in the design source
+        // (E12-B12 round 2, F2): the previous `Colors.white` fill and
+        // fabricated `BoxShadow` were both invented, not measured.
+        color: NexoraColors.devicesNavBg,
+        border: Border(top: BorderSide(color: NexoraColors.devicesRowBorder)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
