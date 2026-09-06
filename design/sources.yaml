@@ -124,6 +124,47 @@ screens:
     # with Google" on the welcome screen, while OAuth completes. Answers the
     # missing-login-screen gap the human raised; Google Sign-In is NEXORA's
     # sole auth method (BRD §5), so there is no separate credentials form.
+
+  # E12-B06: the two `source: derived` screens GAP-028 approved
+  # (design/gaps.md), now registered so `make design-verify SCREEN=<id>`
+  # gates them like every `source: ui` screen above, per `design-fidelity`
+  # §3's own instruction ("derived screens get a contract too ... once
+  # built, extract the built screen as its own golden"). Both contracts
+  # have no design SOURCE to extract from (`golden: none yet` in their own
+  # frontmatter) — the golden under `design/golden/<id>/default@390x844/`
+  # was extracted from the FIRST successful `make design-probe` dump of the
+  # already-built screen instead, per that same instruction. `design_path`
+  # is `n/a` for both: verify.mjs never reads it on the
+  # `impl_flutter`/`--impl flutter` path this repo actually uses for every
+  # Flutter screen (`design/tools/verify.mjs`, the `useFlutterProbe` branch)
+  # — it is documentation only, same as `device-enrollment-approval.md`'s
+  # own `impl_path: n/a` frontmatter line.
+  - id: device-enrollment
+    source: derived
+    design_path: n/a — derived, design/screens/device-enrollment.md (GAP-028)
+    impl_path: /device-enrollment
+    viewports: [390x844]
+    states: [{ name: default }]
+    # Captures the `waiting` state (the route's own first frame) — the
+    # contract's other two states (`denied`, `no-recovery-notice`) are not
+    # separately registered here: `verify.mjs`'s Flutter-probe path resolves
+    # one dump file per SCREEN id, not per state (`build/design-probe/
+    # <screen>.json`, no per-state filename), so one state per screen id is
+    # what this gate mechanism can register today — a follow-up concern for
+    # whichever task widens per-state Flutter probing, not this bug.
+
+  - id: device-enrollment-approval
+    source: derived
+    design_path: n/a — derived, design/screens/device-enrollment-approval.md (GAP-028)
+    impl_path: n/a — a row appended to /devices, not its own route (see the
+      contract's own frontmatter)
+    viewports: [390x844]
+    states: [{ name: default }]
+    # Captures `/devices` with an empty relationship list and exactly one
+    # pending enrollment request seeded — isolates the dump to this
+    # contract's own elements (DEA1-DEA9), same isolation principle already
+    # used for the `_fixture_*` probes below.
+
 # - id: login
 #   source: ui
 #   design_path: /login.html      # the path inside the design source
