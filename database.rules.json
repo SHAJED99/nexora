@@ -58,7 +58,7 @@
           "$newDeviceId": {
             ".validate": "newData.hasChildren(['approvedByDeviceId', 'approvedAt'])",
             "approvedByDeviceId": {
-              ".validate": "newData.isString() && newData.val().length <= 128"
+              ".validate": "newData.isString() && newData.val().length <= 128 && newData.val() !== $newDeviceId && root.child('users').child($uid).child('devices').child(newData.val()).exists()"
             },
             "approvedAt": {
               ".validate": "newData.isNumber()"
