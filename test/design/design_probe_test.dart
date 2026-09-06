@@ -40,13 +40,18 @@ import 'package:nexora/core/storage/storage_decision_log.dart';
 import 'package:nexora/core/storage/storage_inventory.dart';
 import 'package:nexora/core/storage/storage_manager.dart';
 import 'package:nexora/core/storage/storage_settings_repository.dart';
+import 'package:nexora/core/services/firebase_metadata_service.dart';
 import 'package:nexora/features/devices/presentation/devices_binding.dart';
+import 'package:nexora/features/devices/presentation/devices_controller.dart';
 import 'package:nexora/features/devices/presentation/devices_view.dart';
 import 'package:nexora/features/messaging/data/conversation_repository.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
+import 'package:nexora/features/recovery/presentation/device_enrollment_controller.dart';
+import 'package:nexora/features/recovery/presentation/device_enrollment_view.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
 import 'package:nexora/features/trust/domain/block_use_case.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
+import 'package:on_process_button_widget/on_process_button_widget.dart';
 import 'package:path/path.dart' as p;
 
 import 'flutter_probe_dumper.dart';
@@ -101,6 +106,21 @@ Future<void> _insertMember(
           joinedAtEpoch: 0,
         ),
       );
+}
+
+/// A `FirebaseMetadataService` test double for the `device-enrollment` probe
+/// below -- never touches a real `FirebaseDatabase`/platform channel, always
+/// reports "not yet approved, not revoked" (same seam-stubbing pattern
+/// `device_enrollment_controller_test.dart`'s own
+/// `_StubFirebaseMetadataService` uses, reimplemented here since that class
+/// is private to its own file).
+class _NeverGrantsFirebaseMetadataService extends FirebaseMetadataService {
+  @override
+  Future<Object?> readEnrollmentGrantData(String uid, String newDeviceId) async =>
+      null;
+
+  @override
+  Future<Object?> readDeviceMetadata(String uid, String deviceId) async => null;
 }
 
 void main() {
@@ -470,6 +490,109 @@ void main() {
     });
   });
 
+  // ── E12-B06: `device-enrollment` ───────────────────────────────────────
+  // Registers `design/screens/device-enrollment.md` (GAP-028, `source:
+  // derived`) with `design/sources.yaml`/`make design-probe`, closing the
+  // gap this bug describes: a derived contract with no probe block could
+  // never be gated. Captures the `waiting` state (the route's own first
+  // frame, `EnrollmentState.waiting` — `DeviceEnrollmentController`'s
+  // default) as the screen's single registered state, mirroring every
+  // other screen in this file (one `default` state each).
+  group('screen probes — device-enrollment (make design-probe)', () {
+    tearDown(() {
+      // Disposes the controller `Get.put` below registered -- this is what
+      // actually stops `DeviceEnrollmentController`'s `Timer.periodic`
+      // before the test ends (same pattern
+      // `device_enrollment_controller_test.dart` documents for its own
+      // `Get.reset()` teardown).
+      Get.reset();
+    });
+
+    testWidgets('device-enrollment', (tester) async {
+      // `pollInterval` long enough that no poll tick can fire during this
+      // probe's bounded pumps (`flutter_probe_dumper.dart` never calls an
+      // unbounded `pumpAndSettle`) -- same technique
+      // `device_enrollment_controller_test.dart`'s own
+      // `test_E12_B07_button_present_and_tappable_on_first_frame_in_waiting`
+      // uses to freeze the controller on its very first frame.
+      final controller = DeviceEnrollmentController(
+        accountUid: 'uid-probe',
+        thisDeviceId: 'device-probe',
+        firebaseMetadataService: _NeverGrantsFirebaseMetadataService(),
+        pollInterval: const Duration(seconds: 30),
+        maxPolls: 1000,
+      );
+      Get.put<DeviceEnrollmentController>(controller);
+
+      await dumpScreenProbe(
+        tester,
+        screenId: 'device-enrollment',
+        screen: GetMaterialApp(home: const DeviceEnrollmentView()),
+      );
+
+      // Cancels the `Timer.periodic` `onInit` started -- must happen before
+      // this test body returns, or flutter_test's own end-of-test
+      // pending-timer check fails it (`addTearDown`/the outer `tearDown()`
+      // above both run too late for this specific assertion).
+      controller.onClose();
+    });
+  });
+
+  // ── E12-B06: `device-enrollment-approval` ──────────────────────────────
+  // Registers `design/screens/device-enrollment-approval.md` (GAP-028,
+  // `source: derived`) -- per that contract, this is a row prepended to
+  // `/devices`'s own list (`DevicesController.pendingEnrollments`), not a
+  // separate route/view. This is a SEPARATE setUp/db from the `devices`
+  // group above (E12-B05's own fixture is out of this bug's scope, per its
+  // own "What this fix does NOT do") -- relationships stay empty here so
+  // the dump captures ONLY the pending-enrollment row's own elements
+  // (DEA1-DEA9), same isolation principle the EARS fixture group below
+  // already uses for its own purpose.
+  group('screen probes — device-enrollment-approval (make design-probe)', () {
+    late AppDatabase db;
+    late TransportService transportService;
+
+    setUp(() async {
+      Get.testMode = true;
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      final repository = RelationshipRepository(db);
+      Get.put<RelationshipRepository>(repository, permanent: true);
+      Get.put<BlockUseCase>(BlockUseCase(repository), permanent: true);
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      transportService = TransportService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: 'device-enrollment-approval-probe',
+      );
+      Get.put<TransportService>(transportService, permanent: true);
+      DevicesBinding().dependencies();
+      // One pending enrollment request (DEA1-DEA9) -- no relationship row
+      // for this device id, matching `device-enrollment-approval.md`'s own
+      // "disjoint from an established relationship" note.
+      Get.find<DevicesController>().pendingEnrollments.add(
+            TransportDevice(
+              id: 'device-pending-1',
+              displayName: 'New Phone',
+              type: TransportType.bluetooth,
+            ),
+          );
+    });
+
+    tearDown(() async {
+      await transportService.dispose();
+      await db.close();
+      Get.reset();
+    });
+
+    testWidgets('device-enrollment-approval', (tester) async {
+      await dumpScreenProbe(
+        tester,
+        screenId: 'device-enrollment-approval',
+        screen: GetMaterialApp(home: const DevicesView()),
+      );
+    });
+  });
+
   // ── 2. EARS falsification — a fixture, not `devices` ─────────────────────
   group('EARS-UI-1/2 — fixture falsification', () {
     testWidgets(
@@ -490,21 +613,63 @@ void main() {
       expect(elements, isNotEmpty);
 
       final title = elements.singleWhere((e) => e['text'] == 'Fixture Title');
-      expect(title['role'], 'generic');
+      // E12-B13: 24px/w600 is heading-scale (`_headingRole`'s threshold),
+      // and it's the first such style this fixture dump sees, so `heading:1`
+      // — this fixture's own doc comment already calls it "a heading-ish
+      // Text", this just makes the dumper agree.
+      expect(title['role'], 'heading:1');
       // Resolved via DefaultTextStyle.merge, never the widget's own (null)
       // color — proving this dumps RESOLVED styles, not source constants.
       expect(title['style']['color'], 'rgb(0, 0, 255)');
       expect(title['style']['fontSize'], '24px');
       expect(title['style']['fontWeight'], '600');
 
-      final button = elements.singleWhere((e) => e['role'] == 'button');
+      final button = elements.singleWhere((e) => e['role'] == 'button' && e['text'] == 'Go');
       expect(button['text'], 'Go');
 
       final panel = elements.singleWhere(
-        (e) => e['role'] == 'generic' && e['surface'] == true && e['text'] == '',
+        (e) => e['role'] == 'generic' && e['style']['background'] == 'rgb(20, 40, 60)',
       );
       expect(panel['style']['background'], 'rgb(20, 40, 60)');
       expect(panel['style']['radius'], '8px');
+
+      // E12-B13 round 2 (a): an `OnProcessButtonWidget` carrying a styled
+      // `Text` label — the review's own falsification found the previous
+      // suite's ONLY button assertion (`button['text']` above, on the
+      // `GestureDetector`/plain-`Container` "Go" button) never exercises
+      // `_firstLabelStyle`/`_isInteractiveBoundary`/the `borderRadius` read
+      // at all, since that button has no `InkWell`/`OnProcessButtonWidget`
+      // internals to swallow its label in the first place. Reverting issue
+      // 2 (interactive-boundary swallowing) or issue 3 (button style
+      // capture) in `flutter_probe_dumper.dart` must fail exactly this
+      // block, and was verified to (see Run log).
+      final submit = elements.singleWhere(
+        (e) => e['role'] == 'button' && e['text'] == 'Submit',
+      );
+      expect(submit['text'], isNotEmpty);
+      expect(submit['style']['color'], 'rgb(255, 0, 255)');
+      expect(submit['style']['fontSize'], '16px');
+      expect(submit['style']['fontWeight'], '500');
+      // Non-zero and matches the widget's own `borderRadius: BorderRadius.
+      // circular(6)` — not the pre-fix always-0px fallback.
+      expect(submit['style']['radius'], '6px');
+
+      // E12-B13 round 2 (b): an `Icon(..., size: N)` — reverting issue 4
+      // (icon font-metadata capture) must fail this block.
+      final icon = elements.singleWhere((e) => e['text'] == 'search');
+      expect(icon['style']['fontSize'], '22px');
+      expect(icon['style']['fontFamily'], isNotEmpty);
+
+      // E12-B13 round 2 (c): a `Border(bottom: ...)`-only container (no top
+      // border) — reverting issue 7 (border.bottom reading) must fail this
+      // block: the pre-fix dumper only ever read `border.top`, which is
+      // zero-width here, so it reported `borderWidth: '0px'`/the default
+      // empty `borderColor` regardless of the real bottom border.
+      final bottomBorderBox = elements.singleWhere(
+        (e) => e['role'] == 'generic' && e['style']['borderColor'] == 'rgb(0, 170, 0)',
+      );
+      expect(bottomBorderBox['style']['borderWidth'], '3px');
+      expect(bottomBorderBox['style']['borderColor'], 'rgb(0, 170, 0)');
     });
 
     testWidgets(
@@ -618,6 +783,44 @@ Widget _fixture({
                   child: const Center(child: Text('Go')),
                 ),
               ),
+            // E12-B13 round 2 (a): a real `OnProcessButtonWidget` — the
+            // pre-fix dumper never read `OnProcessButtonWidget.borderRadius`
+            // and its internal `InkWell` swallowed the label entirely, so
+            // this button's own style/text were previously unrecoverable.
+            SizedBox(
+              width: 100,
+              height: 36,
+              child: OnProcessButtonWidget(
+                backgroundColor: Colors.blueGrey,
+                fontColor: const Color(0xFFFF00FF),
+                iconColor: const Color(0xFFFF00FF),
+                borderRadius: BorderRadius.circular(6),
+                onTap: () async => null,
+                child: const Text(
+                  'Submit',
+                  style: TextStyle(
+                    color: Color(0xFFFF00FF),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+            // E12-B13 round 2 (b): a standalone `Icon` — the pre-fix dumper
+            // never read `Icon.size`/`IconData.fontFamily` at all.
+            const Icon(Icons.search, size: 22),
+            // E12-B13 round 2 (c): a `Border(bottom: ...)`-only container (no
+            // top border) — the pre-fix dumper only ever read `border.top`,
+            // which is zero-width here, so it reported the box as borderless.
+            Container(
+              width: 100,
+              height: 20,
+              decoration: const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFF00AA00), width: 3),
+                ),
+              ),
+            ),
           ],
         ),
       ),

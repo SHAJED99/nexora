@@ -10,13 +10,37 @@
 //   - devicePixelRatio is pinned to 1.0 so logical pixels here equal the CSS
 //     pixels design/screens/*.md contracts were measured at. If a future
 //     screen needs a different DPR, pin it explicitly and say so in the run.
-//   - role mapping only covers the common cases (button/textbox/heading-less
-//     generic/surface). See docs/design-gate-flutter.md's mapping table.
+//   - role mapping covers button/textbox/heading/generic/surface. `heading:N`
+//     (E12-B13) is a STYLE heuristic, not a structural one: this dumper has
+//     no equivalent of "this Text sits one <section> deeper than that one",
+//     so the level NUMBER is approximated from order-of-first-appearance of
+//     each distinct heading-scale style on the screen (see `_headingRole`'s
+//     own doc comment for the known miss this leaves).
 //   - icon widgets are matched to the design's icon-font glyph text via a
 //     small name map (`_iconNames` below) — both sides draw from the same
 //     Material Symbols font, so `Icons.search` legitimately corresponds to
 //     the design's literal "search" glyph text. Icons outside the map dump
 //     with empty text (a real, recorded finding), never a guessed string.
+//     Their `fontFamily` (E12-B13) is honestly reported as Flutter's own
+//     bundled icon font (`IconData.fontFamily`, e.g. `MaterialIcons`) — a
+//     REAL, different value from the golden's `Material Symbols Outlined`
+//     (no custom icon font is bundled by this app), so this stays a
+//     genuine, expected style-delta finding; `fontSize` DOES resolve
+//     correctly now, since every `Icon(..., size: N)` call site's `N`
+//     already matches the design's measured glyph size.
+//   - a `button`-role element nested inside another interactive widget's OWN
+//     internal gesture wrapper (`InkWell`/`InkResponse` — see
+//     `_isInteractiveBoundary`, E12-B13) now reports its real label text and
+//     that label's own color/fontSize/fontFamily/fontWeight, and reads
+//     `OnProcessButtonWidget.borderRadius` when set. An icon-only button
+//     (no Text label — e.g. a kebab menu) still reports default/empty style
+//     here: there is no label to resolve a style from, and guessing one
+//     from the icon would be an invented value, exactly what
+//     `design-fidelity`'s off-palette-token check exists to catch.
+//   - a `Border`'s `top` and `bottom` sides are both read (E12-B13); when
+//     both are non-zero-width, `top` wins — an arbitrary but documented
+//     convention, matching `_decorationOf`'s existing "richer decorations
+//     read as their dominant/top-left value" simplification.
 import 'dart:convert';
 import 'dart:io';
 
@@ -192,6 +216,7 @@ Future<void> dumpScreenProbe(
     // own suite calls it ~7 times. Without a reset here, an early screen's
     // visits would count against a later, unrelated screen's budget.
     _walkVisitCount = 0;
+    _headingScaleOrder.clear();
     if (rootElement != null) {
       _walk(rootElement, elements, bump, insideInteractive: false);
     }
@@ -231,6 +256,45 @@ bool _isInteractive(Widget w) {
       w is InkWell ||
       w is InkResponse ||
       w is IconButton ||
+      w is TextButton ||
+      w is ElevatedButton ||
+      w is OutlinedButton ||
+      w is OnProcessButtonWidget;
+}
+
+/// E12-B13 (issue 2): `InkWell`/`InkResponse` (and, transitively, the bare
+/// `GestureDetector` THEY compose internally — see below) are the low-level
+/// gesture primitives every HIGH-LEVEL button widget in `_isInteractive`
+/// composes to implement its own tap handling — confirmed directly against
+/// `on_process_button_widget`'s source: `OnProcessButtonWidget.build()` wraps
+/// its `child` in exactly `Material > InkWell > AnimatedSize >
+/// DefaultTextStyle > Container > child`. A bounded scan looking for a
+/// widget's OWN label/decoration (`_collectText`, `_findFirstDecoration`,
+/// `_firstLabelStyle`) must NOT stop at any of this internal plumbing —
+/// stopping there is exactly what made every `button`-role element in a
+/// real dump have `text: ""` (this file's own header, and E12-B13's
+/// found-by report).
+///
+/// `GestureDetector` specifically is NOT a boundary here, even though it IS
+/// one of the widgets `_isInteractive` treats as an outermost interactive
+/// element: dumping the actual Element subtree of an `OnProcessButtonWidget`
+/// (found directly, via a throwaway probe test) shows `InkWell` itself is
+/// built from `Actions > ... > GestureDetector > RawGestureDetector >
+/// Listener` — i.e. `InkWell`'s OWN internals bottom out in a bare
+/// `GestureDetector`, the exact same widget type this app's OTHER,
+/// intentional top-level buttons use directly. Treating `GestureDetector`
+/// as a stop-boundary here doesn't distinguish "a deliberate second tap
+/// target nested inside this one" from "the button's own gesture-arena
+/// plumbing" — it can only ever hit the latter, since this codebase's own
+/// convention (chat_view.dart's header, `L-frontend-001`) is to build custom
+/// tap targets from `InkWell`/`Material`, never a bare `Listener`/
+/// `GestureDetector`, so a SEPARATE nested tappable area would itself be
+/// `InkWell`-based and still stop the scan below via `IconButton` et al.
+/// Still stops at a widget that could represent a SEPARATE, independently-
+/// tappable HIGH-LEVEL target nested inside the outer one (a card's own
+/// icon button, say).
+bool _isInteractiveBoundary(Widget w) {
+  return w is IconButton ||
       w is TextButton ||
       w is ElevatedButton ||
       w is OutlinedButton ||
@@ -310,8 +374,16 @@ _Deco? _decorationOf(Widget w) {
   Color? borderColor;
   final border = bd?.border;
   if (border is Border) {
-    borderWidth = border.top.width;
-    borderColor = border.top.color;
+    // E12-B13 (issue 7): read BOTH edges, not only `top` — a design source
+    // that draws its hairline on `border-bottom` (a row divider, say) used
+    // to be invisible to this dumper on both the golden and implementation
+    // side equally, which reads as "unmeasured", never as "passing".
+    // Convention when both are non-zero-width: `top` wins (documented,
+    // arbitrary — matches this class's own "richer decorations read as
+    // their dominant/top-left value" simplification below).
+    final side = border.top.width > 0 ? border.top : border.bottom;
+    borderWidth = side.width;
+    borderColor = side.color;
   }
   return _Deco(
     color: bd?.color ?? plainColor,
@@ -322,14 +394,16 @@ _Deco? _decorationOf(Widget w) {
 }
 
 /// Bounded scan for the first decoration in [element]'s subtree, stopping at
-/// a nested interactive widget (that widget owns its own decoration, if any,
-/// captured separately when its turn comes).
+/// a nested interactive BOUNDARY widget (that widget owns its own decoration,
+/// if any, captured separately when its turn comes) — but NOT at the outer
+/// widget's own internal `InkWell`/`InkResponse` gesture wrapper, see
+/// `_isInteractiveBoundary` (E12-B13).
 _Deco? _findFirstDecoration(Element element) {
   _Deco? found;
   void visit(Element e) {
     if (found != null) return;
     final w = e.widget;
-    if (_isInteractive(w)) return; // nested interactive owns its own subtree
+    if (_isInteractiveBoundary(w)) return; // a genuinely separate nested target
     final d = _decorationOf(w);
     if (d != null) {
       found = d;
@@ -342,13 +416,15 @@ _Deco? _findFirstDecoration(Element element) {
 }
 
 /// Bounded scan collecting the plain text of every `Text` descendant, joined
-/// with a single space, stopping at nested interactive widgets (their own
-/// label is captured as part of THEIR own element, not this one's).
+/// with a single space, stopping at nested interactive BOUNDARY widgets
+/// (their own label is captured as part of THEIR own element, not this
+/// one's) — but NOT at the outer widget's own internal `InkWell`/
+/// `InkResponse` gesture wrapper, see `_isInteractiveBoundary` (E12-B13).
 String _collectText(Element element) {
   final parts = <String>[];
   void visit(Element e) {
     final w = e.widget;
-    if (_isInteractive(w)) return;
+    if (_isInteractiveBoundary(w)) return;
     if (w is Text) {
       final t = (w.data ?? w.textSpan?.toPlainText() ?? '').trim();
       if (t.isNotEmpty) parts.add(t);
@@ -358,6 +434,37 @@ String _collectText(Element element) {
   }
   element.visitChildren(visit);
   return parts.join(' ').trim();
+}
+
+/// Bounded scan for the first non-empty `Text` descendant's OWN resolved
+/// style (color/fontSize/fontFamily/fontWeight) — E12-B13 issue 3: gives a
+/// `button`-role element its real label style instead of always falling back
+/// to `_defaultStyle`. Same boundary rule as `_collectText`/
+/// `_findFirstDecoration`: stops at a genuinely separate nested interactive
+/// target, but is transparent through the outer widget's own internal
+/// `InkWell`/`InkResponse`.
+Map<String, String>? _firstLabelStyle(Element element) {
+  Map<String, String>? found;
+  void visit(Element e) {
+    if (found != null) return;
+    final w = e.widget;
+    if (_isInteractiveBoundary(w)) return;
+    if (w is Text) {
+      final t = (w.data ?? w.textSpan?.toPlainText() ?? '').trim();
+      if (t.isEmpty) return;
+      final effective = DefaultTextStyle.of(e).style.merge(w.style);
+      found = {
+        'color': _cssColor(effective.color ?? const Color(0xFF000000)),
+        'fontFamily': effective.fontFamily ?? '',
+        'fontSize': _pxStr(effective.fontSize ?? 14),
+        'fontWeight': '${_weightOf(effective.fontWeight)}',
+      };
+      return;
+    }
+    e.visitChildren(visit);
+  }
+  element.visitChildren(visit);
+  return found;
 }
 
 const _defaultStyle = {
@@ -382,6 +489,45 @@ const _defaultStyle = {
 // findings), rather than never producing a dump at all.
 const _maxWalkVisits = 4000;
 int _walkVisitCount = 0;
+
+// E12-B13 (issue 1): per-screen order-of-first-appearance heading-level
+// state — reset alongside `_walkVisitCount` in `dumpScreenProbe`, same
+// top-level-variable-shared-across-one-suite-run pattern already documented
+// at that reset site.
+final List<String> _headingScaleOrder = [];
+
+/// A `Text`'s role is `heading:N` when its RESOLVED style is heading-scale —
+/// bold/medium weight at a size body/label text in this app never uses (see
+/// `design/screens/*.md`'s own `heading:N` rows: every one measures
+/// `fontWeight >= 500` at `fontSize >= 20px`; this app's own row-title/badge/
+/// nav-label styles all sit below that, e.g. `NexoraTextStyles.devicesBadgeLabel`
+/// at 12px). Below that threshold, `null` (stays `generic`) — deliberately
+/// conservative: a 16px/w500 row-title style (`devicesDeviceName`) IS a
+/// `heading:3` in `devices.md` but is `generic` in `dashboard.md`'s own
+/// Recent-Conversations rows (`Family`/`Rahim`/`Ahmed`, same style) — the
+/// design's own source reuses one style for both a heading and plain text,
+/// so a lower threshold would manufacture a false "heading" there this
+/// dumper cannot tell apart from a real one. Above the threshold, the level
+/// NUMBER is a heuristic too — this dumper has no signal comparable to real
+/// HTML heading nesting, so it approximates: the first distinct heading-scale
+/// style seen on the screen is `heading:1`, the next NEW distinct style is
+/// `heading:2`, and so on (matches this app's own brand-title-then-section-
+/// heading convention — verified against devices.md/conversations.md/
+/// chat.md, all three exactly). Known miss, left honest rather than silent:
+/// `dashboard.md`'s `heading:3` rows (`Local Storage`/`Recent Conversations`)
+/// reuse `heading:2`'s exact 22px/w500 style, so this reports `heading:2` for
+/// both — `compare.mjs`'s Pass C (re-role) resolves that as a SOFT "re-roled"
+/// finding (same box + text, different role), never a hard "missing" one.
+String? _headingRole(double fontSizePx, int fontWeight) {
+  if (fontWeight < 500 || fontSizePx < 20) return null;
+  final key = '${fontSizePx.round()}|$fontWeight';
+  var idx = _headingScaleOrder.indexOf(key);
+  if (idx == -1) {
+    _headingScaleOrder.add(key);
+    idx = _headingScaleOrder.length - 1;
+  }
+  return 'heading:${idx + 1}';
+}
 
 bool _sameBox(Map<String, num>? a, Map<String, num>? b) {
   if (a == null || b == null) return false;
@@ -408,17 +554,42 @@ void _walk(
     if (box != null) {
       final text = _collectText(element);
       Color? bg;
-      if (widget is OnProcessButtonWidget) bg = widget.backgroundColor;
+      // E12-B13 (issue 3): `OnProcessButtonWidget.borderRadius` specifically
+      // is read here — it was never consulted before, so a button whose
+      // background came from `widget.backgroundColor` (skipping the
+      // `_findFirstDecoration` fallback below entirely) always reported
+      // `radius: '0px'` regardless of what was actually set.
+      double? explicitRadiusPx;
+      if (widget is OnProcessButtonWidget) {
+        bg = widget.backgroundColor;
+        final br = widget.borderRadius;
+        if (br is BorderRadius) explicitRadiusPx = br.topLeft.x;
+      }
       final deco = bg == null ? _findFirstDecoration(element) : null;
       final resolvedBg = bg ?? deco?.color;
-      final radiusPx = deco?.radius == -1 ? (box['w']! / 2) : (deco?.radius ?? 0);
+      final radiusPx = explicitRadiusPx ??
+          (deco?.radius == -1 ? (box['w']! / 2) : (deco?.radius ?? 0));
       final surface = resolvedBg != null && resolvedBg.a > 0;
       final style = Map<String, String>.from(_defaultStyle);
       if (resolvedBg != null) style['background'] = _cssColor(resolvedBg);
-      if (deco != null) {
+      if (deco != null || explicitRadiusPx != null) {
         style['radius'] = _pxStr(radiusPx.toDouble());
-        style['borderWidth'] = _pxStr(deco.borderWidth);
-        if (deco.borderColor != null) style['borderColor'] = _cssColor(deco.borderColor!);
+        style['borderWidth'] = _pxStr(deco?.borderWidth ?? 0);
+        if (deco?.borderColor != null) style['borderColor'] = _cssColor(deco!.borderColor!);
+      }
+      // E12-B13 (issue 2/3): the button's own label — reached through its
+      // internal `InkWell`/`InkResponse` gesture wrapper now (see
+      // `_isInteractiveBoundary`) instead of being swallowed by it — gets
+      // its own real color/fontSize/fontFamily/fontWeight instead of
+      // `_defaultStyle`'s always-black-14px-400 placeholder. An icon-only
+      // button (no label) leaves these at their default, honestly: there is
+      // no label to resolve a style from.
+      final labelStyle = text.isNotEmpty ? _firstLabelStyle(element) : null;
+      if (labelStyle != null) {
+        style['color'] = labelStyle['color']!;
+        style['fontFamily'] = labelStyle['fontFamily']!;
+        style['fontSize'] = labelStyle['fontSize']!;
+        style['fontWeight'] = labelStyle['fontWeight']!;
       }
       out.add(_ProbeElement(
         role: 'button',
@@ -448,11 +619,17 @@ void _walk(
       if (box != null) {
         final effective = DefaultTextStyle.of(element).style.merge(widget.style);
         final style = Map<String, String>.from(_defaultStyle);
+        final fontSizePx = effective.fontSize ?? 14;
+        final fontWeight = _weightOf(effective.fontWeight);
         style['color'] = _cssColor(effective.color ?? const Color(0xFF000000));
         style['fontFamily'] = effective.fontFamily ?? '';
-        style['fontSize'] = _pxStr(effective.fontSize ?? 14);
-        style['fontWeight'] = '${_weightOf(effective.fontWeight)}';
-        out.add(_ProbeElement(role: 'generic', text: t, box: box, surface: false, style: style));
+        style['fontSize'] = _pxStr(fontSizePx);
+        style['fontWeight'] = '$fontWeight';
+        // E12-B13 (issue 1): `heading:N` when this Text's own resolved style
+        // is heading-scale — see `_headingRole`'s doc comment for the level
+        // heuristic and its one known miss.
+        final role = _headingRole(fontSizePx, fontWeight) ?? 'generic';
+        out.add(_ProbeElement(role: role, text: t, box: box, surface: false, style: style));
         bump('color', style['color']);
         bump('fontSize', style['fontSize']);
         bump('fontWeight', style['fontWeight']);
@@ -468,8 +645,22 @@ void _walk(
       if (box != null) {
         final name = _iconName(widget.icon) ?? '';
         final style = Map<String, String>.from(_defaultStyle);
-        final color = widget.color ?? IconTheme.of(element).color;
+        final iconTheme = IconTheme.of(element);
+        final color = widget.color ?? iconTheme.color;
         if (color != null) style['color'] = _cssColor(color);
+        // E12-B13 (issue 4): font metadata for `Icon` widgets. `fontSize`
+        // resolves correctly now — every `Icon(..., size: N)` call site's
+        // `N` already matches the design's measured glyph size. `fontFamily`
+        // is honestly reported as Flutter's own bundled icon font
+        // (`IconData.fontFamily`, e.g. `MaterialIcons`) — see this file's
+        // header comment: a REAL, different value from the golden's
+        // `Material Symbols Outlined` (no custom icon font is bundled by
+        // this app), so it stays a genuine, expected style-delta finding,
+        // not something to paper over here.
+        final size = widget.size ?? iconTheme.size;
+        if (size != null) style['fontSize'] = _pxStr(size);
+        final fontFamily = widget.icon?.fontFamily;
+        if (fontFamily != null) style['fontFamily'] = fontFamily;
         out.add(_ProbeElement(
           role: 'generic',
           text: name,
