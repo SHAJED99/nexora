@@ -143,6 +143,42 @@ void main() {
     source.dispose();
   });
 
+  test(
+    'test_EARS_NOTIFY_15_over_then_null_then_over_posts_once',
+    () async {
+      // F1 (E10-B07): a null reading between two over-threshold readings
+      // must NOT be read as a fall below threshold. The guard at
+      // `storage_notification_source.dart:100` (`if (plan == null) return;`)
+      // is what keeps the latch armed across the null -- if that guard were
+      // replaced with `{ _wasOverThreshold = false; return; }` the null
+      // would disarm the latch and the second `over` reading would
+      // re-notify, violating EARS-NOTIFY-15 ("stays over -- no further
+      // notification until it falls and rises again"). A null plan is not a
+      // fall: only a genuinely-under reading disarms.
+      final latestPlan = Rx<RetentionPlan?>(null);
+      final source = StorageNotificationSource(
+        latestPlan,
+        isOverThreshold: overHundred,
+      );
+
+      final facts = <NotificationFacts>[];
+      final subscription = source.facts.listen(facts.add);
+      await settle();
+
+      latestPlan.value = planWithBytes(200); // crossing #1 -- posts
+      await settle();
+      latestPlan.value = null; // must not disarm the latch
+      await settle();
+      latestPlan.value = planWithBytes(300); // still over -- no re-notify
+      await settle();
+
+      expect(facts, hasLength(1));
+
+      await subscription.cancel();
+      source.dispose();
+    },
+  );
+
   test('test_EARS_NOTIFY_14_null_plan_posts_nothing', () async {
     final latestPlan = Rx<RetentionPlan?>(null);
     final source = StorageNotificationSource(
