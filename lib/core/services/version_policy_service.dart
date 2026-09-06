@@ -114,13 +114,6 @@ class VersionPolicyService {
     // method could fail). Folded into the same catch-and-log,
     // never-rethrow shape as the fetch above, so `refresh()` is actually
     // total, not just documented as total.
-    // E14-B06 round 2 (F2): this local Drift write used to sit OUTSIDE the
-    // try/catch above -- a locked/full/corrupt local database would throw
-    // straight out of `refresh()`, breaking `EARS-VER-4`'s "never throws"
-    // contract for real (the fetch succeeding was never the only way this
-    // method could fail). Folded into the same catch-and-log,
-    // never-rethrow shape as the fetch above, so `refresh()` is actually
-    // total, not just documented as total.
     try {
       await _database
           .into(_database.versionPolicyCache)
