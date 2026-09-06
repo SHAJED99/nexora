@@ -168,7 +168,7 @@ void main() {
   });
 
   test(
-    'test_EARS_PLAT_11_dart_plumbing_forwards_all_false_snapshot_'
+    'test_EARS_PLAT_11_dart_plumbing_forwards_snapshot_'
     'unaltered',
     () async {
       // F3 (E10-B07): the previous version of this test named itself for
