@@ -40,7 +40,10 @@ class RelationshipRepository {
   /// evaluated locally.
   Future<List<domain.Relationship>> listAll() async {
     final rows = await (_db.select(_db.relationships)
-          ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.updatedAt),
+            (t) => OrderingTerm.asc(t.deviceId),
+          ]))
         .get();
     return rows.map(_fromRow).toList();
   }
