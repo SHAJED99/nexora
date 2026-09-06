@@ -411,25 +411,31 @@ void main() {
       addTearDown(db.close);
 
       // `AppDatabase.forTesting` always migrates a raw database up to the
-      // *current* `schemaVersion` (18 as of E13-T01, not 17) -- opening
-      // this v16 handle therefore also runs the `from < 18` step, so the
-      // exact-set diff below legitimately includes `rate_limit_counters`
-      // too (same widening `database_migration_test.dart`/
+      // *current* `schemaVersion` (20 as of the epic_12/epic_13/epic_14 ->
+      // development merge, 2026-09-06, not 17) -- opening this v16 handle
+      // therefore also runs the `from < 18`/`from < 19`/`from < 20` steps,
+      // so the exact-set diff below legitimately includes
+      // `rate_limit_counters` and `version_policy_cache` too (same
+      // widening `database_migration_test.dart`/
       // `notification_migration_test.dart` already document). Force the
       // lazy migration to run before inspecting sqlite_master.
       await db.customSelect('SELECT 1').get();
 
-      // Exactly these two new tables -- `device_revocations` (v16->v17, no
-      // index, task §5, sync_tables.dart's "point lookup by PK needs no
-      // secondary index" reasoning applies identically here) and
-      // `rate_limit_counters` (v17->v18, E13-T01, same no-index reasoning).
+      // Exactly these three new tables -- `device_revocations` (v16->v17,
+      // no index, task §5, sync_tables.dart's "point lookup by PK needs no
+      // secondary index" reasoning applies identically here),
+      // `rate_limit_counters` (v17->v18, E13-T01, same no-index reasoning;
+      // v18->v19 adds an index only, no new table) and
+      // `version_policy_cache` (v19->v20, E14-T01, renumbered from
+      // `from < 18` at this same merge, same no-index reasoning).
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
-        {'device_revocations', 'rate_limit_counters'},
+        {'device_revocations', 'rate_limit_counters', 'version_policy_cache'},
         reason: 'the v16->current-version upgrade must add exactly these '
             'tables (device_revocations from v16->v17, rate_limit_counters '
-            'from v17->v18)',
+            'from v17->v18; v18->v19 adds an index only, no new table; '
+            'version_policy_cache from v19->v20)',
       );
 
       // The new table is usable through the real Dart definition.

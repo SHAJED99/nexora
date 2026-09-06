@@ -388,6 +388,17 @@ void main() {
       // E13-T01 note: same widening again -- current `schemaVersion` is now
       // 18, so opening this v15 handle also runs the `from < 18` step,
       // adding `rate_limit_counters` to the diff below.
+      //
+      // E13-B01 note: same widening a further time -- current
+      // `schemaVersion` is now 19, so this v15 handle also runs the
+      // `from < 19` step, which adds no new table (purely an index on the
+      // already-existing `rate_limit_counters`).
+      //
+      // E14-T01 note (renumbered from `from < 18` to `from < 20` during the
+      // epic_12/epic_13/epic_14 -> development merge, 2026-09-06): same
+      // widening again -- current `schemaVersion` is now 20, so this v15
+      // handle also runs the `from < 20` step, adding `version_policy_cache`
+      // to the diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -396,10 +407,12 @@ void main() {
           'notification_preferences',
           'device_revocations',
           'rate_limit_counters',
+          'version_policy_cache',
         },
         reason: 'the v15->current-version upgrade must add exactly these '
             'tables (notifications from v15->v16, device_revocations from '
-            'v16->v17, rate_limit_counters from v17->v18)',
+            'v16->v17, rate_limit_counters from v17->v18; v18->v19 adds an '
+            'index only, no new table; version_policy_cache from v19->v20)',
       );
 
       // Nine user-facing categories, every one enabled -- no

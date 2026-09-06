@@ -97,6 +97,30 @@ class FirebasePaths {
   static String directoryPrivateOwnerUid(String deviceId) =>
       'directory_private/$deviceId/ownerUid';
 
+  /// `config/version_policy` — `E14-T01`, claiming `OQ-E11-2`'s reserved
+  /// node (`docs/firebase-schema.md`). A top-level node, NOT under
+  /// `users/$uid` — this is server/ops-published policy shared by every
+  /// account, not per-account data, the same reasoning as [directoryRoot]/
+  /// [directoryEntry] being siblings of `users` rather than nested under a
+  /// uid. `.write: false` for every client (task §2) — no client code, this
+  /// build included, ever writes this node; see `E14-T01`'s own §4 for who
+  /// actually publishes it.
+  static String versionPolicy() => 'config/version_policy';
+
+  /// `.info/connected` — Firebase Realtime Database's own built-in special
+  /// path (not part of this app's schema tree; there is no corresponding
+  /// entry in `database.rules.json`, and it needs none — the SDK serves it
+  /// directly, the same way it does for every RTDB client). Its value is
+  /// `true`/`false` and toggles automatically as the client's own socket to
+  /// the Realtime Database server connects/disconnects — reusing this
+  /// (`E14-B06`) rather than adding a new connectivity dependency
+  /// (`connectivity_plus` or similar) is deliberate: `FR-VER-008`'s
+  /// "reconnect" is reconnection to the exact source `VersionPolicyService`
+  /// reads from, and this path is Firebase's own native signal for exactly
+  /// that, already available via the `firebase_database` package this app
+  /// already depends on.
+  static String infoConnected() => '.info/connected';
+
   /// `users/<uid>/device_enrollment_grants/<newDeviceId>` — `E12-B02`/
   /// `E12-B03`'s dedicated enrollment-approval channel, deliberately
   /// separate from [relationship]/[relationships]. The since-deleted

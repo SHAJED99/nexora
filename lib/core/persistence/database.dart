@@ -22,6 +22,7 @@ import 'revocation_table.dart';
 import 'routing_tables.dart';
 import 'storage_tables.dart';
 import 'sync_tables.dart';
+import 'version_policy_tables.dart';
 
 part 'database.g.dart';
 
@@ -94,6 +95,7 @@ class DeviceIdentities extends Table {
     NotificationPreferences,
     DeviceRevocations,
     RateLimitCounters,
+    VersionPolicyCache,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -103,7 +105,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -606,6 +608,29 @@ class AppDatabase extends _$AppDatabase {
           'idx_rate_limit_counters_window_start ON rate_limit_counters '
           '(window_start_ms);',
         );
+      }
+      if (from < 20) {
+        // E14-T01: new `version_policy_cache` table -- additive only, no
+        // changes to any pre-existing table (task §5,
+        // docs/conventions.md "Schema migrations"). No index needed: the
+        // only local access pattern is a point lookup by the fixed row id
+        // `1`, which the PK's own implicit index already serves (same
+        // reasoning as `sync_tables.dart`'s "no @TableIndex" comment). No
+        // default row inserted here, unlike
+        // `storage_policy_settings`/`location_settings`/
+        // `notification_preferences` above -- a fresh device has no
+        // remote policy to seed from (task §3), and an absent row is
+        // itself the correct "never successfully fetched" state
+        // `VersionPolicyService.cached()` must be able to return.
+        //
+        // Renumbered from E14-T01's own original `from < 18` to
+        // `from < 20` during the epic_12/epic_13/epic_14 -> development
+        // merge (2026-09-06): E13-T01/E13-B01 independently claimed v18/v19
+        // against an earlier development baseline that predated this
+        // table, same shape as E11-T04's own renumbering above. The table
+        // creation itself is unchanged from what E14-T01 shipped and
+        // reviewed; only its position in the version sequence moved.
+        await m.createTable(versionPolicyCache);
       }
     },
   );

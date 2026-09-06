@@ -79,6 +79,22 @@ dependencies:
   # per the answered question.
   geolocator: 14.0.2
 
+  # Installed build-number reader — E14-T04, Q-E14-T04-1 (resolved
+  # 2026-09-05, human-approved). Needed for `EvaluateVersionStateUseCase`'s
+  # (E14-T02) injected `InstalledBuildProvider` to read a REAL build number
+  # at launch. Already present as a *transitive* dependency at 10.2.1
+  # (pulled in by another package, per `pubspec.lock` before this change) —
+  # pinned to that exact, already-resolved version rather than a caret
+  # range, per the geolocator precedent above and the answered question.
+  package_info_plus: 10.2.1
+
+  # Google Play in-app update binding — E14-T04, Q-E14-T04-1 (resolved
+  # 2026-09-05, human-approved). The commonly-used Flutter package for the
+  # Google Play "Immediate Update" API (FR-VER-007) — Android only, no iOS
+  # equivalent (task file §6 Risks). Pinned to an exact version, not a
+  # caret range, per the geolocator precedent above.
+  in_app_update: 5.0.0
+
   # Crash/error reporting — ADR-0006 (dedicated observability vendor, no
   # analytics for v1), E13-T06, human-approved 2026-09-05 (new_dependency
   # gate). Pinned to an exact version, not a caret range, per the same

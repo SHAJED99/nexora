@@ -468,6 +468,12 @@ void main() {
       // adds no new table (purely an index on the already-existing
       // `rate_limit_counters`) but does add
       // `idx_rate_limit_counters_window_start` to the index diff below.
+      //
+      // E14-T01 note (renumbered from `from < 18` to `from < 20` during the
+      // epic_12/epic_13/epic_14 -> development merge, 2026-09-06): same
+      // widening a sixth time -- current `schemaVersion` is now 20, so this
+      // v13 handle also runs the `from < 20` step, adding
+      // `version_policy_cache` to the diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -482,12 +488,13 @@ void main() {
           'notification_preferences',
           'device_revocations',
           'rate_limit_counters',
+          'version_policy_cache',
         },
         reason: 'the v13->current-version upgrade must add exactly these '
             'tables (storage from v13->v14, location from v14->v15, '
             'notifications from v15->v16, device_revocations from '
             'v16->v17, rate_limit_counters from v17->v18; v18->v19 adds an '
-            'index only, no new table)',
+            'index only, no new table; version_policy_cache from v19->v20)',
       );
 
       // Same exact-set treatment for the declared indexes. Neither
@@ -661,6 +668,12 @@ void main() {
       // adds no new table (purely an index on the already-existing
       // `rate_limit_counters`) but does add
       // `idx_rate_limit_counters_window_start` to the index diff below.
+      //
+      // E14-T01 note (renumbered from `from < 18` to `from < 20` during the
+      // epic_12/epic_13/epic_14 -> development merge, 2026-09-06): same
+      // widening a sixth time -- current `schemaVersion` is now 20, so this
+      // v14 handle also runs the `from < 20` step, adding
+      // `version_policy_cache` to the diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -672,11 +685,13 @@ void main() {
           'notification_preferences',
           'device_revocations',
           'rate_limit_counters',
+          'version_policy_cache',
         },
         reason: 'the v14->current-version upgrade must add exactly these '
             'tables (location from v14->v15, notifications from v15->v16, '
             'device_revocations from v16->v17, rate_limit_counters from '
-            'v17->v18; v18->v19 adds an index only, no new table)',
+            'v17->v18; v18->v19 adds an index only, no new table; '
+            'version_policy_cache from v19->v20)',
       );
 
       // Same exact-set treatment for the declared indexes.
