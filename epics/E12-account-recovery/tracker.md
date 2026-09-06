@@ -1,12 +1,13 @@
 # E12 · Account Recovery & Device Enrollment · Progress
 
-**Status:** all 3 tasks done, cross-model reviewed, merged into `epic_12`.
-Bug sweep run 2026-09-06 found 14 bugs (B01-B14); all P1s and P2s except
-`E12-B06`/`E12-B13` (both P2, project-wide design-fidelity tooling debt,
-tracked as non-blocking follow-ups) are fixed and merged. `flutter test`
-1192/1192 green. Merging into `development` now. ·
-**Started:** 2026-09-05 · **Completed:** 2026-09-06 · **Progress:** 3/3
-tasks done, 14 bugs filed, 12 closed
+**Status:** all 3 tasks done, cross-model reviewed, merged into
+`development`. Bug sweep run 2026-09-06 found 14 bugs (B01-B14) — **all 14
+now fixed and merged**, including `E12-B06`/`E12-B13` (both project-wide
+design-fidelity tooling debt: `E12-B13` fixed 7 dumper blind spots across
+two review rounds, `E12-B06` then registered both E12 derived screens in
+the gate, 2026-09-07). **E12 has zero open P1/P2/P3 findings.** ·
+**Started:** 2026-09-05 · **Completed:** 2026-09-07 · **Progress:** 3/3
+tasks done, 14/14 bugs closed
 
 ## Tasks
 
