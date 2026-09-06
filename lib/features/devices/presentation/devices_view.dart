@@ -86,7 +86,12 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: NexoraColors.devicesHeaderBg,
+      decoration: const BoxDecoration(
+        color: NexoraColors.devicesHeaderBg,
+        border: Border(
+          bottom: BorderSide(color: NexoraColors.devicesRowBorder, width: 1),
+        ),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
@@ -197,7 +202,12 @@ class _DeviceRow extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: visual.iconBackdrop,
-                  shape: BoxShape.circle,
+                  // devices.md's own token table measures this as a literal
+                  // 9999px radius (the design system's "fully round" token),
+                  // not a derived box/2 circle — BoxShape.circle renders
+                  // identically but reports as radius 20px against the
+                  // contract's 9999px (E12-B12).
+                  borderRadius: BorderRadius.circular(9999),
                 ),
                 child: Icon(Icons.devices, size: 24, color: visual.iconColor),
               ),
@@ -440,8 +450,17 @@ class _StateVisual {
   final String badgeLabel;
 }
 
-/// Elements 13-14, 21-22, 29-30, 37-38 — icon/color/copy per state, exactly
-/// as the design contract's four example rows show them.
+/// Elements 8/13-14, 16/21-22, 24/29-30, 32/37-38 — icon/color/copy per
+/// state, exactly as the design contract's four example rows show them.
+/// The row's own leading glyph is intentionally NOT keyed on
+/// `RelationshipState` (reverted in E12-B12 round 2, see GAP-003):
+/// `RelationshipRepository` only stores `deviceId`/`state`/`updatedAt`, no
+/// actual device hardware type, so varying the icon by trust state would
+/// fabricate a hardware claim the data does not support (a trusted phone
+/// would show a laptop glyph; a blocked laptop would show a desktop tower).
+/// Same reasoning this file's own §Deviations already applied to the
+/// subtitle copy — kept as the honest, generic `Icons.devices` at the call
+/// site instead.
 _StateVisual _stateVisual(RelationshipState state) {
   switch (state) {
     case RelationshipState.trusted:
@@ -499,10 +518,12 @@ class _BottomNav extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(color: Color(0x14000000), blurRadius: 12, offset: Offset(0, -2)),
-        ],
+        // code.html:282 — `bg-surface-container` + `border-t
+        // border-outline-variant/10`. No shadow in the design source
+        // (E12-B12 round 2, F2): the previous `Colors.white` fill and
+        // fabricated `BoxShadow` were both invented, not measured.
+        color: NexoraColors.devicesNavBg,
+        border: Border(top: BorderSide(color: NexoraColors.devicesRowBorder)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
