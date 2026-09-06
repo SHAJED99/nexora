@@ -9422,6 +9422,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'idx_location_fixes_captured_at',
     'CREATE INDEX idx_location_fixes_captured_at ON location_fixes (captured_at)',
   );
+  late final Index idxRateLimitCountersWindowStart = Index(
+    'idx_rate_limit_counters_window_start',
+    'CREATE INDEX idx_rate_limit_counters_window_start ON rate_limit_counters (window_start_ms)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -9461,6 +9465,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     idxStorageItemStatsLastAccessed,
     idxStorageDecisionsDecidedAt,
     idxLocationFixesCapturedAt,
+    idxRateLimitCountersWindowStart,
   ];
 }
 
