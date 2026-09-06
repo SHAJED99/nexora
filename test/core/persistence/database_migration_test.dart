@@ -458,6 +458,16 @@ void main() {
       // 2026-09-05): same widening a third time -- current `schemaVersion`
       // is now 17, so opening this v13 handle also runs the `from < 17`
       // step, adding `device_revocations` to the diff below.
+      //
+      // E13-T01 note: same widening a fourth time -- current `schemaVersion`
+      // is now 18, so opening this v13 handle also runs the `from < 18`
+      // step, adding `rate_limit_counters` to the diff below.
+      //
+      // E13-B01 note: same widening a fifth time -- current `schemaVersion`
+      // is now 19, so this v13 handle also runs the `from < 19` step, which
+      // adds no new table (purely an index on the already-existing
+      // `rate_limit_counters`) but does add
+      // `idx_rate_limit_counters_window_start` to the index diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -471,11 +481,13 @@ void main() {
           'notification_category_settings',
           'notification_preferences',
           'device_revocations',
+          'rate_limit_counters',
         },
         reason: 'the v13->current-version upgrade must add exactly these '
             'tables (storage from v13->v14, location from v14->v15, '
             'notifications from v15->v16, device_revocations from '
-            'v16->v17)',
+            'v16->v17, rate_limit_counters from v17->v18; v18->v19 adds an '
+            'index only, no new table)',
       );
 
       // Same exact-set treatment for the declared indexes. Neither
@@ -488,9 +500,11 @@ void main() {
           'idx_storage_item_stats_last_accessed',
           'idx_storage_decisions_decided_at',
           'idx_location_fixes_captured_at',
+          'idx_rate_limit_counters_window_start',
         },
         reason: 'the v13->current-version upgrade must add exactly these '
-            'indexes',
+            'indexes (v18->v19, E13-B01, adds '
+            'idx_rate_limit_counters_window_start)',
       );
 
       // The three new tables are usable through the real Dart definitions.
@@ -637,6 +651,16 @@ void main() {
       // 2026-09-05): same widening a third time -- current `schemaVersion`
       // is now 17, so this v14 handle also runs the `from < 17` step,
       // adding `device_revocations` to the diff below.
+      //
+      // E13-T01 note: same widening a fourth time -- current `schemaVersion`
+      // is now 18, so this v14 handle also runs the `from < 18` step,
+      // adding `rate_limit_counters` to the diff below.
+      //
+      // E13-B01 note: same widening a fifth time -- current `schemaVersion`
+      // is now 19, so this v14 handle also runs the `from < 19` step, which
+      // adds no new table (purely an index on the already-existing
+      // `rate_limit_counters`) but does add
+      // `idx_rate_limit_counters_window_start` to the index diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -647,18 +671,25 @@ void main() {
           'notification_category_settings',
           'notification_preferences',
           'device_revocations',
+          'rate_limit_counters',
         },
         reason: 'the v14->current-version upgrade must add exactly these '
             'tables (location from v14->v15, notifications from v15->v16, '
-            'device_revocations from v16->v17)',
+            'device_revocations from v16->v17, rate_limit_counters from '
+            'v17->v18; v18->v19 adds an index only, no new table)',
       );
 
-      // Same exact-set treatment for the one declared index.
+      // Same exact-set treatment for the declared indexes.
       final postMigrationIndexes = await _namedIndexNames(db);
       expect(
         postMigrationIndexes.difference(preMigrationIndexes),
-        {'idx_location_fixes_captured_at'},
-        reason: 'the v14->v15 step must add exactly this one index',
+        {
+          'idx_location_fixes_captured_at',
+          'idx_rate_limit_counters_window_start',
+        },
+        reason: 'the v14->v15 step must add its one index, and the '
+            'v18->v19 step (E13-B01) must add '
+            'idx_rate_limit_counters_window_start',
       );
 
       // The three new tables are usable through the real Dart definitions.

@@ -155,27 +155,66 @@ class LoginController extends GetxController {
 
   Future<void> _signIn() async {
     signingIn.value = true;
-    final deviceIdentityRepository = _resolveDeviceIdentityRepository();
-
-    // E12-B01 fix: reuse THIS device's own existing identity, if any, so a
-    // relaunch on the same physical device passes the SAME deviceId back
-    // into `SignInUseCase.call` — see file header. Best-effort: a failure
-    // reading it must not block sign-in, it just falls back to minting a
-    // fresh id (the unchanged pre-B01/no-repository behavior).
-    String? existingDeviceId;
     try {
-      final existingIdentity =
-          await deviceIdentityRepository?.latestDeviceIdentity();
-      existingDeviceId = existingIdentity?.deviceId;
-    } catch (e) {
-      ObservabilityService.instance.logError(
-        'recovery.device_identity_read_failed',
-        cause: e,
-      );
-    }
-    final deviceId = existingDeviceId ?? generateSecureDeviceId();
+      final deviceIdentityRepository = _resolveDeviceIdentityRepository();
 
-    try {
+      // F1 fix (E13-T07 review round 2, S1/S2) + E12-B01 fix (merged from
+      // `epic_12`): reuse this device's own already-registered id when one
+      // exists, rather than unconditionally minting a fresh one on every
+      // launch — minting fresh every time made every relaunch look like a
+      // brand-new device registering, which silently exhausted
+      // `DeviceIdentityRepository`'s per-account registration rate limit
+      // (5/24h) after just 5 launches; it also permanently mis-routed
+      // returning users to `/device-enrollment` (`E12-B01`). `call`
+      // recognizes a reused id as a returning device and skips the
+      // registration/rate-limit path entirely for it (see
+      // `sign_in_use_case.dart`'s header + `call`'s own doc comment).
+      //
+      // Two independently-reviewed mechanisms read this device's existing
+      // identity, reconciled here at the merge of `epic_12`/`epic_13`:
+      // - When a `DeviceIdentityRepository` is resolvable (the real app,
+      //   via `Get.find`, or a test's explicit `deviceIdentityRepository:`
+      //   override), read it DIRECTLY (E12-B01's own mechanism) — a
+      //   failure here is a best-effort hint, not a reason to fail the
+      //   whole sign-in attempt. It falls back to minting a fresh id and
+      //   is logged distinctly from a real sign-in failure
+      //   (`E12-B08` regression: `test_EARS_AUTH_3_device_identity_read_
+      //   failure_falls_through_to_dashboard`).
+      // - When no repository is resolvable at all (no container, or a
+      //   test that only wires `SignInUseCase` directly without also
+      //   registering/injecting a `DeviceIdentityRepository`), fall back
+      //   to `_signInUseCase.existingDeviceId()` — the same signal read
+      //   via `_signInUseCase`'s own internal repository reference, which
+      //   in production is always the identical singleton
+      //   `deviceIdentityRepository` would have resolved to anyway
+      //   (`E13-T07` regression:
+      //   `test_EARS_ABUSE_5_returning_device_reaches_dashboard_across_N_
+      //   launches`). Unlike the repository-read branch above, THIS read
+      //   is intentionally left unguarded: if it throws, no fallback
+      //   repository was even available, which is abnormal enough to fail
+      //   the whole sign-in attempt cleanly via the outer catch below
+      //   (EARS-AUTH-3) rather than silently minting a device id nothing
+      //   could confirm (`E13-T07` review round 3, F6 regression:
+      //   `test_EARS_AUTH_3_existing_device_id_read_failure_completes_
+      //   signin_instead_of_hanging`). `onInit()` calls `_signIn()`
+      //   unawaited, so this must stay inside the outer `try` — moved here
+      //   deliberately, not left to float outside it.
+      String? existingDeviceId;
+      if (deviceIdentityRepository != null) {
+        try {
+          final existingIdentity =
+              await deviceIdentityRepository.latestDeviceIdentity();
+          existingDeviceId = existingIdentity?.deviceId;
+        } catch (e) {
+          ObservabilityService.instance.logError(
+            'recovery.device_identity_read_failed',
+            cause: e,
+          );
+        }
+      } else {
+        existingDeviceId = await _signInUseCase.existingDeviceId();
+      }
+      final deviceId = existingDeviceId ?? generateSecureDeviceId();
       await _signInUseCase(deviceId);
       signingIn.value = false;
 

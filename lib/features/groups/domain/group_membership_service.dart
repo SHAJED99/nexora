@@ -82,6 +82,21 @@
 // [GroupNotificationEventKind] instead; every other detail (the eight-value
 // closed set, field names) matches §5 exactly.
 //
+// **Group-invitation rate limiting (E13-T04, `FR-ABUSE-001`,
+// EARS-ABUSE-8/9).** [createGroup] and [_perform] (only for
+// `GroupAction.addMember`) each call `RateLimiter.allow` on one shared
+// bucket keyed by THIS device's own id, before any local write -- a device
+// creating groups or adding members faster than realistic legitimate use
+// permits is denied (`counters.groupRateLimited`) without ever building or
+// sending a wire frame. Gated at both call sites individually, not inside
+// one single shared choke point, because `_perform` turned out NOT to be a
+// funnel [createGroup] goes through at all (see [createGroup]'s own doc
+// comment for the full disclosed deviation from the task file's stated
+// assumption). Does NOT throttle any other `_perform`-backed action
+// (`rename`, `removeMember`, `grantAdmin`, ...), and does NOT touch
+// [handleWireFrame]/[handleControlFrame] -- this is an OUTBOUND-only gate
+// (task file §4).
+//
 // `prefer_initializing_formals` is intentionally not applied to this file's
 // constructor, matching the same documented exclusion already used by
 // `relay_engine.dart`/`inbound_pipeline.dart`/`prekey_exchange.dart`: the
@@ -93,6 +108,7 @@ import 'dart:typed_data';
 
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 
+import '../../../core/abuse/rate_limiter.dart';
 import '../../../core/auth/google_auth_service.dart' show AppFailure;
 import '../../../core/messaging/group_control.dart';
 import '../../../core/messaging/messaging_stack.dart';
@@ -123,6 +139,21 @@ const Duration _controlFrameTtl = Duration(days: 1);
 /// others.
 const Duration _defaultFanOutSessionTimeout = Duration(seconds: 20);
 
+/// Default cap on how many group-invitation actions (creating a group,
+/// adding a member) one LOCAL device may initiate inside
+/// [_defaultGroupInviteRateLimitWindow] (task file §3/§6, EARS-ABUSE-8/9).
+/// Sized around realistic legitimate use -- a user setting up a few groups
+/// and adding a handful of members in one sitting -- comfortably clears
+/// this in normal use, while an automated flood of creates/adds does not.
+/// See this task's own Run log for the full justification. Deliberately
+/// generous rather than tight: this is an abuse backstop, not a UX-facing
+/// throttle, so false positives against a real, busy user are the worse
+/// failure mode.
+const int _defaultGroupInviteRateLimitMaxCount = 20;
+
+/// The fixed window paired with [_defaultGroupInviteRateLimitMaxCount].
+const Duration _defaultGroupInviteRateLimitWindow = Duration(minutes: 10);
+
 /// So a dropped frame is observable rather than silent (task file §3),
 /// mirroring `InboundCounters`/`PrekeyExchangeCounters`'s own style.
 class GroupMembershipCounters {
@@ -142,6 +173,14 @@ class GroupMembershipCounters {
   /// actually produced it (EARS-GROUP-10) — the security property this
   /// whole file exists to enforce.
   int groupUnauthenticated = 0;
+
+  /// This LOCAL device was denied by `RateLimiter` (E13-T01) for exceeding
+  /// its group-invitation admission rate — a device creating groups or
+  /// adding members faster than realistic legitimate use permits
+  /// (`FR-ABUSE-001`, EARS-ABUSE-8, task file §3). Unlike the three
+  /// counters above (all about a frame this device RECEIVED), this one
+  /// counts a local, OUTBOUND action this device itself tried to initiate.
+  int groupRateLimited = 0;
 }
 
 /// The closed set of group-event notification kinds (E10-T06, task file §5)
@@ -194,17 +233,25 @@ class GroupMembershipService {
     required RelationshipRepository relationshipRepository,
     DateTime Function() clock = DateTime.now,
     Duration fanOutSessionTimeout = _defaultFanOutSessionTimeout,
+    RateLimiter? rateLimiter,
+    int groupInviteRateLimitMaxCount = _defaultGroupInviteRateLimitMaxCount,
+    Duration groupInviteRateLimitWindow = _defaultGroupInviteRateLimitWindow,
   })  : _stack = stack,
         _repository = repository,
         _relationshipRepository = relationshipRepository,
         _clock = clock,
-        _fanOutSessionTimeout = fanOutSessionTimeout;
+        _fanOutSessionTimeout = fanOutSessionTimeout,
+        _rateLimiterOrNull = rateLimiter,
+        _groupInviteRateLimitMaxCount = groupInviteRateLimitMaxCount,
+        _groupInviteRateLimitWindow = groupInviteRateLimitWindow;
 
   final MessagingStack _stack;
   final GroupRepository _repository;
   final RelationshipRepository _relationshipRepository;
   final DateTime Function() _clock;
   final Duration _fanOutSessionTimeout;
+  final int _groupInviteRateLimitMaxCount;
+  final Duration _groupInviteRateLimitWindow;
 
   final GroupMembershipCounters counters = GroupMembershipCounters();
 
@@ -254,6 +301,26 @@ class GroupMembershipService {
   /// read outside tests.
   Future<Map<String, AppFailure?>>? lastRotationForTest;
 
+  /// `RateLimiter` (E13-T01), built lazily against `_stack.db` -- the single
+  /// app-wide `AppDatabase` already threaded through this file (see the
+  /// `_rotation` getter above for why lazy construction, not eager, is this
+  /// file's own established pattern: it avoids depending on anything from
+  /// `MessagingStack`'s constructor before that constructor has actually
+  /// finished building it). A test may instead inject its own instance via
+  /// the constructor's `rateLimiter` parameter -- not needed for a real,
+  /// per-test `AppDatabase`, but kept for parity with every other injectable
+  /// dependency on this class.
+  RateLimiter? _rateLimiterOrNull;
+  RateLimiter get _rateLimiter => _rateLimiterOrNull ??= RateLimiter(_stack.db);
+
+  /// One bucket per LOCAL device, shared by both group-invitation entry
+  /// points below (task file §2: "keyed by the LOCAL device id doing the
+  /// inviting") -- `createGroup` and `addMember` both draw from the same
+  /// budget rather than each getting their own, matching this task's own
+  /// §6 risk note that a legitimate burst of adds should not itself be
+  /// doubled by a separate, independent create budget.
+  String get _groupInviteBucketKey => 'group_invite:${_stack.selfDeviceId}';
+
   // --- Founding write -------------------------------------------------
 
   /// Creates a group locally (this device becomes Owner) and fans out a
@@ -261,10 +328,40 @@ class GroupMembershipService {
   /// `memberList` — to every invitee, so a device that has never heard of
   /// this group before learns it in one frame (task file §2/§3). A local
   /// act: there is no server to register with (ADR-0005).
+  /// **Deviation (task file §5, disclosed):** the task's own contract names
+  /// `_perform` as "the shared apply/send helper both funnel through" and
+  /// asks that a single gate there cover both callers -- but reading this
+  /// file in full (task file's own required verification step) shows that
+  /// is not actually true: this method never calls `_perform` at all: it
+  /// builds its own `GroupControlFrame` and fans out directly (see the
+  /// class doc comment above, "Founding write"). Per the task file's own
+  /// explicit fallback ("if it is not, gate each caller individually
+  /// instead of forcing a shared choke point that doesn't actually exist"),
+  /// the admission check is therefore duplicated at THIS call site too,
+  /// sharing [_groupInviteBucketKey] with the gate inside [_perform] (see
+  /// there) so one device's combined create+add rate is bounded by one
+  /// budget, not two independent ones. Throws [AppFailure] (rather than
+  /// returning a nullable failure, unlike every `_perform`-backed method)
+  /// because this method's own return type is `Future<String>` -- a bare
+  /// group id, not the existing `Future<AppFailure?>` outcome shape used
+  /// everywhere else in this file, and changing that return type is outside
+  /// this task's own `files:`-fenced contract. Throwing `AppFailure` for a
+  /// failure condition already has a precedent in this codebase
+  /// (`google_auth_service.dart`'s own documented "Throws AppFailure ... on
+  /// any failure" methods), so this is not a new pattern.
   Future<String> createGroup({
     required String name,
     required List<String> memberDeviceIds,
   }) async {
+    if (!await _rateLimiter.allow(
+      _groupInviteBucketKey,
+      maxCount: _groupInviteRateLimitMaxCount,
+      window: _groupInviteRateLimitWindow,
+    )) {
+      counters.groupRateLimited++;
+      throw const AppFailure('group.rate_limited');
+    }
+
     final ownerDeviceId = _stack.selfDeviceId;
     final groupId = await _repository.createGroup(
       name: name,
@@ -366,6 +463,26 @@ class GroupMembershipService {
     String? subjectDeviceId,
     String? name,
   }) async {
+    // Task file §2/§3: the admission gate belongs ONLY to the
+    // group-invitation vector (`FR-ABUSE-001`, EARS-ABUSE-8) -- creating a
+    // group or adding a member -- not to every action this shared helper
+    // happens to serve. `rename`/`removeMember`/`grantAdmin`/`revokeAdmin`/
+    // `transferOwnership`/`deleteGroup`/`leave` all funnel through this same
+    // `_perform`, but none of them is the spam vector this task closes, so
+    // none of them is throttled by it; scoping the check to
+    // `GroupAction.addMember` keeps this gate confined to that one action
+    // rather than silently rate-limiting unrelated group management.
+    if (action == GroupAction.addMember) {
+      if (!await _rateLimiter.allow(
+        _groupInviteBucketKey,
+        maxCount: _groupInviteRateLimitMaxCount,
+        window: _groupInviteRateLimitWindow,
+      )) {
+        counters.groupRateLimited++;
+        return const AppFailure('group.rate_limited');
+      }
+    }
+
     final myRole = await _repository.roleOf(groupId, _stack.selfDeviceId);
     if (myRole == null) return const AppFailure('group.forbidden');
 
