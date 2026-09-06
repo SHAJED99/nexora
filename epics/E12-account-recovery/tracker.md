@@ -257,3 +257,22 @@ E13-T07).
     signing in on the same physical install would be refused that write.
     Currently unreachable (no sign-out/account-switch flow exists
     anywhere in `lib/`); file against whenever one lands.
+- 2026-09-06 — **`E12-B09` fixed and merged** (grant revocation): block/deny
+  now deletes the enrollment grant; `checkApproval()` also checks device-
+  revocation status (E11-T04's existing mechanism, zero new plumbing
+  needed). Reviewer independently falsified both halves against real
+  production classes; both mechanisms confirmed genuinely independent, not
+  double-counted. `auth_or_payment_code` gate human-approved 2026-09-06
+  (this decides whether a device enters an account). 3 non-blocking
+  observations carried forward, not fixed here:
+  - **S3**: `isDeviceRevoked` fails open (a read failure/timeout reads as
+    "not revoked") — mitigated since the grant read itself fails closed,
+    so a plain outage still denies overall.
+  - **S4**: `checkApproval()` now does two sequential 10s-timeout reads
+    per poll (grant + revocation), doubling worst-case latency against an
+    8-poll/~28s deadline — narrows, doesn't break, the window to observe
+    a very-late approval.
+  - **S4**: `block()`'s grant-delete runs after `await load()` — a throw
+    from the block use case or `load()` skips the delete, leaving a grant
+    live after a locally-recorded block. Same ordering `verify()`'s mirror
+    write already uses, so consistent, not new.

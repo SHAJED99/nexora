@@ -299,6 +299,98 @@ void main() {
   });
 
   test(
+      'test_E12_B09_blocking_a_previously_approved_device_deletes_its_'
+      'enrollment_grant', () async {
+    // E12-B09 regression: `Approve` writes a grant (E12-B02), and by the
+    // time the approving device later changes its mind, `verify()` has
+    // already removed the device from `pendingEnrollments` -- so `block()`
+    // must delete the grant unconditionally, not gated on the
+    // now-stale pending-enrollment membership.
+    const String suffix = 'enrollment-grant-delete-on-block';
+    final stub = _StubFirebaseMetadataService({'device-a'});
+    final controller = buildController(
+      suffix,
+      ownDeviceIds: {'device-a'},
+      firebaseMetadataService: stub,
+      thisDeviceId: 'my-approving-device',
+    );
+
+    controller.discover();
+    await Future<void>.delayed(Duration.zero);
+    pushDiscoveredDevice(
+      suffix,
+      TransportDevice(
+        id: 'device-a',
+        displayName: 'Approve Me',
+        type: TransportType.bluetooth,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    await controller.verify('device-a');
+    expect(stub.writeEnrollmentGrantCallCount, 1);
+    // No longer pending -- `block()` below must not rely on this.
+    expect(
+      controller.pendingEnrollments.any((d) => d.id == 'device-a'),
+      isFalse,
+    );
+
+    await controller.block('device-a');
+
+    expect(stub.deleteEnrollmentGrantCallCount, 1);
+    expect(stub.capturedDeleteUid, 'uid-1');
+    expect(stub.capturedDeleteNewDeviceId, 'device-a');
+  });
+
+  test(
+      'blocking an ordinary stranger with no grant still attempts the '
+      'delete, harmlessly', () async {
+    const String suffix = 'enrollment-grant-delete-no-grant';
+    final stub = _StubFirebaseMetadataService({'some-other-own-device'});
+    final controller = buildController(
+      suffix,
+      ownDeviceIds: {'some-other-own-device'},
+      firebaseMetadataService: stub,
+    );
+
+    controller.discover();
+    await Future<void>.delayed(Duration.zero);
+    pushDiscoveredDevice(
+      suffix,
+      TransportDevice(
+        id: 'stranger-device',
+        displayName: 'Nearby Phone',
+        type: TransportType.bluetooth,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    await controller.block('stranger-device');
+
+    expect(stub.deleteEnrollmentGrantCallCount, 1);
+    expect(stub.capturedDeleteNewDeviceId, 'stranger-device');
+  });
+
+  test(
+      'blocking with no signed-in uid skips the delete, never throws',
+      () async {
+    const String suffix = 'enrollment-grant-delete-no-uid';
+    final stub = _StubFirebaseMetadataService({'device-a'});
+    final controller = buildController(
+      suffix,
+      ownDeviceIds: {'device-a'},
+      signedIn: false,
+      firebaseMetadataService: stub,
+    );
+
+    await controller.block('device-a');
+
+    expect(stub.deleteEnrollmentGrantCallCount, 0);
+  });
+
+  test(
       'an ordinary Verify of a ordinary Unknown stranger (not a pending '
       'enrollment) does NOT write an enrollment grant',
       () async {
@@ -614,6 +706,12 @@ class _StubFirebaseMetadataService extends FirebaseMetadataService {
   String? capturedGrantNewDeviceId;
   Map<String, dynamic>? capturedGrantData;
 
+  /// `E12-B09` regression evidence: captures whether/what `block()`
+  /// actually deleted from the dedicated enrollment-grant channel.
+  int deleteEnrollmentGrantCallCount = 0;
+  String? capturedDeleteUid;
+  String? capturedDeleteNewDeviceId;
+
   @override
   Future<Set<String>> readOwnDeviceIds(String uid) async {
     callCount++;
@@ -638,5 +736,15 @@ class _StubFirebaseMetadataService extends FirebaseMetadataService {
     capturedGrantUid = uid;
     capturedGrantNewDeviceId = newDeviceId;
     capturedGrantData = data;
+  }
+
+  @override
+  Future<void> deleteEnrollmentGrantData(
+    String uid,
+    String newDeviceId,
+  ) async {
+    deleteEnrollmentGrantCallCount++;
+    capturedDeleteUid = uid;
+    capturedDeleteNewDeviceId = newDeviceId;
   }
 }
