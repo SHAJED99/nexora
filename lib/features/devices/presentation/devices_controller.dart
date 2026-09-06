@@ -182,6 +182,21 @@ class DevicesController extends GetxController {
 
   /// Kebab menu's "Block" action (FR-BLOCK-001) — the design contract's
   /// generic `more_vert` button, element 12/20/28/36.
+  ///
+  /// `E12-B09` fix: also deletes any device-enrollment grant this account
+  /// may have previously issued for [deviceId]
+  /// (`FirebaseMetadataService.deleteEnrollmentGrant`) -- without this, a
+  /// device approved via `verify()` and later blocked/denied keeps its
+  /// stale grant node forever, and the enrolling device's own
+  /// `checkApproval()` never learns the approval was reversed (`E12-B09`'s
+  /// own repro). Deliberately unconditional on [deviceId] currently being a
+  /// pending enrollment (unlike `verify()`'s `wasPendingEnrollment` gate):
+  /// by the time a previously-approved device is blocked, `verify()` has
+  /// already removed it from [pendingEnrollments] (EARS-RECOVER-7), so that
+  /// signal is gone by the time `block()` runs. A delete for a [deviceId]
+  /// with no grant node at all (the overwhelmingly common "Block" of an
+  /// ordinary stranger) is a harmless no-op --
+  /// `FirebaseMetadataService.deleteEnrollmentGrant`'s own doc comment.
   Future<void> block(String deviceId) async {
     await _blockUseCase(deviceId);
     // EARS-RECOVER-7: `Deny` (a pending-enrollment row's trailing button)
@@ -192,6 +207,14 @@ class DevicesController extends GetxController {
     // e.g. the kebab menu's "Block").
     pendingEnrollments.removeWhere((d) => d.id == deviceId);
     await load();
+    final String? uid = await _currentAccountUid();
+    // Best-effort, same degraded-case framing as `verify()`'s own mirror
+    // call: an unknown uid (not signed in yet, or the repository lookup
+    // fails) simply skips the delete -- the local block is still recorded
+    // either way, never blocked on this.
+    if (uid != null) {
+      await _firebaseMetadataService.deleteEnrollmentGrant(uid, deviceId);
+    }
   }
 
   /// "Verify" button (element 31, Unknown rows only) — promotes an Unknown

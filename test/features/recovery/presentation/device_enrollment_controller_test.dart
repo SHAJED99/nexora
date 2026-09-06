@@ -32,15 +32,26 @@ import 'package:nexora/features/recovery/presentation/device_enrollment_view.dar
 /// real `FirebaseDatabase`/platform channel. Counts calls so the dispose
 /// test can prove polling actually stopped.
 class _StubFirebaseMetadataService extends FirebaseMetadataService {
-  _StubFirebaseMetadataService(this._raw);
+  _StubFirebaseMetadataService(this._raw, {this._deviceMetadata});
 
   final Object? _raw;
+  /// `E12-B09`: the raw `users/$uid/devices/$thisDeviceId` node value
+  /// `isDeviceRevoked` reads via `readDeviceMetadata` -- `null` (the
+  /// default) means no device node at all, matching every existing test's
+  /// prior behaviour (no revocation, since `readDeviceMetadata` throws with
+  /// no override here and `isDeviceRevoked` catches that as "not revoked").
+  final Object? _deviceMetadata;
   int readCalls = 0;
 
   @override
   Future<Object?> readEnrollmentGrantData(String uid, String newDeviceId) async {
     readCalls++;
     return _raw;
+  }
+
+  @override
+  Future<Object?> readDeviceMetadata(String uid, String deviceId) async {
+    return _deviceMetadata;
   }
 }
 
@@ -254,6 +265,59 @@ void main() {
         );
         addTearDown(controllerB.onClose);
         expect(await controllerB.checkApproval(), isFalse);
+      },
+    );
+
+    test(
+      'test_E12_B09_a_granted_but_meanwhile_revoked_device_reads_as_not_'
+      'approved',
+      () async {
+        // E12-B09: the other named trigger from the bug's own repro --
+        // this device id is revoked via E11-T04's own mechanism
+        // (`users/$uid/devices/$thisDeviceId/revocation`) after the grant
+        // was written. A real grant node alone must no longer be enough.
+        final stub = _StubFirebaseMetadataService(
+          {'approvedByDeviceId': 'trusted-device', 'approvedAt': 1000},
+          deviceMetadata: {
+            'deviceId': 'this-device',
+            'revocation': {
+              'revokedAt': 2000,
+              'revokedByDeviceId': 'trusted-device',
+            },
+          },
+        );
+        final controller = DeviceEnrollmentController(
+          accountUid: 'uid-1',
+          thisDeviceId: 'this-device',
+          firebaseMetadataService: stub,
+        );
+        addTearDown(controller.onClose);
+
+        expect(await controller.checkApproval(), isFalse);
+      },
+    );
+
+    test(
+      'a granted device with no revocation child still reads as approved '
+      '(happy path unaffected)',
+      () async {
+        final stub = _StubFirebaseMetadataService(
+          {'approvedByDeviceId': 'trusted-device', 'approvedAt': 1000},
+          deviceMetadata: {
+            'deviceId': 'this-device',
+            'createdAt': 1000,
+            'lastSeenAt': 1000,
+            'platform': 'android',
+          },
+        );
+        final controller = DeviceEnrollmentController(
+          accountUid: 'uid-1',
+          thisDeviceId: 'this-device',
+          firebaseMetadataService: stub,
+        );
+        addTearDown(controller.onClose);
+
+        expect(await controller.checkApproval(), isTrue);
       },
     );
   });

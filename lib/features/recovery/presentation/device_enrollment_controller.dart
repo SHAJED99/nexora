@@ -133,11 +133,31 @@ class DeviceEnrollmentController extends GetxController {
   /// by design, same as the read it replaces — it simply reads as "not yet
   /// approved," never a thrown error (task §5 "UI" note: no dedicated
   /// error state).
+  ///
+  /// `E12-B09` fix: a grant node existing is no longer sufficient on its
+  /// own. `DevicesController.block()` (the SAME handler `Deny` uses) now
+  /// deletes this device's grant node when it fires, which handles the
+  /// block/deny-after-approve case directly at the source -- so a grant
+  /// this method reads here has, by construction, not been blocked/denied
+  /// since. The one revocation path that does NOT go through `block()` at
+  /// all is `E11-T04`'s own device-revocation mechanism
+  /// (`DeviceRevocationService.revoke`, `users/$uid/devices/$thisDeviceId
+  /// /revocation`) -- checked here as an additional, independent condition
+  /// via `FirebaseMetadataService.isDeviceRevoked`, so a grant for a
+  /// meanwhile-revoked device id is never trusted either. Both checks are
+  /// best-effort reads of data this service already writes/reads
+  /// elsewhere -- no new Firebase path, no `ConflictResolver`/`pull`.
   Future<bool> checkApproval() async {
-    return _firebaseMetadataService.readEnrollmentGrant(
+    final bool granted = await _firebaseMetadataService.readEnrollmentGrant(
       _accountUid,
       _thisDeviceId,
     );
+    if (!granted) return false;
+    final bool revoked = await _firebaseMetadataService.isDeviceRevoked(
+      _accountUid,
+      _thisDeviceId,
+    );
+    return !revoked;
   }
 
   /// "Continue without history" (`waiting`/`denied`) — EARS-RECOVER-11.

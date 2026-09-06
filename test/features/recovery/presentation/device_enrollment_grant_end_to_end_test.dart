@@ -61,6 +61,14 @@ class _FakeFirebaseMetadataService extends FirebaseMetadataService {
   Future<Object?> readEnrollmentGrantData(String uid, String newDeviceId) async {
     return _shared.store['$uid/$newDeviceId'];
   }
+
+  /// `E12-B09`: mirrors a real Realtime Database `.remove()` against the
+  /// same shared store -- proves `DevicesController.block()`'s delete
+  /// actually reaches the exact node the enrolling device reads.
+  @override
+  Future<void> deleteEnrollmentGrantData(String uid, String newDeviceId) async {
+    _shared.store.remove('$uid/$newDeviceId');
+  }
 }
 
 void main() {
@@ -174,6 +182,82 @@ void main() {
       addTearDown(controller.onClose);
 
       expect(await controller.checkApproval(), isFalse);
+    },
+  );
+
+  test(
+    'test_E12_B09_a_grant_revoked_by_a_later_block_no_longer_reads_as_'
+    'approved',
+    () async {
+      // E12-B09 regression: approve `dev-X`, then call `block('dev-X')` on
+      // the approving device (the SAME handler `Deny` uses) -- the
+      // enrolling device's `checkApproval()` must now return `false`,
+      // instead of still reading the stale grant (reviewer's own probe,
+      // `E12-B09.md`).
+      const String suffix = 'e2e-approved-then-blocked';
+      const String uid = 'account-uid';
+      const String newDeviceId = 'dev-X';
+      const String approvingDeviceId = 'trusted-device';
+
+      final shared = _SharedEnrollmentGrantStore();
+
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repository = RelationshipRepository(db);
+      final blockUseCase = BlockUseCase(repository);
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.TransportApi.startDiscovery.$suffix',
+        (ByteData? message) async =>
+            TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[null]),
+      );
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.TransportApi.stopDiscovery.$suffix',
+        (ByteData? message) async =>
+            TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[null]),
+      );
+      final transportService = TransportService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: suffix,
+      );
+      addTearDown(transportService.dispose);
+      final devicesController = DevicesController(
+        repository,
+        blockUseCase,
+        transportService: transportService,
+        evaluateConnectionRequestUseCase:
+            EvaluateConnectionRequestUseCase(repository),
+        currentAccountUid: () async => uid,
+        thisDeviceId: () async => approvingDeviceId,
+        firebaseMetadataService: _FakeFirebaseMetadataService(shared),
+      );
+      devicesController.pendingEnrollments.add(
+        TransportDevice(
+          id: newDeviceId,
+          displayName: 'New Phone',
+          type: TransportType.bluetooth,
+        ),
+      );
+
+      final enrollingController = DeviceEnrollmentController(
+        accountUid: uid,
+        thisDeviceId: newDeviceId,
+        firebaseMetadataService: _FakeFirebaseMetadataService(shared),
+      );
+      addTearDown(enrollingController.onClose);
+
+      // Approve -- the enrolling device sees it (happy path, still works).
+      await devicesController.verify(newDeviceId);
+      expect(await enrollingController.checkApproval(), isTrue);
+
+      // The approving device changes its mind: `block('dev-X')` (the SAME
+      // handler `Deny` uses, per EARS-RECOVER-7).
+      await devicesController.block(newDeviceId);
+
+      // The grant node itself is gone from the shared store...
+      expect(shared.store.containsKey('$uid/$newDeviceId'), isFalse);
+      // ...so the enrolling device's own checkApproval() now correctly
+      // returns false instead of still trusting the stale grant.
+      expect(await enrollingController.checkApproval(), isFalse);
     },
   );
 }

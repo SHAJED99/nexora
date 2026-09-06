@@ -324,4 +324,79 @@ class FirebaseMetadataService {
         .get()
         .then((snapshot) => snapshot.value);
   }
+
+  /// `E12-B09` (`FR-RECOVER-001`/`FR-TRUST-007`): removes a previously
+  /// written `users/$uid/device_enrollment_grants/$newDeviceId` node, so a
+  /// later `block()`/`deny()` (`DevicesController.block`, the SAME handler
+  /// `Deny` uses) makes an already-issued grant ineffective — the
+  /// enrolling device's next [readEnrollmentGrant] then sees no node and
+  /// reads as not-approved, same as if it had never been granted.
+  ///
+  /// Always safe to call, including for a [newDeviceId] with no grant node
+  /// at all (an ordinary "Block" of a ordinary stranger, never a pending
+  /// enrollment) — a Realtime Database `.remove()` of an already-absent
+  /// path is a silent no-op, same as every other best-effort wrapper on
+  /// this class. Never throws: any Realtime Database error (including
+  /// being offline, or a timeout) is caught and logged via
+  /// [ObservabilityService], mirroring [writeEnrollmentGrant]'s own
+  /// best-effort framing — a failed deletion here must never block the
+  /// caller's own local block/deny action.
+  ///
+  /// No [FirebaseBoundary.assertAllowedFields] guard is needed here (unlike
+  /// [writeEnrollmentGrant]): a removal carries no field payload to police,
+  /// it only ever narrows what exists at this path.
+  Future<void> deleteEnrollmentGrant(String uid, String newDeviceId) async {
+    try {
+      await deleteEnrollmentGrantData(uid, newDeviceId).timeout(_timeout);
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'firebase.delete_enrollment_grant_failed',
+        cause: e,
+      );
+    }
+  }
+
+  /// Performs the actual Realtime Database removal. Split out from
+  /// [deleteEnrollmentGrant] for the same test-seam reason as
+  /// [writeEnrollmentGrantData].
+  Future<void> deleteEnrollmentGrantData(String uid, String newDeviceId) {
+    return _database
+        .ref(FirebasePaths.deviceEnrollmentGrant(uid, newDeviceId))
+        .remove();
+  }
+
+  /// `E12-B09` (`FR-RECOVER-001`/`FR-TRUST-007`): best-effort check of
+  /// whether [deviceId] carries a `revocation` child under its own
+  /// `users/$uid/devices/$deviceId` node (`E11-T04`'s
+  /// `DeviceRevocationService.revoke`) — reuses [readDeviceMetadata]'s
+  /// existing whole-node read, since `revocation` is just one child of the
+  /// same node [readDeviceMetadata] already fetches (no new Firebase path,
+  /// no new writer). This is `checkApproval()`'s own defense against a
+  /// grant that outlived a later revocation of the same device id (the
+  /// bug's own repro step 3, "or B is revoked via
+  /// `users/$uid/devices/B/revocation`").
+  ///
+  /// Absent/malformed data (no node, no `revocation` child, or a
+  /// non-`Map` child) reads as "not revoked" — absent information, never
+  /// "unknown" — mirroring
+  /// `DeviceRevocationService._extractRevocationFlags`'s exact shape for
+  /// the same underlying data. Never throws: any read failure or timeout
+  /// also reads as "not revoked", since this is a hint an enrollment poll
+  /// may not block on (same best-effort framing as every other reader on
+  /// this class).
+  Future<bool> isDeviceRevoked(String uid, String deviceId) async {
+    final Object? raw;
+    try {
+      raw = await readDeviceMetadata(uid, deviceId).timeout(_timeout);
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'firebase.read_device_revocation_status_failed',
+        cause: e,
+      );
+      return false;
+    }
+    return raw is Map &&
+        raw['revocation'] is Map &&
+        (raw['revocation'] as Map).isNotEmpty;
+  }
 }

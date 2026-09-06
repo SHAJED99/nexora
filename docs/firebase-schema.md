@@ -119,6 +119,24 @@ read/write is inherited from `users/$uid`'s own rule, same shape as
 `relationships/$peerDeviceId` — no narrower `.read`/`.write` is declared
 at this node.
 
+`E12-B09` (`FR-RECOVER-001`/`FR-TRUST-007`) closes a gap the reviewer found
+once `E12-B02`/`E12-B03` shipped: a grant node written above is otherwise
+permanent — nothing ever revoked it. Two independent, best-effort checks now
+guard against a stale grant, neither adding a new path or a new writer:
+`DevicesController.block()` (the same handler `Deny` uses) now also calls
+`FirebaseMetadataService.deleteEnrollmentGrant` for the blocked/denied device
+id — a `.remove()` at the exact same `device_enrollment_grants/$newDeviceId`
+node, unconditional on whether the id is still tracked as "pending" (by the
+time a previously-approved device is blocked, `verify()` has already cleared
+that tracking) and a harmless no-op when no grant exists. Separately,
+`DeviceEnrollmentController.checkApproval()` also checks
+`FirebaseMetadataService.isDeviceRevoked` — a read of the ALREADY-EXISTING
+`users/$uid/devices/$deviceId/revocation` child (`E11-T04`, above), reused
+as-is — so a device revoked via that unrelated mechanism is never trusted by
+a stale grant either, with no new Firebase path or writer needed for that
+check. Neither change touches `relationships/*`/`RelationshipSyncService`
+or reintroduces `ConflictResolver` on this read path.
+
 The remaining `reserved` rows are declared here as placeholders their
 owning task flips to `live` — this is the anti-collision mechanism for
 this shared doc, not a promise of behaviour (see
