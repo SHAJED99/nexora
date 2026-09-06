@@ -40,6 +40,11 @@ class NexoraColors {
   static const devicesActiveNavBg = Color(0xFF4F46E5); // rgb(79,70,229)
   static const devicesRowBorder = Color(0x1AC7C4D8); // rgba(199,196,216,0.1)
   static const devicesRowFill = Color(0x1AEFF4FF); // rgba(239,244,255,0.1)
+  // E12-B12 round 2 (F2): the bottom nav's `bg-surface-container` token
+  // (code.html:282) — same value already used ad hoc as `_barBg`/
+  // `_fieldAndRowFill` in chat_view.dart/conversations_view.dart; named here
+  // so devices_view.dart can reference it instead of inventing a shadow.
+  static const devicesNavBg = Color(0xFFE5EEFF); // rgb(229,238,255)
   // Review fix (E02-T02, F1): the 40x40 tinted circular backdrop behind
   // each row's leading icon — dropped in the first pass. One per state,
   // measured from design/golden/devices/default@390x844/probe.json

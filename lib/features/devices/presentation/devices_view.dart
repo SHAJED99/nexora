@@ -209,7 +209,7 @@ class _DeviceRow extends StatelessWidget {
                   // contract's 9999px (E12-B12).
                   borderRadius: BorderRadius.circular(9999),
                 ),
-                child: Icon(visual.rowIcon, size: 24, color: visual.iconColor),
+                child: Icon(Icons.devices, size: 24, color: visual.iconColor),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -438,7 +438,6 @@ class _StateVisual {
   const _StateVisual({
     required this.iconColor,
     required this.iconBackdrop,
-    required this.rowIcon,
     required this.badgeIcon,
     required this.badgeColor,
     required this.badgeLabel,
@@ -446,7 +445,6 @@ class _StateVisual {
 
   final Color iconColor;
   final Color iconBackdrop;
-  final IconData rowIcon;
   final IconData badgeIcon;
   final Color badgeColor;
   final String badgeLabel;
@@ -454,22 +452,21 @@ class _StateVisual {
 
 /// Elements 8/13-14, 16/21-22, 24/29-30, 32/37-38 — icon/color/copy per
 /// state, exactly as the design contract's four example rows show them.
-/// `rowIcon` (E12-B12): the contract's four example rows each show a
-/// DIFFERENT leading device-type glyph (laptop_mac/smartphone/router/
-/// desktop_windows, one per `RelationshipState`) — a fixed `Icons.devices`
-/// for every row (the pre-fix behaviour) collided, in the design gate's own
-/// matcher, with the bottom nav's "Devices" tab label (both dump as the
-/// case-insensitive text "devices"), which is what produced that tab's
-/// bogus copy/style findings. No new device-metadata field is introduced —
-/// this is the same four fixed example glyphs the contract itself measures,
-/// keyed on the state this screen already switches over.
+/// The row's own leading glyph is intentionally NOT keyed on
+/// `RelationshipState` (reverted in E12-B12 round 2, see GAP-003):
+/// `RelationshipRepository` only stores `deviceId`/`state`/`updatedAt`, no
+/// actual device hardware type, so varying the icon by trust state would
+/// fabricate a hardware claim the data does not support (a trusted phone
+/// would show a laptop glyph; a blocked laptop would show a desktop tower).
+/// Same reasoning this file's own §Deviations already applied to the
+/// subtitle copy — kept as the honest, generic `Icons.devices` at the call
+/// site instead.
 _StateVisual _stateVisual(RelationshipState state) {
   switch (state) {
     case RelationshipState.trusted:
       return const _StateVisual(
         iconColor: NexoraColors.welcomeHeading,
         iconBackdrop: NexoraColors.devicesIconBackdropTrusted,
-        rowIcon: Icons.laptop_mac,
         badgeIcon: Icons.check_circle,
         badgeColor: NexoraColors.devicesTrustedGreen,
         badgeLabel: 'Trusted Node',
@@ -478,7 +475,6 @@ _StateVisual _stateVisual(RelationshipState state) {
       return const _StateVisual(
         iconColor: NexoraColors.devicesAllowedBlue,
         iconBackdrop: NexoraColors.devicesIconBackdropAllowed,
-        rowIcon: Icons.smartphone,
         badgeIcon: Icons.radio_button_checked,
         badgeColor: NexoraColors.devicesAllowedBlue,
         badgeLabel: 'Allowed',
@@ -487,7 +483,6 @@ _StateVisual _stateVisual(RelationshipState state) {
       return const _StateVisual(
         iconColor: NexoraColors.devicesMuted,
         iconBackdrop: NexoraColors.devicesIconBackdropUnknown,
-        rowIcon: Icons.router,
         badgeIcon: Icons.warning,
         badgeColor: NexoraColors.devicesUnknownAmber,
         badgeLabel: 'Unknown',
@@ -496,7 +491,6 @@ _StateVisual _stateVisual(RelationshipState state) {
       return const _StateVisual(
         iconColor: NexoraColors.devicesBlockedRed,
         iconBackdrop: NexoraColors.devicesIconBackdropBlocked,
-        rowIcon: Icons.desktop_windows,
         badgeIcon: Icons.block,
         badgeColor: NexoraColors.devicesBlockedRed,
         badgeLabel: 'Blocked',
@@ -524,10 +518,12 @@ class _BottomNav extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(color: Color(0x14000000), blurRadius: 12, offset: Offset(0, -2)),
-        ],
+        // code.html:282 — `bg-surface-container` + `border-t
+        // border-outline-variant/10`. No shadow in the design source
+        // (E12-B12 round 2, F2): the previous `Colors.white` fill and
+        // fabricated `BoxShadow` were both invented, not measured.
+        color: NexoraColors.devicesNavBg,
+        border: Border(top: BorderSide(color: NexoraColors.devicesRowBorder)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
