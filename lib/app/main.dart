@@ -103,7 +103,15 @@ Future<void> main() async {
     // (`Get.offNamed`, `login_controller.dart:58`) -- the established
     // pattern in this codebase for "this session's state changed, replace
     // the current screen" rather than pushing on top of it.
-    onUpdateRequired: () => Get.offNamed(Routes.versionUpdateRequired),
+    //
+    // E14-B06 round 2 (F5): guarded so a flapping connection producing
+    // repeated reconnect events while the mandatory-update screen is
+    // already showing doesn't keep tearing it down and rebuilding it.
+    onUpdateRequired: () {
+      if (Get.currentRoute != Routes.versionUpdateRequired) {
+        Get.offNamed(Routes.versionUpdateRequired);
+      }
+    },
   ).start();
 }
 

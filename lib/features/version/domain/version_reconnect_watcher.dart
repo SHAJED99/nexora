@@ -31,6 +31,7 @@
 // ignore_for_file: prefer_initializing_formals
 import 'dart:async';
 
+import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/services/version_policy_service.dart';
 import 'package:nexora/features/version/domain/evaluate_version_state_use_case.dart';
 import 'package:nexora/features/version/domain/version_state.dart';
@@ -64,14 +65,28 @@ class VersionReconnectWatcher {
 
   StreamSubscription<bool>? _subscription;
 
-  /// `null` until the first event arrives. Starting at `null` (not `false`
-  /// or `true`) is deliberate: it means the very first event this stream
-  /// ever emits — whatever its value — can never itself look like a
-  /// disconnect-to-connect transition, so a fresh subscription never
-  /// re-fires the launch-time check `E14-B01` already performed. Only a
-  /// LATER transition, genuinely observed going false-then-true while this
-  /// watcher has been running, counts as a reconnect.
+  /// `null` until the first event arrives. Tracks the raw previous value of
+  /// [connectivityStream], updated on every event regardless of whether it
+  /// ends up counting as a reconnect.
   bool? _previouslyConnected;
+
+  /// E14-B06 round 2 (F3): whether this watcher has EVER observed a `true`
+  /// event. A raw `false -> true` transition test alone is not enough to
+  /// avoid duplicating `E14-B01`'s own launch-time check: Firebase's
+  /// `.info/connected` characteristically emits `false` first at cold
+  /// start (its "not yet connected" initial value) and then `true` once the
+  /// socket actually connects -- and that pair, on its own, is textually a
+  /// `false -> true` transition even though it is really this stream's
+  /// FIRST-EVER successful connection, not a genuine reconnect. Gating on
+  /// [_everConnected] means the first `true` this stream ever reports never
+  /// counts as a reconnect no matter how many `false` events preceded it
+  /// (cold start's `false, true` included) -- only a `true` that follows a
+  /// `false` AFTER a connection has already been established once counts.
+  /// (The originally shipped version of this file claimed the `null`-seeded
+  /// `_previouslyConnected` check above was, on its own, sufficient to avoid
+  /// ever duplicating the launch-time check -- that claim was wrong; this
+  /// flag is the actual fix.)
+  bool _everConnected = false;
 
   /// Serializes overlapping `_onConnectivityChanged` runs so two rapid
   /// reconnect events cannot both be mid-`refresh()`/evaluate at once —
@@ -96,11 +111,30 @@ class VersionReconnectWatcher {
   }
 
   void _onConnectivityChanged(bool connected) {
-    final isReconnect = connected && _previouslyConnected == false;
+    final isReconnect =
+        connected && _everConnected && _previouslyConnected == false;
+    if (connected) _everConnected = true;
     _previouslyConnected = connected;
     if (!isReconnect) return;
 
-    _pending = _pending.then((_) => _reevaluate());
+    // E14-B06 round 2 (F1): a rejection here used to propagate straight
+    // into `_pending`'s own Future, so every SUBSEQUENT `.then` in this
+    // chain short-circuited without ever running `_reevaluate()` again --
+    // one failed re-evaluation would silently and permanently kill this
+    // watcher for the rest of the session, with no logging anywhere.
+    // `catchError` keeps the chain alive (the awaited `_pending` Future
+    // always resolves, never rejects) so one failure degrades to "this one
+    // reconnect's re-check was skipped", not "no reconnect check ever runs
+    // again".
+    _pending = _pending.then((_) => _reevaluate()).catchError((
+      Object e,
+      StackTrace st,
+    ) {
+      ObservabilityService.instance.logError(
+        'version.reconnect_reevaluation_failed',
+        cause: e,
+      );
+    });
   }
 
   /// `refresh()` then re-evaluate, exactly `main.dart`'s own
