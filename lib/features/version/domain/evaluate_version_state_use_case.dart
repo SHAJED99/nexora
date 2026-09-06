@@ -62,7 +62,15 @@ typedef CachedPolicyProvider = Future<VersionPolicy?> Function();
 /// this file's header comment: no build-number-reading mechanism exists
 /// yet in this codebase, and adding one is a 🧍 `new_dependency` gate for
 /// whichever task wires a real implementation in.
-typedef InstalledBuildProvider = Future<int> Function();
+///
+/// `E14-B03` (`OQ-E14-B03-1`, resolved 2026-09-06): `null` is a real,
+/// distinguishable outcome — "the installed build number could not be
+/// read/parsed" — never smuggled through a sentinel `int` (the bug's own
+/// finding: a `1 << 62` sentinel inside a normal-looking `int` return is
+/// exactly what let a read failure silently fail OPEN unnoticed). [call]
+/// below treats `null` as failing CLOSED whenever a policy is cached to
+/// evaluate against.
+typedef InstalledBuildProvider = Future<int?> Function();
 
 /// `FR-VER-005`'s one pure decision point: `UP_TO_DATE` /
 /// `UPDATE_AVAILABLE` / `UPDATE_REQUIRED`, driven by comparing the
@@ -87,7 +95,21 @@ class EvaluateVersionStateUseCase {
   /// No cached policy at all (a fresh install that has never reached
   /// Firebase) → [VersionState.upToDate], fail-open by design (`EARS-VER-9`,
   /// `FR-VER-008`'s "offline use" framing) — the installed build number is
-  /// never even read in that case.
+  /// never even read in that case. This precedent does NOT extend to an
+  /// unreadable build number below — see the next paragraph
+  /// (`E14-B03`/`OQ-E14-B03-1`).
+  ///
+  /// If a policy IS cached but [installedBuildProvider] cannot produce a
+  /// build number — it resolves `null`, or its Future rejects — the result
+  /// is [VersionState.updateRequired], never [VersionState.upToDate]
+  /// (`E14-B03`, `OQ-E14-B03-1`, resolved 2026-09-06: "we could not read our
+  /// own build number" is not the same claim as "we have never heard a
+  /// policy", and under `FR-VER-010` — an emergency bump because the
+  /// running build is unsafe — a device that cannot read its own build
+  /// number is exactly the device that should not get the benefit of the
+  /// doubt). The provider's Future is awaited inside its own `try` so a
+  /// throwing injected provider degrades to the same fail-closed outcome as
+  /// one that returns `null` cleanly, rather than crashing launch.
   ///
   /// Comparison is numeric (`int` vs `int`), never lexicographic —
   /// `"9" < "10"` is false as strings (task file §6 Risks).
@@ -95,8 +117,16 @@ class EvaluateVersionStateUseCase {
     final policy = await _cachedPolicyProvider();
     if (policy == null) return VersionState.upToDate;
 
-    final installedBuild = await _installedBuildProvider();
+    int? installedBuild;
+    try {
+      installedBuild = await _installedBuildProvider();
+    } catch (_) {
+      installedBuild = null;
+    }
 
+    if (installedBuild == null) {
+      return VersionState.updateRequired;
+    }
     if (installedBuild < policy.minimumSupportedBuild) {
       return VersionState.updateRequired;
     }

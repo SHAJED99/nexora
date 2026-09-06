@@ -19,13 +19,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:nexora/app/main.dart'
-    show evaluateVersionStateAtLaunch, initialRouteFor;
+    show
+        evaluateVersionStateAtLaunch,
+        initialRouteFor,
+        readInstalledBuildNumber;
 import 'package:nexora/app/routes.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/services/version_policy_service.dart';
 import 'package:nexora/features/version/domain/version_state.dart';
 import 'package:nexora/features/version/presentation/version_update_controller.dart';
 import 'package:nexora/features/version/presentation/version_update_view.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 /// E14-B01's own test seam (`version_policy_service_test.dart`'s pattern,
 /// reused here rather than re-invented): overrides the read seam so
@@ -108,6 +112,95 @@ void main() {
       );
     });
   });
+
+  group(
+    'E14-B03 — an unreadable installed build number fails CLOSED '
+    '(OQ-E14-B03-1)',
+    () {
+      test(
+          'test_E14_B03_throwing_installed_build_provider_is_update_required',
+          () async {
+        // A policy IS cached (`minimumSupportedBuild` seeded below) --
+        // `OQ-E14-B03-1`'s resolution only concerns this case, never the
+        // separate no-cached-policy fail-open (`EARS-VER-9`, untouched by
+        // this fix).
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+
+        final versionPolicyService = _FixedReadVersionPolicyService(
+          database: db,
+          payload: {
+            'minimumSupportedBuild': 100,
+            'currentBuild': 120,
+            'updateAvailableBuild': 130,
+            'signature': 'sig-v1',
+            'updatedAt': 1700000000000,
+          },
+        );
+
+        // Before this bug's fix, `EvaluateVersionStateUseCase.call()`
+        // awaited `_installedBuildProvider()` with no `try`/`catch` of its
+        // own, so a throwing provider like this one propagated straight out
+        // of `evaluateVersionStateAtLaunch` as an uncaught exception --
+        // this test failed on today's HEAD by throwing, never by asserting
+        // the wrong `VersionState`.
+        final versionState = await evaluateVersionStateAtLaunch(
+          versionPolicyService,
+          () async => throw StateError('platform channel error'),
+        );
+
+        expect(versionState, VersionState.updateRequired);
+        expect(
+          initialRouteFor(versionState),
+          Routes.versionUpdateRequired,
+        );
+      });
+
+      test(
+          'test_E14_B03_non_numeric_build_number_is_update_required',
+          () async {
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+
+        final versionPolicyService = _FixedReadVersionPolicyService(
+          database: db,
+          payload: {
+            'minimumSupportedBuild': 100,
+            'currentBuild': 120,
+            'updateAvailableBuild': 130,
+            'signature': 'sig-v1',
+            'updatedAt': 1700000000000,
+          },
+        );
+
+        // A valid `CFBundleVersion` shape (task file's own repro §1) --
+        // `PackageInfo.buildNumber` is a `String` with no numeric
+        // guarantee. Before this bug's fix, `_readInstalledBuildNumber`'s
+        // `int.parse` threw a `FormatException`, was caught, and returned
+        // the `1 << 62` sentinel -- comfortably above `minimumSupportedBuild`
+        // -- so this test failed asserting `VersionState.upToDate` instead
+        // of `updateRequired` on today's HEAD.
+        PackageInfo.setMockInitialValues(
+          appName: 'nexora',
+          packageName: 'com.nexora.app',
+          version: '1.0.3',
+          buildNumber: '1.0.3',
+          buildSignature: '',
+        );
+
+        final versionState = await evaluateVersionStateAtLaunch(
+          versionPolicyService,
+          readInstalledBuildNumber,
+        );
+
+        expect(versionState, VersionState.updateRequired);
+        expect(
+          initialRouteFor(versionState),
+          Routes.versionUpdateRequired,
+        );
+      });
+    },
+  );
 
   group('VersionUpdateController', () {
     test('test_EARS_VER_12_update_now_starts_immediate_update_flow',
