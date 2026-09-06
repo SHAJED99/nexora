@@ -118,66 +118,81 @@ class NexoraTextStyles {
     color: NexoraColors.loginBody,
   );
 
-  // devices.md
+  // devices.md — fontFamily added per E12-B12 (design/reports/devices/
+  // default@390x844/report.md's style-delta table: every text role here is
+  // measured against a specific font family in the golden capture; these
+  // styles previously fell back to the platform default (Roboto), which is
+  // exactly what that report's "fontFamily: expected X, got Roboto" rows are.
   static const devicesBrandTitle = TextStyle(
     fontSize: 28,
     fontWeight: FontWeight.w600,
     color: NexoraColors.welcomeHeading,
+    fontFamily: 'Geist',
   );
 
   static const devicesSectionHeading = TextStyle(
     fontSize: 22,
     fontWeight: FontWeight.w500,
     color: NexoraColors.loginHeading,
+    fontFamily: 'Inter',
   );
 
   static const devicesSectionSubtitle = TextStyle(
     fontSize: 14,
     color: NexoraColors.loginBody,
+    fontFamily: 'Inter',
   );
 
   static const devicesDiscoverLabel = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w500,
     color: Colors.white,
+    fontFamily: 'JetBrains Mono',
   );
 
   static const devicesDeviceName = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w500,
     color: NexoraColors.loginHeading,
+    fontFamily: 'Inter',
   );
 
   static const devicesDeviceSubtitle = TextStyle(
     fontSize: 11,
     color: NexoraColors.loginBody,
+    fontFamily: 'JetBrains Mono',
   );
 
   static const devicesBadgeLabel = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w500,
+    fontFamily: 'JetBrains Mono',
   );
 
   static const devicesLastSeen = TextStyle(
     fontSize: 11,
     color: NexoraColors.loginBody,
+    fontFamily: 'JetBrains Mono',
   );
 
   static const devicesVerifyLabel = TextStyle(
     fontSize: 11,
     color: NexoraColors.loginBrand,
+    fontFamily: 'JetBrains Mono',
   );
 
   static const devicesNavLabel = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w500,
     color: NexoraColors.loginBody,
+    fontFamily: 'JetBrains Mono',
   );
 
   static const devicesNavLabelActive = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w500,
     color: NexoraColors.welcomeTextAccent,
+    fontFamily: 'JetBrains Mono',
   );
 
   // settings.md

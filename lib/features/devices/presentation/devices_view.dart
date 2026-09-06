@@ -86,7 +86,12 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: NexoraColors.devicesHeaderBg,
+      decoration: const BoxDecoration(
+        color: NexoraColors.devicesHeaderBg,
+        border: Border(
+          bottom: BorderSide(color: NexoraColors.devicesRowBorder, width: 1),
+        ),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
@@ -197,9 +202,14 @@ class _DeviceRow extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: visual.iconBackdrop,
-                  shape: BoxShape.circle,
+                  // devices.md's own token table measures this as a literal
+                  // 9999px radius (the design system's "fully round" token),
+                  // not a derived box/2 circle — BoxShape.circle renders
+                  // identically but reports as radius 20px against the
+                  // contract's 9999px (E12-B12).
+                  borderRadius: BorderRadius.circular(9999),
                 ),
-                child: Icon(Icons.devices, size: 24, color: visual.iconColor),
+                child: Icon(visual.rowIcon, size: 24, color: visual.iconColor),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -428,6 +438,7 @@ class _StateVisual {
   const _StateVisual({
     required this.iconColor,
     required this.iconBackdrop,
+    required this.rowIcon,
     required this.badgeIcon,
     required this.badgeColor,
     required this.badgeLabel,
@@ -435,19 +446,30 @@ class _StateVisual {
 
   final Color iconColor;
   final Color iconBackdrop;
+  final IconData rowIcon;
   final IconData badgeIcon;
   final Color badgeColor;
   final String badgeLabel;
 }
 
-/// Elements 13-14, 21-22, 29-30, 37-38 — icon/color/copy per state, exactly
-/// as the design contract's four example rows show them.
+/// Elements 8/13-14, 16/21-22, 24/29-30, 32/37-38 — icon/color/copy per
+/// state, exactly as the design contract's four example rows show them.
+/// `rowIcon` (E12-B12): the contract's four example rows each show a
+/// DIFFERENT leading device-type glyph (laptop_mac/smartphone/router/
+/// desktop_windows, one per `RelationshipState`) — a fixed `Icons.devices`
+/// for every row (the pre-fix behaviour) collided, in the design gate's own
+/// matcher, with the bottom nav's "Devices" tab label (both dump as the
+/// case-insensitive text "devices"), which is what produced that tab's
+/// bogus copy/style findings. No new device-metadata field is introduced —
+/// this is the same four fixed example glyphs the contract itself measures,
+/// keyed on the state this screen already switches over.
 _StateVisual _stateVisual(RelationshipState state) {
   switch (state) {
     case RelationshipState.trusted:
       return const _StateVisual(
         iconColor: NexoraColors.welcomeHeading,
         iconBackdrop: NexoraColors.devicesIconBackdropTrusted,
+        rowIcon: Icons.laptop_mac,
         badgeIcon: Icons.check_circle,
         badgeColor: NexoraColors.devicesTrustedGreen,
         badgeLabel: 'Trusted Node',
@@ -456,6 +478,7 @@ _StateVisual _stateVisual(RelationshipState state) {
       return const _StateVisual(
         iconColor: NexoraColors.devicesAllowedBlue,
         iconBackdrop: NexoraColors.devicesIconBackdropAllowed,
+        rowIcon: Icons.smartphone,
         badgeIcon: Icons.radio_button_checked,
         badgeColor: NexoraColors.devicesAllowedBlue,
         badgeLabel: 'Allowed',
@@ -464,6 +487,7 @@ _StateVisual _stateVisual(RelationshipState state) {
       return const _StateVisual(
         iconColor: NexoraColors.devicesMuted,
         iconBackdrop: NexoraColors.devicesIconBackdropUnknown,
+        rowIcon: Icons.router,
         badgeIcon: Icons.warning,
         badgeColor: NexoraColors.devicesUnknownAmber,
         badgeLabel: 'Unknown',
@@ -472,6 +496,7 @@ _StateVisual _stateVisual(RelationshipState state) {
       return const _StateVisual(
         iconColor: NexoraColors.devicesBlockedRed,
         iconBackdrop: NexoraColors.devicesIconBackdropBlocked,
+        rowIcon: Icons.desktop_windows,
         badgeIcon: Icons.block,
         badgeColor: NexoraColors.devicesBlockedRed,
         badgeLabel: 'Blocked',
