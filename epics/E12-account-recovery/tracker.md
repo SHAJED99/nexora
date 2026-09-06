@@ -289,3 +289,51 @@ E13-T07).
   **E12 is now clear of all P1/P2 findings except `E12-B06`/`E12-B13`**
   (both project-wide design-fidelity tooling debt, tracked as non-blocking
   follow-ups — see this tracker's own header). Merged into `development`.
+- 2026-09-07 — **`E12-B13` fixed and merged** (round 2, `epic_12`): closed
+  five confirmed blind spots in `test/design/flutter_probe_dumper.dart`
+  (shared project-wide, not E12-specific) — `heading:N` role, interactive-
+  ancestor swallowing, button label/radius capture, icon font metadata,
+  `border.bottom` reading. Round-1 review found 4 of 5 sub-fixes had zero
+  regression coverage (reverting them left the suite green); round 2 closed
+  the gap, independently re-falsified per-issue by the reviewer. Real
+  4-screen before/after: `devices` 62.3%→65.6%, `conversations`
+  19.3%→21.1%, `chat` 76.7%→79.1%, `dashboard` 20.6%→19.0% (the dashboard
+  number is a false drop — two spurious long-range nearest-box pairings
+  dissolve once `NEXORA` gets a correct heading role, not a regression; see
+  `E12-B13.md`'s own Run log for the traced mechanism).
+- 2026-09-07 — **`E12-B06` fixed and merged** (`epic_12`, cut after E12-B13
+  landed): registered both E12 derived screens (`device-enrollment`,
+  `device-enrollment-approval`) in `design/sources.yaml` plus their own
+  `test/design/design_probe_test.dart` probe blocks and extracted goldens
+  from each screen's first build dump, per `design-fidelity` §3's
+  never-before-executed instruction. Both now PASS at 100% (golden IS the
+  first dump — expected, not chased; no screen widget code touched).
+  Reviewer independently falsified the gate is live (mutated one character
+  in the committed golden, confirmed a real copy-mismatch failure,
+  restored). **E12 is now clear of all P1/P2/P3 design-fidelity tooling
+  debt — both `E12-B06` and `E12-B13` are done.** 3 non-blocking items
+  carried forward, none fixed here (all outside this bug's own
+  registration-only fence):
+  - Per-state gating is still absent for `device-enrollment` — only its
+    `waiting` state has a golden; `denied`/`no-recovery-notice` need either
+    a per-state dump-filename convention in `verify.mjs`/the probe, or a
+    separate registered screen id per state. Needs a named follow-up task.
+  - A second as-built-vs-contract discrepancy of **C3**'s own class: the
+    golden records DE2 as `heading:1`; `device-enrollment.md:102` specifies
+    `heading:2`. Almost certainly `E12-B13`'s per-screen heading-level
+    heuristic, not a build defect (`NexoraTextStyles.welcomeSubheading`'s
+    style matches DE2's spec exactly) — worth adjudicating alongside **C3**
+    itself (342px vs. the contract's measured 326px button, still open —
+    the derived-golden method cannot independently verify against the
+    ORIGINAL design intent, only regression-protect the as-built screen
+    from here on; a human/reviewer comparison against `device-enrollment.md`
+    is still needed for both).
+  - `devices` still fails its own gate outright (0/1 pass/fail, 100+
+    findings against `thresholds.yaml`'s pass bar) — reconfirmed
+    pre-existing and identical on both the `epic_12` baseline and this
+    branch, so not a regression from this task. This is the residual gap
+    already known from `E12-B13`'s own numbers (65.6% match, still below
+    whatever `thresholds.yaml` requires to PASS) — not the earlier
+    `renderError`/0% issue `E12-B05` already fixed. No new owner needed;
+    already covered by `devices`' own existing bug lineage
+    (`E12-B05`/`E12-B12`/`E12-B13`).
