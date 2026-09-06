@@ -38,6 +38,18 @@ input (idea|PRD|SRS|design|code) ─▶ intake + questions ─▶ knowledge map 
    2026-09-05) once rule 5's gate has genuinely passed — see rule 5. This
    delegation covers only that one merge point; it is not a standing grant to
    skip any other rule-3 stop, and `development`→`main` remains human-only.
+   **Standing autonomy grant (human decision, 2026-09-05):** for all
+   *non-foundational* execution work — dispatching/re-dispatching reviews,
+   routing fixes, running bug sweeps, deciding merge-ready vs
+   changes-requested, and the epic→`development` merges above — the agent
+   proceeds without pausing to ask permission. Report a genuine **permission
+   or access failure** (a rate limit, a failed auth, a denied tool call) when
+   it happens; do not pause otherwise to confirm a decision this rule or rule
+   5 already authorizes. This grant does **not** reach the named items still
+   listed above (stack/architecture/datastore/auth-strategy choices, new
+   dependencies, secrets, deletions >50 lines, auth/payment code *design*
+   decisions, `development`→`main`) — those remain genuine human calls,
+   presented with trade-offs and a recommendation, then STOP.
 4. **One task = one branch = one worktree.** `development` (integration) →
    `epic_<NN>` → `epic_<NN>_task_<MM>`. Never commit directly to `main`,
    `development`, or an epic branch. Promotion is by PR only.

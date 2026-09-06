@@ -40,6 +40,11 @@ class NexoraColors {
   static const devicesActiveNavBg = Color(0xFF4F46E5); // rgb(79,70,229)
   static const devicesRowBorder = Color(0x1AC7C4D8); // rgba(199,196,216,0.1)
   static const devicesRowFill = Color(0x1AEFF4FF); // rgba(239,244,255,0.1)
+  // E12-B12 round 2 (F2): the bottom nav's `bg-surface-container` token
+  // (code.html:282) — same value already used ad hoc as `_barBg`/
+  // `_fieldAndRowFill` in chat_view.dart/conversations_view.dart; named here
+  // so devices_view.dart can reference it instead of inventing a shadow.
+  static const devicesNavBg = Color(0xFFE5EEFF); // rgb(229,238,255)
   // Review fix (E02-T02, F1): the 40x40 tinted circular backdrop behind
   // each row's leading icon — dropped in the first pass. One per state,
   // measured from design/golden/devices/default@390x844/probe.json
@@ -118,66 +123,81 @@ class NexoraTextStyles {
     color: NexoraColors.loginBody,
   );
 
-  // devices.md
+  // devices.md — fontFamily added per E12-B12 (design/reports/devices/
+  // default@390x844/report.md's style-delta table: every text role here is
+  // measured against a specific font family in the golden capture; these
+  // styles previously fell back to the platform default (Roboto), which is
+  // exactly what that report's "fontFamily: expected X, got Roboto" rows are.
   static const devicesBrandTitle = TextStyle(
     fontSize: 28,
     fontWeight: FontWeight.w600,
     color: NexoraColors.welcomeHeading,
+    fontFamily: 'Geist',
   );
 
   static const devicesSectionHeading = TextStyle(
     fontSize: 22,
     fontWeight: FontWeight.w500,
     color: NexoraColors.loginHeading,
+    fontFamily: 'Inter',
   );
 
   static const devicesSectionSubtitle = TextStyle(
     fontSize: 14,
     color: NexoraColors.loginBody,
+    fontFamily: 'Inter',
   );
 
   static const devicesDiscoverLabel = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w500,
     color: Colors.white,
+    fontFamily: 'JetBrains Mono',
   );
 
   static const devicesDeviceName = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w500,
     color: NexoraColors.loginHeading,
+    fontFamily: 'Inter',
   );
 
   static const devicesDeviceSubtitle = TextStyle(
     fontSize: 11,
     color: NexoraColors.loginBody,
+    fontFamily: 'JetBrains Mono',
   );
 
   static const devicesBadgeLabel = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w500,
+    fontFamily: 'JetBrains Mono',
   );
 
   static const devicesLastSeen = TextStyle(
     fontSize: 11,
     color: NexoraColors.loginBody,
+    fontFamily: 'JetBrains Mono',
   );
 
   static const devicesVerifyLabel = TextStyle(
     fontSize: 11,
     color: NexoraColors.loginBrand,
+    fontFamily: 'JetBrains Mono',
   );
 
   static const devicesNavLabel = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w500,
     color: NexoraColors.loginBody,
+    fontFamily: 'JetBrains Mono',
   );
 
   static const devicesNavLabelActive = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w500,
     color: NexoraColors.welcomeTextAccent,
+    fontFamily: 'JetBrains Mono',
   );
 
   // settings.md

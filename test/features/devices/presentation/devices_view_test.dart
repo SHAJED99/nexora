@@ -150,9 +150,23 @@ void main() {
     await tester.pumpWidget(GetMaterialApp(home: const DevicesView()));
     await tester.pumpAndSettle();
 
-    // Open the kebab menu on the Trusted row and tap Block.
-    final kebabs = find.byIcon(Icons.more_vert);
-    await tester.tap(kebabs.first);
+    // Open the kebab menu on the Trusted row and tap Block. Locate the
+    // kebab by its own row (the Row ancestor of the 'device-trusted' label
+    // that also contains its PopupMenuButton) rather than by screen
+    // position: E12-B14 gave `listAll` a deterministic secondary sort key
+    // (deviceId ascending on an updatedAt tie), so the on-screen row order
+    // for this fixture's four same-tick upserts is no longer
+    // trusted/allowed/unknown/blocked -- it is alphabetical by deviceId.
+    // Selecting `kebabs.first` here would now open a different row's menu.
+    final trustedRow = find.ancestor(
+      of: find.text('device-trusted'),
+      matching: find.byType(Row),
+    );
+    final trustedKebab = find.descendant(
+      of: trustedRow.first,
+      matching: find.byIcon(Icons.more_vert),
+    );
+    await tester.tap(trustedKebab);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Block'));
     await tester.pumpAndSettle();

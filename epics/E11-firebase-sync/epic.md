@@ -45,8 +45,19 @@ with, and extends, that wrapper rather than replacing it.
 - **EARS-FB-11**: WHEN local and remote revocation state for one device disagree, the system SHALL resolve to revoked. (FR-MSG-007 — REVOKED > ACTIVE)
 - **EARS-FB-12**: IF the Firebase read or write fails or the device is offline, THEN the system SHALL keep the local revocation state unchanged and complete without throwing. (ADR-0005, NFR-REL-001)
 - **EARS-FB-13**: The revocation node SHALL carry only `revokedAt` and `revokedByDeviceId`, and the security rules SHALL reject any other field. (FR-FB-001, FR-FB-002)
-- **EARS-FB-14**: WHEN a relationship's state changes locally, the system SHALL persist it locally first and best-effort mirror it to the account's own Firebase relationship node, without blocking or reversing the local change on a Firebase failure. (FR-TRUST-007)
-- **EARS-FB-15**: WHEN a remote relationship state disagrees with the local one for the same peer device, the system SHALL resolve to the more restrictive of the two via `ConflictResolver.resolveTrust`. (FR-MSG-007)
+- **EARS-FB-14** — ⛔ **RETIRED 2026-09-06** with `FR-TRUST-007` (`IMP-002`;
+  criterion text kept, not deleted — `E11-T05` still traces to it): WHEN a
+  relationship's state changes locally, the system SHALL persist it locally
+  first and best-effort mirror it to the account's own Firebase relationship
+  node, without blocking or reversing the local change on a Firebase failure.
+  (FR-TRUST-007 — descoped)
+- **EARS-FB-15** — ⛔ **RETIRED 2026-09-06** with `FR-TRUST-007` (`IMP-002`):
+  WHEN a remote relationship state disagrees with the local one for the same
+  peer device, the system SHALL resolve to the more restrictive of the two via
+  `ConflictResolver.resolveTrust`. (FR-MSG-007) — retired only because no
+  *remote* relationship state is read any more. `ConflictResolver.resolveTrust`
+  and `FR-MSG-007`'s restrictive-wins rule are untouched and still covered by
+  `test/features/messaging/domain/conflict_resolver_test.dart`.
 - **EARS-FB-16**: The system's Firebase security rules SHALL grant read and write on `users/$uid/relationships/*` only to the authenticated owner of `$uid`. (FR-FB-001, ADR-0005, ADR-0008)
 - **EARS-FB-17**: WHEN a signed-in device's signed prekey rotates, its
   one-time prekeys are replenished, or it is revoked, and a call site with

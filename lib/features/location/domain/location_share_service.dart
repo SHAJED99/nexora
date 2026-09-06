@@ -38,7 +38,9 @@
 // `localState` and `remoteState` — logged as a Deviation (judgment call
 // within an already-accepted limitation), not a new Open Question: it
 // changes no signature, and a genuine two-sided exchange is explicitly
-// deferred to FR-TRUST-007 (E11), not this task's to build (task file §4).
+// declined: the cross-account half permanently by `ADR-0008`, and the
+// own-account half by `E12-B11`/`IMP-002` (which descoped `FR-TRUST-007`).
+// Not this task's to build either way (task file §4).
 //
 // This class does NOT implement a real `LocationSource`, does NOT decide
 // staleness, does NOT render anything, and does NOT write

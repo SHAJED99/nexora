@@ -171,6 +171,16 @@ limitation for now**, not solved by this ADR — recorded against
 `FR-TRUST-005` below, revisitable later as a distinct rule-3 call if a
 concrete need for it (beyond what option 2's directory covers) emerges.
 
+> **Later development — 2026-09-06 (`IMP-002`, `E12-B11`).** This ADR is
+> **not** superseded and its decision is unchanged: option 2 stands, option 3
+> stays declined. What changed is downstream of it — the own-account reading
+> of `FR-TRUST-007` that this ADR points at `E11-T05` has since been
+> **descoped by the human**, and `RelationshipSyncService` is deleted. So
+> both halves of `FR-TRUST-007` are now declined: the cross-account half
+> permanently here, the own-account half by `IMP-002`. Read every
+> `FR-TRUST-007` mention above as history. Nothing else in this ADR — the
+> directory, `E11-T06`, the `NFR-PRIV-001` reasoning — is affected.
+
 **Option 4 (mesh-only / transport-frame signing) stays E06-B04's problem**,
 tracked there — this ADR does not fold it in, per `OQ-E11-4`.
 
