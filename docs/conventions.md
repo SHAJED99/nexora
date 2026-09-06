@@ -101,6 +101,41 @@ explicitly disabled per FR-DIAG-002; see the inline comments on
 `SentryObservabilityClient.configurePrivacyOptions` for the reasoning
 behind each, and `test_EARS_DIAG_1_*` for the assertion.
 
+**`cause:` payload discipline (E13-B02, FR-DIAG-002 non-negotiable):**
+`SentryObservabilityClient.capture` forwards a non-`String` `cause` to
+`Sentry.captureException` **verbatim** — the vendor captures that object's
+own `message`/`toString()`, not merely its `runtimeType`. That is a real
+behavior change from the console-stub era this "Diagnostics ... log `code`
++ `cause` type" line above was written against, and E13-T06 (real vendor
+sink) never re-audited the ~20 pre-existing `cause:` call sites against it —
+E13-B02 found one that constructed its own exception with a device id
+interpolated straight into the message
+(`device_directory_service.dart`'s identity-mismatch log). The rule going
+forward:
+- Never build a `cause:` exception whose own message interpolates a raw
+  identifier (a device id, an account uid, a database path, a bound query
+  value). Describe the KIND of failure in the message instead — the stable
+  `code` argument already carries the specific classification. E13-B02's
+  fix: `'directory entry: ...'`, not `'directory/$deviceId: ...'`.
+- When wrapping a library/vendor exception in a purpose-built failure type,
+  follow `crypto_failures.dart`'s `CryptoDecryptFailure.toString()`
+  precedent: expose the wrapped exception's `runtimeType` only, never its
+  message.
+- A `cause: e` site that forwards a caught SDK exception UNCHANGED
+  (`firebase_database`, `firebase_auth`, `google_sign_in`, Drift, platform
+  file I/O) is accepted as of the E13-B02 audit because that SDK's
+  documented/observed error message format is generic — verified for
+  Firebase Realtime Database's permission-denied and validation-failure
+  paths against a live `firebase-tools` emulator running this project's own
+  `database.rules.json`: the wire response is `{"error":"Permission
+  denied"}` for both an unauthenticated write and a validation-violating
+  write to `users/$uid/devices/$deviceId`, with neither the uid nor the
+  device id echoed back. This is NOT a blanket "passing a raw caught
+  exception is always safe" license — re-check the specific site if the
+  underlying SDK's error message format ever changes (a major version
+  bump is the obvious trigger), and check it explicitly the first time any
+  NEW `cause:` site is added.
+
 ## UI widget kit
 
 Three packages are the project's standard component layer, superseding raw
