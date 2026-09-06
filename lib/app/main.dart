@@ -10,11 +10,18 @@
 // crash — see `messaging_stack.dart`), so nothing here needs its own
 // try/catch beyond that already-honest contract.
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/services/firebase_paths.dart';
+import 'package:nexora/core/services/version_policy_service.dart';
+import 'package:nexora/features/version/domain/evaluate_version_state_use_case.dart';
+import 'package:nexora/features/version/domain/version_reconnect_watcher.dart';
+import 'package:nexora/features/version/domain/version_state.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'bindings.dart';
 import 'routes.dart';
 
@@ -50,22 +57,171 @@ Future<void> main() async {
     selfDeviceId: selfDeviceId,
   );
 
-  runApp(NexoraApp(db: db, messagingStack: messagingStack));
+  // E14-T04 (FR-VER-006/FR-VER-007, EARS-VER-10): a launch-time-only check
+  // (task file §4 — no mid-session re-check, that is a deliberately
+  // separate follow-up) against `E14-T01`'s already-cached version policy.
+  // `VersionPolicyService(database: db)` reads the SAME `db` instance
+  // constructed above — never a second `AppDatabase`, same "exactly one"
+  // discipline this file already documents for `MessagingStack`.
+  final versionPolicyService = VersionPolicyService(database: db);
+  final versionState = await evaluateVersionStateAtLaunch(
+    versionPolicyService,
+    _readInstalledBuildNumber,
+  );
+  final initialRoute = initialRouteFor(versionState);
+
+  runApp(
+    NexoraApp(
+      db: db,
+      messagingStack: messagingStack,
+      initialRoute: initialRoute,
+      // E14-B02 (FR-VER-006's "block application communication" clause):
+      // the same already-evaluated `versionState` also decides whether
+      // `AppBinding` may start the mesh -- see `bindings.dart`'s own
+      // `blockCommunication` doc comment for exactly what this gates.
+      blockCommunication: versionState == VersionState.updateRequired,
+    ),
+  );
+
+  // E14-B06 (FR-VER-008's own second half): a genuine reconnect, observed
+  // any time AFTER this launch-time evaluation already ran, re-fetches and
+  // re-evaluates the version policy, re-routing to the mandatory-update
+  // screen if it now comes back `updateRequired`. Started after `runApp`
+  // (never before -- `Get.offNamed` below needs `GetMaterialApp` already
+  // built), and reuses the SAME `versionPolicyService`/
+  // `_readInstalledBuildNumber` this function already constructed above --
+  // never a second `VersionPolicyService`, same "exactly one" discipline
+  // this file already documents for `AppDatabase`/`MessagingStack`.
+  VersionReconnectWatcher(
+    connectivityStream: FirebaseDatabase.instance
+        .ref(FirebasePaths.infoConnected())
+        .onValue
+        .map((event) => event.snapshot.value == true),
+    versionPolicyService: versionPolicyService,
+    installedBuildProvider: _readInstalledBuildNumber,
+    // Mirrors `LoginController._signIn`'s own forced-navigation shape
+    // (`Get.offNamed`, `login_controller.dart:58`) -- the established
+    // pattern in this codebase for "this session's state changed, replace
+    // the current screen" rather than pushing on top of it.
+    //
+    // E14-B06 round 2 (F5): guarded so a flapping connection producing
+    // repeated reconnect events while the mandatory-update screen is
+    // already showing doesn't keep tearing it down and rebuilding it.
+    onUpdateRequired: () {
+      if (Get.currentRoute != Routes.versionUpdateRequired) {
+        Get.offNamed(Routes.versionUpdateRequired);
+      }
+    },
+  ).start();
+}
+
+/// E14-B01: the exact launch-time composition `main()` runs to decide
+/// [VersionState] — pulled out to a named, top-level function (same reason
+/// `initialRouteFor` below already is one) so
+/// `test/features/version/presentation/version_update_controller_test.dart`
+/// (this bug's own fenced test file) can call THIS SAME function, not a
+/// re-implementation of it, and so a regression that removes the
+/// `.refresh()` call below fails that test rather than silently passing.
+///
+/// `refresh()` had zero production callers anywhere in `lib/` before this
+/// fix — `E14-T01`/`E14-T02`/`E14-T04` each fenced the call site out to one
+/// of the other two, and the sum was that `.cached()` below always read an
+/// empty table (`VersionState.upToDate` always won by fail-open default).
+/// Launch-time only (no polling timer, no periodic refresh — matches
+/// `E14-T04`'s own fence): `refresh()` is already best-effort, timeout
+/// -bounded and never-throwing (`EARS-VER-4`), so awaiting it here degrades
+/// a no-network launch to exactly the previous (broken-but-safe) fail-open
+/// behaviour, never a hang or a crash.
+Future<VersionState> evaluateVersionStateAtLaunch(
+  VersionPolicyService versionPolicyService,
+  Future<int> Function() installedBuildProvider,
+) async {
+  await versionPolicyService.refresh();
+  final evaluateVersionState = EvaluateVersionStateUseCase(
+    cachedPolicyProvider: versionPolicyService.cached,
+    installedBuildProvider: installedBuildProvider,
+  );
+  return evaluateVersionState.call();
+}
+
+/// `EARS-VER-10` (FR-VER-006): the launch-time routing decision itself, as
+/// a pure, independently-testable function of [VersionState] — pulled out
+/// of `main()`'s body so `test_EARS_VER_10_update_required_routes_to_mandatory_screen`
+/// (`test/features/version/presentation/version_update_controller_test.dart`,
+/// this task's own fenced test file) can assert the mapping directly,
+/// without booting Firebase/`AppDatabase`/`MessagingStack` the way a full
+/// `main()` run would require.
+///
+/// `GetMaterialApp.initialRoute` is itself already non-poppable-behind
+/// (there is nothing before it), so returning this value satisfies task
+/// file §3's "stack-replacing navigation" requirement without
+/// `Get.offAll`/`Get.offAllNamed` — there is no prior route for either of
+/// those to replace.
+String initialRouteFor(VersionState state) => state == VersionState.updateRequired
+    ? Routes.versionUpdateRequired
+    : Routes.welcome;
+
+/// Real `InstalledBuildProvider` (`EvaluateVersionStateUseCase`'s own
+/// injected seam, E14-T02) backed by `package_info_plus`
+/// (`Q-E14-T04-1`, human-approved 2026-09-05). `PackageInfo.buildNumber` is
+/// a `String` (Android's own `versionCode` rendered as text) — parsed to
+/// `int` here, since the use case's own comparison is explicitly numeric,
+/// never lexicographic (that file's own header comment).
+Future<int> _readInstalledBuildNumber() async {
+  try {
+    final info = await PackageInfo.fromPlatform();
+    return int.parse(info.buildNumber);
+  } catch (e) {
+    ObservabilityService.instance.logError(
+      'version.installed_build_read_failed',
+      cause: e,
+    );
+    // Fail-open, mirroring `EvaluateVersionStateUseCase`'s own "no cached
+    // policy -> upToDate" precedent (FR-VER-008, offline-use framing): an
+    // unreadable build number must never itself block app use, so it is
+    // treated as satisfying every threshold rather than none.
+    return 1 << 62;
+  }
 }
 
 class NexoraApp extends StatelessWidget {
-  const NexoraApp({super.key, required this.db, required this.messagingStack});
+  const NexoraApp({
+    super.key,
+    required this.db,
+    required this.messagingStack,
+    this.initialRoute = Routes.welcome,
+    this.blockCommunication = false,
+  });
 
   final AppDatabase db;
   final MessagingStack messagingStack;
+
+  /// E14-T04: `Routes.versionUpdateRequired` when the launch-time check in
+  /// `main()` above evaluates `VersionState.updateRequired`, else
+  /// `Routes.welcome` (the pre-existing default, also this constructor's
+  /// own default for any caller — e.g. a widget test — that does not pass
+  /// one explicitly).
+  final String initialRoute;
+
+  /// E14-B02 (FR-VER-006): `true` exactly when `main()`'s own
+  /// `versionState == VersionState.updateRequired` — threaded straight
+  /// into `AppBinding.blockCommunication`, see that field's own doc
+  /// comment for what it gates. Defaults `false` (the pre-existing
+  /// behaviour) for any caller — e.g. a widget test — that does not pass
+  /// one explicitly.
+  final bool blockCommunication;
 
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
       title: 'NEXORA',
       debugShowCheckedModeBanner: false,
-      initialBinding: AppBinding(db: db, messagingStack: messagingStack),
-      initialRoute: Routes.welcome,
+      initialBinding: AppBinding(
+        db: db,
+        messagingStack: messagingStack,
+        blockCommunication: blockCommunication,
+      ),
+      initialRoute: initialRoute,
       getPages: appPages,
     );
   }

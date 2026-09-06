@@ -9067,6 +9067,713 @@ class DeviceRevocationsCompanion extends UpdateCompanion<DeviceRevocationRow> {
   }
 }
 
+class $RateLimitCountersTable extends RateLimitCounters
+    with TableInfo<$RateLimitCountersTable, RateLimitCounterRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RateLimitCountersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _bucketKeyMeta = const VerificationMeta(
+    'bucketKey',
+  );
+  @override
+  late final GeneratedColumn<String> bucketKey = GeneratedColumn<String>(
+    'bucket_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _windowStartMsMeta = const VerificationMeta(
+    'windowStartMs',
+  );
+  @override
+  late final GeneratedColumn<int> windowStartMs = GeneratedColumn<int>(
+    'window_start_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _countMeta = const VerificationMeta('count');
+  @override
+  late final GeneratedColumn<int> count = GeneratedColumn<int>(
+    'count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [bucketKey, windowStartMs, count];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'rate_limit_counters';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RateLimitCounterRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('bucket_key')) {
+      context.handle(
+        _bucketKeyMeta,
+        bucketKey.isAcceptableOrUnknown(data['bucket_key']!, _bucketKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bucketKeyMeta);
+    }
+    if (data.containsKey('window_start_ms')) {
+      context.handle(
+        _windowStartMsMeta,
+        windowStartMs.isAcceptableOrUnknown(
+          data['window_start_ms']!,
+          _windowStartMsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_windowStartMsMeta);
+    }
+    if (data.containsKey('count')) {
+      context.handle(
+        _countMeta,
+        count.isAcceptableOrUnknown(data['count']!, _countMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_countMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {bucketKey};
+  @override
+  RateLimitCounterRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RateLimitCounterRow(
+      bucketKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}bucket_key'],
+      )!,
+      windowStartMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}window_start_ms'],
+      )!,
+      count: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}count'],
+      )!,
+    );
+  }
+
+  @override
+  $RateLimitCountersTable createAlias(String alias) {
+    return $RateLimitCountersTable(attachedDatabase, alias);
+  }
+}
+
+class RateLimitCounterRow extends DataClass
+    implements Insertable<RateLimitCounterRow> {
+  final String bucketKey;
+
+  /// Epoch-ms, this device's clock, when the current window started.
+  final int windowStartMs;
+
+  /// Cumulative count (or cumulative quantity, e.g. bytes) admitted so far
+  /// within the current window.
+  final int count;
+  const RateLimitCounterRow({
+    required this.bucketKey,
+    required this.windowStartMs,
+    required this.count,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['bucket_key'] = Variable<String>(bucketKey);
+    map['window_start_ms'] = Variable<int>(windowStartMs);
+    map['count'] = Variable<int>(count);
+    return map;
+  }
+
+  RateLimitCountersCompanion toCompanion(bool nullToAbsent) {
+    return RateLimitCountersCompanion(
+      bucketKey: Value(bucketKey),
+      windowStartMs: Value(windowStartMs),
+      count: Value(count),
+    );
+  }
+
+  factory RateLimitCounterRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RateLimitCounterRow(
+      bucketKey: serializer.fromJson<String>(json['bucketKey']),
+      windowStartMs: serializer.fromJson<int>(json['windowStartMs']),
+      count: serializer.fromJson<int>(json['count']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'bucketKey': serializer.toJson<String>(bucketKey),
+      'windowStartMs': serializer.toJson<int>(windowStartMs),
+      'count': serializer.toJson<int>(count),
+    };
+  }
+
+  RateLimitCounterRow copyWith({
+    String? bucketKey,
+    int? windowStartMs,
+    int? count,
+  }) => RateLimitCounterRow(
+    bucketKey: bucketKey ?? this.bucketKey,
+    windowStartMs: windowStartMs ?? this.windowStartMs,
+    count: count ?? this.count,
+  );
+  RateLimitCounterRow copyWithCompanion(RateLimitCountersCompanion data) {
+    return RateLimitCounterRow(
+      bucketKey: data.bucketKey.present ? data.bucketKey.value : this.bucketKey,
+      windowStartMs: data.windowStartMs.present
+          ? data.windowStartMs.value
+          : this.windowStartMs,
+      count: data.count.present ? data.count.value : this.count,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RateLimitCounterRow(')
+          ..write('bucketKey: $bucketKey, ')
+          ..write('windowStartMs: $windowStartMs, ')
+          ..write('count: $count')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(bucketKey, windowStartMs, count);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RateLimitCounterRow &&
+          other.bucketKey == this.bucketKey &&
+          other.windowStartMs == this.windowStartMs &&
+          other.count == this.count);
+}
+
+class RateLimitCountersCompanion extends UpdateCompanion<RateLimitCounterRow> {
+  final Value<String> bucketKey;
+  final Value<int> windowStartMs;
+  final Value<int> count;
+  final Value<int> rowid;
+  const RateLimitCountersCompanion({
+    this.bucketKey = const Value.absent(),
+    this.windowStartMs = const Value.absent(),
+    this.count = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RateLimitCountersCompanion.insert({
+    required String bucketKey,
+    required int windowStartMs,
+    required int count,
+    this.rowid = const Value.absent(),
+  }) : bucketKey = Value(bucketKey),
+       windowStartMs = Value(windowStartMs),
+       count = Value(count);
+  static Insertable<RateLimitCounterRow> custom({
+    Expression<String>? bucketKey,
+    Expression<int>? windowStartMs,
+    Expression<int>? count,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (bucketKey != null) 'bucket_key': bucketKey,
+      if (windowStartMs != null) 'window_start_ms': windowStartMs,
+      if (count != null) 'count': count,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RateLimitCountersCompanion copyWith({
+    Value<String>? bucketKey,
+    Value<int>? windowStartMs,
+    Value<int>? count,
+    Value<int>? rowid,
+  }) {
+    return RateLimitCountersCompanion(
+      bucketKey: bucketKey ?? this.bucketKey,
+      windowStartMs: windowStartMs ?? this.windowStartMs,
+      count: count ?? this.count,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (bucketKey.present) {
+      map['bucket_key'] = Variable<String>(bucketKey.value);
+    }
+    if (windowStartMs.present) {
+      map['window_start_ms'] = Variable<int>(windowStartMs.value);
+    }
+    if (count.present) {
+      map['count'] = Variable<int>(count.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RateLimitCountersCompanion(')
+          ..write('bucketKey: $bucketKey, ')
+          ..write('windowStartMs: $windowStartMs, ')
+          ..write('count: $count, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $VersionPolicyCacheTable extends VersionPolicyCache
+    with TableInfo<$VersionPolicyCacheTable, VersionPolicyCacheRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $VersionPolicyCacheTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _minimumSupportedBuildMeta =
+      const VerificationMeta('minimumSupportedBuild');
+  @override
+  late final GeneratedColumn<int> minimumSupportedBuild = GeneratedColumn<int>(
+    'minimum_supported_build',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _currentBuildMeta = const VerificationMeta(
+    'currentBuild',
+  );
+  @override
+  late final GeneratedColumn<int> currentBuild = GeneratedColumn<int>(
+    'current_build',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updateAvailableBuildMeta =
+      const VerificationMeta('updateAvailableBuild');
+  @override
+  late final GeneratedColumn<int> updateAvailableBuild = GeneratedColumn<int>(
+    'update_available_build',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _signatureMeta = const VerificationMeta(
+    'signature',
+  );
+  @override
+  late final GeneratedColumn<String> signature = GeneratedColumn<String>(
+    'signature',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    minimumSupportedBuild,
+    currentBuild,
+    updateAvailableBuild,
+    signature,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'version_policy_cache';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<VersionPolicyCacheRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('minimum_supported_build')) {
+      context.handle(
+        _minimumSupportedBuildMeta,
+        minimumSupportedBuild.isAcceptableOrUnknown(
+          data['minimum_supported_build']!,
+          _minimumSupportedBuildMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_minimumSupportedBuildMeta);
+    }
+    if (data.containsKey('current_build')) {
+      context.handle(
+        _currentBuildMeta,
+        currentBuild.isAcceptableOrUnknown(
+          data['current_build']!,
+          _currentBuildMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_currentBuildMeta);
+    }
+    if (data.containsKey('update_available_build')) {
+      context.handle(
+        _updateAvailableBuildMeta,
+        updateAvailableBuild.isAcceptableOrUnknown(
+          data['update_available_build']!,
+          _updateAvailableBuildMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_updateAvailableBuildMeta);
+    }
+    if (data.containsKey('signature')) {
+      context.handle(
+        _signatureMeta,
+        signature.isAcceptableOrUnknown(data['signature']!, _signatureMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_signatureMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  VersionPolicyCacheRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return VersionPolicyCacheRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      minimumSupportedBuild: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}minimum_supported_build'],
+      )!,
+      currentBuild: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}current_build'],
+      )!,
+      updateAvailableBuild: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}update_available_build'],
+      )!,
+      signature: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}signature'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $VersionPolicyCacheTable createAlias(String alias) {
+    return $VersionPolicyCacheTable(attachedDatabase, alias);
+  }
+}
+
+class VersionPolicyCacheRow extends DataClass
+    implements Insertable<VersionPolicyCacheRow> {
+  final int id;
+  final int minimumSupportedBuild;
+  final int currentBuild;
+  final int updateAvailableBuild;
+  final String signature;
+
+  /// Epoch-millis `updatedAt` from the remote policy payload -- the
+  /// server/ops-published value, not this device's own fetch time.
+  final int updatedAt;
+  const VersionPolicyCacheRow({
+    required this.id,
+    required this.minimumSupportedBuild,
+    required this.currentBuild,
+    required this.updateAvailableBuild,
+    required this.signature,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['minimum_supported_build'] = Variable<int>(minimumSupportedBuild);
+    map['current_build'] = Variable<int>(currentBuild);
+    map['update_available_build'] = Variable<int>(updateAvailableBuild);
+    map['signature'] = Variable<String>(signature);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  VersionPolicyCacheCompanion toCompanion(bool nullToAbsent) {
+    return VersionPolicyCacheCompanion(
+      id: Value(id),
+      minimumSupportedBuild: Value(minimumSupportedBuild),
+      currentBuild: Value(currentBuild),
+      updateAvailableBuild: Value(updateAvailableBuild),
+      signature: Value(signature),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory VersionPolicyCacheRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return VersionPolicyCacheRow(
+      id: serializer.fromJson<int>(json['id']),
+      minimumSupportedBuild: serializer.fromJson<int>(
+        json['minimumSupportedBuild'],
+      ),
+      currentBuild: serializer.fromJson<int>(json['currentBuild']),
+      updateAvailableBuild: serializer.fromJson<int>(
+        json['updateAvailableBuild'],
+      ),
+      signature: serializer.fromJson<String>(json['signature']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'minimumSupportedBuild': serializer.toJson<int>(minimumSupportedBuild),
+      'currentBuild': serializer.toJson<int>(currentBuild),
+      'updateAvailableBuild': serializer.toJson<int>(updateAvailableBuild),
+      'signature': serializer.toJson<String>(signature),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  VersionPolicyCacheRow copyWith({
+    int? id,
+    int? minimumSupportedBuild,
+    int? currentBuild,
+    int? updateAvailableBuild,
+    String? signature,
+    int? updatedAt,
+  }) => VersionPolicyCacheRow(
+    id: id ?? this.id,
+    minimumSupportedBuild: minimumSupportedBuild ?? this.minimumSupportedBuild,
+    currentBuild: currentBuild ?? this.currentBuild,
+    updateAvailableBuild: updateAvailableBuild ?? this.updateAvailableBuild,
+    signature: signature ?? this.signature,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  VersionPolicyCacheRow copyWithCompanion(VersionPolicyCacheCompanion data) {
+    return VersionPolicyCacheRow(
+      id: data.id.present ? data.id.value : this.id,
+      minimumSupportedBuild: data.minimumSupportedBuild.present
+          ? data.minimumSupportedBuild.value
+          : this.minimumSupportedBuild,
+      currentBuild: data.currentBuild.present
+          ? data.currentBuild.value
+          : this.currentBuild,
+      updateAvailableBuild: data.updateAvailableBuild.present
+          ? data.updateAvailableBuild.value
+          : this.updateAvailableBuild,
+      signature: data.signature.present ? data.signature.value : this.signature,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VersionPolicyCacheRow(')
+          ..write('id: $id, ')
+          ..write('minimumSupportedBuild: $minimumSupportedBuild, ')
+          ..write('currentBuild: $currentBuild, ')
+          ..write('updateAvailableBuild: $updateAvailableBuild, ')
+          ..write('signature: $signature, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    minimumSupportedBuild,
+    currentBuild,
+    updateAvailableBuild,
+    signature,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is VersionPolicyCacheRow &&
+          other.id == this.id &&
+          other.minimumSupportedBuild == this.minimumSupportedBuild &&
+          other.currentBuild == this.currentBuild &&
+          other.updateAvailableBuild == this.updateAvailableBuild &&
+          other.signature == this.signature &&
+          other.updatedAt == this.updatedAt);
+}
+
+class VersionPolicyCacheCompanion
+    extends UpdateCompanion<VersionPolicyCacheRow> {
+  final Value<int> id;
+  final Value<int> minimumSupportedBuild;
+  final Value<int> currentBuild;
+  final Value<int> updateAvailableBuild;
+  final Value<String> signature;
+  final Value<int> updatedAt;
+  const VersionPolicyCacheCompanion({
+    this.id = const Value.absent(),
+    this.minimumSupportedBuild = const Value.absent(),
+    this.currentBuild = const Value.absent(),
+    this.updateAvailableBuild = const Value.absent(),
+    this.signature = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  VersionPolicyCacheCompanion.insert({
+    this.id = const Value.absent(),
+    required int minimumSupportedBuild,
+    required int currentBuild,
+    required int updateAvailableBuild,
+    required String signature,
+    required int updatedAt,
+  }) : minimumSupportedBuild = Value(minimumSupportedBuild),
+       currentBuild = Value(currentBuild),
+       updateAvailableBuild = Value(updateAvailableBuild),
+       signature = Value(signature),
+       updatedAt = Value(updatedAt);
+  static Insertable<VersionPolicyCacheRow> custom({
+    Expression<int>? id,
+    Expression<int>? minimumSupportedBuild,
+    Expression<int>? currentBuild,
+    Expression<int>? updateAvailableBuild,
+    Expression<String>? signature,
+    Expression<int>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (minimumSupportedBuild != null)
+        'minimum_supported_build': minimumSupportedBuild,
+      if (currentBuild != null) 'current_build': currentBuild,
+      if (updateAvailableBuild != null)
+        'update_available_build': updateAvailableBuild,
+      if (signature != null) 'signature': signature,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  VersionPolicyCacheCompanion copyWith({
+    Value<int>? id,
+    Value<int>? minimumSupportedBuild,
+    Value<int>? currentBuild,
+    Value<int>? updateAvailableBuild,
+    Value<String>? signature,
+    Value<int>? updatedAt,
+  }) {
+    return VersionPolicyCacheCompanion(
+      id: id ?? this.id,
+      minimumSupportedBuild:
+          minimumSupportedBuild ?? this.minimumSupportedBuild,
+      currentBuild: currentBuild ?? this.currentBuild,
+      updateAvailableBuild: updateAvailableBuild ?? this.updateAvailableBuild,
+      signature: signature ?? this.signature,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (minimumSupportedBuild.present) {
+      map['minimum_supported_build'] = Variable<int>(
+        minimumSupportedBuild.value,
+      );
+    }
+    if (currentBuild.present) {
+      map['current_build'] = Variable<int>(currentBuild.value);
+    }
+    if (updateAvailableBuild.present) {
+      map['update_available_build'] = Variable<int>(updateAvailableBuild.value);
+    }
+    if (signature.present) {
+      map['signature'] = Variable<String>(signature.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VersionPolicyCacheCompanion(')
+          ..write('id: $id, ')
+          ..write('minimumSupportedBuild: $minimumSupportedBuild, ')
+          ..write('currentBuild: $currentBuild, ')
+          ..write('updateAvailableBuild: $updateAvailableBuild, ')
+          ..write('signature: $signature, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -9114,6 +9821,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $NotificationPreferencesTable(this);
   late final $DeviceRevocationsTable deviceRevocations =
       $DeviceRevocationsTable(this);
+  late final $RateLimitCountersTable rateLimitCounters =
+      $RateLimitCountersTable(this);
+  late final $VersionPolicyCacheTable versionPolicyCache =
+      $VersionPolicyCacheTable(this);
   late final Index idxMessagesConversationCreatedAt = Index(
     'idx_messages_conversation_created_at',
     'CREATE INDEX idx_messages_conversation_created_at ON messages (conversation_id, created_at)',
@@ -9141,6 +9852,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final Index idxLocationFixesCapturedAt = Index(
     'idx_location_fixes_captured_at',
     'CREATE INDEX idx_location_fixes_captured_at ON location_fixes (captured_at)',
+  );
+  late final Index idxRateLimitCountersWindowStart = Index(
+    'idx_rate_limit_counters_window_start',
+    'CREATE INDEX idx_rate_limit_counters_window_start ON rate_limit_counters (window_start_ms)',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -9173,6 +9888,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     notificationCategorySettings,
     notificationPreferences,
     deviceRevocations,
+    rateLimitCounters,
+    versionPolicyCache,
     idxMessagesConversationCreatedAt,
     idxGroupMembersCurrent,
     idxGroupSingleOwner,
@@ -9180,6 +9897,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     idxStorageItemStatsLastAccessed,
     idxStorageDecisionsDecidedAt,
     idxLocationFixesCapturedAt,
+    idxRateLimitCountersWindowStart,
   ];
 }
 
@@ -14292,6 +15010,415 @@ typedef $$DeviceRevocationsTableProcessedTableManager =
       DeviceRevocationRow,
       PrefetchHooks Function()
     >;
+typedef $$RateLimitCountersTableCreateCompanionBuilder =
+    RateLimitCountersCompanion Function({
+      required String bucketKey,
+      required int windowStartMs,
+      required int count,
+      Value<int> rowid,
+    });
+typedef $$RateLimitCountersTableUpdateCompanionBuilder =
+    RateLimitCountersCompanion Function({
+      Value<String> bucketKey,
+      Value<int> windowStartMs,
+      Value<int> count,
+      Value<int> rowid,
+    });
+
+class $$RateLimitCountersTableFilterComposer
+    extends Composer<_$AppDatabase, $RateLimitCountersTable> {
+  $$RateLimitCountersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get bucketKey => $composableBuilder(
+    column: $table.bucketKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get windowStartMs => $composableBuilder(
+    column: $table.windowStartMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get count => $composableBuilder(
+    column: $table.count,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RateLimitCountersTableOrderingComposer
+    extends Composer<_$AppDatabase, $RateLimitCountersTable> {
+  $$RateLimitCountersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get bucketKey => $composableBuilder(
+    column: $table.bucketKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get windowStartMs => $composableBuilder(
+    column: $table.windowStartMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get count => $composableBuilder(
+    column: $table.count,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RateLimitCountersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RateLimitCountersTable> {
+  $$RateLimitCountersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get bucketKey =>
+      $composableBuilder(column: $table.bucketKey, builder: (column) => column);
+
+  GeneratedColumn<int> get windowStartMs => $composableBuilder(
+    column: $table.windowStartMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get count =>
+      $composableBuilder(column: $table.count, builder: (column) => column);
+}
+
+class $$RateLimitCountersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RateLimitCountersTable,
+          RateLimitCounterRow,
+          $$RateLimitCountersTableFilterComposer,
+          $$RateLimitCountersTableOrderingComposer,
+          $$RateLimitCountersTableAnnotationComposer,
+          $$RateLimitCountersTableCreateCompanionBuilder,
+          $$RateLimitCountersTableUpdateCompanionBuilder,
+          (
+            RateLimitCounterRow,
+            BaseReferences<
+              _$AppDatabase,
+              $RateLimitCountersTable,
+              RateLimitCounterRow
+            >,
+          ),
+          RateLimitCounterRow,
+          PrefetchHooks Function()
+        > {
+  $$RateLimitCountersTableTableManager(
+    _$AppDatabase db,
+    $RateLimitCountersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RateLimitCountersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RateLimitCountersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RateLimitCountersTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> bucketKey = const Value.absent(),
+                Value<int> windowStartMs = const Value.absent(),
+                Value<int> count = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RateLimitCountersCompanion(
+                bucketKey: bucketKey,
+                windowStartMs: windowStartMs,
+                count: count,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String bucketKey,
+                required int windowStartMs,
+                required int count,
+                Value<int> rowid = const Value.absent(),
+              }) => RateLimitCountersCompanion.insert(
+                bucketKey: bucketKey,
+                windowStartMs: windowStartMs,
+                count: count,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RateLimitCountersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RateLimitCountersTable,
+      RateLimitCounterRow,
+      $$RateLimitCountersTableFilterComposer,
+      $$RateLimitCountersTableOrderingComposer,
+      $$RateLimitCountersTableAnnotationComposer,
+      $$RateLimitCountersTableCreateCompanionBuilder,
+      $$RateLimitCountersTableUpdateCompanionBuilder,
+      (
+        RateLimitCounterRow,
+        BaseReferences<
+          _$AppDatabase,
+          $RateLimitCountersTable,
+          RateLimitCounterRow
+        >,
+      ),
+      RateLimitCounterRow,
+      PrefetchHooks Function()
+    >;
+typedef $$VersionPolicyCacheTableCreateCompanionBuilder =
+    VersionPolicyCacheCompanion Function({
+      Value<int> id,
+      required int minimumSupportedBuild,
+      required int currentBuild,
+      required int updateAvailableBuild,
+      required String signature,
+      required int updatedAt,
+    });
+typedef $$VersionPolicyCacheTableUpdateCompanionBuilder =
+    VersionPolicyCacheCompanion Function({
+      Value<int> id,
+      Value<int> minimumSupportedBuild,
+      Value<int> currentBuild,
+      Value<int> updateAvailableBuild,
+      Value<String> signature,
+      Value<int> updatedAt,
+    });
+
+class $$VersionPolicyCacheTableFilterComposer
+    extends Composer<_$AppDatabase, $VersionPolicyCacheTable> {
+  $$VersionPolicyCacheTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get minimumSupportedBuild => $composableBuilder(
+    column: $table.minimumSupportedBuild,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get currentBuild => $composableBuilder(
+    column: $table.currentBuild,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updateAvailableBuild => $composableBuilder(
+    column: $table.updateAvailableBuild,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get signature => $composableBuilder(
+    column: $table.signature,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$VersionPolicyCacheTableOrderingComposer
+    extends Composer<_$AppDatabase, $VersionPolicyCacheTable> {
+  $$VersionPolicyCacheTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get minimumSupportedBuild => $composableBuilder(
+    column: $table.minimumSupportedBuild,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get currentBuild => $composableBuilder(
+    column: $table.currentBuild,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updateAvailableBuild => $composableBuilder(
+    column: $table.updateAvailableBuild,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get signature => $composableBuilder(
+    column: $table.signature,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$VersionPolicyCacheTableAnnotationComposer
+    extends Composer<_$AppDatabase, $VersionPolicyCacheTable> {
+  $$VersionPolicyCacheTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get minimumSupportedBuild => $composableBuilder(
+    column: $table.minimumSupportedBuild,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get currentBuild => $composableBuilder(
+    column: $table.currentBuild,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updateAvailableBuild => $composableBuilder(
+    column: $table.updateAvailableBuild,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get signature =>
+      $composableBuilder(column: $table.signature, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$VersionPolicyCacheTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $VersionPolicyCacheTable,
+          VersionPolicyCacheRow,
+          $$VersionPolicyCacheTableFilterComposer,
+          $$VersionPolicyCacheTableOrderingComposer,
+          $$VersionPolicyCacheTableAnnotationComposer,
+          $$VersionPolicyCacheTableCreateCompanionBuilder,
+          $$VersionPolicyCacheTableUpdateCompanionBuilder,
+          (
+            VersionPolicyCacheRow,
+            BaseReferences<
+              _$AppDatabase,
+              $VersionPolicyCacheTable,
+              VersionPolicyCacheRow
+            >,
+          ),
+          VersionPolicyCacheRow,
+          PrefetchHooks Function()
+        > {
+  $$VersionPolicyCacheTableTableManager(
+    _$AppDatabase db,
+    $VersionPolicyCacheTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$VersionPolicyCacheTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$VersionPolicyCacheTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$VersionPolicyCacheTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> minimumSupportedBuild = const Value.absent(),
+                Value<int> currentBuild = const Value.absent(),
+                Value<int> updateAvailableBuild = const Value.absent(),
+                Value<String> signature = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+              }) => VersionPolicyCacheCompanion(
+                id: id,
+                minimumSupportedBuild: minimumSupportedBuild,
+                currentBuild: currentBuild,
+                updateAvailableBuild: updateAvailableBuild,
+                signature: signature,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int minimumSupportedBuild,
+                required int currentBuild,
+                required int updateAvailableBuild,
+                required String signature,
+                required int updatedAt,
+              }) => VersionPolicyCacheCompanion.insert(
+                id: id,
+                minimumSupportedBuild: minimumSupportedBuild,
+                currentBuild: currentBuild,
+                updateAvailableBuild: updateAvailableBuild,
+                signature: signature,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$VersionPolicyCacheTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $VersionPolicyCacheTable,
+      VersionPolicyCacheRow,
+      $$VersionPolicyCacheTableFilterComposer,
+      $$VersionPolicyCacheTableOrderingComposer,
+      $$VersionPolicyCacheTableAnnotationComposer,
+      $$VersionPolicyCacheTableCreateCompanionBuilder,
+      $$VersionPolicyCacheTableUpdateCompanionBuilder,
+      (
+        VersionPolicyCacheRow,
+        BaseReferences<
+          _$AppDatabase,
+          $VersionPolicyCacheTable,
+          VersionPolicyCacheRow
+        >,
+      ),
+      VersionPolicyCacheRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -14358,4 +15485,8 @@ class $AppDatabaseManager {
       );
   $$DeviceRevocationsTableTableManager get deviceRevocations =>
       $$DeviceRevocationsTableTableManager(_db, _db.deviceRevocations);
+  $$RateLimitCountersTableTableManager get rateLimitCounters =>
+      $$RateLimitCountersTableTableManager(_db, _db.rateLimitCounters);
+  $$VersionPolicyCacheTableTableManager get versionPolicyCache =>
+      $$VersionPolicyCacheTableTableManager(_db, _db.versionPolicyCache);
 }

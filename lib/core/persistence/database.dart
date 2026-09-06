@@ -10,6 +10,7 @@ import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'abuse_tables.dart';
 import 'crypto_tables.dart';
 import 'group_tables.dart';
 import 'location_tables.dart';
@@ -21,6 +22,7 @@ import 'revocation_table.dart';
 import 'routing_tables.dart';
 import 'storage_tables.dart';
 import 'sync_tables.dart';
+import 'version_policy_tables.dart';
 
 part 'database.g.dart';
 
@@ -92,6 +94,8 @@ class DeviceIdentities extends Table {
     NotificationCategorySettings,
     NotificationPreferences,
     DeviceRevocations,
+    RateLimitCounters,
+    VersionPolicyCache,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -101,7 +105,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -561,6 +565,72 @@ class AppDatabase extends _$AppDatabase {
         // creation itself is unchanged from what E11-T04 shipped and
         // reviewed; only its position in the version sequence moved.
         await m.createTable(deviceRevocations);
+      }
+      if (from < 18) {
+        // E13-T01: new `rate_limit_counters` table -- additive only, no
+        // changes to any pre-existing table (task §3, §5,
+        // docs/conventions.md "Schema migrations"). No backfill -- no
+        // bucket exists for any identity yet (task §5).
+        //
+        // **E13-B01 correction**: this step's original comment claimed "no
+        // index needed" on the grounds that the only local access pattern
+        // is a point lookup by `bucketKey`. That was true when this step
+        // was written; `E13-T07`'s later opportunistic eviction (added
+        // inside `RateLimiter.allow`, this same table, no schema change at
+        // the time) introduced a second access pattern -- a range filter
+        // on `windowStartMs` -- that the PK's index does not serve. See the
+        // `from < 19` step below, which adds the index this table actually
+        // needed once T07 landed.
+        await m.createTable(rateLimitCounters);
+      }
+      if (from < 19) {
+        // E13-B01: `RateLimiter.allow`'s stale-row eviction
+        // (`rate_limiter.dart`) filters on `windowStartMs` on every single
+        // admission decision, and that column had no index -- an unindexed
+        // full-table scan whose cost is proportional to `rate_limit_
+        // counters`' row count, a count an attacker directly controls by
+        // rotating claimed bucket keys (`relay:${frame.source}`,
+        // `storage_volume:${frame.source}` are keyed on an unverified
+        // claimed identity, T03's own accepted limitation). Purely
+        // additive: a new index on an existing table, no backfill, no
+        // change to any existing row or to `RateLimiter`'s behavior.
+        //
+        // As with the `from < 11`/`from < 13`/etc. steps above:
+        // `createTable` only issues the CREATE TABLE statement and would
+        // not have created this index anyway -- but there is no
+        // `createTable` in this step at all (the table already exists), so
+        // the index is created explicitly via a raw statement, with
+        // `IF NOT EXISTS` for the same retry-safety reason those earlier
+        // steps document (the generated `createIndex` statement in
+        // `database.g.dart` has no such guard).
+        await m.database.customStatement(
+          'CREATE INDEX IF NOT EXISTS '
+          'idx_rate_limit_counters_window_start ON rate_limit_counters '
+          '(window_start_ms);',
+        );
+      }
+      if (from < 20) {
+        // E14-T01: new `version_policy_cache` table -- additive only, no
+        // changes to any pre-existing table (task §5,
+        // docs/conventions.md "Schema migrations"). No index needed: the
+        // only local access pattern is a point lookup by the fixed row id
+        // `1`, which the PK's own implicit index already serves (same
+        // reasoning as `sync_tables.dart`'s "no @TableIndex" comment). No
+        // default row inserted here, unlike
+        // `storage_policy_settings`/`location_settings`/
+        // `notification_preferences` above -- a fresh device has no
+        // remote policy to seed from (task §3), and an absent row is
+        // itself the correct "never successfully fetched" state
+        // `VersionPolicyService.cached()` must be able to return.
+        //
+        // Renumbered from E14-T01's own original `from < 18` to
+        // `from < 20` during the epic_12/epic_13/epic_14 -> development
+        // merge (2026-09-06): E13-T01/E13-B01 independently claimed v18/v19
+        // against an earlier development baseline that predated this
+        // table, same shape as E11-T04's own renumbering above. The table
+        // creation itself is unchanged from what E14-T01 shipped and
+        // reviewed; only its position in the version sequence moved.
+        await m.createTable(versionPolicyCache);
       }
     },
   );

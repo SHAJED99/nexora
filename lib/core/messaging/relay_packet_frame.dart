@@ -36,6 +36,27 @@ import 'dart:typed_data';
 /// Current, and so far only, frame layout version. Bump this — and add a
 /// new `deserialize` branch, never silently reinterpret the old one — if the
 /// layout ever changes incompatibly.
+///
+/// E14-T05 (`FR-VER-001`/`FR-VER-002`) confirmed this byte already IS the
+/// version-negotiation mechanism those requirements ask for, end-to-end:
+/// `deserialize` below rejects any frame whose [relayFrameVersion] it does
+/// not recognise (never silently reinterpreting a newer/older layout as the
+/// current one), and the one real caller —
+/// `InboundPipeline._handleBuffer` (`lib/core/messaging/inbound_pipeline.dart`)
+/// — already catches that rejection as a `FormatException` and drops the
+/// frame (`counters.malformed++`) without the receive loop crashing or
+/// misinterpreting the payload. (`RelayEngine` itself never calls
+/// `deserialize` — it only ever forwards `payload` as opaque bytes,
+/// FR-ROUTE-003 — so the upstream catch this requirement needs lives one
+/// layer earlier than a first read of this file might suggest.)
+/// `FR-VER-001`'s fuller list (app/build/protocol/crypto/db version) is
+/// covered by the SUM of this byte (transport frame layout) plus E03's own
+/// independent `preKeyBundleCodecVersion`
+/// (`lib/core/crypto/prekey_bundle_codec.dart`) on the X3DH handshake
+/// artifact — no combined field was needed. See
+/// `test/core/messaging/relay_packet_frame_version_rejection_test.dart`
+/// (EARS-VER-13/14) for the test evidence, and `E14-T05.md`'s Run log for
+/// the full investigation writeup.
 const int relayFrameVersion = 1;
 
 /// The kind of ciphertext (or non-ciphertext control body) `payload` holds.

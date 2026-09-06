@@ -122,6 +122,31 @@
         }
       }
     },
+    "config": {
+      "version_policy": {
+        ".read": "auth != null",
+        ".write": false,
+        ".validate": "newData.hasChildren(['minimumSupportedBuild', 'currentBuild', 'updateAvailableBuild', 'signature', 'updatedAt'])",
+        "minimumSupportedBuild": {
+          ".validate": "newData.isNumber()"
+        },
+        "currentBuild": {
+          ".validate": "newData.isNumber()"
+        },
+        "updateAvailableBuild": {
+          ".validate": "newData.isNumber()"
+        },
+        "signature": {
+          ".validate": "newData.isString() && newData.val().length <= 4096"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
     "directory_private": {
       "$deviceId": {
         ".validate": "newData.hasChildren()",
