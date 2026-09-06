@@ -2,8 +2,10 @@
 
 **Status:** in progress — 5/6 tasks done and merged into `epic_14` (T01,
 T02, T04, T05, T06); T03 remains `blocked` on a human key-infrastructure
-decision (`OQ-E14-T03-1`) — the epic's only remaining item. · **Started:**
-2026-09-05 · **Completed:** — · **Progress:** 5/6 tasks done
+decision (`OQ-E14-T03-1`) — the epic's only remaining item. Bug sweep
+found 6 bugs (B01-B06); all fixed and merged except B03/B04/B05
+(non-blocking, P2/P3). · **Started:** 2026-09-05 · **Completed:** — ·
+**Progress:** 5/6 tasks done
 
 ## Tasks
 

@@ -13,6 +13,8 @@ import 'package:nexora/features/devices/presentation/devices_binding.dart';
 import 'package:nexora/features/devices/presentation/devices_view.dart';
 import 'package:nexora/features/home/presentation/home_view.dart';
 import 'package:nexora/features/login/presentation/login_view.dart';
+import 'package:nexora/features/recovery/presentation/device_enrollment_controller.dart';
+import 'package:nexora/features/recovery/presentation/device_enrollment_view.dart';
 import 'package:nexora/features/settings/presentation/settings_binding.dart';
 import 'package:nexora/features/settings/presentation/settings_view.dart';
 import 'package:nexora/features/version/presentation/version_update_controller.dart';
@@ -52,6 +54,13 @@ abstract final class Routes {
   /// wired via `GetMaterialApp.initialRoute` (`Q-E14-T04-1`, resolved
   /// 2026-09-05).
   static const versionUpdateRequired = '/version-update-required';
+
+  /// design/screens/device-enrollment.md (E12-T03, GAP-028). Reached from
+  /// `/login`'s own sign-in flow only (`LoginController._signIn()`) — never
+  /// linked from any existing screen. `uid`/`deviceId` are passed via
+  /// `Get.arguments`, not a path parameter, since neither is meant to be a
+  /// shareable/bookmarkable URL segment.
+  static const deviceEnrollment = '/device-enrollment';
 }
 
 /// Starts the platform's Google Play in-app update "Immediate Update" flow
@@ -118,6 +127,19 @@ final appPages = <GetPage<dynamic>>[
     name: Routes.versionUpdateRequired,
     page: () => const VersionUpdateView(),
     binding: _VersionUpdateBinding(),
+  ),
+  GetPage<dynamic>(
+    name: Routes.deviceEnrollment,
+    page: () => const DeviceEnrollmentView(),
+    // Inline binding (no separate `DeviceEnrollmentBinding` file — not in
+    // this task's `files:` fence): `DeviceEnrollmentController`'s own
+    // constructor already defaults every collaborator (Get.find lookups for
+    // the app-wide singletons, `Get.arguments` for `uid`/`deviceId`), so
+    // there is nothing a dedicated binding class would add here beyond what
+    // `BindingsBuilder` already does inline.
+    binding: BindingsBuilder(
+      () => Get.lazyPut(DeviceEnrollmentController.new),
+    ),
   ),
 ];
 

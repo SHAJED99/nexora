@@ -95,6 +95,14 @@ dependencies:
   # caret range, per the geolocator precedent above.
   in_app_update: 5.0.0
 
+  # Crash/error reporting — ADR-0006 (dedicated observability vendor, no
+  # analytics for v1), E13-T06, human-approved 2026-09-05 (new_dependency
+  # gate). Pinned to an exact version, not a caret range, per the same
+  # convention used for `geolocator` above. DSN is never hardcoded — read
+  # from a build-time `--dart-define`, see
+  # `lib/core/observability/observability_service.dart`.
+  sentry_flutter: 8.14.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

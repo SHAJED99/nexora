@@ -346,6 +346,88 @@ void main() {
     await stack.dispose();
   });
 
+  test(
+    'test_EARS_ABUSE_4_wired_messaging_stack_denies_over_limit_peer',
+    () async {
+      // E13-T07 (FR-ABUSE-001): before this task, `MessagingStack.create`'s
+      // own construction of `EvaluateConnectionRequestUseCase` never passed
+      // a `RateLimiter`, so `PrekeyExchange`'s inbound trust gate could
+      // never actually deny a flood of `bundleRequest` frames from the same
+      // claimed peer, no matter how many arrived. This proves the real
+      // composition root now wires a working one: a peer with no stored
+      // relationship (defaults to `unknown`, never `blocked`) still gets
+      // refused once it exceeds `EvaluateConnectionRequestUseCase`'s own
+      // 10-per-minute ceiling (`_maxConnectionRequestsPerWindow`).
+      const suffix = 'messaging-stack-abuse-4';
+      // Admitted calls (up to the rate limit) still try to answer with a
+      // real bundle response, which goes out over `transport.send` -- mock
+      // it so those admitted sends succeed rather than throwing a
+      // `PlatformException` for an unregistered test channel (this file's
+      // own `mockSendAlwaysSucceeds` helper, used the same way by every
+      // other test in this suite that actually sends).
+      mockSendAlwaysSucceeds(suffix);
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'device-a',
+        transport: TransportService(
+          binaryMessenger: messenger,
+          messageChannelSuffix: suffix,
+        ),
+      );
+      expect(stack.status, const MessagingStackStatus.ready());
+
+      const peerDeviceId = 'flooding-peer';
+      final now = DateTime.now();
+
+      // Raw wire bytes for a `bundleRequest` control body -- mirrors
+      // `PrekeyExchange`'s own private `_ControlBody.request(...).serialize()`
+      // layout exactly (that file's header): [u8 subType=1][u32
+      // requestIdLen][requestId bytes], no bundle. Calling
+      // `handleControlFrame` directly (as `InboundPipeline` would, after
+      // already stripping its own leading `controlKind` byte) needs exactly
+      // this shape.
+      Uint8List bundleRequestBody(String requestId) {
+        final idBytes = Uint8List.fromList(requestId.codeUnits);
+        final buffer = ByteData(1 + 4 + idBytes.length);
+        buffer.setUint8(0, 1); // subType 1 == bundleRequest
+        buffer.setUint32(1, idBytes.length);
+        buffer.buffer.asUint8List().setRange(5, 5 + idBytes.length, idBytes);
+        return buffer.buffer.asUint8List();
+      }
+
+      for (var i = 0; i < 15; i++) {
+        final frame = RelayPacketFrame(
+          payloadType: PayloadType.control,
+          packetId: 'req-$i',
+          destination: 'device-a',
+          source: peerDeviceId,
+          priority: 0,
+          createdAtMs: now.millisecondsSinceEpoch,
+          expiresAtMs: now.add(const Duration(seconds: 30)).millisecondsSinceEpoch,
+          payload: bundleRequestBody('req-$i'),
+        );
+        await stack.prekeyExchange.handleControlFrame(frame);
+      }
+
+      // Exactly 10 calls admitted (rate limiter ceiling); every call past
+      // that is refused -- silence, never `requestsServed`/`bundleUnavailable`
+      // for those. Without real wiring, EVERY one of the 15 calls would have
+      // been evaluated as `unknown` (never `blocked`), and none would ever
+      // land in `requestsRefused`.
+      expect(
+        stack.prekeyExchange.counters.requestsRefused,
+        greaterThanOrEqualTo(5),
+        reason:
+            'at least the 5 over-limit requests must have been refused by '
+            'a real RateLimiter -- zero here would mean the gate is still '
+            'unwired',
+      );
+
+      await stack.dispose();
+    },
+  );
+
   test('test_EARS_COMM_6_send_use_case_uses_the_stack_database', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     final stack = await MessagingStack.create(

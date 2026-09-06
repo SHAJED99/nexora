@@ -41,6 +41,22 @@ protocol security.
 | E13-T04 | Rate-limit group-invitation spam |
 | E13-T05 | Byte-volume admission control against storage-exhausting inbound data |
 | E13-T06 | Real observability client (Sentry-or-equivalent) replacing the console-log stub |
+| E13-T07 | Wire the rate limiter into production — filed 2026-09-05 out of T02's own review finding (P1) |
+
+## Bug sweep (2026-09-06)
+
+Run per `skills/bug-sweep` by an independent cross-model reviewer against
+`origin/epic_13` @ `b5c3f99` in an isolated worktree. Full suite
+1187/1187 green; `flutter analyze` clean. Two findings, **zero S1, zero
+S2 — P1/P2 = 0**:
+
+| Bug | Severity | Summary |
+|---|---|---|
+| `E13-B01` | S3 | `RateLimiter.allow`'s eviction runs an unindexed full-table DELETE on every admission decision; per-call cost grows linearly with an attacker-growable table (measured 0.28ms → 1.31ms/call from 10k → 50k rows). T01/T07 seam. Also corrects `OQ-E13-T01-1` from "resolved" to "bounded to a rolling 2 days". |
+| `E13-B02` | S4 | T06 changed the observability sink from a debug-console stub to real third-party egress without re-auditing the pre-existing `cause:` payloads; `device_directory_service.dart:274` interpolates a device id into a message Sentry captures verbatim (currently unreachable — that service is never constructed). Rate-limit denials themselves were checked and leak nothing. |
+
+🧍 **HUMAN GATE** (`bug_priorities`): pending. With no S1/S2, the
+epic→`development` PR is unblocked once priorities are stamped.
 
 ## Open Questions
 None new at the epic level (each task's own Open Questions section, if

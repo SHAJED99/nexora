@@ -181,6 +181,159 @@ class _HangingReadFirebaseMetadataService extends FirebaseMetadataService {
   ) async {}
 }
 
+/// Captures the path (via uid/newDeviceId) + data a real
+/// `writeEnrollmentGrant` write would have sent, instead of touching
+/// Realtime Database.
+class _CapturingEnrollmentGrantWriteService extends FirebaseMetadataService {
+  String? capturedUid;
+  String? capturedNewDeviceId;
+  Map<String, dynamic>? capturedData;
+
+  @override
+  Future<void> writeEnrollmentGrantData(
+    String uid,
+    String newDeviceId,
+    Map<String, dynamic> data,
+  ) async {
+    capturedUid = uid;
+    capturedNewDeviceId = newDeviceId;
+    capturedData = data;
+  }
+}
+
+/// Always throws from the enrollment-grant write seam -- proves
+/// `writeEnrollmentGrant` swallows and logs rather than propagating
+/// (E12-B02, same best-effort contract as every other wrapper).
+class _ThrowingEnrollmentGrantWriteService extends FirebaseMetadataService {
+  @override
+  Future<void> writeEnrollmentGrantData(
+    String uid,
+    String newDeviceId,
+    Map<String, dynamic> data,
+  ) {
+    throw Exception('realtime database unavailable');
+  }
+}
+
+/// Never completes from the enrollment-grant write seam -- proves
+/// `writeEnrollmentGrant` is bounded by its timeout, not an indefinite hang.
+class _HangingEnrollmentGrantWriteService extends FirebaseMetadataService {
+  _HangingEnrollmentGrantWriteService({super.timeout});
+
+  @override
+  Future<void> writeEnrollmentGrantData(
+    String uid,
+    String newDeviceId,
+    Map<String, dynamic> data,
+  ) {
+    return Completer<void>().future; // never completes
+  }
+}
+
+/// Reports a stubbed raw enrollment-grant node value for
+/// `readEnrollmentGrant`, instead of touching Realtime Database.
+class _StubEnrollmentGrantReadService extends FirebaseMetadataService {
+  _StubEnrollmentGrantReadService(this._raw);
+
+  final Object? _raw;
+
+  @override
+  Future<Object?> readEnrollmentGrantData(String uid, String newDeviceId) async =>
+      _raw;
+}
+
+/// The enrollment-grant read seam always throws -- proves
+/// `readEnrollmentGrant` treats a read failure as "not approved" (`false`),
+/// never a thrown error.
+class _ThrowingEnrollmentGrantReadService extends FirebaseMetadataService {
+  @override
+  Future<Object?> readEnrollmentGrantData(String uid, String newDeviceId) {
+    throw Exception('realtime database read unavailable');
+  }
+}
+
+/// The enrollment-grant read seam never completes -- proves
+/// `readEnrollmentGrant` is bounded by its timeout, not an indefinite hang.
+class _HangingEnrollmentGrantReadService extends FirebaseMetadataService {
+  _HangingEnrollmentGrantReadService({super.timeout});
+
+  @override
+  Future<Object?> readEnrollmentGrantData(String uid, String newDeviceId) {
+    return Completer<Object?>().future; // never completes
+  }
+}
+
+/// `E12-B09`: captures the path (via uid/newDeviceId) a real
+/// `deleteEnrollmentGrant` removal would have sent, instead of touching
+/// Realtime Database.
+class _CapturingEnrollmentGrantDeleteService extends FirebaseMetadataService {
+  int callCount = 0;
+  String? capturedUid;
+  String? capturedNewDeviceId;
+
+  @override
+  Future<void> deleteEnrollmentGrantData(String uid, String newDeviceId) async {
+    callCount++;
+    capturedUid = uid;
+    capturedNewDeviceId = newDeviceId;
+  }
+}
+
+/// `E12-B09`: always throws from the enrollment-grant delete seam -- proves
+/// `deleteEnrollmentGrant` swallows and logs rather than propagating, same
+/// best-effort contract as [writeEnrollmentGrant].
+class _ThrowingEnrollmentGrantDeleteService extends FirebaseMetadataService {
+  @override
+  Future<void> deleteEnrollmentGrantData(String uid, String newDeviceId) {
+    throw Exception('realtime database unavailable');
+  }
+}
+
+/// `E12-B09`: never completes from the enrollment-grant delete seam --
+/// proves `deleteEnrollmentGrant` is bounded by its timeout, not an
+/// indefinite hang.
+class _HangingEnrollmentGrantDeleteService extends FirebaseMetadataService {
+  _HangingEnrollmentGrantDeleteService({super.timeout});
+
+  @override
+  Future<void> deleteEnrollmentGrantData(String uid, String newDeviceId) {
+    return Completer<void>().future; // never completes
+  }
+}
+
+/// `E12-B09`: reports a stubbed raw `users/$uid/devices/$deviceId` node
+/// value for `isDeviceRevoked`, instead of touching Realtime Database.
+class _StubDeviceMetadataService extends FirebaseMetadataService {
+  _StubDeviceMetadataService(this._raw);
+
+  final Object? _raw;
+
+  @override
+  Future<Object?> readDeviceMetadata(String uid, String deviceId) async =>
+      _raw;
+}
+
+/// `E12-B09`: the device-metadata read seam always throws -- proves
+/// `isDeviceRevoked` treats a read failure as "not revoked", never a
+/// thrown error.
+class _ThrowingDeviceMetadataReadService extends FirebaseMetadataService {
+  @override
+  Future<Object?> readDeviceMetadata(String uid, String deviceId) {
+    throw Exception('realtime database read unavailable');
+  }
+}
+
+/// `E12-B09`: the device-metadata read seam never completes -- proves
+/// `isDeviceRevoked` is bounded by its timeout, not an indefinite hang.
+class _HangingDeviceMetadataReadService extends FirebaseMetadataService {
+  _HangingDeviceMetadataReadService({super.timeout});
+
+  @override
+  Future<Object?> readDeviceMetadata(String uid, String deviceId) {
+    return Completer<Object?>().future; // never completes
+  }
+}
+
 void main() {
   test('test_EARS_FB_7_first_registration_writes_both_timestamps', () async {
     // EARS-FB-7: WHEN a device registers for the first time, the system
@@ -436,4 +589,268 @@ void main() {
       );
     },
   );
+
+  group('writeEnrollmentGrant (E12-B02)', () {
+    test(
+      'test_EARS_RECOVER_7_writes_approvedByDeviceId_and_a_server_timestamp',
+      () async {
+        final service = _CapturingEnrollmentGrantWriteService();
+
+        await service.writeEnrollmentGrant('uid-1', 'new-device', 'approver-device');
+
+        expect(service.capturedUid, 'uid-1');
+        expect(service.capturedNewDeviceId, 'new-device');
+        final data = service.capturedData!;
+        expect(data.keys.toSet(), {'approvedByDeviceId', 'approvedAt'});
+        expect(data['approvedByDeviceId'], 'approver-device');
+        expect(data['approvedAt'], ServerValue.timestamp);
+      },
+    );
+
+    test(
+      'the payload passes FirebaseBoundary.assertAllowedFields for '
+      'FirebaseNodeKind.deviceEnrollmentGrant',
+      () async {
+        final service = _CapturingEnrollmentGrantWriteService();
+
+        await service.writeEnrollmentGrant('uid-1', 'new-device', 'approver-device');
+
+        expect(
+          service.capturedData!.keys.toSet(),
+          FirebaseBoundary.allowedFields(FirebaseNodeKind.deviceEnrollmentGrant),
+        );
+      },
+    );
+
+    test(
+      'uses FirebasePaths.deviceEnrollmentGrant verbatim',
+      () {
+        expect(
+          FirebasePaths.deviceEnrollmentGrant('uid-1', 'new-device'),
+          'users/uid-1/device_enrollment_grants/new-device',
+        );
+      },
+    );
+
+    test(
+      'a write failure is caught and logged, never thrown',
+      () async {
+        final service = _ThrowingEnrollmentGrantWriteService();
+
+        await expectLater(
+          service.writeEnrollmentGrant('uid-1', 'new-device', 'approver-device'),
+          completes,
+        );
+      },
+    );
+
+    test(
+      'a hanging write is bounded by the timeout, never hangs the caller',
+      () async {
+        final service = _HangingEnrollmentGrantWriteService(
+          timeout: const Duration(milliseconds: 50),
+        );
+
+        await expectLater(
+          service.writeEnrollmentGrant('uid-1', 'new-device', 'approver-device'),
+          completes,
+        );
+      },
+    );
+  });
+
+  group('readEnrollmentGrant (E12-B03)', () {
+    test(
+      'test_EARS_RECOVER_1_a_real_grant_reads_as_approved',
+      () async {
+        final service = _StubEnrollmentGrantReadService({
+          'approvedByDeviceId': 'approver-device',
+          'approvedAt': 1000,
+        });
+
+        expect(
+          await service.readEnrollmentGrant('uid-1', 'new-device'),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'test_EARS_RECOVER_1_no_grant_node_reads_as_not_approved',
+      () async {
+        final service = _StubEnrollmentGrantReadService(null);
+
+        expect(
+          await service.readEnrollmentGrant('uid-1', 'new-device'),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'malformed data (not a Map, or missing approvedByDeviceId) reads as '
+      'not approved, never crashes',
+      () async {
+        expect(
+          await _StubEnrollmentGrantReadService('not-a-map')
+              .readEnrollmentGrant('uid-1', 'new-device'),
+          isFalse,
+        );
+        expect(
+          await _StubEnrollmentGrantReadService({'approvedAt': 1000})
+              .readEnrollmentGrant('uid-1', 'new-device'),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'a read failure is caught and logged, reads as not approved -- never '
+      'thrown',
+      () async {
+        final service = _ThrowingEnrollmentGrantReadService();
+
+        await expectLater(
+          service.readEnrollmentGrant('uid-1', 'new-device'),
+          completion(isFalse),
+        );
+      },
+    );
+
+    test(
+      'a hanging read is bounded by the timeout, resolves to not approved',
+      () async {
+        final service = _HangingEnrollmentGrantReadService(
+          timeout: const Duration(milliseconds: 50),
+        );
+
+        await expectLater(
+          service.readEnrollmentGrant('uid-1', 'new-device'),
+          completion(isFalse),
+        );
+      },
+    );
+  });
+
+  group('deleteEnrollmentGrant (E12-B09)', () {
+    test('removes the grant node at the exact uid/newDeviceId path', () async {
+      final service = _CapturingEnrollmentGrantDeleteService();
+
+      await service.deleteEnrollmentGrant('uid-1', 'new-device');
+
+      expect(service.callCount, 1);
+      expect(service.capturedUid, 'uid-1');
+      expect(service.capturedNewDeviceId, 'new-device');
+    });
+
+    test(
+      'a delete failure is caught and logged, never thrown',
+      () async {
+        final service = _ThrowingEnrollmentGrantDeleteService();
+
+        await expectLater(
+          service.deleteEnrollmentGrant('uid-1', 'new-device'),
+          completes,
+        );
+      },
+    );
+
+    test(
+      'a hanging delete is bounded by the timeout, resolves without hanging',
+      () async {
+        final service = _HangingEnrollmentGrantDeleteService(
+          timeout: const Duration(milliseconds: 50),
+        );
+
+        await expectLater(
+          service.deleteEnrollmentGrant('uid-1', 'new-device'),
+          completes,
+        );
+      },
+    );
+  });
+
+  group('isDeviceRevoked (E12-B09)', () {
+    test('a device node with a non-empty revocation child reads as revoked',
+        () async {
+      final service = _StubDeviceMetadataService({
+        'deviceId': 'device-1',
+        'revocation': {
+          'revokedAt': 1000,
+          'revokedByDeviceId': 'some-device',
+        },
+      });
+
+      expect(await service.isDeviceRevoked('uid-1', 'device-1'), isTrue);
+    });
+
+    test('no device node reads as not revoked', () async {
+      final service = _StubDeviceMetadataService(null);
+
+      expect(await service.isDeviceRevoked('uid-1', 'device-1'), isFalse);
+    });
+
+    test(
+      'a device node with no revocation child reads as not revoked',
+      () async {
+        final service = _StubDeviceMetadataService({
+          'deviceId': 'device-1',
+          'createdAt': 1000,
+          'lastSeenAt': 1000,
+          'platform': 'android',
+        });
+
+        expect(await service.isDeviceRevoked('uid-1', 'device-1'), isFalse);
+      },
+    );
+
+    test(
+      'malformed data (not a Map, or a non-Map/empty revocation child) '
+      'reads as not revoked, never crashes',
+      () async {
+        expect(
+          await _StubDeviceMetadataService('not-a-map')
+              .isDeviceRevoked('uid-1', 'device-1'),
+          isFalse,
+        );
+        expect(
+          await _StubDeviceMetadataService({'revocation': 'not-a-map'})
+              .isDeviceRevoked('uid-1', 'device-1'),
+          isFalse,
+        );
+        expect(
+          await _StubDeviceMetadataService({'revocation': <String, dynamic>{}})
+              .isDeviceRevoked('uid-1', 'device-1'),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'a read failure is caught and logged, reads as not revoked -- never '
+      'thrown',
+      () async {
+        final service = _ThrowingDeviceMetadataReadService();
+
+        await expectLater(
+          service.isDeviceRevoked('uid-1', 'device-1'),
+          completion(isFalse),
+        );
+      },
+    );
+
+    test(
+      'a hanging read is bounded by the timeout, resolves to not revoked',
+      () async {
+        final service = _HangingDeviceMetadataReadService(
+          timeout: const Duration(milliseconds: 50),
+        );
+
+        await expectLater(
+          service.isDeviceRevoked('uid-1', 'device-1'),
+          completion(isFalse),
+        );
+      },
+    );
+  });
 }

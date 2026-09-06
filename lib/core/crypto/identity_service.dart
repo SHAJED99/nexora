@@ -53,7 +53,7 @@ class IdentityService {
   })  : // Named param (`onKeyMaterialChanged`) is public API; the private
         // field below can't share that name, so `prefer_initializing_formals`
         // doesn't apply here despite the trivial assignment -- same
-        // reasoning as `DeviceRevocationService`/`RelationshipSyncService`.
+        // reasoning as `DeviceRevocationService`.
         _onKeyMaterialChanged = onKeyMaterialChanged; // ignore: prefer_initializing_formals
 
   final AppDatabase _db;

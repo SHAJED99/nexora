@@ -10,6 +10,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nexora/core/abuse/rate_limiter.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
@@ -74,7 +75,10 @@ void main() {
     /// Builds a `DevicesController` wired to a real `TransportService`
     /// running over `messenger` with a test-unique [suffix], and a mock
     /// handler for `TransportApi.startDiscovery` that always accepts.
-    DevicesController buildDiscoveringController(String suffix) {
+    DevicesController buildDiscoveringController(
+      String suffix, {
+      EvaluateConnectionRequestUseCase? useCase,
+    }) {
       messenger.setMockMessageHandler(
         'dev.flutter.pigeon.nexora.TransportApi.startDiscovery.$suffix',
         (ByteData? message) async =>
@@ -95,7 +99,7 @@ void main() {
         blockUseCase,
         transportService: transportService,
         evaluateConnectionRequestUseCase:
-            EvaluateConnectionRequestUseCase(repository),
+            useCase ?? EvaluateConnectionRequestUseCase(repository),
       );
     }
 
@@ -279,5 +283,58 @@ void main() {
         RelationshipState.unknown,
       );
     });
+
+    test(
+      'test_EARS_ABUSE_4_rate_limited_evaluation_is_not_shown_as_blocked',
+      () async {
+        // E13-T07: resolves the UI-conflation finding from E13-T02's review
+        // -- a rate-limited evaluation must not render with the same
+        // "Blocked" badge a genuine `BlockUseCase` block gets.
+        const String suffix = 'devices-discover-ratelimited';
+        const String deviceId = 'rate-limited-device';
+        final limiter = RateLimiter(db);
+        // Exhaust the connection-request bucket for this device id BEFORE
+        // discovery ever evaluates it (same bucket-key scheme
+        // `evaluate_connection_request_use_case.dart` documents:
+        // `connection_request:<deviceId>`, max 10/minute).
+        for (var i = 0; i < 10; i++) {
+          final admitted = await limiter.allow(
+            'connection_request:$deviceId',
+            maxCount: 10,
+            window: const Duration(minutes: 1),
+          );
+          expect(admitted, isTrue);
+        }
+
+        final discovering = buildDiscoveringController(
+          suffix,
+          useCase: EvaluateConnectionRequestUseCase(
+            repository,
+            rateLimiter: limiter,
+          ),
+        );
+
+        discovering.discover();
+        await Future<void>.delayed(Duration.zero);
+
+        pushDiscoveredDevice(
+          suffix,
+          TransportDevice(
+            id: deviceId,
+            displayName: 'Rate Limited Phone',
+            type: TransportType.bluetooth,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(
+          discovering.relationships,
+          isEmpty,
+          reason:
+              'a rate-limited evaluation must not be surfaced at all, '
+              'let alone with the same badge a genuine block gets',
+        );
+      },
+    );
   });
 }

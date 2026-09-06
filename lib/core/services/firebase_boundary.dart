@@ -21,6 +21,7 @@ enum FirebaseNodeKind {
   directory,
   directoryPrivate,
   versionPolicy,
+  deviceEnrollmentGrant,
 }
 
 /// Thrown by [FirebaseBoundary.assertAllowedFields] when a payload carries a
@@ -73,8 +74,11 @@ class FirebaseBoundary {
       'revokedAt',
       'revokedByDeviceId',
     },
-    // `users/$uid/relationships/$peerDeviceId` — trust/block metadata
-    // (RelationshipSyncService.push, E11-T05).
+    // `users/$uid/relationships/$peerDeviceId` — trust/block metadata.
+    // UNUSED since `E12-B11`/`IMP-002`: `FR-TRUST-007` is descoped and its
+    // only writer (`RelationshipSyncService.push`, E11-T05) is deleted.
+    // Kept because the node and its security rule still exist -- retiring
+    // those is a separate, operational decision (`IMP-002` follow-up 2).
     FirebaseNodeKind.relationship: {
       'state',
       'updatedAt',
@@ -112,6 +116,17 @@ class FirebaseBoundary {
       'updateAvailableBuild',
       'signature',
       'updatedAt',
+    },
+    // `users/$uid/device_enrollment_grants/$newDeviceId` — the dedicated
+    // enrollment-approval channel (`FirebaseMetadataService
+    // .writeEnrollmentGrant`, `E12-B02`/`E12-B03`), deliberately separate
+    // from `FirebaseNodeKind.relationship` and never merged through
+    // `ConflictResolver` -- an authorization grant from a trusted device
+    // to a specific new device, not a peer-trust opinion (`E12-B03`'s
+    // human decision).
+    FirebaseNodeKind.deviceEnrollmentGrant: {
+      'approvedByDeviceId',
+      'approvedAt',
     },
   };
 

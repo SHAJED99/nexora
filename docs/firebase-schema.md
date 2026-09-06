@@ -19,7 +19,8 @@ accepted option 2).
 | `users/$uid/devices/$deviceId` | live | `deviceId:String`, `createdAt:int(ServerValue)`, `lastSeenAt:int(ServerValue)`, `platform:String` | device registry metadata | `E01-T02` | structural (`.validate` + `$other` deny) — `E11-T02` |
 | `users/$uid/sync_cursors/$writerDeviceId/$conversationId/$aboutDeviceId` | live | `localDeviceId:String`, `remoteDeviceId:String`, `conversationId:String`, `lastConfirmedSequenceNumber:int`, `updatedAt:int` | synchronization metadata (`NFR-PRIV-001`) | `E05-T04` | structural (`.validate` + `$other` deny) — `E11-T02` |
 | `users/$uid/devices/$deviceId/revocation` | live | `revokedAt:int(ServerValue)`, `revokedByDeviceId:String` | revocation information | `E11-T04` | structural (`.validate` + `$other` deny) — `E11-T04` |
-| `users/$uid/relationships/$peerDeviceId` | live | `state:String` (one of `trusted`/`allowed`/`unknown`/`blocked`), `updatedAt:int(ServerValue)` | trust metadata, block metadata | `E11-T05` | structural (`.validate` + `$other` deny) — `E11-T05` |
+| `users/$uid/relationships/$peerDeviceId` | ⛔ unused (rule still deployed) | `state:String` (one of `trusted`/`allowed`/`unknown`/`blocked`), `updatedAt:int(ServerValue)` | trust metadata, block metadata | `E11-T05`, retired by `E12-B11` | structural (`.validate` + `$other` deny) — `E11-T05` |
+| `users/$uid/device_enrollment_grants/$newDeviceId` | live | `approvedByDeviceId:String`, `approvedAt:int(ServerValue)` | device-enrollment authorization grant (`FR-RECOVER-001`) | `E12-B02`/`E12-B03` | structural (`.validate` + `$other` deny), own-uid read/write inherited from `users/$uid` — `E12-B02`/`E12-B03` |
 | `users/$uid/push/$deviceId` | reserved (no owner) | — | push notification information | ⏳ `OQ-E11-2` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
 | `config/version_policy` | live | `minimumSupportedBuild:int`, `currentBuild:int`, `updateAvailableBuild:int`, `signature:String`, `updatedAt:int` | application version policy | `E14-T01` | structural (`.validate` + `$other` deny), any-authenticated-account read, `.write: false` for every client — `E14-T01` |
 | `directory/$deviceId` | live | `identityPublicKey:String` (base64), `prekeyBundle:String` (base64 `PreKeyBundleCodec` v1), `revokedAt:int?` | device public identity information | `E11-T06` (`ADR-0008` accepted, option 2) | structural (`.validate` + `$other` deny), cross-account exact-id read; write requires the caller's `auth.uid` to match `directory_private/$deviceId/ownerUid` — `E11-T06`, fixed by `E11-B06` |
@@ -36,11 +37,18 @@ The first two `live` rows above are pre-existing (`E01-T02`, `E05-T04`);
 changing a single field, path, or the paths' argument order (task §6 Risks).
 The third `live` row (`.../revocation`) is new — `E11-T04`'s own deliverable,
 a child node under the pre-existing `devices/$deviceId` node rather than a
-new top-level path. The fourth `live` row (`relationships/$peerDeviceId`) is
+new top-level path. The fourth row (`relationships/$peerDeviceId`) was
 `E11-T05`'s own deliverable — a new top-level-under-`$uid` node, own-account
 only (`ADR-0008`'s declined-option-3 boundary): `$peerDeviceId` is always a
 remote device id, never a foreign account's uid, and this row does not
-change that. The fifth `live` row (`directory/$deviceId`) is `E11-T06`'s
+change that. **It is now ⛔ unused**: `E12-B11` / `IMP-002` descoped
+`FR-TRUST-007` (human decision, 2026-09-06) and deleted its only reader and
+writer, `RelationshipSyncService.pull`/`push`. No application code touches
+this path any more. The node and its security rule are deliberately left
+deployed — removing a live restrictive rule is an operational decision of its
+own (`IMP-002` follow-up 2), and an unused node guarded by an owner-only rule
+is harmless. Do not treat this row as a seam to reuse: reviving own-account
+relationship sync needs a new FR id and a fresh human decision. The fifth `live` row (`directory/$deviceId`) is `E11-T06`'s
 own deliverable and the one deliberate exception to "every path lives
 under `users/$uid/…`, owner-only": it is a top-level node, readable by
 **any authenticated account, by exact device id only** — never a listing,
@@ -94,6 +102,48 @@ design: revoke, don't delete — enforced by the `.write` rule's own
 property was found to have been silently dropped by finding 2's
 refactor; `ADR-0008`'s addendum has the full detail).
 
+The seventh `live` row (`device_enrollment_grants/$newDeviceId`) is
+`E12-B02`/`E12-B03`'s own fix for a two-part S1 defect the E12 bug sweep
+found: an approving device's `verify()` recorded trust locally only
+(`E12-B02`, no Firebase write at all) and, even once written, a new
+device's `RelationshipSyncService.pull` could never surface it
+(`E12-B03`) — `pull` merges every remote relationship state through
+`ConflictResolver.resolveTrust` (`FR-MSG-007`, "more restrictive state
+wins"), and an enrolling device has no local relationship row, so
+`resolveTrust(unknown, allowed)` resolves to `unknown` and the approval
+is silently discarded. The human-decided fix (2026-09-06) is a dedicated
+node, deliberately NOT under `relationships/`, read directly by the
+enrolling device rather than merged through `ConflictResolver` — an
+enrollment approval is an authorization GRANT from a trusted device to a
+specific new device, not a peer-trust OPINION to reconcile, so
+`FR-MSG-007`'s restrictive-wins rule (correct for the general
+peer-relationship case) is a category error here. This row does **not**
+change `ConflictResolver.resolveTrust`, `FR-MSG-007`, or `pull`'s own
+Firebase read seam at all — those stay exactly as they were for ordinary
+peer trust. `approvedByDeviceId` is the approving (already-trusted)
+device's own id; `approvedAt` is a `ServerValue.timestamp`. Own-uid
+read/write is inherited from `users/$uid`'s own rule, same shape as
+`relationships/$peerDeviceId` — no narrower `.read`/`.write` is declared
+at this node.
+
+`E12-B09` (`FR-RECOVER-001`/`FR-TRUST-007`) closes a gap the reviewer found
+once `E12-B02`/`E12-B03` shipped: a grant node written above is otherwise
+permanent — nothing ever revoked it. Two independent, best-effort checks now
+guard against a stale grant, neither adding a new path or a new writer:
+`DevicesController.block()` (the same handler `Deny` uses) now also calls
+`FirebaseMetadataService.deleteEnrollmentGrant` for the blocked/denied device
+id — a `.remove()` at the exact same `device_enrollment_grants/$newDeviceId`
+node, unconditional on whether the id is still tracked as "pending" (by the
+time a previously-approved device is blocked, `verify()` has already cleared
+that tracking) and a harmless no-op when no grant exists. Separately,
+`DeviceEnrollmentController.checkApproval()` also checks
+`FirebaseMetadataService.isDeviceRevoked` — a read of the ALREADY-EXISTING
+`users/$uid/devices/$deviceId/revocation` child (`E11-T04`, above), reused
+as-is — so a device revoked via that unrelated mechanism is never trusted by
+a stale grant either, with no new Firebase path or writer needed for that
+check. Neither change touches `relationships/*`/`RelationshipSyncService`
+or reintroduces `ConflictResolver` on this read path.
+
 The remaining `reserved` rows are declared here as placeholders their
 owning task flips to `live` — this is the anti-collision mechanism for
 this shared doc, not a promise of behaviour (see
@@ -119,14 +169,16 @@ stored as raw, unverified data in this build — signature verification
   `FirebasePaths.syncCursor`, `FirebasePaths.devices` (the parent
   `users/$uid/devices` node, used to enumerate every device's revocation
   flag in one read), `FirebasePaths.deviceRevocation` (E11-T04),
-  `FirebasePaths.relationships` (the parent `users/$uid/relationships`
+  `FirebasePaths.relationships` (unused since `E12-B11`; the parent `users/$uid/relationships`
   node, used to enumerate every peer relationship in one read),
   `FirebasePaths.relationship` (E11-T05), `FirebasePaths.directoryRoot`
   (the parent `directory` node — never passed to a live `.ref(...)` call,
   only used by the rules test to prove a read there is denied),
   `FirebasePaths.directoryEntry` (E11-T06),
-  `FirebasePaths.directoryPrivateOwnerUid` (`E11-B06` fix) and
-  `FirebasePaths.versionPolicy` (`E14-T01`). Pure functions, no I/O.
+  `FirebasePaths.directoryPrivateOwnerUid` (`E11-B06` fix),
+  `FirebasePaths.versionPolicy` (`E14-T01`) and
+  `FirebasePaths.deviceEnrollmentGrant` (`E12-B02`/`E12-B03`). Pure
+  functions, no I/O.
 - Allowed fields: `lib/core/services/firebase_boundary.dart` —
   `FirebaseBoundary.allowedFields(FirebaseNodeKind)` and
   `FirebaseBoundary.assertAllowedFields(FirebaseNodeKind, Map<String, Object?>)`,
@@ -139,9 +191,11 @@ stored as raw, unverified data in this build — signature verification
   `DeviceRevocationService.revoke`
   (`lib/core/services/device_revocation_service.dart`, E11-T04),
   `RelationshipSyncService.push`
-  (`lib/core/services/relationship_sync_service.dart`, E11-T05) and
+  (`lib/core/services/relationship_sync_service.dart`, E11-T05),
   `DeviceDirectoryService.publish`
-  (`lib/core/services/device_directory_service.dart`, E11-T06) — build
+  (`lib/core/services/device_directory_service.dart`, E11-T06) and
+  `FirebaseMetadataService.writeEnrollmentGrant`
+  (`lib/core/services/firebase_metadata_service.dart`, `E12-B02`) — build
   their payload, call `assertAllowedFields` **before** entering their
   existing best-effort `try`/`catch`, then call the path-registry function
   for the actual `.ref(...)` call. This ordering matters: a boundary

@@ -53,6 +53,21 @@
             }
           }
         },
+        "device_enrollment_grants": {
+          ".validate": "newData.hasChildren()",
+          "$newDeviceId": {
+            ".validate": "newData.hasChildren(['approvedByDeviceId', 'approvedAt'])",
+            "approvedByDeviceId": {
+              ".validate": "newData.isString() && newData.val().length <= 128"
+            },
+            "approvedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
         "sync_cursors": {
           ".validate": "newData.hasChildren()",
           "$writer": {

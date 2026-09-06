@@ -14,11 +14,66 @@
 // requires this exact change and names verifying it as a risk; logged here
 // as a Deviation (one line, this file only) rather than silently left
 // pointing at the superseded placeholder.
+//
+// E12-T03 (FR-RECOVER-001): one new branch point before that unconditional
+// `/dashboard` redirect. `SignInUseCase.call` (unchanged by this task)
+// already persists the freshly-created device identity locally, including
+// `accountUid` when Firebase produced one — `DeviceIdentityRepository
+// .latestDeviceIdentity()` reads that same row back rather than threading a
+// new return value through `SignInUseCase`'s signature (task §4: "does not
+// change SignInUseCase"). When `accountUid` is present, `E12-T01`'s
+// `FirebaseMetadataService.readOwnDeviceIds(accountUid)` says whether any
+// OTHER device already exists on this account; if so, this device cannot
+// read that history locally, so it routes to `/device-enrollment` instead
+// of straight to `/dashboard`. A first device (no accountUid, or no other
+// registered ids) keeps the exact unchanged behavior.
+//
+// **E12-B01 fix (S1 — every returning user misrouted to
+// `/device-enrollment` on every launch after the first):**
+// `generateSecureDeviceId()` used to be called unconditionally on every
+// launch, so `SignInUseCase.call` (which always calls
+// `createDeviceIdentity`/`registerDevice` — neither is in this bug's
+// `files:` fence, so neither changes) accumulated one NEW registered id
+// per launch. The gate above then always saw "another id exists" from
+// launch 2 onward, because the registry held the previous launch's id
+// plus this launch's freshly-minted one. Fix, entirely within this file:
+// read this device's own existing identity (if any) via
+// `DeviceIdentityRepository.latestDeviceIdentity()` BEFORE minting an id,
+// and reuse its `deviceId` when one exists — the same read-back pattern
+// `lib/app/main.dart` already uses to seed `selfDeviceId`, and the same
+// signal `E13-T07` reuses for the same root cause on its own branch/file
+// (that fix cannot be reused directly here: its `files:` fence
+// deliberately excludes this file). A genuinely new device (no local row
+// yet) still mints a fresh random id, unchanged. Reusing the id means the
+// registry never gains a second entry for this device, so the gate's own
+// condition (`otherDeviceIds.any((id) => id != deviceId)`, itself
+// untouched by this fix) again reads "no other device" on every relaunch.
+// This lookup is best-effort, same rationale as the AFTER-sign-in read
+// below: a failure here (Drift error, corrupt row) must not block sign-in
+// — it falls back to minting a fresh id, exactly the pre-B01 behavior,
+// and is logged rather than silently swallowed.
+//
+// **E12-B08 fix (Defect 1, S4):** the AFTER-sign-in identity read (and the
+// `readOwnDeviceIds` call it feeds) used to sit inside `_signIn()`'s outer
+// `try`, so a Drift error there reported a SUCCEEDED sign-in as a mapped
+// failure. It is now wrapped in its own try/catch that logs and falls
+// through to the unchanged `/dashboard` redirect — the same degraded case
+// this task's own §6 Risks already sanctions for an unresolvable
+// repository, now applied to a resolvable-but-throwing one too.
+//
+// **E12-B08 fix (Defect 2, S4):** `_resolveDeviceIdentityRepository()`'s
+// `catch (_)` was the one best-effort failure path in this feature that
+// never logged — every sibling collaborator does. Now logs via
+// `ObservabilityService` before returning `null`, same shape as every
+// sibling catch (`firebase_metadata_service.dart`,
+// `relationship_sync_service.dart`, this file's own outer `_signIn` catch).
 import 'dart:math';
 
 import 'package:get/get.dart';
 import 'package:nexora/core/auth/google_auth_service.dart';
 import 'package:nexora/core/observability/observability_service.dart';
+import 'package:nexora/core/services/firebase_metadata_service.dart';
+import 'package:nexora/features/login/data/device_identity_repository.dart';
 import 'package:nexora/features/login/domain/sign_in_use_case.dart';
 
 /// Generates a device identifier using a cryptographically-secure RNG.
@@ -37,9 +92,58 @@ String generateSecureDeviceId() {
 }
 
 class LoginController extends GetxController {
-  LoginController(this._signInUseCase);
+  /// [metadataService]/[deviceIdentityRepository] are optional named
+  /// parameters. [metadataService] defaults to a fresh
+  /// [FirebaseMetadataService]. [deviceIdentityRepository] defaults to
+  /// `null` at construction — resolved lazily via [_resolveDeviceIdentityRepository]
+  /// instead, since `AppBinding.dependencies()` (NOT in this task's
+  /// `files:` fence, so its existing single-positional-argument
+  /// `LoginController(Get.find<SignInUseCase>())` call site stays
+  /// unmodified) is the only production place that registers a
+  /// `DeviceIdentityRepository` singleton — `Get.find` in a constructor
+  /// initializer would throw for any caller that never registered one
+  /// (e.g. `test/widget_test.dart`'s walking-skeleton test, which builds
+  /// its own unregistered `DeviceIdentityRepository` and passes only a
+  /// `SignInUseCase`). Resolving lazily inside `_signIn()`, guarded by a
+  /// try/catch, keeps that caller's existing behavior byte-for-byte: no
+  /// registered repository reads as "cannot determine `accountUid`", which
+  /// this task's own §6 Risks already treats as an acceptable degraded
+  /// case (falls through to the unchanged `/dashboard` redirect).
+  LoginController(
+    this._signInUseCase, {
+    FirebaseMetadataService? metadataService,
+    DeviceIdentityRepository? deviceIdentityRepository,
+  })  : _metadataService = metadataService ?? FirebaseMetadataService(),
+        _deviceIdentityRepositoryOverride = deviceIdentityRepository;
 
   final SignInUseCase _signInUseCase;
+  final FirebaseMetadataService _metadataService;
+  final DeviceIdentityRepository? _deviceIdentityRepositoryOverride;
+
+  /// Resolves the collaborator this task's branch needs: the explicit
+  /// override if one was given (every test in
+  /// `login_controller_enrollment_gate_test.dart` supplies one), otherwise
+  /// the app-wide permanent singleton via `Get.find` — a lookup, never a
+  /// second construction, so it never risks the
+  /// second-`AppDatabase`/`DeviceIdentityRepository` pitfall
+  /// `app/bindings.dart`'s own header warns about. `Get.find` throwing
+  /// (nothing registered) is caught and reads as "unknown" rather than
+  /// crashing sign-in — this whole branch is a best-effort hint (task §6
+  /// Risks), never something worth blocking navigation over.
+  DeviceIdentityRepository? _resolveDeviceIdentityRepository() {
+    if (_deviceIdentityRepositoryOverride != null) {
+      return _deviceIdentityRepositoryOverride;
+    }
+    try {
+      return Get.find<DeviceIdentityRepository>();
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'recovery.device_identity_repository_unresolved',
+        cause: e,
+      );
+      return null;
+    }
+  }
 
   final RxBool signingIn = true.obs;
 
@@ -51,11 +155,113 @@ class LoginController extends GetxController {
 
   Future<void> _signIn() async {
     signingIn.value = true;
-    final deviceId = generateSecureDeviceId();
     try {
+      final deviceIdentityRepository = _resolveDeviceIdentityRepository();
+
+      // F1 fix (E13-T07 review round 2, S1/S2) + E12-B01 fix (merged from
+      // `epic_12`): reuse this device's own already-registered id when one
+      // exists, rather than unconditionally minting a fresh one on every
+      // launch — minting fresh every time made every relaunch look like a
+      // brand-new device registering, which silently exhausted
+      // `DeviceIdentityRepository`'s per-account registration rate limit
+      // (5/24h) after just 5 launches; it also permanently mis-routed
+      // returning users to `/device-enrollment` (`E12-B01`). `call`
+      // recognizes a reused id as a returning device and skips the
+      // registration/rate-limit path entirely for it (see
+      // `sign_in_use_case.dart`'s header + `call`'s own doc comment).
+      //
+      // Two independently-reviewed mechanisms read this device's existing
+      // identity, reconciled here at the merge of `epic_12`/`epic_13`:
+      // - When a `DeviceIdentityRepository` is resolvable (the real app,
+      //   via `Get.find`, or a test's explicit `deviceIdentityRepository:`
+      //   override), read it DIRECTLY (E12-B01's own mechanism) — a
+      //   failure here is a best-effort hint, not a reason to fail the
+      //   whole sign-in attempt. It falls back to minting a fresh id and
+      //   is logged distinctly from a real sign-in failure
+      //   (`E12-B08` regression: `test_EARS_AUTH_3_device_identity_read_
+      //   failure_falls_through_to_dashboard`).
+      // - When no repository is resolvable at all (no container, or a
+      //   test that only wires `SignInUseCase` directly without also
+      //   registering/injecting a `DeviceIdentityRepository`), fall back
+      //   to `_signInUseCase.existingDeviceId()` — the same signal read
+      //   via `_signInUseCase`'s own internal repository reference, which
+      //   in production is always the identical singleton
+      //   `deviceIdentityRepository` would have resolved to anyway
+      //   (`E13-T07` regression:
+      //   `test_EARS_ABUSE_5_returning_device_reaches_dashboard_across_N_
+      //   launches`). Unlike the repository-read branch above, THIS read
+      //   is intentionally left unguarded: if it throws, no fallback
+      //   repository was even available, which is abnormal enough to fail
+      //   the whole sign-in attempt cleanly via the outer catch below
+      //   (EARS-AUTH-3) rather than silently minting a device id nothing
+      //   could confirm (`E13-T07` review round 3, F6 regression:
+      //   `test_EARS_AUTH_3_existing_device_id_read_failure_completes_
+      //   signin_instead_of_hanging`). `onInit()` calls `_signIn()`
+      //   unawaited, so this must stay inside the outer `try` — moved here
+      //   deliberately, not left to float outside it.
+      String? existingDeviceId;
+      if (deviceIdentityRepository != null) {
+        try {
+          final existingIdentity =
+              await deviceIdentityRepository.latestDeviceIdentity();
+          existingDeviceId = existingIdentity?.deviceId;
+        } catch (e) {
+          ObservabilityService.instance.logError(
+            'recovery.device_identity_read_failed',
+            cause: e,
+          );
+        }
+      } else {
+        existingDeviceId = await _signInUseCase.existingDeviceId();
+      }
+      final deviceId = existingDeviceId ?? generateSecureDeviceId();
       await _signInUseCase(deviceId);
       signingIn.value = false;
-      Get.offNamed('/dashboard');
+
+      // E12-T03: the one new branch point. `SignInUseCase.call` already
+      // wrote (and signed in) this exact device's identity row — read it
+      // straight back for the `accountUid` it recorded, rather than
+      // changing that use case's return type.
+      //
+      // E12-B08 fix (Defect 1): this read (and the `readOwnDeviceIds` call
+      // it feeds) is a best-effort routing hint, not a sign-in outcome —
+      // its own try/catch keeps a failure here from being reported as a
+      // sign-in failure by the outer catch below; it falls through to the
+      // unchanged `/dashboard` redirect instead, same as the no-accountUid
+      // case already does.
+      String? accountUid;
+      var routeToEnrollment = false;
+      try {
+        final identity = await deviceIdentityRepository?.latestDeviceIdentity();
+        accountUid = identity?.accountUid;
+
+        if (accountUid != null) {
+          final otherDeviceIds = await _metadataService.readOwnDeviceIds(
+            accountUid,
+          );
+          // "any device id OTHER than the one just created" (task §2) — a
+          // first device's own freshly-registered id may already be the
+          // only entry `readOwnDeviceIds` reports (E01-T02's
+          // `registerDevice` may have already run by the time this read
+          // happens), which must not by itself count as "other devices
+          // exist".
+          routeToEnrollment = otherDeviceIds.any((id) => id != deviceId);
+        }
+      } catch (e) {
+        ObservabilityService.instance.logError(
+          'recovery.device_identity_lookup_failed',
+          cause: e,
+        );
+      }
+
+      if (routeToEnrollment) {
+        Get.offNamed(
+          '/device-enrollment',
+          arguments: {'uid': accountUid, 'deviceId': deviceId},
+        );
+      } else {
+        Get.offNamed('/dashboard');
+      }
     } catch (e) {
       // EARS-AUTH-3: surface as a mapped failure, never crash. A full
       // error-state UI is out of scope for this task (see task §4) — this

@@ -17,6 +17,7 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
+import 'package:nexora/core/abuse/rate_limiter.dart';
 import 'package:nexora/core/background/background_policy.dart';
 import 'package:nexora/core/background/background_service.dart';
 import 'package:nexora/core/background/power_state.dart';
@@ -103,8 +104,18 @@ class AppBinding extends Bindings {
   @override
   void dependencies() {
     Get.put(db, permanent: true);
+    // E13-T07 (FR-ABUSE-001, EARS-ABUSE-5, task §2 item 4 -- the site
+    // `OQ-E13-T02-1` itself did not name): this is the singleton the app
+    // actually resolves through every `Get.find<DeviceIdentityRepository>()`
+    // call, including `SignInUseCase`'s own construction just below --
+    // wiring `sign_in_use_case.dart`'s call site alone, without this one,
+    // would leave EARS-ABUSE-5 still inert, since this is where the real
+    // instance is built.
     Get.put(
-      DeviceIdentityRepository(Get.find<AppDatabase>()),
+      DeviceIdentityRepository(
+        Get.find<AppDatabase>(),
+        rateLimiter: RateLimiter(Get.find<AppDatabase>()),
+      ),
       permanent: true,
     );
     Get.put(SignInUseCase(Get.find<DeviceIdentityRepository>()), permanent: true);
