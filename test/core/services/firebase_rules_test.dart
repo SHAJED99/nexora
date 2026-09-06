@@ -653,6 +653,38 @@ void main() {
       final uidNode = _navigate(rules, ['users', r'$uid']);
       expect(uidNode.containsKey('device_enrollment_grants'), isTrue);
     });
+
+    test('E12-B10: approvedByDeviceId must differ from \$newDeviceId -- a '
+        'self-referential grant (approvedByDeviceId === \$newDeviceId) is '
+        'rejected at the rules level, not merely by app-level logic', () {
+      final approvedByDeviceIdNode =
+          grantNode['approvedByDeviceId'] as Map<String, dynamic>;
+      final validate = approvedByDeviceIdNode['.validate'] as String;
+      expect(
+        validate,
+        contains(r"newData.val() !== $newDeviceId"),
+        reason: 'the .validate string must explicitly forbid the '
+            'approver device id from equaling the target device id',
+      );
+    });
+
+    test('E12-B10: approvedByDeviceId must name a device already '
+        'registered under users/\$uid/devices/ -- an approver device that '
+        'does not exist in that subtree is rejected at the rules level', () {
+      final approvedByDeviceIdNode =
+          grantNode['approvedByDeviceId'] as Map<String, dynamic>;
+      final validate = approvedByDeviceIdNode['.validate'] as String;
+      expect(
+        validate,
+        contains(
+          "root.child('users').child(\$uid).child('devices')"
+          ".child(newData.val()).exists()",
+        ),
+        reason: 'the .validate string must require the approver device id '
+            'to exist under users/\$uid/devices/, not merely be a '
+            'well-formed string',
+      );
+    });
   });
 
   group('test_EARS_FB_18_directory_read_rules', () {
