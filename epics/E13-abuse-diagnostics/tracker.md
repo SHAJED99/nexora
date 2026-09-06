@@ -1,11 +1,15 @@
 # E13 · Abuse Prevention & Diagnostics · Progress
 
-**Status:** all 7 tasks done and merged into `epic_13`. Epic-level bug
-sweep run 2026-09-06: **P1/P2 = 0** (two findings, `E13-B01` S3 and
-`E13-B02` S4; no S1, no S2). Not yet merged into `development` — awaiting
-the 🧍 `bug_priorities` gate on those two severities. · **Started:**
-2026-09-05 · **Completed:** 2026-09-06 · **Progress:** 7/7 tasks done, 2
-bugs open (S3/S4)
+**Status:** all 7 tasks done and merged into `development`. Epic-level bug
+sweep run 2026-09-06 found 3 bugs: `E13-B01` (S3/P2, rate-limiter cleanup)
+and `E13-B02` (S4/P4, identifier-leak audit) both fixed, reviewed, and
+merged directly into `development`. `E13-B03` was re-scoped down
+(2026-09-07, per `E13-B02`'s own reviewer recommendation, once its
+original "no test seam exists" premise became false) from S3/P2 to a
+narrower S4/P3 `SentryFlutter.init()` root-cause investigation — non-
+blocking, `status: todo`, no further gate pending. · **Started:**
+2026-09-05 · **Completed:** 2026-09-06 · **Progress:** 7/7 tasks done, 2/3
+bugs closed, 1 narrow non-blocking follow-up remains
 
 ## Tasks
 

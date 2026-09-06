@@ -1,11 +1,19 @@
 # E14 · Version & Update Management · Progress
 
-**Status:** in progress — 5/6 tasks done and merged into `epic_14` (T01,
-T02, T04, T05, T06); T03 remains `blocked` on a human key-infrastructure
-decision (`OQ-E14-T03-1`) — the epic's only remaining item. Bug sweep
-found 6 bugs (B01-B06); all fixed and merged except B03/B04/B05
-(non-blocking, P2/P3). · **Started:** 2026-09-05 · **Completed:** — ·
-**Progress:** 5/6 tasks done
+**Status:** in progress — 5/6 tasks done and merged (T01, T02, T04, T05,
+T06). **2026-09-06: `OQ-E14-T03-1` resolved** (asymmetric/Ed25519 signing,
+fail-closed at the signature check) — T03 is `unblocked` but still
+`status: todo`, since a concrete task-sharding pass (files:/functions:/EARS)
+can't be written without also picking the signing library, itself a
+separate 🧍 `new_dependency` gate (no Ed25519-capable dependency exists in
+`pubspec.yaml` today) — see `E14-T03.md` §2. Bug sweep found 7 bugs
+(B01-B07); **B01-B06 all fixed and merged.** `E14-B07` (the
+`sentry_flutter`/`package_info_plus` AAR-metadata compileSdk conflict,
+found during a device-run attempt, not the original sweep) remains
+genuinely open, blocked on a human dependency-version decision (bump
+`sentry_flutter`'s pin vs. pin `package_info_plus` down) — the epic's only
+other remaining item. · **Started:** 2026-09-05 · **Completed:** — ·
+**Progress:** 5/6 tasks done, 6/7 bugs closed
 
 ## Tasks
 
@@ -13,7 +21,7 @@ found 6 bugs (B01-B06); all fixed and merged except B03/B04/B05
 |---|---|---|---|
 | E14-T01 | done | — | T02, T05 |
 | E14-T02 | done | T01 | T04 |
-| E14-T03 | todo, **blocked** (`OQ-E14-T03-1`) | T01 | — |
+| E14-T03 | todo, **unblocked** (`OQ-E14-T03-1` resolved 2026-09-06; sharding still needs a `new_dependency` gate) | T01 | — |
 | E14-T04 | done | T02 | — |
 | E14-T05 | done | — | — |
 | E14-T06 | done | — | — |
