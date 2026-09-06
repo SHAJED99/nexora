@@ -72,4 +72,43 @@ void main() {
     expect(states.last, RelationshipState.blocked);
     await sub.cancel();
   });
+
+  test(
+      'listAll orders rows with an identical updatedAt deterministically '
+      'by deviceId ascending (E12-B14 regression)', () async {
+    // Regression for E12-B14: `listAll`'s query previously sorted only by
+    // `updatedAt desc`, with no secondary key. Rows sharing the exact same
+    // `updatedAt` (e.g. seeded in one tick, as the devices design-verify
+    // probe fixture does) then had an unspecified tie-break order from
+    // SQLite -- this seeds four rows with one identical `updatedAt` value
+    // (bypassing `upsert`, which always stamps `DateTime.now()`, so the tie
+    // is under this test's control) and asserts the result is always
+    // ordered by `deviceId` ascending among the tied rows, across repeated
+    // reads.
+    final tiedUpdatedAt = DateTime.utc(2026, 1, 1, 12);
+    for (final deviceId in ['device-c', 'device-a', 'device-d', 'device-b']) {
+      await db.into(db.relationships).insert(
+            RelationshipsCompanion.insert(
+              deviceId: deviceId,
+              state: RelationshipState.allowed.name,
+              updatedAt: tiedUpdatedAt,
+            ),
+          );
+    }
+
+    final expectedOrder = ['device-a', 'device-b', 'device-c', 'device-d'];
+
+    // Query twice: a non-deterministic tie-break could still coincidentally
+    // match `expectedOrder` on a single read, so this repeats the read and
+    // requires the same deviceId-ascending order every time.
+    for (var i = 0; i < 2; i++) {
+      final rows = await repository.listAll();
+      expect(
+        rows.map((r) => r.deviceId).toList(),
+        expectedOrder,
+        reason: 'listAll must break updatedAt ties by deviceId ascending '
+            '(read #$i)',
+      );
+    }
+  });
 }
