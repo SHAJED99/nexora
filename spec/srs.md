@@ -37,7 +37,28 @@ sourced during intake; this is their first atomic-id rendering)
 - **FR-TRUST-004**: When B has configured A as trusted, the system shall auto-accept A's connection request, skipping the normal authentication flow. *(traces_to: BRD §9)*
 - **FR-TRUST-005**: The system shall evaluate connection authorization independently on both sides — a connection is permitted only when both sides allow it. *(traces_to: BRD §10)*
 - **FR-TRUST-006**: The system shall let users configure: auto-accept trusted devices, auto-accept specific users, require authentication for unknown users, block specific users, allow/disable communication, control location access. *(traces_to: BRD §11)*
-- **FR-TRUST-007**: Where Firebase is available, relevant relationship configuration shall synchronize through it. *(traces_to: BRD §11)*
+- **FR-TRUST-007** — ⛔ **DESCOPED 2026-09-06** (human decision, `IMP-002`; the
+  id is retained and never deleted, because prior tasks trace to it): Where
+  Firebase is available, relevant relationship configuration shall synchronize
+  through it. *(traces_to: BRD §11)*
+  - **Why descoped.** Read narrowly per `ADR-0008`, this meant "an account's
+    own devices agree on peer-relationship state". `ADR-0005` already makes
+    device identity and session state fully independent per device, and each
+    device evaluates authorization for itself (`FR-TRUST-003`,
+    `FR-TRUST-005`) — so no product behaviour depends on two of an account's
+    own devices holding the same trust/block opinion. The one case that
+    genuinely needed a device-to-device signal was device-enrollment
+    approval, and `E12-B03` moved that onto a dedicated enrollment-grant
+    channel (`users/$uid/deviceEnrollmentGrants/*`, read directly rather than
+    merged through `ConflictResolver`) precisely because routing an
+    authorization *grant* through a restrictive-wins conflict resolver was
+    that bug's root cause. What was left was
+    `RelationshipSyncService.push`/`pull` (E11-T05) with no production caller
+    at all — deleted by `E12-B11`.
+  - **Not superseded, not re-scoped.** Nothing replaces this requirement.
+    Cross-account relationship-state exchange was already declined
+    permanently by `ADR-0008`; the own-account half is now declined too.
+    Reviving it needs a new FR id and a fresh human decision, not a revert.
 
 ## FR-BLOCK — Blocking
 

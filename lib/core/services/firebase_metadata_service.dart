@@ -233,13 +233,14 @@ class FirebaseMetadataService {
   /// own side of the dedicated device-enrollment-grant channel
   /// (`FirebasePaths.deviceEnrollmentGrant`, `E12-B03`'s human-decided fix
   /// -- a new Firebase path, read directly by the enrolling device, never
-  /// merged through `RelationshipSyncService.pull`/`ConflictResolver`).
+  /// merged through `ConflictResolver` (nor through the since-deleted
+  /// `RelationshipSyncService.pull`, `E12-B11`).
   /// Writes once [approvedByDeviceId] (the approving device's own id, NOT
   /// the enrolling account's uid) approves [newDeviceId]'s enrollment.
   ///
-  /// Deliberately does NOT touch `RelationshipSyncService.push` or
-  /// `users/$uid/relationships/*` -- that channel and this one are
-  /// independent (`E12-B03`'s "does not loosen `ConflictResolver
+  /// Deliberately does NOT touch `users/$uid/relationships/*` -- that
+  /// channel and this one are independent, and that one is now gone
+  /// entirely (`E12-B11`/`IMP-002` descoped `FR-TRUST-007`) (`E12-B03`'s "does not loosen `ConflictResolver
   /// .resolveTrust` for the general peer-relationship case" fence).
   ///
   /// Best-effort, same pattern as every other wrapper on this class: never
@@ -290,8 +291,9 @@ class FirebaseMetadataService {
 
   /// `E12-B03` (`FR-RECOVER-001`): the enrolling device's own side -- a
   /// plain existence/value check at the dedicated grant path, read
-  /// DIRECTLY, never through `RelationshipSyncService.pull`/
-  /// `ConflictResolver.resolveTrust`. An enrollment approval is an
+  /// DIRECTLY, never through `ConflictResolver.resolveTrust` (nor through
+  /// the since-deleted `RelationshipSyncService.pull`, `E12-B11`). An
+  /// enrollment approval is an
   /// authorization GRANT from a trusted device to a specific new device,
   /// not a peer-trust OPINION to be reconciled -- `FR-MSG-007`'s "more
   /// restrictive state wins" does not apply here (`E12-B03`'s human

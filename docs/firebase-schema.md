@@ -19,7 +19,7 @@ accepted option 2).
 | `users/$uid/devices/$deviceId` | live | `deviceId:String`, `createdAt:int(ServerValue)`, `lastSeenAt:int(ServerValue)`, `platform:String` | device registry metadata | `E01-T02` | structural (`.validate` + `$other` deny) — `E11-T02` |
 | `users/$uid/sync_cursors/$writerDeviceId/$conversationId/$aboutDeviceId` | live | `localDeviceId:String`, `remoteDeviceId:String`, `conversationId:String`, `lastConfirmedSequenceNumber:int`, `updatedAt:int` | synchronization metadata (`NFR-PRIV-001`) | `E05-T04` | structural (`.validate` + `$other` deny) — `E11-T02` |
 | `users/$uid/devices/$deviceId/revocation` | live | `revokedAt:int(ServerValue)`, `revokedByDeviceId:String` | revocation information | `E11-T04` | structural (`.validate` + `$other` deny) — `E11-T04` |
-| `users/$uid/relationships/$peerDeviceId` | live | `state:String` (one of `trusted`/`allowed`/`unknown`/`blocked`), `updatedAt:int(ServerValue)` | trust metadata, block metadata | `E11-T05` | structural (`.validate` + `$other` deny) — `E11-T05` |
+| `users/$uid/relationships/$peerDeviceId` | ⛔ unused (rule still deployed) | `state:String` (one of `trusted`/`allowed`/`unknown`/`blocked`), `updatedAt:int(ServerValue)` | trust metadata, block metadata | `E11-T05`, retired by `E12-B11` | structural (`.validate` + `$other` deny) — `E11-T05` |
 | `users/$uid/device_enrollment_grants/$newDeviceId` | live | `approvedByDeviceId:String`, `approvedAt:int(ServerValue)` | device-enrollment authorization grant (`FR-RECOVER-001`) | `E12-B02`/`E12-B03` | structural (`.validate` + `$other` deny), own-uid read/write inherited from `users/$uid` — `E12-B02`/`E12-B03` |
 | `users/$uid/push/$deviceId` | reserved (no owner) | — | push notification information | ⏳ `OQ-E11-2` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
 | `config/version_policy` | reserved (no owner) | — | application version policy | ⏳ `OQ-E11-2` | client guard only (no rule yet — reserved node, `E11-T02` §4) |
@@ -37,11 +37,18 @@ The first two `live` rows above are pre-existing (`E01-T02`, `E05-T04`);
 changing a single field, path, or the paths' argument order (task §6 Risks).
 The third `live` row (`.../revocation`) is new — `E11-T04`'s own deliverable,
 a child node under the pre-existing `devices/$deviceId` node rather than a
-new top-level path. The fourth `live` row (`relationships/$peerDeviceId`) is
+new top-level path. The fourth row (`relationships/$peerDeviceId`) was
 `E11-T05`'s own deliverable — a new top-level-under-`$uid` node, own-account
 only (`ADR-0008`'s declined-option-3 boundary): `$peerDeviceId` is always a
 remote device id, never a foreign account's uid, and this row does not
-change that. The fifth `live` row (`directory/$deviceId`) is `E11-T06`'s
+change that. **It is now ⛔ unused**: `E12-B11` / `IMP-002` descoped
+`FR-TRUST-007` (human decision, 2026-09-06) and deleted its only reader and
+writer, `RelationshipSyncService.pull`/`push`. No application code touches
+this path any more. The node and its security rule are deliberately left
+deployed — removing a live restrictive rule is an operational decision of its
+own (`IMP-002` follow-up 2), and an unused node guarded by an owner-only rule
+is harmless. Do not treat this row as a seam to reuse: reviving own-account
+relationship sync needs a new FR id and a fresh human decision. The fifth `live` row (`directory/$deviceId`) is `E11-T06`'s
 own deliverable and the one deliberate exception to "every path lives
 under `users/$uid/…`, owner-only": it is a top-level node, readable by
 **any authenticated account, by exact device id only** — never a listing,
@@ -130,7 +137,7 @@ this shared doc, not a promise of behaviour (see
   `FirebasePaths.syncCursor`, `FirebasePaths.devices` (the parent
   `users/$uid/devices` node, used to enumerate every device's revocation
   flag in one read), `FirebasePaths.deviceRevocation` (E11-T04),
-  `FirebasePaths.relationships` (the parent `users/$uid/relationships`
+  `FirebasePaths.relationships` (unused since `E12-B11`; the parent `users/$uid/relationships`
   node, used to enumerate every peer relationship in one read),
   `FirebasePaths.relationship` (E11-T05), `FirebasePaths.directoryRoot`
   (the parent `directory` node — never passed to a live `.ref(...)` call,

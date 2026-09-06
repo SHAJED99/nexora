@@ -7,7 +7,8 @@
 //
 // E12-B03 fix (human decision, 2026-09-06): `checkApproval()` used to be a
 // `pull()`-then-read-local check against `users/$uid/relationships/*` --
-// but `RelationshipSyncService.pull` merges every remote state through
+// but `RelationshipSyncService.pull` (since deleted by `E12-B11`) merged
+// every remote state through
 // `ConflictResolver.resolveTrust` (`FR-MSG-007`, "more restrictive state
 // wins"), and an enrolling device has no local relationship row, so
 // `resolveTrust(unknown, allowed)` resolved to `unknown` and the approval
@@ -128,8 +129,9 @@ class DeviceEnrollmentController extends GetxController {
   /// The waiting state's own poll/check step (task §5 contract). `E12-B03`
   /// fix: reads `FirebaseMetadataService.readEnrollmentGrant` directly --
   /// the dedicated `users/$uid/device_enrollment_grants/$thisDeviceId` node
-  /// -- NEVER through `RelationshipSyncService.pull`/
-  /// `ConflictResolver.resolveTrust`. A read failure/timeout is best-effort
+  /// -- NEVER through `ConflictResolver.resolveTrust` (nor through the
+  /// since-deleted `RelationshipSyncService.pull`, `E12-B11`). A read
+  /// failure/timeout is best-effort
   /// by design, same as the read it replaces — it simply reads as "not yet
   /// approved," never a thrown error (task §5 "UI" note: no dedicated
   /// error state).
