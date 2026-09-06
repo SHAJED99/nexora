@@ -50,6 +50,19 @@ input (idea|PRD|SRS|design|code) ─▶ intake + questions ─▶ knowledge map 
    dependencies, secrets, deletions >50 lines, auth/payment code *design*
    decisions, `development`→`main`) — those remain genuine human calls,
    presented with trade-offs and a recommendation, then STOP.
+   **Extended standing grant (human decision, 2026-09-06):** when the
+   human is stepping away and says not to wait for them, the agent also
+   decides the items rule 3 would otherwise ask about (open-question
+   resolutions like a signing approach, a release go/no-go, which
+   leftover backlog item to work next) rather than pausing — record the
+   decision and reasoning in the relevant task/tracker file the same way
+   a human answer would be recorded, so it stays reviewable after the
+   fact. This still does **not** reach genuinely irreversible or
+   safety-relevant calls with no reasonable default (secrets, destructive
+   deletions, `development`→`main` when no prior go-ahead exists at all,
+   or a foundational choice with no advisory recommendation already on
+   record) — those still STOP and wait, because there is no session to
+   hand the decision back to.
 4. **One task = one branch = one worktree.** `development` (integration) →
    `epic_<NN>` → `epic_<NN>_task_<MM>`. Never commit directly to `main`,
    `development`, or an epic branch. Promotion is by PR only.
