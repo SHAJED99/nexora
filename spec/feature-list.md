@@ -23,7 +23,9 @@
   - UC: Device A requests a connection with device B
   - UC: B auto-accepts a trusted device's request
   - UC: B evaluates an unknown device's request
-- **Feature: Relationship Controls** — FR-TRUST-006, FR-TRUST-007
+- **Feature: Relationship Controls** — FR-TRUST-006
+  (FR-TRUST-007 ⛔ descoped 2026-09-06, `IMP-002` — relationship config is
+  local-only per device; no cross-device sync)
   - UC: User configures auto-accept and authentication requirements
 - **Feature: Blocking** — FR-BLOCK-001–003
   - UC: User blocks another user

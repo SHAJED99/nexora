@@ -73,8 +73,11 @@ class FirebaseBoundary {
       'revokedAt',
       'revokedByDeviceId',
     },
-    // `users/$uid/relationships/$peerDeviceId` — trust/block metadata
-    // (RelationshipSyncService.push, E11-T05).
+    // `users/$uid/relationships/$peerDeviceId` — trust/block metadata.
+    // UNUSED since `E12-B11`/`IMP-002`: `FR-TRUST-007` is descoped and its
+    // only writer (`RelationshipSyncService.push`, E11-T05) is deleted.
+    // Kept because the node and its security rule still exist -- retiring
+    // those is a separate, operational decision (`IMP-002` follow-up 2).
     FirebaseNodeKind.relationship: {
       'state',
       'updatedAt',

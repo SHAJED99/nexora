@@ -203,15 +203,14 @@ class DevicesController extends GetxController {
   /// ordinary stranger's `Unknown`/`Verify` row), this ALSO mirrors the
   /// approval to Firebase via `FirebaseMetadataService.writeEnrollmentGrant`
   /// -- the dedicated channel `E12-B03`'s human decision names (a new
-  /// path, never merged through `RelationshipSyncService.pull`/
-  /// `ConflictResolver`). Gated on `wasPendingEnrollment`, captured BEFORE
+  /// path, never merged through `ConflictResolver`). Gated on `wasPendingEnrollment`, captured BEFORE
   /// the local upsert/removal below, because an ordinary `Verify` of a
   /// stranger has no enrollment to grant -- writing a grant record for a
   /// non-enrolling peer would be a category error, the same one `E12-B03`
-  /// itself diagnoses for `ConflictResolver`. Deliberately does NOT call
-  /// `RelationshipSyncService.push` or touch `users/$uid/relationships/*`
-  /// -- that channel is unrelated and unchanged (`E12-B02`'s own "does not
-  /// change push's own implementation or path" fence).
+  /// itself diagnoses for `ConflictResolver`. Deliberately does NOT touch
+  /// `users/$uid/relationships/*` -- that channel was always unrelated, and
+  /// is now gone entirely (`E12-B11`/`IMP-002` descoped `FR-TRUST-007` and
+  /// deleted `RelationshipSyncService`).
   Future<void> verify(String deviceId) async {
     final bool wasPendingEnrollment =
         pendingEnrollments.any((d) => d.id == deviceId);

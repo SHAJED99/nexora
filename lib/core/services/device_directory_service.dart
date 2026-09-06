@@ -42,8 +42,8 @@
 // this task's fence).
 //
 // Firebase boundary (FR-FB-002, non-negotiable): the Firebase read/write
-// methods below mirror `DeviceRevocationService`/`RelationshipSyncService`'s
-// exact pattern (E11-T04/E11-T05) -- best-effort, bounded timeout via
+// methods below mirror `DeviceRevocationService`'s exact pattern (E11-T04)
+// -- best-effort, bounded timeout via
 // `.timeout()`, catch-and-log via `ObservabilityService`, never throws to
 // the caller. Only `identityPublicKey`/`prekeyBundle`/`revokedAt` are ever
 // written to the public `directory/$deviceId` node -- never anything
@@ -108,12 +108,12 @@ class DeviceDirectoryService {
   })  : // Named params (`identityService`/`database`) are public API; the
         // private fields below can't share those names, so
         // `prefer_initializing_formals` doesn't apply here -- same
-        // reasoning as `DeviceRevocationService`/`RelationshipSyncService`.
+        // reasoning as `DeviceRevocationService`.
         _identityService = identityService, // ignore: prefer_initializing_formals
         _database = database, // ignore: prefer_initializing_formals
         _firebaseDatabaseOverride = firebaseDatabase,
-        // Same reasoning as DeviceRevocationService._timeout /
-        // RelationshipSyncService._timeout: a Realtime Database write/read
+        // Same reasoning as DeviceRevocationService._timeout:
+        // a Realtime Database write/read
         // queued offline never completes at all, so this bounds it -- a
         // timeout is just another failure mode, caught below like any
         // other Realtime Database error.
@@ -150,8 +150,7 @@ class DeviceDirectoryService {
   /// `IdentityService.getLocalPreKeyBundle()` throwing `StateError` because
   /// identity/prekey bootstrap hasn't finished yet -- is caught and logged
   /// via `ObservabilityService`, exactly like every other best-effort
-  /// Firebase writer in this codebase (`DeviceRevocationService.revoke`,
-  /// `RelationshipSyncService.push`).
+  /// Firebase writer in this codebase (`DeviceRevocationService.revoke`).
   Future<void> publish(String uid, String deviceId) async {
     try {
       await _publish(uid, deviceId).timeout(_timeout);
@@ -181,7 +180,7 @@ class DeviceDirectoryService {
     // EARS-FB-17/task §6 Risks: the guard runs *before* the write below --
     // a boundary violation is a programming error and must propagate, not
     // get caught and logged as "just another Firebase error" (same
-    // reasoning as DeviceRevocationService.revoke/RelationshipSyncService.push).
+    // reasoning as DeviceRevocationService.revoke).
     FirebaseBoundary.assertAllowedFields(FirebaseNodeKind.directory, data);
     // `ownerUid` (`E11-B06` fix) is boundary-checked separately against its
     // own, narrower allow-list -- it is never part of the public payload

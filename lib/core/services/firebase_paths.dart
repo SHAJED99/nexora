@@ -47,18 +47,23 @@ class FirebasePaths {
       'users/$uid/devices/$deviceId/revocation';
 
   /// `users/<uid>/relationships` — the parent node this account's own
-  /// trust/block relationship entries live under. Used by
-  /// `RelationshipSyncService.pull` (E11-T05) to enumerate every peer
-  /// device this account has a relationship node for in a single read,
-  /// same shape as [devices]/`DeviceRevocationService.pullRevocations`.
+  /// trust/block relationship entries live under.
+  ///
+  /// UNUSED since `E12-B11`/`IMP-002`: `FR-TRUST-007` is descoped and its
+  /// only reader (`RelationshipSyncService.pull`, E11-T05) is deleted. Kept
+  /// only because the node and its security rule (`EARS-FB-16`) still
+  /// exist; retiring those is a separate operational decision.
   static String relationships(String uid) => 'users/$uid/relationships';
 
   /// `users/<uid>/relationships/<peerDeviceId>` — this account's own
-  /// trust/block state for [peerDeviceId] (E11-T05, `FR-TRUST-007`
-  /// "relevant relationship configuration shall synchronize", read
-  /// narrowly per `ADR-0008` as a user's own devices agreeing with each
-  /// other). `$peerDeviceId` is the remote device id this relationship is
-  /// about, never a foreign account's uid.
+  /// trust/block state for [peerDeviceId] (E11-T05). `$peerDeviceId` is the
+  /// remote device id this relationship is about, never a foreign account's
+  /// uid.
+  ///
+  /// UNUSED since `E12-B11`/`IMP-002`: `FR-TRUST-007` is descoped and
+  /// `RelationshipSyncService` is deleted, so nothing reads or writes this
+  /// path. Kept only because the node and its security rule (`EARS-FB-16`)
+  /// still exist; retiring those is a separate operational decision.
   static String relationship(String uid, String peerDeviceId) =>
       'users/$uid/relationships/$peerDeviceId';
 
@@ -94,8 +99,9 @@ class FirebasePaths {
 
   /// `users/<uid>/device_enrollment_grants/<newDeviceId>` — `E12-B02`/
   /// `E12-B03`'s dedicated enrollment-approval channel, deliberately
-  /// separate from [relationship]/[relationships]. `RelationshipSyncService
-  /// .pull` merges every remote relationship state through
+  /// separate from [relationship]/[relationships]. The since-deleted
+  /// `RelationshipSyncService.pull` merged every remote relationship state
+  /// through
   /// `ConflictResolver.resolveTrust` (`FR-MSG-007`, "more restrictive
   /// state wins"), which is correct for reconciling two devices'
   /// independent OPINIONS about a peer but a category error for an

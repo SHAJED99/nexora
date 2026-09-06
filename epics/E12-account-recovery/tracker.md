@@ -211,6 +211,24 @@ E13-T07).
   reports a real 62.3% (38/61) FAIL — pre-existing drift, not caused by
   any E12 change, but genuinely red and needs an owner before this epic
   is feature-complete).
+- 2026-09-06 — **`E12-B11` resolved** (branch `epic_12_bug_11`,
+  `status: review-requested`) by executing the human's 2026-09-06 decision:
+  **`FR-TRUST-007` is formally ⛔ descoped** and `RelationshipSyncService`
+  (`push`/`pull`, 186 prod + 492 test lines) is deleted. Recorded as
+  `docs/impact/IMP-002-descope-fr-trust-007.md` (class: dropped scope).
+  `FR-TRUST-007`, `EARS-FB-14` and `EARS-FB-15` are **marked** retired, never
+  deleted — `E11-T05`/`E12-B02`/`E12-B03`/`E12-B09`/`E12-B10` all trace to
+  them. `ConflictResolver.resolveTrust`/`FR-MSG-007` untouched. `E11-T05`'s
+  contract untouched (note appended only). `flutter test` 1176/1176 green,
+  `flutter analyze` 1 pre-existing unrelated info. Three follow-ups carried
+  in `IMP-002`, **none of them silent**: (1) `E12-B10`'s only `traces_to:` is
+  now a descoped id and needs re-pointing before dispatch — planner; (2)
+  whether to retire the now-unused `relationships` node from
+  `database.rules.json` (and `EARS-FB-16`, `FirebasePaths.relationship*`,
+  `FirebaseNodeKind.relationship`) — **human**, since removing a deployed
+  security rule is operational, not cleanup; (3) regenerate
+  `docs/traceability.md` so `FR-TRUST-007` reads as descoped rather than
+  uncovered.
 - 2026-09-06 — **`E12-B09`/`E12-B10`/`E12-B11` filed** from B02/B03's own
   review: B09 (S3) an enrollment grant is permanent/unrevocable once
   written; B10 (S4) the grant's Firebase rule lacks a defense-in-depth
