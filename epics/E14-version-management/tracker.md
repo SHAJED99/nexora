@@ -192,6 +192,27 @@ trigger is missing.
   `FirebaseBoundary.assertAllowedFields` on the read side and folds a
   violation into "no usable policy" rather than throwing.
 
+### E14-B06 round 2 review — carried-forward observation
+
+- **F4 (non-blocking, recorded, not fixed):** `E14-B06`'s round-2 review
+  (2026-09-06) found that a mid-session `updateRequired` result from
+  `VersionReconnectWatcher` navigates to `/version-update-required`
+  (`lib/app/main.dart`) but does NOT retroactively set
+  `AppBinding.blockCommunication` — that flag is computed once at launch
+  (`E14-B02`) from the launch-time `versionState` only and is never revisited.
+  Consequence: a user already mid-session when an emergency policy update
+  lands gets routed to the mandatory-update screen, but the mesh
+  coordinator/inbound pipeline/link feed/background service/notification
+  dispatcher `AppBinding` already started keep running underneath it —
+  `FR-VER-006`'s "block application communication" clause is not actually
+  enforced for this specific reconnect-triggered path, only for a fresh
+  launch. Judged likely outside `E14-B06`'s own fence (it owns re-evaluation
+  and re-routing, not `AppBinding`'s binding lifecycle) — recorded here per
+  this bug's own review instructions rather than fixed as part of this round.
+  Needs its own task if prioritized: making `blockCommunication` (or an
+  equivalent live gate `AppBinding`'s four starts already read) mutable and
+  wired to `VersionReconnectWatcher`'s own `onUpdateRequired` callback.
+
 ### Gate status
 
 **P1/P2 count: 🧍 not yet determined — priorities are the human's call**
