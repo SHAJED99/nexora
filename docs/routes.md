@@ -29,9 +29,12 @@ navigates to it.
 | `/settings` | `settings` | `design/screens/settings.md` | `lib/features/settings/` (E02-T03) |
 | `/conversations` | `conversations` | `design/screens/conversations.md` | `lib/features/conversations/` (E06-T10) |
 | `/chat/:id` | `chat` | `design/screens/chat.md` | `lib/features/chat/` (E06-T11) |
+| `/version-update-required` | `version-update-required` | `design/screens/version-update-required.md` | `lib/features/version/` (E14-T04) |
+| `/device-enrollment` | `device-enrollment` | `design/screens/device-enrollment.md` | `lib/features/recovery/` (E12-T03) |
 
-`welcome`, `login`, `devices`, `settings`, `conversations`, `chat` and
-`dashboard` all have generated contracts and are wired.
+`welcome`, `login`, `devices`, `settings`, `conversations`, `chat`,
+`dashboard`, `version-update-required` and `device-enrollment` all have
+generated contracts and are wired.
 `settings`'s eight rows are a pure navigation menu — none of their
 sub-screens (Account, Privacy & Security, etc.) have a design source yet;
 see `design/gaps.md` GAP-005.
