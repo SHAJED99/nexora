@@ -113,6 +113,24 @@ class SentryObservabilityClient implements ObservabilityClient {
 
   @override
   Future<void> init() async {
+    // E13-B03: an empty DSN (this app's default whenever
+    // `--dart-define=SENTRY_DSN=...` is not passed, e.g. CI/dev) means
+    // there is nothing for this client to send anywhere -- so skip
+    // `SentryFlutter.init()` entirely rather than attempting it. This is
+    // not merely a test workaround: `SentryFlutter.init()`'s own
+    // `Sentry.init()` (in `package:sentry`) only rejects a NULL `dsn`,
+    // not an empty one, so an empty-DSN call still unconditionally runs
+    // every default integration (platform-channel calls included, e.g.
+    // `package_info_plus` via `LoadReleaseIntegration`) with no public
+    // option to opt out -- work that is always wasted when there is no
+    // DSN, and that this investigation confirmed can hang indefinitely
+    // (no error, no timeout) rather than complete when a real widget
+    // frame/engine binding never pumps a frame for it to wait on (see
+    // `test/core/observability/sentry_observability_client_init_test.dart`
+    // for the full investigation and the regression test proving this).
+    if (_dsn.isEmpty) {
+      return;
+    }
     await SentryFlutter.init(configurePrivacyOptions);
   }
 
