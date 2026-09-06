@@ -151,8 +151,30 @@ class ObservabilityService {
   factory ObservabilityService.withClient(ObservabilityClient client) =>
       ObservabilityService._(client: client);
 
-  final ObservabilityClient _client;
+  ObservabilityClient _client;
   bool _initialized = false;
+
+  /// Test-only seam (E13-B02): temporarily swap the singleton `instance`'s
+  /// own client and mark it initialized, so a test can observe exactly
+  /// what a REAL production call site -- which always logs through
+  /// `ObservabilityService.instance`, never through `.withClient` -- would
+  /// actually send to the vendor. Returns a restore callback the caller
+  /// MUST invoke (e.g. via `addTearDown`) to put the singleton back
+  /// exactly as it was; this mutates process-wide state and is never used
+  /// by any production call site.
+  @visibleForTesting
+  static void Function() debugOverrideInstanceClientForTesting(
+    ObservabilityClient client,
+  ) {
+    final previousClient = instance._client;
+    final previousInitialized = instance._initialized;
+    instance._client = client;
+    instance._initialized = true;
+    return () {
+      instance._client = previousClient;
+      instance._initialized = previousInitialized;
+    };
+  }
 
   /// Initializes the configured `ObservabilityClient` — `SentryObservabilityClient`
   /// by default, bootstrapping the real Sentry SDK with the disabled-PII

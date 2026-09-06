@@ -8,9 +8,33 @@
 // PII-adjacent default named in the task's §6 Risks; `EARS-DIAG-2`/`3`
 // exercise the `ObservabilityClient` injection seam with a fake client, as
 // before.
+import 'dart:convert';
+
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nexora/core/crypto/drift_signal_store.dart';
+import 'package:nexora/core/crypto/identity_service.dart';
+import 'package:nexora/core/crypto/prekey_bundle_codec.dart';
 import 'package:nexora/core/observability/observability_service.dart';
+import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/services/device_directory_service.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
+
+/// Same test-seam pattern as `device_directory_service_test.dart`: subclass
+/// `DeviceDirectoryService` and return a fixed raw `directory/$deviceId`
+/// snapshot from the read seam, without touching a live `FirebaseDatabase`.
+class _RespondingReadDeviceDirectoryService extends DeviceDirectoryService {
+  _RespondingReadDeviceDirectoryService({
+    required super.identityService,
+    required super.database,
+    required this.response,
+  });
+
+  final Object? response;
+
+  @override
+  Future<Object?> readDirectoryData(String deviceId) async => response;
+}
 
 class _RecordingClient implements ObservabilityClient {
   final List<(LogLevel, String, Object?)> captured = [];
@@ -137,6 +161,80 @@ void main() {
                 'SentryOptions.isTracingEnabled()');
         expect(options.enableAutoPerformanceTracing, isFalse);
         expect(options.enableUserInteractionTracing, isFalse);
+      },
+    );
+  });
+
+  group('E13-B02 — device_directory_service.dart identity-mismatch cause '
+      'must not leak deviceId to the vendor', () {
+    // Reproduces the exact real path (`DeviceDirectoryService.lookupDevice`'s
+    // E11-B02 identity-mismatch check) rather than a copy of its message
+    // string, so reverting the fix in `device_directory_service.dart` makes
+    // THIS test fail -- a test built from a duplicated string could stay
+    // green even after a regression. Captures what the singleton would
+    // actually forward to the vendor via
+    // `ObservabilityService.debugOverrideInstanceClientForTesting`, since
+    // production code always logs through `ObservabilityService.instance`,
+    // never through `.withClient`.
+    test(
+      'test_E13_B02_lookupDevice_identity_mismatch_cause_excludes_device_id',
+      () async {
+        final dbA = AppDatabase.forTesting(NativeDatabase.memory());
+        final dbB = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(() async {
+          await dbA.close();
+          await dbB.close();
+        });
+        final identityServiceA =
+            IdentityService(dbA, DriftSignalProtocolStore(dbA));
+        final identityServiceB =
+            IdentityService(dbB, DriftSignalProtocolStore(dbB));
+        await identityServiceA.ensureLocalIdentity();
+        await identityServiceA.ensureSignedPreKey();
+        await identityServiceA.replenishOneTimePreKeys();
+        await identityServiceB.ensureLocalIdentity();
+        await identityServiceB.ensureSignedPreKey();
+        await identityServiceB.replenishOneTimePreKeys();
+
+        final bundleA = await identityServiceA.getLocalPreKeyBundle();
+        final bundleB = await identityServiceB.getLocalPreKeyBundle();
+
+        // A forged entry: `identityPublicKey` names identity A, but the
+        // identity key embedded inside `prekeyBundle` names identity B --
+        // this is the exact E11-B02 mismatch `lookupDevice` detects and
+        // logs.
+        final forgedEntry = <String, Object?>{
+          'identityPublicKey': base64Encode(bundleA.getIdentityKey().serialize()),
+          'prekeyBundle': base64Encode(PreKeyBundleCodec.serialize(bundleB)),
+        };
+
+        final recordingClient = _RecordingClient();
+        final restore = ObservabilityService
+            .debugOverrideInstanceClientForTesting(recordingClient);
+        addTearDown(restore);
+
+        const sentinelDeviceId = 'sentinel-device-id-must-not-leak-E13-B02';
+        final lookup = _RespondingReadDeviceDirectoryService(
+          identityService: identityServiceA,
+          database: dbA,
+          response: forgedEntry,
+        );
+
+        final entry = await lookup.lookupDevice(sentinelDeviceId);
+
+        expect(entry, isNull,
+            reason: 'a mismatched entry must still be rejected');
+        expect(recordingClient.captured, hasLength(1));
+        final captured = recordingClient.captured.single;
+        expect(captured.$2, 'firebase.device_directory_lookup_identity_mismatch');
+        final capturedCause = captured.$3;
+        expect(capturedCause, isNotNull);
+        expect(
+          capturedCause.toString(),
+          isNot(contains(sentinelDeviceId)),
+          reason: 'FR-DIAG-002: the cause shipped to Sentry via '
+              'captureException must never interpolate the deviceId',
+        );
       },
     );
   });

@@ -269,11 +269,18 @@ class DeviceDirectoryService {
         identityPublicKey.serialize(),
         preKeyBundle.getIdentityKey().serialize(),
       )) {
+        // E13-B02: never interpolate `deviceId` (or any other identifier)
+        // into this message -- it reaches `Sentry.captureException`
+        // verbatim via `ObservabilityService`, and FR-DIAG-002 forbids
+        // shipping an identifier to a third-party vendor. The stable
+        // `code` argument above already says which failure this is; a
+        // reader of the privacy-scoped error report needs the KIND of
+        // mismatch, not which device triggered it.
         ObservabilityService.instance.logError(
           'firebase.device_directory_lookup_identity_mismatch',
           cause: StateError(
-            'directory/$deviceId: identityPublicKey field disagrees with '
-            'the identity key embedded in prekeyBundle',
+            'directory entry: identityPublicKey field disagrees with the '
+            'identity key embedded in prekeyBundle',
           ),
         );
         return null;
