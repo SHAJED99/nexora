@@ -66,7 +66,7 @@ Future<void> main() async {
   final versionPolicyService = VersionPolicyService(database: db);
   final versionState = await evaluateVersionStateAtLaunch(
     versionPolicyService,
-    _readInstalledBuildNumber,
+    readInstalledBuildNumber,
   );
   final initialRoute = initialRouteFor(versionState);
 
@@ -89,7 +89,7 @@ Future<void> main() async {
   // screen if it now comes back `updateRequired`. Started after `runApp`
   // (never before -- `Get.offNamed` below needs `GetMaterialApp` already
   // built), and reuses the SAME `versionPolicyService`/
-  // `_readInstalledBuildNumber` this function already constructed above --
+  // `readInstalledBuildNumber` this function already constructed above --
   // never a second `VersionPolicyService`, same "exactly one" discipline
   // this file already documents for `AppDatabase`/`MessagingStack`.
   VersionReconnectWatcher(
@@ -98,7 +98,7 @@ Future<void> main() async {
         .onValue
         .map((event) => event.snapshot.value == true),
     versionPolicyService: versionPolicyService,
-    installedBuildProvider: _readInstalledBuildNumber,
+    installedBuildProvider: readInstalledBuildNumber,
     // Mirrors `LoginController._signIn`'s own forced-navigation shape
     // (`Get.offNamed`, `login_controller.dart:58`) -- the established
     // pattern in this codebase for "this session's state changed, replace
@@ -134,7 +134,7 @@ Future<void> main() async {
 /// behaviour, never a hang or a crash.
 Future<VersionState> evaluateVersionStateAtLaunch(
   VersionPolicyService versionPolicyService,
-  Future<int> Function() installedBuildProvider,
+  Future<int?> Function() installedBuildProvider,
 ) async {
   await versionPolicyService.refresh();
   final evaluateVersionState = EvaluateVersionStateUseCase(
@@ -167,20 +167,42 @@ String initialRouteFor(VersionState state) => state == VersionState.updateRequir
 /// a `String` (Android's own `versionCode` rendered as text) — parsed to
 /// `int` here, since the use case's own comparison is explicitly numeric,
 /// never lexicographic (that file's own header comment).
-Future<int> _readInstalledBuildNumber() async {
+///
+/// Not private (pulled out of `main()`'s body the same way
+/// `evaluateVersionStateAtLaunch`/`initialRouteFor` already are) so
+/// `test/features/version/presentation/version_update_controller_test.dart`
+/// (this bug's own fenced test file) can call THIS SAME function against a
+/// mocked `PackageInfo`, rather than re-implementing it.
+///
+/// `E14-B03` (`OQ-E14-B03-1`, resolved 2026-09-06): returns `null` — never
+/// a sentinel smuggled through a normal-looking `int` (the bug's own
+/// finding about the old `1 << 62` value) — on EITHER failure mode this
+/// used to conflate: a `PackageInfo.fromPlatform()` failure (platform
+/// -channel error, plugin-registration failure) or a non-numeric
+/// `buildNumber` (`int.tryParse` returning `null` instead of `int.parse`
+/// throwing `FormatException`). `EvaluateVersionStateUseCase.call()` is the
+/// one place that decides what `null` means (fail CLOSED when a policy is
+/// cached) — this function's only job is reporting "could not read/parse",
+/// honestly, in the type.
+Future<int?> readInstalledBuildNumber() async {
   try {
     final info = await PackageInfo.fromPlatform();
-    return int.parse(info.buildNumber);
+    final buildNumber = int.tryParse(info.buildNumber);
+    if (buildNumber == null) {
+      ObservabilityService.instance.logError(
+        'version.installed_build_read_failed',
+        cause: FormatException(
+          'PackageInfo.buildNumber is not numeric: "${info.buildNumber}"',
+        ),
+      );
+    }
+    return buildNumber;
   } catch (e) {
     ObservabilityService.instance.logError(
       'version.installed_build_read_failed',
       cause: e,
     );
-    // Fail-open, mirroring `EvaluateVersionStateUseCase`'s own "no cached
-    // policy -> upToDate" precedent (FR-VER-008, offline-use framing): an
-    // unreadable build number must never itself block app use, so it is
-    // treated as satisfying every threshold rather than none.
-    return 1 << 62;
+    return null;
   }
 }
 
