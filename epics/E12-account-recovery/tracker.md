@@ -217,3 +217,25 @@ E13-T07).
   self-grant check; B11 (S3) `RelationshipSyncService` is now fully dead
   production code and `FR-TRUST-007` has zero remaining wiring — a
   planner call on direction, not a coding defect.
+- 2026-09-06 — **`E12-B01`/`E12-B08` fixed and merged** (both P1/S1 and S4
+  respectively): `login_controller.dart` now reuses an existing local
+  device identity across launches instead of minting a fresh one every
+  time, matching `E13-T07`'s independent fix for the same root cause in a
+  different epic/file. Reviewer confirmed no regression to genuinely-new-
+  device enrollment. **E12 is now clear of all P1 findings.** Reviewer
+  carried forward 3 new observations, not blocking this fix or the
+  epic's own merge:
+  - **S3**: a legitimately-approved second device on a multi-device
+    account now sees "Waiting for approval…" on every single launch
+    (its device id is stable, so `otherDeviceIds.any(id != deviceId)`
+    stays permanently true) — not a hang (`checkApproval()` still bounces
+    it to `/dashboard`), but a UX rough edge on every cold start.
+  - **S4**: `createDeviceIdentity` still inserts a new row per launch
+    (no upsert) — unbounded `device_identities` growth, now load-bearing
+    since the fix depends on `latestDeviceIdentity()`'s `ORDER BY id DESC
+    LIMIT 1` picking the right row.
+  - **S4**: a stable device id interacts with `database.rules.json`'s
+    sticky `directory_private/$deviceId/ownerUid` — a second account
+    signing in on the same physical install would be refused that write.
+    Currently unreachable (no sign-out/account-switch flow exists
+    anywhere in `lib/`); file against whenever one lands.
