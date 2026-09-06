@@ -10,13 +10,16 @@
 // crash — see `messaging_stack.dart`), so nothing here needs its own
 // try/catch beyond that already-honest contract.
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/services/firebase_paths.dart';
 import 'package:nexora/core/services/version_policy_service.dart';
 import 'package:nexora/features/version/domain/evaluate_version_state_use_case.dart';
+import 'package:nexora/features/version/domain/version_reconnect_watcher.dart';
 import 'package:nexora/features/version/domain/version_state.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'bindings.dart';
@@ -79,6 +82,37 @@ Future<void> main() async {
       blockCommunication: versionState == VersionState.updateRequired,
     ),
   );
+
+  // E14-B06 (FR-VER-008's own second half): a genuine reconnect, observed
+  // any time AFTER this launch-time evaluation already ran, re-fetches and
+  // re-evaluates the version policy, re-routing to the mandatory-update
+  // screen if it now comes back `updateRequired`. Started after `runApp`
+  // (never before -- `Get.offNamed` below needs `GetMaterialApp` already
+  // built), and reuses the SAME `versionPolicyService`/
+  // `_readInstalledBuildNumber` this function already constructed above --
+  // never a second `VersionPolicyService`, same "exactly one" discipline
+  // this file already documents for `AppDatabase`/`MessagingStack`.
+  VersionReconnectWatcher(
+    connectivityStream: FirebaseDatabase.instance
+        .ref(FirebasePaths.infoConnected())
+        .onValue
+        .map((event) => event.snapshot.value == true),
+    versionPolicyService: versionPolicyService,
+    installedBuildProvider: _readInstalledBuildNumber,
+    // Mirrors `LoginController._signIn`'s own forced-navigation shape
+    // (`Get.offNamed`, `login_controller.dart:58`) -- the established
+    // pattern in this codebase for "this session's state changed, replace
+    // the current screen" rather than pushing on top of it.
+    //
+    // E14-B06 round 2 (F5): guarded so a flapping connection producing
+    // repeated reconnect events while the mandatory-update screen is
+    // already showing doesn't keep tearing it down and rebuilding it.
+    onUpdateRequired: () {
+      if (Get.currentRoute != Routes.versionUpdateRequired) {
+        Get.offNamed(Routes.versionUpdateRequired);
+      }
+    },
+  ).start();
 }
 
 /// E14-B01: the exact launch-time composition `main()` runs to decide

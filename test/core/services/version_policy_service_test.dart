@@ -8,10 +8,27 @@
 // `FirebaseDatabase`/platform channel.
 import 'dart:async';
 
+import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/services/version_policy_service.dart';
+
+/// E14-B06 round 2 (F2 regression fixture): intercepts every write
+/// statement Drift issues and throws instead of running it, while leaving
+/// reads (`ensureOpen`, `runSelect`) untouched -- simulates a locked/full/
+/// corrupt local SQLite database specifically on the write path, the exact
+/// shape `refresh()`'s own `insertOnConflictUpdate` exercises.
+class _ThrowingWriteInterceptor extends QueryInterceptor {
+  @override
+  Future<int> runInsert(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) {
+    throw Exception('simulated locked/full/corrupt local database');
+  }
+}
 
 /// Returns a fixed payload from the read seam, so [refresh] never touches a
 /// real `FirebaseDatabase`.
@@ -212,6 +229,28 @@ void main() {
       final cached = await violatingService.cached();
       expect(cached, isNotNull);
       expect(cached!.minimumSupportedBuild, 100);
+    });
+
+    test(
+        'a thrown error from the local Drift write is caught and '
+        'refresh() never throws (E14-B06 round 2 F2 regression)', () async {
+      // The original fix's `insertOnConflictUpdate` write sat OUTSIDE the
+      // surrounding try/catch -- a locked/full/corrupt local database threw
+      // straight out of `refresh()`, breaking `EARS-VER-4`'s "never
+      // throws" contract for real. `_ThrowingWriteInterceptor` makes the
+      // write throw deterministically without faking a whole Drift
+      // executor.
+      final throwingWriteDatabase = AppDatabase.forTesting(
+        NativeDatabase.memory().interceptWith(_ThrowingWriteInterceptor()),
+      );
+      addTearDown(throwingWriteDatabase.close);
+
+      final service = _FixedReadVersionPolicyService(
+        database: throwingWriteDatabase,
+        payload: _validPayload(minimumSupportedBuild: 100),
+      );
+
+      await expectLater(service.refresh(), completes);
     });
 
     test('an absent (null) payload leaves the cache untouched and '

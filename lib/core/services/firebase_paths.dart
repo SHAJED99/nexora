@@ -101,4 +101,18 @@ class FirebasePaths {
   /// build included, ever writes this node; see `E14-T01`'s own §4 for who
   /// actually publishes it.
   static String versionPolicy() => 'config/version_policy';
+
+  /// `.info/connected` — Firebase Realtime Database's own built-in special
+  /// path (not part of this app's schema tree; there is no corresponding
+  /// entry in `database.rules.json`, and it needs none — the SDK serves it
+  /// directly, the same way it does for every RTDB client). Its value is
+  /// `true`/`false` and toggles automatically as the client's own socket to
+  /// the Realtime Database server connects/disconnects — reusing this
+  /// (`E14-B06`) rather than adding a new connectivity dependency
+  /// (`connectivity_plus` or similar) is deliberate: `FR-VER-008`'s
+  /// "reconnect" is reconnection to the exact source `VersionPolicyService`
+  /// reads from, and this path is Firebase's own native signal for exactly
+  /// that, already available via the `firebase_database` package this app
+  /// already depends on.
+  static String infoConnected() => '.info/connected';
 }

@@ -121,16 +121,17 @@ excluded as genuinely parked on `OQ-E14-T03-1`.
 `test/core/calls/call_migration_controller_test.dart:177` — verified
 pre-existing on `origin/development`, not E14's.
 
-**Bugs filed — 5.** Severity is the reviewer's; 🧍 **priority is the human's**
-(`bug_priorities` gate, all five stamped `p: TBD`).
+**Bugs filed — 6.** Severity is the reviewer's; priority stamped by the
+orchestrator per the `bug_priorities` gate.
 
-| Bug | Severity | What |
-|---|---|---|
-| `E14-B01` | **S2** | `VersionPolicyService.refresh()` has zero production callers — the cache is never written, so every build always evaluates `upToDate` and the mandatory-update screen is unreachable in a shipped app |
-| `E14-B02` | **S2** | `FR-VER-006`'s "block application communication" is unimplemented — `AppBinding` is `initialBinding`, so the coordinator/inbound pipeline/link feed/background service/notification dispatcher all start behind the update screen |
-| `E14-B03` | S3 | `_readInstalledBuildNumber`'s catch-all fail-open (`1 << 62`) silently disables enforcement on any `PackageInfo` failure; needs `OQ-E14-B03-1` answered first |
-| `E14-B04` | S4 | T06's carried-forward v9 gap, confirmed and filed so it has a reader |
-| `E14-B05` | S4 | `docs/routes.md` missing the `/version-update-required` row |
+| Bug | Severity | Priority | What |
+|---|---|---|---|
+| `E14-B01` | **S2** | P1 (fixed, merged) | `VersionPolicyService.refresh()` has zero production callers — the cache is never written, so every build always evaluates `upToDate` and the mandatory-update screen is unreachable in a shipped app |
+| `E14-B02` | **S2** | P1 (fixed, merged) | `FR-VER-006`'s "block application communication" is unimplemented — `AppBinding` is `initialBinding`, so the coordinator/inbound pipeline/link feed/background service/notification dispatcher all start behind the update screen |
+| `E14-B03` | S3 | P2 | `_readInstalledBuildNumber`'s catch-all fail-open (`1 << 62`) silently disables enforcement on any `PackageInfo` failure; needs `OQ-E14-B03-1` answered first |
+| `E14-B04` | S4 | P3 | T06's carried-forward v9 gap, confirmed and filed so it has a reader |
+| `E14-B05` | S4 | P3 | `docs/routes.md` missing the `/version-update-required` row |
+| `E14-B06` | S3 | P2 (fixed, merged) | `FR-VER-008`'s reconnect-triggered re-evaluation had no implementation — filed by `E14-B01`/`B02`'s own reviewer, fixed via Firebase's `.info/connected` special path (no new dependency), 2 review rounds |
 
 **`E14-B01` is the sweep's whole justification.** Every one of T01/T02/T04
 passed its own review, and each explicitly fenced the `refresh()` call site
@@ -191,6 +192,27 @@ trigger is missing.
   catch-all, and `VersionPolicyService._parse` runs
   `FirebaseBoundary.assertAllowedFields` on the read side and folds a
   violation into "no usable policy" rather than throwing.
+
+### E14-B06 round 2 review — carried-forward observation
+
+- **F4 (non-blocking, recorded, not fixed):** `E14-B06`'s round-2 review
+  (2026-09-06) found that a mid-session `updateRequired` result from
+  `VersionReconnectWatcher` navigates to `/version-update-required`
+  (`lib/app/main.dart`) but does NOT retroactively set
+  `AppBinding.blockCommunication` — that flag is computed once at launch
+  (`E14-B02`) from the launch-time `versionState` only and is never revisited.
+  Consequence: a user already mid-session when an emergency policy update
+  lands gets routed to the mandatory-update screen, but the mesh
+  coordinator/inbound pipeline/link feed/background service/notification
+  dispatcher `AppBinding` already started keep running underneath it —
+  `FR-VER-006`'s "block application communication" clause is not actually
+  enforced for this specific reconnect-triggered path, only for a fresh
+  launch. Judged likely outside `E14-B06`'s own fence (it owns re-evaluation
+  and re-routing, not `AppBinding`'s binding lifecycle) — recorded here per
+  this bug's own review instructions rather than fixed as part of this round.
+  Needs its own task if prioritized: making `blockCommunication` (or an
+  equivalent live gate `AppBinding`'s four starts already read) mutable and
+  wired to `VersionReconnectWatcher`'s own `onUpdateRequired` callback.
 
 ### Gate status
 

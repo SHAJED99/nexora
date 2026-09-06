@@ -107,16 +107,32 @@ class VersionPolicyService {
       return;
     }
 
-    await _database.into(_database.versionPolicyCache).insertOnConflictUpdate(
-          VersionPolicyCacheCompanion.insert(
-            id: const Value(_cacheRowId),
-            minimumSupportedBuild: parsed.minimumSupportedBuild,
-            currentBuild: parsed.currentBuild,
-            updateAvailableBuild: parsed.updateAvailableBuild,
-            signature: parsed.signature,
-            updatedAt: parsed.updatedAt,
-          ),
-        );
+    // E14-B06 round 2 (F2): this local Drift write used to sit OUTSIDE the
+    // try/catch above -- a locked/full/corrupt local database would throw
+    // straight out of `refresh()`, breaking `EARS-VER-4`'s "never throws"
+    // contract for real (the fetch succeeding was never the only way this
+    // method could fail). Folded into the same catch-and-log,
+    // never-rethrow shape as the fetch above, so `refresh()` is actually
+    // total, not just documented as total.
+    try {
+      await _database
+          .into(_database.versionPolicyCache)
+          .insertOnConflictUpdate(
+            VersionPolicyCacheCompanion.insert(
+              id: const Value(_cacheRowId),
+              minimumSupportedBuild: parsed.minimumSupportedBuild,
+              currentBuild: parsed.currentBuild,
+              updateAvailableBuild: parsed.updateAvailableBuild,
+              signature: parsed.signature,
+              updatedAt: parsed.updatedAt,
+            ),
+          );
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'firebase.version_policy_cache_write_failed',
+        cause: e,
+      );
+    }
   }
 
   /// Performs the actual Realtime Database read. Split out from [refresh]
