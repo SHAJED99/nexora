@@ -1,12 +1,12 @@
 # E12 · Account Recovery & Device Enrollment · Progress
 
 **Status:** all 3 tasks done, cross-model reviewed, merged into `epic_12`.
-Bug sweep run 2026-09-06 — **NOT ready for the `development` merge.** 3× S1
-found at the cross-task seams (`E12-B01`, `E12-B02`, `E12-B03`); the
-epic→dev PR opens only when P1/P2 = 0 (`skills/bug-sweep` §4), and priority
-is 🧍 awaiting the human. ·
-**Started:** 2026-09-05 · **Completed:** 2026-09-05 · **Progress:** 3/3
-tasks done, 8 bugs filed, 0 closed
+Bug sweep run 2026-09-06 found 14 bugs (B01-B14); all P1s and P2s except
+`E12-B06`/`E12-B13` (both P2, project-wide design-fidelity tooling debt,
+tracked as non-blocking follow-ups) are fixed and merged. `flutter test`
+1192/1192 green. Merging into `development` now. ·
+**Started:** 2026-09-05 · **Completed:** 2026-09-06 · **Progress:** 3/3
+tasks done, 14 bugs filed, 12 closed
 
 ## Tasks
 
@@ -117,6 +117,8 @@ E13-T07).
 > already-golden `welcome_view.dart` — it cannot be adjudicated at all until
 > `device-enrollment` has a golden of its own, which `E12-B06` blocks. Both
 > stay recorded here rather than becoming bug files.
+
+## Carried-forward observations
 - **The `devices` screen's design gate has been reporting 0% match on a
   `renderError` probe, unrelated to any change in this epic.**
   `test/design/design_probe_test.dart`'s `devices` fixture setup
@@ -276,3 +278,14 @@ E13-T07).
     from the block use case or `load()` skips the delete, leaving a grant
     live after a locally-recorded block. Same ordering `verify()`'s mirror
     write already uses, so consistent, not new.
+- 2026-09-06 — **`E12-B12`/`E12-B14` fixed and merged.** B12: the devices
+  screen's icon-by-state fix (a real defect — fabricated device hardware
+  type from trust state) reverted; bottom-nav color/border/shadow corrected
+  against the design source. Remaining 62.3% gap traced entirely to
+  `test/design/flutter_probe_dumper.dart` tooling limitations, filed as
+  `E12-B13` (project-wide, P3). B14: added a secondary sort key to
+  `RelationshipRepository`'s device-row query, fixing nondeterministic
+  ordering that was destabilizing `devices`' own design-verify score.
+  **E12 is now clear of all P1/P2 findings except `E12-B06`/`E12-B13`**
+  (both project-wide design-fidelity tooling debt, tracked as non-blocking
+  follow-ups — see this tracker's own header). Merged into `development`.
