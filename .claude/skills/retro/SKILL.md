@@ -81,6 +81,12 @@ Prune, too: a rule that no longer fires is noise in every context window forever
 Actual >1.5× the estimate for a tier, twice → adjust the tier guidance in
 `skills/task-sharding`. Estimates that never learn are decoration.
 
+**No `metrics.csv` for an epic is expected, not a gap, when the orchestrator
+dispatched via an interactive session's own Agent tool** — rule 9's logging
+is specific to `run-claude.sh` headless dispatch (`L-process-015`; `AGENTS.md`
+rule 9). Don't re-flag the absence; this step simply has no data to work
+from for that epic.
+
 ### 6. Write it up
 `epics/E<NN>/retro.md`: what shipped, what recurred, what got promoted, what the
 numbers said. Short. It's evidence for the next retro, not a report for

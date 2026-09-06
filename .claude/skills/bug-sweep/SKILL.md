@@ -85,6 +85,22 @@ has no information for** — that's the human's call, and it's rule 3.
   looks small, which makes scope creep both easier to justify in the
   moment and easier to miss in review — state plainly what the fix does
   NOT touch, alongside Repro/Expected/Actual/Severity.
+- **A best-effort `files:` fence, filled at authoring time.** (Rule, added
+  2026-09-02, L-process-011: every bug file the E07 sweep produced —
+  `E07-B01`..`B04`, 4-for-4 — shipped with `files: {create: [], update:
+  [], delete: []}` fully empty, not just the §4 prose missing. You already
+  know which files are implicated — it's the reasoning behind
+  `found_in`/the Repro section. Write that list into `files:` too, even
+  before priority or fix direction is decided; widen it later if the real
+  fix needs more, but don't leave it structurally unverifiable from the
+  start.)
+- **`status: blocked`, not an invented word.** (Rule, added 2026-09-02,
+  L-process-012: the E07 sweep wrote `status: open` on all 4 new bug
+  files — not in `harness.yaml`'s `scheduler.statuses` list, caught only
+  by `scheduler.py --validate` after the fact.) A newly-found bug awaiting
+  the 🧍 `bug_priorities` gate is `status: blocked` — check
+  `harness.yaml`'s `scheduler.statuses` if unsure, never a plausible-
+  sounding English word.
 
 ## Re-verification
 Every fix is re-verified by the reviewer before close — against the original

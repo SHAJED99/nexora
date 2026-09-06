@@ -59,7 +59,17 @@ Every accepted decision the diff touches is implemented, or listed in
 §Deviations with a reason. Decisions get silently dropped under deadline
 pressure — this line exists because it happened.
 
-### 7. The security lens
+### 7. Unbounded id lists
+Any `.isIn(ids)` or raw SQL `IN (...)` in the diff — is the id list provably
+bounded at the call site, or chunked (≤500 ids) before the query runs? A
+list built by paging through an enumeration with no upper cap is unbounded
+by construction, even though it looks safe; it recurred at four call sites
+in one epic (`L-backend-004`) before this became a checklist line. If a
+regression test claims to prove the fix, confirm it seeds past SQLite's
+~32,766-bind-variable ceiling — a few-hundred-id test passes on both sides
+of this bug.
+
+### 8. The security lens
 Auth · payments · RBAC · single-use tokens · money or state machines → run
 [references/security.md](references/security.md) fully. Every item gets
 PASS/FAIL with a file:line. These are the attacks that have actually bitten
@@ -83,6 +93,16 @@ tracker Review log, back to the SAME implementer (they have the context).
 **APPROVE** → orchestrator squash-merges to the epic branch, `status: done`,
 stamps `reviewed_at`/`reviewed_by`/`review_outcome`, removes the worktree,
 stamps metrics. The human flips `done` → `verified` in batches.
+
+**`reviewed_by` must LEAD with a model string from `harness.yaml`'s
+`review_routing.models`, always** — even a disclosed rate-limit-deviation
+review (the orchestrator reviewing directly instead of dispatching) needs
+the actual model identifier first, e.g. `claude-sonnet-5 (direct, rate-limit
+deviation — see Run log for full disclosure)`, never free prose alone
+(`"orchestrator (independent re-verification...)"`). `make health`'s H5
+check can only confirm rule 5 held by finding a declared model name
+somewhere in the field — full disclosure for a human reader belongs in the
+Run log, not instead of the model name in this field (L-process-010).
 
 **Second rejection of the same task** → escalate to the planner. Two rounds on
 one task is a specification problem wearing a coding problem's clothes; a third
