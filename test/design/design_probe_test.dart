@@ -47,6 +47,7 @@ import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
 import 'package:nexora/features/trust/domain/block_use_case.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
+import 'package:on_process_button_widget/on_process_button_widget.dart';
 import 'package:path/path.dart' as p;
 
 import 'flutter_probe_dumper.dart';
@@ -501,14 +502,52 @@ void main() {
       expect(title['style']['fontSize'], '24px');
       expect(title['style']['fontWeight'], '600');
 
-      final button = elements.singleWhere((e) => e['role'] == 'button');
+      final button = elements.singleWhere((e) => e['role'] == 'button' && e['text'] == 'Go');
       expect(button['text'], 'Go');
 
       final panel = elements.singleWhere(
-        (e) => e['role'] == 'generic' && e['surface'] == true && e['text'] == '',
+        (e) => e['role'] == 'generic' && e['style']['background'] == 'rgb(20, 40, 60)',
       );
       expect(panel['style']['background'], 'rgb(20, 40, 60)');
       expect(panel['style']['radius'], '8px');
+
+      // E12-B13 round 2 (a): an `OnProcessButtonWidget` carrying a styled
+      // `Text` label — the review's own falsification found the previous
+      // suite's ONLY button assertion (`button['text']` above, on the
+      // `GestureDetector`/plain-`Container` "Go" button) never exercises
+      // `_firstLabelStyle`/`_isInteractiveBoundary`/the `borderRadius` read
+      // at all, since that button has no `InkWell`/`OnProcessButtonWidget`
+      // internals to swallow its label in the first place. Reverting issue
+      // 2 (interactive-boundary swallowing) or issue 3 (button style
+      // capture) in `flutter_probe_dumper.dart` must fail exactly this
+      // block, and was verified to (see Run log).
+      final submit = elements.singleWhere(
+        (e) => e['role'] == 'button' && e['text'] == 'Submit',
+      );
+      expect(submit['text'], isNotEmpty);
+      expect(submit['style']['color'], 'rgb(255, 0, 255)');
+      expect(submit['style']['fontSize'], '16px');
+      expect(submit['style']['fontWeight'], '500');
+      // Non-zero and matches the widget's own `borderRadius: BorderRadius.
+      // circular(6)` — not the pre-fix always-0px fallback.
+      expect(submit['style']['radius'], '6px');
+
+      // E12-B13 round 2 (b): an `Icon(..., size: N)` — reverting issue 4
+      // (icon font-metadata capture) must fail this block.
+      final icon = elements.singleWhere((e) => e['text'] == 'search');
+      expect(icon['style']['fontSize'], '22px');
+      expect(icon['style']['fontFamily'], isNotEmpty);
+
+      // E12-B13 round 2 (c): a `Border(bottom: ...)`-only container (no top
+      // border) — reverting issue 7 (border.bottom reading) must fail this
+      // block: the pre-fix dumper only ever read `border.top`, which is
+      // zero-width here, so it reported `borderWidth: '0px'`/the default
+      // empty `borderColor` regardless of the real bottom border.
+      final bottomBorderBox = elements.singleWhere(
+        (e) => e['role'] == 'generic' && e['style']['borderColor'] == 'rgb(0, 170, 0)',
+      );
+      expect(bottomBorderBox['style']['borderWidth'], '3px');
+      expect(bottomBorderBox['style']['borderColor'], 'rgb(0, 170, 0)');
     });
 
     testWidgets(
@@ -622,6 +661,44 @@ Widget _fixture({
                   child: const Center(child: Text('Go')),
                 ),
               ),
+            // E12-B13 round 2 (a): a real `OnProcessButtonWidget` — the
+            // pre-fix dumper never read `OnProcessButtonWidget.borderRadius`
+            // and its internal `InkWell` swallowed the label entirely, so
+            // this button's own style/text were previously unrecoverable.
+            SizedBox(
+              width: 100,
+              height: 36,
+              child: OnProcessButtonWidget(
+                backgroundColor: Colors.blueGrey,
+                fontColor: const Color(0xFFFF00FF),
+                iconColor: const Color(0xFFFF00FF),
+                borderRadius: BorderRadius.circular(6),
+                onTap: () async => null,
+                child: const Text(
+                  'Submit',
+                  style: TextStyle(
+                    color: Color(0xFFFF00FF),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+            // E12-B13 round 2 (b): a standalone `Icon` — the pre-fix dumper
+            // never read `Icon.size`/`IconData.fontFamily` at all.
+            const Icon(Icons.search, size: 22),
+            // E12-B13 round 2 (c): a `Border(bottom: ...)`-only container (no
+            // top border) — the pre-fix dumper only ever read `border.top`,
+            // which is zero-width here, so it reported the box as borderless.
+            Container(
+              width: 100,
+              height: 20,
+              decoration: const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFF00AA00), width: 3),
+                ),
+              ),
+            ),
           ],
         ),
       ),
