@@ -13,6 +13,7 @@ import 'dart:typed_data';
 
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:nexora/app/bindings.dart';
@@ -159,23 +160,69 @@ void main() {
   });
 
   group('test_EARS_PLAT_14_reclaim_runs_while_backgrounded', () {
+    setUp(Get.reset);
+    tearDown(Get.reset);
+
     test(
-      'reclaimPayloads runs off the same tick regardless of app lifecycle',
+      'reclaimPayloads runs from the real timer once genuinely paused '
+      'AND the foreground service is running -- never a hand-called tick()',
       () async {
-        // MessagingCoordinator itself has no notion of `AppLifecycleState`
-        // at all (task file §4: this task adds no reordering, no new tick
-        // step) -- the NFR-SEC-001 retention guarantee this proves is that
-        // nothing here gates the pass on the app being foregrounded. The
-        // only thing that changes while "backgrounded" is the interval
-        // BackgroundLifecycleObserver applies via setTickInterval; the tick
-        // itself, and `reclaimPayloads()` within it, is unconditional.
-        final stack = await newStack('device-a', nextSuffix());
+        // F5 (E10-B07): the previous version of this test established
+        // NEITHER half of NFR-SEC-001's own precondition -- no
+        // `AppLifecycleState`, no `ServiceState`, no
+        // `BackgroundLifecycleObserver` anywhere in it -- and drove
+        // `reclaimPayloads` by calling `stack.coordinator.tick()` directly.
+        // That only re-proved what `messaging_coordinator_test.dart`
+        // already covers before E10 existed; it could not fail if a future
+        // change silently gated the tick (or the observer's own wiring)
+        // on the app being foregrounded.
+        //
+        // This version drives the SAME two signals through the real
+        // `BackgroundLifecycleObserver` this epic ships
+        // (`app/bindings.dart`) -- `didChangeAppLifecycleState(paused)`
+        // and a `BackgroundStub` genuinely reporting `ServiceState
+        // .running` -- and then lets the coordinator's own already-live
+        // `Timer.periodic` fire on its own. Nothing below calls
+        // `coordinator.tick()` by hand.
+        final stack = await newStack(
+          'device-a',
+          nextSuffix(),
+          // Long enough that start()'s own timer cannot fire before the
+          // background+running precondition below is established.
+          tickInterval: const Duration(minutes: 10),
+        );
         addTearDown(stack.dispose);
+        addTearDown(stack.coordinator.stop);
 
-        // Simulate the plan a locked, backgrounded phone with the service
-        // running would receive (task file §5 table row).
-        stack.coordinator.setTickInterval(const Duration(seconds: 120));
+        await stack.coordinator.start();
 
+        final backgroundStub = BackgroundStub();
+        AppBinding(
+          db: stack.db,
+          messagingStack: stack,
+          backgroundControl: backgroundStub,
+        ).dependencies();
+        final observer = Get.find<BackgroundLifecycleObserver>();
+        addTearDown(observer.stop);
+
+        // The real observer callback -- not a test-only lever -- exactly
+        // as `WidgetsBinding` would invoke it on a genuine backgrounding.
+        observer.didChangeAppLifecycleState(AppLifecycleState.paused);
+        // `_setDesiredRunning(true)` above called `_service.start()`
+        // unawaited; let that (and the `ServiceState.running` event it
+        // emits back through the observer) settle.
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          await backgroundStub.isRunning(),
+          isTrue,
+          reason: 'the foreground-service half of the precondition must be '
+              'genuinely true, not assumed',
+        );
+
+        // Enqueue the already-expired packet only NOW, after the
+        // backgrounded+running state is genuinely established -- so its
+        // reclaim below can only be the product of a tick that happens
+        // AFTER this point.
         final now = DateTime.now();
         await stack.relayEngine.enqueue(
           'device-b',
@@ -190,12 +237,24 @@ void main() {
           lessThanOrEqualTo(now.millisecondsSinceEpoch),
         );
 
-        await stack.coordinator.tick();
+        // `_applyPlan()` (triggered above) just rescheduled the timer onto
+        // a genuine, unmeasured PRODUCTION cadence value
+        // (`background_policy.dart`'s own table, 60-300s) -- waiting for
+        // that in real time would make this test take minutes. Speeding
+        // up the ALREADY-armed timer is the same test-speed technique
+        // `test_EARS_PLAT_12_no_second_timer_created` above already uses;
+        // it does not re-establish or fake the backgrounded/running
+        // precondition proven above, only how soon the next real firing
+        // happens.
+        stack.coordinator.setTickInterval(const Duration(milliseconds: 30));
+
+        // Let the real Timer.periodic fire on its own.
+        await Future<void>.delayed(const Duration(milliseconds: 200));
 
         final after = await stack.db.select(stack.db.relayPackets).get();
         expect(after.single.deliveryState, RelayDeliveryState.expired.name);
         expect(after.single.payload, isNull);
-        expect(stack.coordinator.counters.reclaimed, 1);
+        expect(stack.coordinator.counters.reclaimed, greaterThanOrEqualTo(1));
       },
     );
   });

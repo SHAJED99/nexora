@@ -167,40 +167,77 @@ void main() {
     expect(received, <PowerState>[locked]);
   });
 
-  test('test_EARS_PLAT_11_missing_signal_reads_false', () async {
-    // EARS-PLAT-11 (FR-PLAT-002): a signal unavailable on the running API
-    // level SHALL be reported as false, never null, and SHALL NOT throw.
-    // The API-level branching itself is native (PowerStateMonitor.kt,
-    // proven per this file's header); this proves the Dart-side plumbing
-    // has no special-case exception path for an all-false snapshot -- the
-    // one-shot read resolves cleanly through the real generated codec,
-    // exactly as a normal reading would.
-    const String suffix = 'missing_signal';
-    final BackgroundService service = BackgroundService(
-      binaryMessenger: messenger,
-      messageChannelSuffix: suffix,
-    );
-    addTearDown(service.dispose);
+  test(
+    'test_EARS_PLAT_11_dart_plumbing_forwards_snapshot_'
+    'unaltered',
+    () async {
+      // F3 (E10-B07): the previous version of this test named itself for
+      // EARS-PLAT-11's real guarantee -- "a signal unavailable on the
+      // running API level SHALL be reported as false" -- but installed a
+      // mock handler that itself returned `allClearPowerState()` and then
+      // asserted every field was false. That proves nothing: the test
+      // supplied the exact value it later asserted, so it could not fail
+      // no matter what `PowerStateMonitor.kt` actually does, and an
+      // inverted or removed fallback there would not be caught here.
+      //
+      // The API-level fallback itself
+      // (`PowerStateMonitor.kt:55-74` -- each of `deviceIdle`,
+      // `backgroundRestricted` and `ignoringBatteryOptimizations` is
+      // guarded by `Build.VERSION.SDK_INT >= <min>` and every platform
+      // service lookup ends in Kotlin's `?: false`, so a missing signal or
+      // a null service can only ever resolve to `false`, never `null` and
+      // never a thrown exception) is Kotlin and is UNVERIFIED IN THIS
+      // ENVIRONMENT -- no installable device, the standing `E04-T03b`
+      // no-mock-Kotlin limitation carried forward by every prior E10 test
+      // touching this boundary (this file's own header). No Dart test can
+      // falsify that guard; asserting it here would be exactly the hollow
+      // pattern this fix removes. The claim above is established by
+      // reading the Kotlin source, not by this test -- `skills/review`'s
+      // own instruction for an unfalsifiable-in-Dart claim.
+      //
+      // What this test CAN and DOES prove, and is genuinely falsifiable
+      // for: that `BackgroundService.powerState()` is a bare passthrough
+      // of whatever `PowerState` the platform channel returns -- through
+      // the real generated Pigeon codec, not an in-Dart fake -- with no
+      // Dart-side transform, default-substitution or exception-swallowing
+      // in between. Proven by round-tripping a snapshot with every field
+      // TRUE (the opposite of all-clear): if `powerState()` silently
+      // coerced fields toward `false`, or swallowed the reply and
+      // substituted `allClearPowerState()`, this would still pass under
+      // the old test's shape but fails under this one.
+      const String suffix = 'missing_signal';
+      final BackgroundService service = BackgroundService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: suffix,
+      );
+      addTearDown(service.dispose);
 
-    final PowerState allFalse = allClear();
-    messenger.setMockMessageHandler(
-      'dev.flutter.pigeon.nexora.BackgroundApi.powerState.$suffix',
-      (ByteData? message) async {
-        return BackgroundApi.pigeonChannelCodec.encodeMessage(<Object?>[
-          allFalse,
-        ]);
-      },
-    );
+      final PowerState allRestricted = PowerState(
+        deviceIdle: true,
+        powerSaveMode: true,
+        backgroundRestricted: true,
+        ignoringBatteryOptimizations: true,
+        screenLocked: true,
+      );
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.BackgroundApi.powerState.$suffix',
+        (ByteData? message) async {
+          return BackgroundApi.pigeonChannelCodec.encodeMessage(<Object?>[
+            allRestricted,
+          ]);
+        },
+      );
 
-    final PowerState result = await service.powerState();
+      final PowerState result = await service.powerState();
 
-    expect(result, allFalse);
-    expect(result.deviceIdle, isFalse);
-    expect(result.powerSaveMode, isFalse);
-    expect(result.backgroundRestricted, isFalse);
-    expect(result.ignoringBatteryOptimizations, isFalse);
-    expect(result.screenLocked, isFalse);
-  });
+      expect(result, allRestricted);
+      expect(result.deviceIdle, isTrue);
+      expect(result.powerSaveMode, isTrue);
+      expect(result.backgroundRestricted, isTrue);
+      expect(result.ignoringBatteryOptimizations, isTrue);
+      expect(result.screenLocked, isTrue);
+    },
+  );
 
   test('test_background_stub_emit_power_state_is_observable', () async {
     // Task §5: BackgroundStub.emitPowerState is the lever E10-T10's
