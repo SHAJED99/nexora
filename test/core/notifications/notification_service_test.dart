@@ -26,49 +26,83 @@ void main() {
   final TestDefaultBinaryMessenger messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
-  test('test_EARS_PLAT_5_channels_created_once_per_category', () async {
-    // EARS-PLAT-5 (FR-NOTIFY-001, FR-PLAT-003): WHEN the notification host
-    // attaches, the system SHALL create exactly one Android notification
-    // channel per NotificationCategory, idempotently. The per-category /
-    // native-idempotency half is proven natively (see file header); this
-    // test proves the Dart-side contract every caller of ensureReady()
-    // depends on: one `ensureChannels` host call is issued per call, and
-    // repeated calls settle cleanly every time — no accumulating state, no
-    // exception, no duplicated permission requests.
-    const String suffix = 'channels';
-    final NotificationService service = NotificationService(
-      binaryMessenger: messenger,
-      messageChannelSuffix: suffix,
-    );
-    addTearDown(service.dispose);
+  test(
+    'test_EARS_PLAT_5_ensureReady_repeated_calls_forward_once_each_and_'
+    'never_re_request_already_granted_permission',
+    () async {
+      // F4 (E10-B07): the previous version of this test called itself
+      // "channels_created_once_per_category" and asserted
+      // `ensureChannelsCallCount == 3` after three `ensureReady()` calls --
+      // which is true of ANY host, including one that creates zero
+      // channels or ten duplicates per category: it proves a Dart method
+      // forwards a call, nothing about "exactly one channel per category,
+      // idempotently".
+      //
+      // Per-category channel creation and true Android-side idempotency
+      // (a re-declared channel with an unchanged id is a no-op, importance
+      // cannot be raised after creation) are native
+      // (`NotificationChannels.kt`) and are UNVERIFIED IN THIS ENVIRONMENT
+      // -- no installable device, the standing `E04-T03b` no-mock-Kotlin
+      // limitation (this file's own header already disclosed this; the
+      // old test's name did not).
+      //
+      // What IS genuinely Dart-owned in `ensureReady()`
+      // (`notification_service.dart:100-101`:
+      // `if (await _api.hasPermission()...) return true;`, returning
+      // BEFORE `requestPermission()` is ever reached) and is proven here,
+      // falsifiably: when permission is already granted, repeated
+      // `ensureReady()` calls forward exactly one `ensureChannels` host
+      // call each (no accumulation, no skipped calls) and NEVER call
+      // `requestPermission` at all -- "repeated calls are safe" means no
+      // duplicate permission prompt, not merely "returns true again".
+      const String suffix = 'channels';
+      final NotificationService service = NotificationService(
+        binaryMessenger: messenger,
+        messageChannelSuffix: suffix,
+      );
+      addTearDown(service.dispose);
 
-    int ensureChannelsCallCount = 0;
-    messenger.setMockMessageHandler(
-      'dev.flutter.pigeon.nexora.NotificationApi.ensureChannels.$suffix',
-      (ByteData? message) async {
-        ensureChannelsCallCount++;
-        return NotificationApi.pigeonChannelCodec.encodeMessage(
-          <Object?>[null],
-        );
-      },
-    );
-    messenger.setMockMessageHandler(
-      'dev.flutter.pigeon.nexora.NotificationApi.hasPermission.$suffix',
-      (ByteData? message) async =>
-          NotificationApi.pigeonChannelCodec.encodeMessage(<Object?>[true]),
-    );
+      int ensureChannelsCallCount = 0;
+      int requestPermissionCallCount = 0;
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.NotificationApi.ensureChannels.$suffix',
+        (ByteData? message) async {
+          ensureChannelsCallCount++;
+          return NotificationApi.pigeonChannelCodec.encodeMessage(
+            <Object?>[null],
+          );
+        },
+      );
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.NotificationApi.hasPermission.$suffix',
+        (ByteData? message) async =>
+            NotificationApi.pigeonChannelCodec.encodeMessage(<Object?>[true]),
+      );
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.NotificationApi.requestPermission.$suffix',
+        (ByteData? message) async {
+          requestPermissionCallCount++;
+          return NotificationApi.pigeonChannelCodec.encodeMessage(
+            <Object?>[null],
+          );
+        },
+      );
 
-    final bool first = await service.ensureReady();
-    final bool second = await service.ensureReady();
-    final bool third = await service.ensureReady();
+      final bool first = await service.ensureReady();
+      final bool second = await service.ensureReady();
+      final bool third = await service.ensureReady();
 
-    expect(first, isTrue);
-    expect(second, isTrue);
-    expect(third, isTrue);
-    // One ensureChannels effect requested per ensureReady() call; nothing
-    // extra accumulated by calling it repeatedly.
-    expect(ensureChannelsCallCount, 3);
-  });
+      expect(first, isTrue);
+      expect(second, isTrue);
+      expect(third, isTrue);
+      // One ensureChannels effect requested per ensureReady() call; nothing
+      // extra accumulated by calling it repeatedly.
+      expect(ensureChannelsCallCount, 3);
+      // Already-granted permission must never be re-requested -- this is
+      // the actual "repeated calls are safe" guarantee the Dart layer owns.
+      expect(requestPermissionCallCount, 0);
+    },
+  );
 
   test('test_EARS_PLAT_6_post_returns_false_when_denied', () async {
     // EARS-PLAT-6 (FR-PLAT-003): IF POST_NOTIFICATIONS is not granted on
