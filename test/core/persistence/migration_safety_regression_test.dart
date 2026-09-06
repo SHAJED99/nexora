@@ -29,6 +29,7 @@
 // of "reuse, do not re-derive": the DDL text is identical to what already
 // passed review, not an independently-retyped guess at the same schema.
 
+import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/persistence/database.dart';
@@ -152,6 +153,42 @@ void _createRelayPacketsTableV10(sqlite3.Database raw) {
       PRIMARY KEY (id)
     );
   ''');
+}
+
+/// The exact v9 `relay_packets` DDL (E04-T04) -- `payload` still NOT NULL,
+/// pre-dating E04-B02's nullable-payload fix -- copied verbatim from
+/// `relay_retention_migration_test.dart`'s `_createRelayPacketsTableV9`
+/// (E14-B04: this suite's own representative sample never entered the
+/// v9->v10 rebuild until this builder was added -- see `_createV9Tables`
+/// and the standalone v9 test below).
+void _createRelayPacketsTableV9(sqlite3.Database raw) {
+  raw.execute('''
+    CREATE TABLE relay_packets (
+      id TEXT NOT NULL,
+      destination_id TEXT NOT NULL,
+      payload BLOB NOT NULL,
+      priority INTEGER NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      delivery_state TEXT NOT NULL,
+      PRIMARY KEY (id)
+    );
+  ''');
+}
+
+/// The v9 schema -- everything E01-E04-T04 created. `messages` does not
+/// exist yet at v9 (it is introduced only by the `from < 11` step further
+/// down `onUpgrade`), so this is NOT part of the `representativeVersions`
+/// map below (whose shared loop body seeds a `messages` row via
+/// `_seedDeviceAndMessageRows`) -- it gets its own standalone test instead,
+/// composed from the v7/v8/v9 builders exactly as
+/// `relay_retention_migration_test.dart` itself composes its own v9->v10
+/// case.
+void _createV9Tables(sqlite3.Database raw) {
+  _createV7Tables(raw);
+  _createRoutesTable(raw);
+  _createRelayPacketsTableV9(raw);
 }
 
 /// The exact v11 `messages` + `delivery_states` DDL (E05-T01), including the
@@ -751,6 +788,97 @@ void main() {
     },
   );
 
+  // EARS-VER-16 / E14-B04: v9 is the one representative start version below
+  // the `representativeVersions` map further down whose migration to
+  // current MUST cross the v9->v10 `relay_packets` rebuild
+  // (`database.dart:254-315`) -- the only step in the ENTIRE onUpgrade
+  // chain that runs a real `DROP TABLE`. Every version in the map below
+  // starts at v11 or later, i.e. strictly AFTER that step already ran, so
+  // none of them ever enters it -- that drop is otherwise proven only by a
+  // different epic's file (`relay_retention_migration_test.dart`, scoped
+  // narrowly to v9->v10 alone), never by this suite's own "sample of
+  // intermediate versions a real install could resume from" claim
+  // (`EARS-VER-16`). This test closes that gap without duplicating that
+  // other file: it proves the SAME rebuild survives the FULL v9->current
+  // chain, not just the one v9->v10 step.
+  //
+  // `messages` does not exist at v9 (see `_createV9Tables`), so this case
+  // cannot reuse `_seedDeviceAndMessageRows` below -- it seeds
+  // `device_identities` and `relay_packets` instead, the two tables that
+  // actually exist at v9, with a row in more than one delivery state (as
+  // `relay_retention_migration_test.dart` itself does) so the rebuild's
+  // row-copy step is proven for more than a single trivial case.
+  test(
+    'test_EARS_VER_16_intermediate_version_to_current_preserves_rows_v9',
+    () async {
+      final raw = sqlite3.sqlite3.openInMemory();
+      _createV9Tables(raw);
+      raw.execute(
+        "INSERT INTO device_identities (device_id, signed_in) "
+        "VALUES ('v9-device', 1);",
+      );
+      raw.execute(
+        "INSERT INTO relay_packets "
+        "(id, destination_id, payload, priority, size_bytes, created_at, "
+        "expires_at, delivery_state) "
+        "VALUES ('v9-relay-queued', 'D', X'010203', 5, 3, 1000, 9000, "
+        "'queued');",
+      );
+      raw.execute(
+        "INSERT INTO relay_packets "
+        "(id, destination_id, payload, priority, size_bytes, created_at, "
+        "expires_at, delivery_state) "
+        "VALUES ('v9-relay-delivered', 'B', X'0405', 0, 1, 1000, 5000, "
+        "'delivered');",
+      );
+      raw.userVersion = 9;
+
+      final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+      addTearDown(db.close);
+
+      // Force the lazy migration to run before reading rows back.
+      await db.customSelect('SELECT 1').get();
+      expect(db.schemaVersion, greaterThanOrEqualTo(18));
+
+      final identities = await db.select(db.deviceIdentities).get();
+      final identity = identities.singleWhere(
+        (r) => r.deviceId == 'v9-device',
+      );
+      expect(identity.signedIn, isTrue);
+
+      // The v9->v10 step is a create-copy-drop-rename rebuild
+      // (`database.dart:285-313`): both rows must survive it, and every
+      // other step in the chain, byte-identical -- not merely "a
+      // `relay_packets` table exists at the end".
+      final relayPackets = await (db.select(db.relayPackets)
+            ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+          .get();
+      expect(relayPackets, hasLength(2));
+
+      final queued = relayPackets.singleWhere(
+        (r) => r.id == 'v9-relay-queued',
+      );
+      expect(queued.destinationId, 'D');
+      expect(queued.payload, [0x01, 0x02, 0x03]);
+      expect(queued.priority, 5);
+      expect(queued.sizeBytes, 3);
+      expect(queued.createdAt, 1000);
+      expect(queued.expiresAt, 9000);
+      expect(queued.deliveryState, 'queued');
+
+      final delivered = relayPackets.singleWhere(
+        (r) => r.id == 'v9-relay-delivered',
+      );
+      expect(delivered.destinationId, 'B');
+      expect(delivered.payload, [0x04, 0x05]);
+      expect(delivered.priority, 0);
+      expect(delivered.sizeBytes, 1);
+      expect(delivered.createdAt, 1000);
+      expect(delivered.expiresAt, 5000);
+      expect(delivered.deliveryState, 'delivered');
+    },
+  );
+
   // EARS-VER-16: a representative sample of intermediate versions a real
   // install could plausibly resume from, reusing the same
   // "open at vN, migrate to current" pattern every per-task migration test
@@ -758,7 +886,10 @@ void main() {
   // v11 (the version `messages` is introduced at -- the longest possible
   // chain a seeded message row can be asked to survive), v13 (group data
   // model added), and v16 (the fullest available intermediate schema, only
-  // two steps short of current).
+  // two steps short of current). v9 -- the one version below all of these
+  // whose chain crosses the suite's only destructive step -- has its own
+  // standalone test just above instead of a map entry, because `messages`
+  // does not exist yet at v9 (see that test's own comment).
   final representativeVersions = <int, void Function(sqlite3.Database)>{
     11: _createV11Tables,
     13: _createV13Tables,
