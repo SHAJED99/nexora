@@ -490,7 +490,11 @@ void main() {
       expect(elements, isNotEmpty);
 
       final title = elements.singleWhere((e) => e['text'] == 'Fixture Title');
-      expect(title['role'], 'generic');
+      // E12-B13: 24px/w600 is heading-scale (`_headingRole`'s threshold),
+      // and it's the first such style this fixture dump sees, so `heading:1`
+      // — this fixture's own doc comment already calls it "a heading-ish
+      // Text", this just makes the dumper agree.
+      expect(title['role'], 'heading:1');
       // Resolved via DefaultTextStyle.merge, never the widget's own (null)
       // color — proving this dumps RESOLVED styles, not source constants.
       expect(title['style']['color'], 'rgb(0, 0, 255)');
