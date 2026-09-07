@@ -818,7 +818,8 @@ void main() {
         deviceIdNode['.write'],
         "auth != null && newData.exists() && newData.parent().parent()"
             ".child('directory_private').child(\$deviceId).child('ownerUid')"
-            ".val() === auth.uid",
+            ".val() === auth.uid && newData.child('identityPublicKey').val()"
+            " === \$deviceId",
       );
     });
 

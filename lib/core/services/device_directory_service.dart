@@ -63,6 +63,7 @@ import 'dart:convert';
 
 import 'package:firebase_database/firebase_database.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
+import 'package:nexora/core/crypto/identity_key_hex.dart';
 import 'package:nexora/core/crypto/identity_service.dart';
 import 'package:nexora/core/crypto/prekey_bundle_codec.dart';
 import 'package:nexora/core/observability/observability_service.dart';
@@ -165,7 +166,12 @@ class DeviceDirectoryService {
   Future<void> _publish(String uid, String deviceId) async {
     final bundle = await _identityService.getLocalPreKeyBundle();
     final serializedBundle = base64Encode(PreKeyBundleCodec.serialize(bundle));
-    final identityPublicKey = base64Encode(bundle.getIdentityKey().serialize());
+    // E11-B06 finding 1: hex, not base64 -- this value doubles as `deviceId`
+    // for a device's very first publish (`LoginController`'s own
+    // derivation), and a standard-base64 string can contain `/`, which the
+    // Firebase SDK's `.child(path)` always treats as a path separator. See
+    // `identity_key_hex.dart`'s own header for the full reasoning.
+    final identityPublicKey = hexEncodeIdentityKey(bundle.getIdentityKey());
 
     final revocationRow = await (_database.select(_database.deviceRevocations)
           ..where((t) => t.deviceId.equals(deviceId)))
@@ -252,8 +258,7 @@ class DeviceDirectoryService {
     try {
       final preKeyBundle =
           PreKeyBundleCodec.deserialize(base64Decode(prekeyBundleRaw));
-      final identityPublicKey =
-          IdentityKey.fromBytes(base64Decode(identityPublicKeyRaw), 0);
+      final identityPublicKey = hexDecodeIdentityKey(identityPublicKeyRaw);
 
       // E11-B02: `identityPublicKey` and the identity key embedded inside
       // `prekeyBundle` are written from the SAME bundle by `publish`, so an
@@ -296,9 +301,10 @@ class DeviceDirectoryService {
         revokedAt: revokedAt,
       );
     } catch (e) {
-      // A malformed entry (bad base64, undecodable codec bytes) is treated
-      // as "not found", not as a crash -- the caller cannot do anything
-      // more useful with a half-decoded entry than with a missing one.
+      // A malformed entry (bad base64/hex, undecodable codec bytes) is
+      // treated as "not found", not as a crash -- the caller cannot do
+      // anything more useful with a half-decoded entry than with a
+      // missing one.
       ObservabilityService.instance.logError(
         'firebase.device_directory_lookup_malformed',
         cause: e,

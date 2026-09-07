@@ -106,7 +106,7 @@
     "directory": {
       "$deviceId": {
         ".read": "auth != null",
-        ".write": "auth != null && newData.exists() && newData.parent().parent().child('directory_private').child($deviceId).child('ownerUid').val() === auth.uid",
+        ".write": "auth != null && newData.exists() && newData.parent().parent().child('directory_private').child($deviceId).child('ownerUid').val() === auth.uid && newData.child('identityPublicKey').val() === $deviceId",
         ".validate": "newData.hasChildren(['identityPublicKey', 'prekeyBundle'])",
         "identityPublicKey": {
           ".validate": "newData.isString() && newData.val().length <= 4096"

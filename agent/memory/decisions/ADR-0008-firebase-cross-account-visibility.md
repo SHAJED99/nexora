@@ -281,6 +281,47 @@ three are decided here; the third is fixed in code, not decided:
   the `$deviceId`-derivation fix knows the current cheapest attack shape,
   not the pre-`E11-B06` one.
 
+  **Correction and resolution (2026-09-07): the "bootstrap-sequencing
+  change spanning E01 and E03" premise above was WRONG — no reshape was
+  needed, and this finding is now implemented and resolved.** Re-reading
+  `lib/app/main.dart` directly (rather than relying on this addendum's
+  own prior, unverified claim) shows `MessagingStack.create()` runs
+  BEFORE `runApp()` — i.e. before any screen, including the login/welcome
+  screen, is ever shown — and `IdentityService.ensureLocalIdentity()`
+  runs unconditionally inside it, regardless of whether `selfDeviceId` is
+  known yet (it never is, on a fresh install — that's the empty string
+  `main.dart` passes in that exact case). So this device's identity
+  keypair genuinely already exists by the time `LoginController._signIn()`
+  ever runs; the two were never sequenced wrong, they just weren't wired
+  together.
+  - **The fix**: `LoginController` now derives its device id from this
+    already-available identity public key on a genuine first-ever sign-in
+    (`_deriveDeviceIdFromLocalIdentity`, resolving the app-wide
+    `MessagingStack` singleton via `Get.find`), falling back to the
+    pre-existing `generateSecureDeviceId()` only if no `MessagingStack`
+    is resolvable — additive, never a new way to fail sign-in.
+  - **`identityPublicKey`'s own stored encoding changed from base64 to
+    hex** (`identity_key_hex.dart`) — this is what makes option (b)
+    (no Cloud Function) actually work: a Realtime Database rule can
+    enforce `$deviceId === newData.child('identityPublicKey').val()` as a
+    plain STRING EQUALITY, needing no hash primitive at all, PROVIDED the
+    two values use the same encoding and neither can embed a literal `/`
+    (which the Firebase SDK's own `.child(path)` always treats as a path
+    separator — a standard-base64 key routinely contains one; hex never
+    does). This is a narrower, cheaper mechanism than either option this
+    addendum originally presented — no Cloud Function, no bootstrap
+    reshape, just a matching encoding plus one new rule clause.
+  - **`database.rules.json`**: `directory/$deviceId`'s `.write` rule
+    gained `&& newData.child('identityPublicKey').val() === $deviceId`.
+    An attacker can no longer publish an entry at a victim's device id
+    under their own identity key — doing so would require submitting the
+    victim's exact public key as `identityPublicKey` too, which just
+    recreates the victim's own legitimate entry rather than substituting
+    anything.
+  - See `epics/E11-firebase-sync/tasks/E11-B06.md`'s round-4 Run log for
+    the full implementation, falsification, and test evidence. `E11-B06`
+    is no longer `blocked` on this finding.
+
 - **Finding 3 (no unpublish path): human decision — final, as shipped.**
   ✅ "Revoke, don't delete" is confirmed as the deliberate, permanent
   design: a `directory/$deviceId` entry can be revoked (`revokedAt` set)
