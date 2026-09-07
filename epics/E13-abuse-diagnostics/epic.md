@@ -1,7 +1,7 @@
 ---
 id: E13
 title: Abuse Prevention & Diagnostics
-status: done (2026-09-06; 7/7 tasks done, 2/3 bugs closed, P1/P2=0, 1 non-blocking S4/P3 follow-up remains — merged into development)
+status: done (2026-09-07; 7/7 tasks done, 3/3 bugs closed, P1/P2=0 — merged into development)
 type: feature
 priority: { moscow: should, wsjf: 4.0 }
 depends_on: [E06]
@@ -57,8 +57,9 @@ S2 — P1/P2 = 0**:
 
 🧍 **HUMAN GATE** (`bug_priorities`): cleared — `E13-B01` (S3/P2) and
 `E13-B02` (S4/P4) both fixed, reviewed, merged into `development`.
-`E13-B03` (re-scoped down from `E13-B02`'s own review) remains a narrow,
-non-blocking S4/P3 follow-up — see `tracker.md`'s header.
+`E13-B03` (re-scoped down from `E13-B02`'s own review, S4/P3) is also
+fixed and merged (PR #158) — see `tracker.md`'s header. **E13 has zero
+open bugs.**
 
 ## Open Questions
 None new at the epic level (each task's own Open Questions section, if
