@@ -109,6 +109,19 @@ class SentryObservabilityClient implements ObservabilityClient {
     //   belt-and-braces statement of intent independent of that field.
     options.enableAutoPerformanceTracing = false;
     options.enableUserInteractionTracing = false;
+
+    // E14-B08: `sentry_flutter` 9.29.0 changed `anrEnabled`'s default to
+    // `true` (automatic native capture). Explicitly disabled here per ADR-0006's
+    // stance of "no usage analytics/no unnecessary capture", similar to
+    // `enableAutoNativeBreadcrumbs`.
+    options.anrEnabled = false;
+
+    // E14-B08: Session Replay GA'd in 9.x. Explicitly disabled here per ADR-0006
+    // to avoid screen-recording capture, just as `attachScreenshot` is
+    // explicitly disabled. We pin these to null rather than trusting the
+    // SDK's own future defaults.
+    options.replay.sessionSampleRate = null;
+    options.replay.onErrorSampleRate = null;
   }
 
   @override
