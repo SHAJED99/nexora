@@ -6,14 +6,21 @@ fail-closed at the signature check) — T03 is `unblocked` but still
 `status: todo`, since a concrete task-sharding pass (files:/functions:/EARS)
 can't be written without also picking the signing library, itself a
 separate 🧍 `new_dependency` gate (no Ed25519-capable dependency exists in
-`pubspec.yaml` today) — see `E14-T03.md` §2. Bug sweep found 7 bugs
-(B01-B07); **B01-B06 all fixed and merged.** `E14-B07` (the
-`sentry_flutter`/`package_info_plus` AAR-metadata compileSdk conflict,
-found during a device-run attempt, not the original sweep) remains
-genuinely open, blocked on a human dependency-version decision (bump
-`sentry_flutter`'s pin vs. pin `package_info_plus` down) — the epic's only
-other remaining item. · **Started:** 2026-09-05 · **Completed:** — ·
-**Progress:** 5/6 tasks done, 6/7 bugs closed
+`pubspec.yaml` today) — see `E14-T03.md` §2. Bug sweep found 8 bugs
+(B01-B08); **B01-B07 all fixed and merged.** `E14-B07` (the
+`sentry_flutter`/`package_info_plus` AAR-metadata compileSdk conflict)
+resolved 2026-09-07: human approved bumping `sentry_flutter` 8.14.2 →
+9.29.0 (compiles against `compileSdk 36`, also drops the hardcoded Kotlin
+`languageVersion 1.6`); real device build verified on TWO physical devices
+(`21121119SG` API 33, `Pixel 8 Pro` API 37), both confirmed running via
+live process PID, reviewer independently re-ran the Android build itself
+rather than trusting a green test suite alone. `E14-B08` (a non-blocking
+carried-forward observation from that review — `sentry_flutter` 9.x's
+changed `anrEnabled`/Session Replay defaults aren't addressed by
+`configurePrivacyOptions`) filed and correctly `status: blocked` on a
+real DSN ever being configured (zero runtime exposure until then). ·
+**Started:** 2026-09-05 · **Completed:** 2026-09-07 · **Progress:** 5/6
+tasks done, 7/8 bugs closed, 1 non-blocking follow-up (`E14-B08`) open
 
 ## Tasks
 
