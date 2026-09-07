@@ -5,13 +5,10 @@ cross-model reviewed, `E11-B03` docs-fixed). **A second pass — a
 retroactive rule-5 re-review of `T01`/`T02` (same pattern found in E09/E10
 this session, since both were same-model reviewed) — then found 3 more
 real bugs: `E11-B04` (S3, fixed, P3), `E11-B05` (S3, fixed — a real
-Firebase rules gap, P2), `E11-B06` (S2, filed, P3, deferred).** **P1/P2 =
-0, all priority-stamped, epic→`development` merge is genuinely clear.**
-`E11-B06` reached the same "unreachable without a real caller" shape
-`E11-B01` already did, stamped P3 by the same `bug_priorities` gate, under
-the same delegated authority.
-· **Started:** 2026-09-04 · **Completed:** 2026-09-04 ·
-**Progress:** 6/6 tasks done
+Firebase rules gap, P2), `E11-B06` (S2, fixed across 4 rounds — see its
+own Run log).** **P1/P2 = 0, all priority-stamped, all 6 bugs closed.**
+· **Started:** 2026-09-04 · **Completed:** 2026-09-08 ·
+**Progress:** 6/6 tasks done, 6/6 bugs closed
 
 ## Tasks
 
@@ -33,7 +30,7 @@ the same delegated authority.
 | E11-B03 | **done** | S4 | P3 | planner (docs-only) — `files:` fence corrected |
 | E11-B04 | **done** | S3 | P3 | builder — `T01`'s EARS-FB-2 guard tests were tautological (exercised a self-authored fake, or compared payload shape); rewritten to drive the real guarded write path with a forbidden key |
 | E11-B05 | **done** | S3 | P2 | builder — `T02`'s rules had no `.validate` on any documented container node (`users/$uid`, `devices`, `relationships`, `sync_cursors` + wildcards), allowing a leaf-value overwrite of a whole container. Rules never deployed, so not exploited in production; fixed and falsified before this |
-| E11-B06 | **blocked, deferred** | S2/S3 | P3 | planner — `directory/$deviceId`'s first-writer-wins ownership + cross-account-readable `ownerUid`, both real but unreachable until `E11-B01`'s wiring gap closes (same precedent) |
+| E11-B06 | **done** (2026-09-08, round 4) | S2/S3 | P3 | builder — all 3 findings now resolved: finding 2 (cross-account `ownerUid` readability) and finding 3 (no unpublish path) fixed rounds 1-3; finding 1 (directory-entry squatting) fixed round 4 — `deviceId` derived from this device's own identity public key (hex-encoded) on first sign-in, `database.rules.json` enforces `$deviceId === identityPublicKey` as a plain string equality (no Cloud Function, no bootstrap reshape — an earlier recorded decision that either was needed turned out to be wrong). Cross-model reviewed, emulator-verified (19/19 assertions, `@firebase/rules-unit-testing`), APPROVE |
 
 ## DAG
 
