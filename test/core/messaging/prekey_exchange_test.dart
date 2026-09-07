@@ -92,6 +92,31 @@ void main() {
         return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
       },
     );
+    // E04-B05: `PrekeyExchange._sendControlFrame` now goes through
+    // `_stack.directSend` (connect-then-send), not a raw `transport.send` --
+    // mock `[fromSuffix]`'s own `TransportApi.connect` to accept and settle
+    // immediately, mirroring `TransportService.connect`'s real two-channel
+    // contract (accepted reply + a separate `onConnectionStateChanged`
+    // settle event).
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.connect.$fromSuffix',
+      (ByteData? message) async {
+        final List<Object?> args =
+            TransportApi.pigeonChannelCodec.decodeMessage(message)!
+                as List<Object?>;
+        final String deviceId = args[0]! as String;
+        scheduleMicrotask(() {
+          messenger.handlePlatformMessage(
+            'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$fromSuffix',
+            TransportEventsApi.pigeonChannelCodec.encodeMessage(
+              <Object?>[deviceId, ConnectionState.connected],
+            )!,
+            (ByteData? _) {},
+          );
+        });
+        return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+      },
+    );
   }
 
   void pushDiscovered(String suffix, String deviceId) {

@@ -57,6 +57,32 @@ void _mockSendAlwaysSucceeds(TestDefaultBinaryMessenger messenger, String suffix
   );
 }
 
+/// E04-B05: `RelayEngine`'s send path now goes through
+/// `ConnectionEnsuringSender`, which calls `TransportApi.connect` before
+/// `TransportApi.send`. Mocks the native side of `connect` to accept
+/// immediately, then fire the real two-channel settle event
+/// (`TransportEventsApi.onConnectionStateChanged` -> `connected`), mirroring
+/// `TransportService.connect`'s own real contract (`transport_service_test.dart`).
+void _mockConnectAlwaysSucceeds(TestDefaultBinaryMessenger messenger, String suffix) {
+  messenger.setMockMessageHandler(
+    'dev.flutter.pigeon.nexora.TransportApi.connect.$suffix',
+    (ByteData? message) async {
+      final args = TransportApi.pigeonChannelCodec.decodeMessage(message)!
+          as List<Object?>;
+      final deviceId = args[0]! as String;
+      scheduleMicrotask(() {
+        messenger.handlePlatformMessage(
+          'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$suffix',
+          TransportEventsApi.pigeonChannelCodec
+              .encodeMessage(<Object?>[deviceId, ConnectionState.connected])!,
+          (ByteData? _) {},
+        );
+      });
+      return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+    },
+  );
+}
+
 /// A `TransportService` whose `send` is entirely under the test's control --
 /// completes only when the test resolves [gate] (or immediately, if [gate]
 /// is left `null`) -- so a `RelayEngine.processQueue()` pass driven through
@@ -74,6 +100,13 @@ class _ControlledSendTransport extends TransportService {
 
   Completer<void>? gate;
   int sendCallCount = 0;
+
+  // E04-B05: `RelayEngine`'s send path now goes through
+  // `ConnectionEnsuringSender`, which calls `connect()` before `send()`.
+  // This fake only ever needed to control `send()`'s own timing/count; a
+  // connect that always succeeds keeps that behavior unchanged.
+  @override
+  Future<bool> connect(String deviceId) async => true;
 
   @override
   Future<bool> send(String deviceId, Uint8List bytes) async {
@@ -134,6 +167,7 @@ void main() {
         final stack = await newStack('device-a', suffix);
         addTearDown(stack.dispose);
         _mockSendAlwaysSucceeds(messenger, suffix);
+        _mockConnectAlwaysSucceeds(messenger, suffix);
 
         await stack.cryptoService.establishSession(
           const SignalProtocolAddress('device-b', 1),
@@ -348,6 +382,7 @@ void main() {
       final stack = await newStack('device-a', suffix, neighborId: 'device-b');
       addTearDown(stack.dispose);
       _mockSendAlwaysSucceeds(messenger, suffix);
+      _mockConnectAlwaysSucceeds(messenger, suffix);
 
       // `RelayEngine.processQueue()`/`sweepExpired()`/`reclaimPayloads()`
       // are each deliberately defensive against a bad SEND already
@@ -600,6 +635,7 @@ void main() {
               await newStack('device-a', suffix, neighborId: 'device-b');
           addTearDown(stack.dispose);
           _mockSendAlwaysSucceeds(messenger, suffix);
+          _mockConnectAlwaysSucceeds(messenger, suffix);
 
           await stack.relayEngine.enqueue(
             'device-b',

@@ -18,6 +18,7 @@
 // limit" behaviour is provable in a handful of calls, deterministically,
 // without depending on wall-clock time or the large production default.
 import 'package:drift/native.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/auth/google_auth_service.dart' show AppFailure;
 import 'package:nexora/core/crypto/crypto_stub.dart';
@@ -25,6 +26,7 @@ import 'package:nexora/core/crypto/drift_signal_store.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/persistence/group_tables.dart';
+import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/groups/data/group_repository.dart';
 import 'package:nexora/features/groups/domain/group_membership_service.dart';
@@ -64,8 +66,25 @@ void main() {
     late GroupRepository repo;
 
     setUp(() async {
-      a = await newStack('device-owner', nextSuffix());
+      final suffix = nextSuffix();
+      a = await newStack('device-owner', suffix);
       repo = GroupRepository(a.db);
+      // E04-B05: `GroupMembershipService._sendOne`'s `ensureSession` call
+      // now sends its first-contact request via `_stack.directSend`
+      // (connect-then-send). This suite's members (`member-a`/`member-b`)
+      // are never real, reachable devices -- deliberately unmocked before
+      // this task, relying on a fast transport failure so `_sendOne`'s own
+      // `catch (_) {}` swallows it quickly and the local change (this
+      // suite's actual subject) still commits. `TransportApi.connect`,
+      // unlike `TransportApi.send`, does not fail fast when unmocked in
+      // this test harness (its own settle future has no test-side event to
+      // resolve it) -- mock it to fail immediately, matching the "member
+      // isn't actually reachable" reality this suite already assumes.
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.TransportApi.connect.$suffix',
+        (ByteData? message) async =>
+            TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[false]),
+      );
     });
 
     tearDown(() => a.dispose());

@@ -647,8 +647,30 @@ class PrekeyExchange {
     // Direct transport send -- NOT `relayEngine.enqueue` -- per the
     // resolved `OQ-E06-T07-1`: this exchange only ever works with both
     // devices reachable right now, so there is nothing to queue for later
-    // (this file's header).
-    await _stack.transport.send(peerDeviceId, frame.serialize());
+    // (this file's header). `_stack.directSend`, not `_stack.transport.send`
+    // directly -- E04-B05: this is the FIRST send of a first-contact
+    // exchange, so it must itself connect before sending, not assume an
+    // already-open socket that nothing has opened yet.
+    //
+    // `directSend` never throws (`ConnectionEnsuringSender`'s own contract)
+    // -- it converts a connect or send failure into a plain `false`. Before
+    // E04-B05, this call was a raw `_stack.transport.send`, which COULD
+    // throw (a `PlatformException` from a genuine transport failure), and
+    // that throw was the only signal `_ensureSessionUncoalesced` (this
+    // method's one caller inside `ensureSession`, no `catch` of its own,
+    // only `finally`) had that the request never actually left the device
+    // -- without it, `ensureSession` falls through to
+    // `completer.future.timeout(timeout)` and pointlessly waits out the
+    // FULL timeout for a bundle response that a known-failed send could
+    // never have triggered (review finding, E04-B05 widening: reproduced by
+    // `group_membership_rate_limit_test.dart`'s own unreachable-member fan-
+    // out, which used to fail in well under a second and started taking the
+    // full 20s `_fanOutSessionTimeout` instead). Explicitly restoring the
+    // original fail-fast contract here.
+    final sent = await _stack.directSend(peerDeviceId, frame.serialize());
+    if (!sent) {
+      throw const AppFailure('messaging.transport_send_failed');
+    }
   }
 
   /// Closes [_connectionRequests] (E10-T05, task file §7: "controller

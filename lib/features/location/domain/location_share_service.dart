@@ -319,7 +319,10 @@ class LocationShareService {
             state == RelayDeliveryState.forwarding ||
             state == RelayDeliveryState.delivered;
       } else {
-        delivered = await _stack.transport.send(peerDeviceId, serialized);
+        // `_stack.directSend`, not `_stack.transport.send` directly --
+        // E04-B05: must connect before sending, not assume an already-open
+        // socket.
+        delivered = await _stack.directSend(peerDeviceId, serialized);
       }
 
       if (!delivered) {

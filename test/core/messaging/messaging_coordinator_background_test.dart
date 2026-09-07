@@ -364,6 +364,13 @@ class _ControlledSendTransport extends TransportService {
   Completer<void>? gate;
   int sendCallCount = 0;
 
+  // E04-B05: `RelayEngine`'s send path now goes through
+  // `ConnectionEnsuringSender`, which calls `connect()` before `send()`.
+  // This fake only ever needed to control `send()`'s own timing/count; a
+  // connect that always succeeds keeps that behavior unchanged.
+  @override
+  Future<bool> connect(String deviceId) async => true;
+
   @override
   Future<bool> send(String deviceId, Uint8List bytes) async {
     sendCallCount++;

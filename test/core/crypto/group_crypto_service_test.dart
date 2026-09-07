@@ -8,6 +8,7 @@
 //     EARS-GROUP-13 (distribution genuinely rides the pairwise session) --
 //     the security property this task exists to prove, which can only be
 //     falsified against a real Double Ratchet session.
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -42,6 +43,37 @@ void main() {
     );
   }
 
+  /// E04-B05: `RelayEngine`'s `send` is now `ConnectionEnsuringSender.
+  /// ensureConnectedAndSend`, which calls `TransportApi.connect` before
+  /// ever calling `TransportApi.send` -- every test below that mocks
+  /// `send` for a real destination now also needs a `connect` mock, or
+  /// the connect step (never previously exercised here) fails and the
+  /// send is never attempted at all. Mirrors the native connect's own
+  /// two-part contract (`_api.connect` returns "accepted", the real
+  /// settle arrives later via `onConnectionStateChanged`) by firing the
+  /// connected event asynchronously rather than synchronously replying
+  /// "connected" inline -- matching `TransportService.connect`'s own
+  /// documented two-channel design.
+  void mockConnectAlwaysSucceeds(String suffix) {
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.connect.$suffix',
+      (ByteData? message) async {
+        final args = TransportApi.pigeonChannelCodec.decodeMessage(message)!
+            as List<Object?>;
+        final deviceId = args[0]! as String;
+        scheduleMicrotask(() {
+          messenger.handlePlatformMessage(
+            'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$suffix',
+            TransportEventsApi.pigeonChannelCodec
+                .encodeMessage(<Object?>[deviceId, ConnectionState.connected])!,
+            (ByteData? _) {},
+          );
+        });
+        return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+      },
+    );
+  }
+
   /// Mirrors `group_membership_service_test.dart`'s own `newStack`: each
   /// simulated device gets its own `AppDatabase` and a
   /// `DriftSignalProtocolStore`/`CryptoService.withStore` bound to THAT SAME
@@ -70,6 +102,7 @@ void main() {
     setUp(() async {
       final suffix = nextSuffix();
       mockSendAlwaysSucceeds(suffix);
+      mockConnectAlwaysSucceeds(suffix);
       stack = await newStack('device-a', suffix);
       service = stack.groupCryptoService;
     });
@@ -355,7 +388,9 @@ void main() {
       final aSuffix = nextSuffix();
       final bSuffix = nextSuffix();
       mockSendAlwaysSucceeds(aSuffix);
+      mockConnectAlwaysSucceeds(aSuffix);
       mockSendAlwaysSucceeds(bSuffix);
+      mockConnectAlwaysSucceeds(bSuffix);
       final a = await newStack('device-a', aSuffix);
       final b = await newStack('device-b', bSuffix);
       addTearDown(a.dispose);
@@ -474,7 +509,9 @@ void main() {
       final aSuffix = nextSuffix();
       final bSuffix = nextSuffix();
       mockSendAlwaysSucceeds(aSuffix);
+      mockConnectAlwaysSucceeds(aSuffix);
       mockSendAlwaysSucceeds(bSuffix);
+      mockConnectAlwaysSucceeds(bSuffix);
       final a = await newStack('device-a', aSuffix);
       final b = await newStack('device-b', bSuffix);
       addTearDown(a.dispose);
@@ -518,7 +555,9 @@ void main() {
       final aSuffix = nextSuffix();
       final bSuffix = nextSuffix();
       mockSendAlwaysSucceeds(aSuffix);
+      mockConnectAlwaysSucceeds(aSuffix);
       mockSendAlwaysSucceeds(bSuffix);
+      mockConnectAlwaysSucceeds(bSuffix);
       final a = await newStack('device-a', aSuffix);
       final b = await newStack('device-b', bSuffix);
       addTearDown(a.dispose);
@@ -569,7 +608,9 @@ void main() {
       final aSuffix = nextSuffix();
       final bSuffix = nextSuffix();
       mockSendAlwaysSucceeds(aSuffix);
+      mockConnectAlwaysSucceeds(aSuffix);
       mockSendAlwaysSucceeds(bSuffix);
+      mockConnectAlwaysSucceeds(bSuffix);
       final a = await newStack('device-a', aSuffix);
       final b = await newStack('device-b', bSuffix);
       addTearDown(a.dispose);
@@ -609,7 +650,9 @@ void main() {
       final aSuffix = nextSuffix();
       final bSuffix = nextSuffix();
       mockSendAlwaysSucceeds(aSuffix);
+      mockConnectAlwaysSucceeds(aSuffix);
       mockSendAlwaysSucceeds(bSuffix);
+      mockConnectAlwaysSucceeds(bSuffix);
       final a = await newStack('device-a', aSuffix);
       final b = await newStack('device-b', bSuffix);
       addTearDown(a.dispose);
@@ -650,7 +693,9 @@ void main() {
       final aSuffix = nextSuffix();
       final bSuffix = nextSuffix();
       mockSendAlwaysSucceeds(aSuffix);
+      mockConnectAlwaysSucceeds(aSuffix);
       mockSendAlwaysSucceeds(bSuffix);
+      mockConnectAlwaysSucceeds(bSuffix);
       final a = await newStack('device-a', aSuffix);
       final b = await newStack('device-b', bSuffix);
       addTearDown(a.dispose);
@@ -687,6 +732,7 @@ void main() {
         'first contact (OQ-E07-9 -- asserted visible, not fixed)', () async {
       final aSuffix = nextSuffix();
       mockSendAlwaysSucceeds(aSuffix);
+      mockConnectAlwaysSucceeds(aSuffix);
       final a = await newStack('device-a', aSuffix);
       addTearDown(a.dispose);
 
@@ -695,6 +741,7 @@ void main() {
       for (var i = 0; i < 3; i++) {
         final suffix = nextSuffix();
         mockSendAlwaysSucceeds(suffix);
+        mockConnectAlwaysSucceeds(suffix);
         final peer = await newStack('device-peer-$i', suffix);
         stacks.add(peer);
         addTearDown(peer.dispose);

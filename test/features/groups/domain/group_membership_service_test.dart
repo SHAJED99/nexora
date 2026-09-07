@@ -11,6 +11,7 @@
 //     EARS-GROUP-10 (the security property this task exists to prove) and
 //     one full round trip, since the authentication claim can only be
 //     falsified against a real Double Ratchet session.
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:drift/native.dart';
@@ -42,6 +43,37 @@ void main() {
     messenger.setMockMessageHandler(
       'dev.flutter.pigeon.nexora.TransportApi.send.$suffix',
       (ByteData? message) async {
+        return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+      },
+    );
+  }
+
+  /// E04-B05: `RelayEngine`'s `send` is now `ConnectionEnsuringSender.
+  /// ensureConnectedAndSend`, which calls `TransportApi.connect` before
+  /// ever calling `TransportApi.send` -- every test below that mocks
+  /// `send` for a real destination now also needs a `connect` mock, or
+  /// the connect step (never previously exercised here) fails and the
+  /// send is never attempted at all. Mirrors the native connect's own
+  /// two-part contract (`_api.connect` returns "accepted", the real
+  /// settle arrives later via `onConnectionStateChanged`) by firing the
+  /// connected event asynchronously rather than synchronously replying
+  /// "connected" inline -- matching `TransportService.connect`'s own
+  /// documented two-channel design.
+  void mockConnectAlwaysSucceeds(String suffix) {
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.connect.$suffix',
+      (ByteData? message) async {
+        final args = TransportApi.pigeonChannelCodec.decodeMessage(message)!
+            as List<Object?>;
+        final deviceId = args[0]! as String;
+        scheduleMicrotask(() {
+          messenger.handlePlatformMessage(
+            'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$suffix',
+            TransportEventsApi.pigeonChannelCodec
+                .encodeMessage(<Object?>[deviceId, ConnectionState.connected])!,
+            (ByteData? _) {},
+          );
+        });
         return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
       },
     );
@@ -260,6 +292,7 @@ void main() {
           final a = await newStack('device-owner', suffix);
           addTearDown(a.dispose);
           mockSendAlwaysSucceeds(suffix);
+          mockConnectAlwaysSucceeds(suffix);
 
           final repo = GroupRepository(a.db);
           final groupId = await repo.createGroup(
@@ -357,6 +390,7 @@ void main() {
         final a = await newStack('device-owner', suffix);
         addTearDown(a.dispose);
         mockSendAlwaysSucceeds(suffix);
+        mockConnectAlwaysSucceeds(suffix);
 
         final repo = GroupRepository(a.db);
         final groupId = await repo.createGroup(
@@ -533,6 +567,7 @@ void main() {
       addTearDown(b.dispose);
 
       await establishMutualSessions(a, b);
+      mockConnectAlwaysSucceeds(aSuffix);
       wireSend(aSuffix, 'device-a', bSuffix);
 
       b.inbound.start();

@@ -32,6 +32,7 @@
 // `RelayEngine` -> `InboundPipeline` path E07-T04's key distribution already
 // proved works, just on a new `controlKind` (6 — originally 5, renumbered
 // after E07-T09's `kControlKindCallSignaling` claimed 5 first) instead of 4.
+import 'dart:async';
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
@@ -305,6 +306,37 @@ void main() {
     );
   }
 
+  /// E04-B05: `RelayEngine`'s `send` is now `ConnectionEnsuringSender.
+  /// ensureConnectedAndSend`, which calls `TransportApi.connect` before
+  /// ever calling `TransportApi.send` -- every test below that mocks
+  /// `send` for a real destination now also needs a `connect` mock, or
+  /// the connect step (never previously exercised here) fails and the
+  /// send is never attempted at all. Mirrors the native connect's own
+  /// two-part contract (`_api.connect` returns "accepted", the real
+  /// settle arrives later via `onConnectionStateChanged`) by firing the
+  /// connected event asynchronously rather than synchronously replying
+  /// "connected" inline -- matching `TransportService.connect`'s own
+  /// documented two-channel design.
+  void mockConnectAlwaysSucceeds(String suffix) {
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.connect.$suffix',
+      (ByteData? message) async {
+        final args = TransportApi.pigeonChannelCodec.decodeMessage(message)!
+            as List<Object?>;
+        final deviceId = args[0]! as String;
+        scheduleMicrotask(() {
+          messenger.handlePlatformMessage(
+            'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$suffix',
+            TransportEventsApi.pigeonChannelCodec
+                .encodeMessage(<Object?>[deviceId, ConnectionState.connected])!,
+            (ByteData? _) {},
+          );
+        });
+        return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+      },
+    );
+  }
+
   void wireSend(String fromSuffix, String fromDeviceId, String toSuffix) {
     messenger.setMockMessageHandler(
       'dev.flutter.pigeon.nexora.TransportApi.send.$fromSuffix',
@@ -495,7 +527,9 @@ void main() {
     final aSuffix = nextSuffix();
     final bSuffix = nextSuffix();
     mockSendAlwaysSucceeds(aSuffix);
+    mockConnectAlwaysSucceeds(aSuffix);
     mockSendAlwaysSucceeds(bSuffix);
+    mockConnectAlwaysSucceeds(bSuffix);
     final a = await newStack('device-a', aSuffix);
     final b = await newStack('device-b', bSuffix);
     addTearDown(a.dispose);
@@ -552,7 +586,9 @@ void main() {
       final aSuffix = nextSuffix();
       final bSuffix = nextSuffix();
       mockSendAlwaysSucceeds(aSuffix);
+      mockConnectAlwaysSucceeds(aSuffix);
       mockSendAlwaysSucceeds(bSuffix);
+      mockConnectAlwaysSucceeds(bSuffix);
       final a = await newStack('device-a', aSuffix);
       final b = await newStack('device-b', bSuffix);
       addTearDown(a.dispose);
@@ -608,7 +644,9 @@ void main() {
       final aSuffix = nextSuffix();
       final bSuffix = nextSuffix();
       mockSendAlwaysSucceeds(aSuffix);
+      mockConnectAlwaysSucceeds(aSuffix);
       mockSendAlwaysSucceeds(bSuffix);
+      mockConnectAlwaysSucceeds(bSuffix);
       final a = await newStack('device-a', aSuffix);
       final b = await newStack('device-b', bSuffix);
       addTearDown(a.dispose);
@@ -655,7 +693,9 @@ void main() {
     final aSuffix = nextSuffix();
     final bSuffix = nextSuffix();
     mockSendAlwaysSucceeds(aSuffix);
+    mockConnectAlwaysSucceeds(aSuffix);
     mockSendAlwaysSucceeds(bSuffix);
+    mockConnectAlwaysSucceeds(bSuffix);
     final a = await newStack('device-a', aSuffix);
     final b = await newStack('device-b', bSuffix);
     addTearDown(a.dispose);
@@ -775,7 +815,9 @@ void main() {
       final aSuffix = nextSuffix();
       final bSuffix = nextSuffix();
       mockSendAlwaysSucceeds(aSuffix);
+      mockConnectAlwaysSucceeds(aSuffix);
       mockSendAlwaysSucceeds(bSuffix);
+      mockConnectAlwaysSucceeds(bSuffix);
       final a = await newStack('device-a', aSuffix);
       final b = await newStack('device-b', bSuffix);
       addTearDown(a.dispose);

@@ -514,7 +514,9 @@ class DeliveryAckService {
       payload: framedBody,
     );
     try {
-      await _stack.transport.send(peerDeviceId, frame.serialize());
+      // `_stack.directSend`, not `_stack.transport.send` directly -- E04-B05:
+      // must connect before sending, not assume an already-open socket.
+      await _stack.directSend(peerDeviceId, frame.serialize());
       counters.sent++;
     } catch (_) {
       // Best-effort, never surfaced -- see this method's own doc comment.

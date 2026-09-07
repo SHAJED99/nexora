@@ -11,6 +11,7 @@
 //     receiving stack, for the receive-side gate and malformed/undecryptable
 //     rejection (EARS-LOC-10/12) -- these need a real Signal session (to
 //     produce a genuine ciphertext) but not a real network hop.
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:drift/native.dart';
@@ -269,6 +270,29 @@ void main() {
             return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
           },
         );
+        // E04-B05: `LocationShareService`'s direct-neighbor send branch now
+        // goes through `_stack.directSend` (connect-then-send) -- mock
+        // `[fromSuffix]`'s own `TransportApi.connect` to accept and settle
+        // immediately, mirroring `TransportService.connect`'s real
+        // two-channel contract.
+        messenger.setMockMessageHandler(
+          'dev.flutter.pigeon.nexora.TransportApi.connect.$fromSuffix',
+          (ByteData? message) async {
+            final args = TransportApi.pigeonChannelCodec.decodeMessage(message)!
+                as List<Object?>;
+            final deviceId = args[0]! as String;
+            scheduleMicrotask(() {
+              messenger.handlePlatformMessage(
+                'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$fromSuffix',
+                TransportEventsApi.pigeonChannelCodec.encodeMessage(
+                  <Object?>[deviceId, ConnectionState.connected],
+                )!,
+                (ByteData? _) {},
+              );
+            });
+            return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+          },
+        );
       }
 
       Future<void> settle() =>
@@ -363,6 +387,30 @@ void main() {
                 TransportApi.pigeonChannelCodec.decodeMessage(message)!
                     as List<Object?>;
             captured.add(args[1]! as Uint8List);
+            return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+          },
+        );
+        // E04-B05: `LocationShareService`'s direct-neighbor send branch now
+        // goes through `_stack.directSend` (connect-then-send) -- mock
+        // `[aSuffix]`'s own `TransportApi.connect` to accept and settle
+        // immediately, mirroring `TransportService.connect`'s real
+        // two-channel contract.
+        messenger.setMockMessageHandler(
+          'dev.flutter.pigeon.nexora.TransportApi.connect.$aSuffix',
+          (ByteData? message) async {
+            final args =
+                TransportApi.pigeonChannelCodec.decodeMessage(message)!
+                    as List<Object?>;
+            final deviceId = args[0]! as String;
+            scheduleMicrotask(() {
+              messenger.handlePlatformMessage(
+                'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$aSuffix',
+                TransportEventsApi.pigeonChannelCodec.encodeMessage(
+                  <Object?>[deviceId, ConnectionState.connected],
+                )!,
+                (ByteData? _) {},
+              );
+            });
             return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
           },
         );

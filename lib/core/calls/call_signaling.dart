@@ -1052,7 +1052,9 @@ class CallSignaling {
       // wait has already lost its race against the 45s ring timeout, so
       // there is nothing worth queuing for later delivery when the peer is
       // (or is assumed to be) directly reachable.
-      delivered = await _stack.transport.send(peerDeviceId, serialized);
+      // `_stack.directSend`, not `_stack.transport.send` directly -- E04-B05:
+      // must connect before sending, not assume an already-open socket.
+      delivered = await _stack.directSend(peerDeviceId, serialized);
     }
     if (!delivered) {
       throw const AppFailure('call.unreachable');
