@@ -1,7 +1,7 @@
 ---
 id: E12
 title: Account Recovery & Device Enrollment
-status: todo
+status: done (2026-09-07; 3/3 tasks + 14/14 bugs closed, P1/P2/P3=0 — merged into development)
 type: feature
 priority: { moscow: should, wsjf: 3.5 }
 depends_on: [E01, E03]
@@ -56,7 +56,11 @@ copy, which shipped correctly.
 
 See `tracker.md` §Bug sweep for the table, the probe evidence, the `E13-T07`
 cross-epic sequencing dependency, and the C2/C3 out-of-scope dispositions.
-🧍 `bug_priorities` gate pending: severity set, priority is the human's.
+
+**Update (2026-09-07):** all 8 of the above, plus 6 more filed during fix
+review (`E12-B09`–`E12-B14`), are now fixed and merged — 14/14 bugs closed,
+P1/P2/P3 all zero. See `tracker.md`'s own header and event log for the full
+closure sequence. This epic's merge into `development` is complete.
 
 ## Analyze report / Retro
 
