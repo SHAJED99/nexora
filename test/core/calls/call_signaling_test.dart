@@ -12,6 +12,7 @@
 //     session: the authentication claim (EARS-CALL-2's forged-caller-id
 //     test) and the byte-containment property (the frame travels as
 //     ciphertext, not cleartext).
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:drift/native.dart';
@@ -71,6 +72,30 @@ void main() {
           eventMessage,
           (ByteData? _) {},
         );
+        return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+      },
+    );
+    // E04-B05: `CallSignaling._sendFrame`'s direct-neighbor branch now goes
+    // through `_stack.directSend` (connect-then-send) -- mock
+    // `[fromSuffix]`'s own `TransportApi.connect` to accept and settle
+    // immediately, mirroring `TransportService.connect`'s real two-channel
+    // contract.
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.connect.$fromSuffix',
+      (ByteData? message) async {
+        final List<Object?> args =
+            TransportApi.pigeonChannelCodec.decodeMessage(message)!
+                as List<Object?>;
+        final String deviceId = args[0]! as String;
+        scheduleMicrotask(() {
+          messenger.handlePlatformMessage(
+            'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$fromSuffix',
+            TransportEventsApi.pigeonChannelCodec.encodeMessage(
+              <Object?>[deviceId, ConnectionState.connected],
+            )!,
+            (ByteData? _) {},
+          );
+        });
         return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
       },
     );
@@ -505,6 +530,28 @@ void main() {
     messenger.setMockMessageHandler(
       'dev.flutter.pigeon.nexora.TransportApi.send.$suffix',
       (ByteData? message) async {
+        return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+      },
+    );
+    // E04-B05: `CallSignaling._sendFrame`'s direct-neighbor branch now goes
+    // through `_stack.directSend` (connect-then-send) -- see `wireSend`'s
+    // own matching comment above for the full reasoning.
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.connect.$suffix',
+      (ByteData? message) async {
+        final List<Object?> args =
+            TransportApi.pigeonChannelCodec.decodeMessage(message)!
+                as List<Object?>;
+        final String deviceId = args[0]! as String;
+        scheduleMicrotask(() {
+          messenger.handlePlatformMessage(
+            'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$suffix',
+            TransportEventsApi.pigeonChannelCodec.encodeMessage(
+              <Object?>[deviceId, ConnectionState.connected],
+            )!,
+            (ByteData? _) {},
+          );
+        });
         return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
       },
     );

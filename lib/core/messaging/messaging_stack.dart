@@ -242,6 +242,7 @@ class MessagingStack {
     required this.identityService,
     required this.cryptoService,
     required this.transport,
+    required this.directSend,
     required this.routingEngine,
     required this.relayEngine,
     required this.sendMessage,
@@ -431,6 +432,25 @@ class MessagingStack {
   final IdentityService identityService;
   final CryptoService cryptoService;
   final TransportService transport;
+
+  /// E04-B05: the SAME connect-then-send path [relayEngine] uses
+  /// (`ConnectionEnsuringSender.ensureConnectedAndSend`), exposed here for
+  /// the four control sub-protocols that intentionally bypass
+  /// `relayEngine.enqueue` for a direct, unqueued send
+  /// (`PrekeyExchange`/`DeliveryAckService`/`CallSignaling`/
+  /// `LocationShareService` — each already documents its own reason: first
+  /// contact, an ack that must not itself trigger another ack, real-time
+  /// call signaling, and a live location fix, respectively). Before this
+  /// fix, every one of those four called [transport].send directly, which
+  /// hits the same never-connected socket this whole task exists to fix —
+  /// confirmed live: `PrekeyExchange.ensureSession`'s own bundle-request
+  /// send sits upstream of every `RelayEngine` send a real first-contact
+  /// message would ever reach, so leaving those four call sites unfixed
+  /// would have made this task's own real-hardware repro fail identically
+  /// after merge. Callers should use THIS, never [transport].send
+  /// directly, for any call that needs the native socket to actually be
+  /// open.
+  final RelaySendFn directSend;
   final RoutingEngine routingEngine;
   final RelayEngine relayEngine;
   final SendMessageUseCase sendMessage;
@@ -643,6 +663,7 @@ class MessagingStack {
       identityService: identityService,
       cryptoService: resolvedCryptoService,
       transport: resolvedTransport,
+      directSend: connectionEnsuringSender.ensureConnectedAndSend,
       routingEngine: routingEngine,
       relayEngine: relayEngine,
       sendMessage: sendMessage,

@@ -17,6 +17,7 @@
 // same minimal-harness style as `relay_engine_test.dart`'s own tests, no
 // `NetworkSimulator` needed since these tests don't care about simulated
 // link randomness, only about queue ordering.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -303,6 +304,29 @@ void main() {
           'dev.flutter.pigeon.nexora.TransportApi.send.$suffix',
           (ByteData? message) async {
             sendCalls++;
+            return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+          },
+        );
+        // E04-B05: `CallSignaling._sendFrame`'s direct-neighbor branch now
+        // goes through `_stack.directSend` (connect-then-send) -- mock
+        // `[suffix]`'s own `TransportApi.connect` to accept and settle
+        // immediately, mirroring `TransportService.connect`'s real
+        // two-channel contract.
+        messenger.setMockMessageHandler(
+          'dev.flutter.pigeon.nexora.TransportApi.connect.$suffix',
+          (ByteData? message) async {
+            final args = TransportApi.pigeonChannelCodec.decodeMessage(message)!
+                as List<Object?>;
+            final deviceId = args[0]! as String;
+            scheduleMicrotask(() {
+              messenger.handlePlatformMessage(
+                'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$suffix',
+                TransportEventsApi.pigeonChannelCodec.encodeMessage(
+                  <Object?>[deviceId, ConnectionState.connected],
+                )!,
+                (ByteData? _) {},
+              );
+            });
             return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
           },
         );

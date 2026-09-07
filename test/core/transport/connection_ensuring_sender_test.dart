@@ -199,5 +199,31 @@ void main() {
 
       expect(connectedTo, ['peer-1', 'peer-2']);
     });
+
+    test(
+        'a connect() that never settles times out instead of wedging the '
+        'coalescing map forever (review finding, E04-B05)', () async {
+      var connectCalls = 0;
+      final sender = ConnectionEnsuringSender(
+        connect: (deviceId) {
+          connectCalls++;
+          return Completer<bool>().future; // never completes
+        },
+        send: (deviceId, bytes) async => true,
+        connectTimeout: const Duration(milliseconds: 10),
+      );
+
+      final result = await sender.ensureConnectedAndSend(
+        'peer-1',
+        Uint8List.fromList([1]),
+      );
+      expect(result, isFalse);
+
+      // The timed-out attempt must have cleared its own coalescing entry --
+      // a second send to the same device tries again, it isn't wedged
+      // waiting on the first (already-timed-out) future forever.
+      await sender.ensureConnectedAndSend('peer-1', Uint8List.fromList([2]));
+      expect(connectCalls, 2);
+    });
   });
 }

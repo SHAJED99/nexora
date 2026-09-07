@@ -3,6 +3,7 @@
 // EARS-COMM-1/23/24/25 plus the hard confidentiality contract (task §2/§9):
 // decrypted plaintext lives ONLY in this controller's ephemeral view-model,
 // never persisted, logged, or written back.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -173,6 +174,29 @@ void main() {
           eventMessage,
           (ByteData? _) {},
         );
+        return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+      },
+    );
+    // E04-B05: `PrekeyExchange`/`SendMessageUseCase`'s send paths now go
+    // through `_stack.directSend`/`RelayEngine`'s own `ConnectionEnsuringSender`
+    // (both connect-then-send) -- mock `[fromSuffix]`'s own `TransportApi.connect`
+    // to accept and settle immediately, mirroring `TransportService.connect`'s
+    // real two-channel contract.
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.connect.$fromSuffix',
+      (ByteData? message) async {
+        final args = TransportApi.pigeonChannelCodec.decodeMessage(message)!
+            as List<Object?>;
+        final deviceId = args[0]! as String;
+        scheduleMicrotask(() {
+          messenger.handlePlatformMessage(
+            'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$fromSuffix',
+            TransportEventsApi.pigeonChannelCodec.encodeMessage(
+              <Object?>[deviceId, ConnectionState.connected],
+            )!,
+            (ByteData? _) {},
+          );
+        });
         return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
       },
     );
