@@ -70,3 +70,49 @@ draft prose that still has to be applied by spending Claude tokens on it.
   object (`input_tokens`/`output_tokens`/`total_tokens`/`cache_read_tokens`),
   and watch for an explicit rate-limit/quota error surfaced by the CLI
   itself. A prior clean check does not guarantee capacity later.
+
+### A second execution CLI: `opencode` (human instruction, 2026-09-07)
+
+Also available on this machine — `opencode-cli.exe`, installed at
+`C:\Users\SRPPC3\AppData\Local\OpenCode\opencode-cli.exe`, not on `PATH`,
+v1.14.31. Same purpose as `agy` above (push real execution work off this
+session's own Claude token budget), different provider mix: `opencode
+models` lists ~370 models across OpenRouter, LM Studio (local), and
+opencode's own hosted free tier. Non-interactive dispatch:
+`opencode run --model <provider>/<id> "<prompt>"`. `opencode stats` gives
+a real usage/cost dashboard (unlike `agy`, which has none) — check it
+before a large dispatch.
+
+- **The user said: use good FREE models, matched to the task.** Confirmed
+  working, in order of preference for real execution work:
+  1. `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` — largest
+     confirmed-working free model (550B/a55b MoE); default choice for
+     genuinely hard/high-stakes work.
+  2. `openrouter/minimax/minimax-m3:free` — strong alternative, good fit
+     for coding-heavy tasks or as an independent second opinion against
+     the nemotron pick above.
+  3. `opencode/nemotron-3.5-lightning-free` or
+     `openrouter/nvidia/nemotron-3.5-lightning:free` — lighter/quicker
+     tasks that don't need the biggest model.
+  Re-run `opencode models | grep -i free` to reconfirm the live list —
+  it can change, and a model missing here may have been added/removed.
+- **Paid (non-`:free`) OpenRouter models are NOT reliably usable** — this
+  account's OpenRouter credit balance is very low; a real attempt at
+  `openrouter/~google/gemini-flash-latest` failed outright with "requires
+  more credits... requested up to 32000 tokens, but can only afford
+  2173." Stick to `:free`-suffixed OpenRouter models or `opencode/*-free`
+  models unless a paid one is confirmed to work in the moment.
+- **LM Studio models (`lmstudio/...`) are NOT currently reliable** — a
+  real dispatch to `lmstudio/qwen/qwen3-coder-30b` did not respond within
+  60s and had to be backgrounded, most likely because the local LM Studio
+  server/model wasn't loaded and running at the time. Don't depend on
+  these unless first confirmed responsive with a quick probe.
+- Exact model-ID syntax matters and the CLI's own error message tells you
+  the fix — e.g. `openrouter/google/gemini-flash-latest` fails with
+  "Did you mean: ~google/gemini-flash-latest?" (some OpenRouter listings
+  need a literal `~` prefix on the model segment). Read the error rather
+  than guessing a second time.
+- Same rules as `agy` apply: default to real task execution through
+  `opencode` rather than Claude directly, reserve direct Claude spend for
+  orchestration/what only Claude can do, and check usage/cost (`opencode
+  stats`, plus watching for a credits/quota error) before each dispatch.
