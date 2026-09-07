@@ -1,7 +1,7 @@
 ---
 id: E13
 title: Abuse Prevention & Diagnostics
-status: todo
+status: done (2026-09-06; 7/7 tasks done, 2/3 bugs closed, P1/P2=0, 1 non-blocking S4/P3 follow-up remains — merged into development)
 type: feature
 priority: { moscow: should, wsjf: 4.0 }
 depends_on: [E06]
@@ -55,8 +55,10 @@ S2 — P1/P2 = 0**:
 | `E13-B01` | S3 | `RateLimiter.allow`'s eviction runs an unindexed full-table DELETE on every admission decision; per-call cost grows linearly with an attacker-growable table (measured 0.28ms → 1.31ms/call from 10k → 50k rows). T01/T07 seam. Also corrects `OQ-E13-T01-1` from "resolved" to "bounded to a rolling 2 days". |
 | `E13-B02` | S4 | T06 changed the observability sink from a debug-console stub to real third-party egress without re-auditing the pre-existing `cause:` payloads; `device_directory_service.dart:274` interpolates a device id into a message Sentry captures verbatim (currently unreachable — that service is never constructed). Rate-limit denials themselves were checked and leak nothing. |
 
-🧍 **HUMAN GATE** (`bug_priorities`): pending. With no S1/S2, the
-epic→`development` PR is unblocked once priorities are stamped.
+🧍 **HUMAN GATE** (`bug_priorities`): cleared — `E13-B01` (S3/P2) and
+`E13-B02` (S4/P4) both fixed, reviewed, merged into `development`.
+`E13-B03` (re-scoped down from `E13-B02`'s own review) remains a narrow,
+non-blocking S4/P3 follow-up — see `tracker.md`'s header.
 
 ## Open Questions
 None new at the epic level (each task's own Open Questions section, if

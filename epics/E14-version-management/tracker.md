@@ -20,7 +20,12 @@ changed `anrEnabled`/Session Replay defaults aren't addressed by
 `configurePrivacyOptions`) filed and correctly `status: blocked` on a
 real DSN ever being configured (zero runtime exposure until then). ·
 **Started:** 2026-09-05 · **Completed:** 2026-09-07 · **Progress:** 5/6
-tasks done, 7/8 bugs closed, 1 non-blocking follow-up (`E14-B08`) open
+tasks done, 8/8 bugs closed. `E14-B08` fixed 2026-09-07 (implemented via
+`agy`/`gemini-3.1-pro-high`, reviewed via `agy`/`claude-opus-4-6-thinking` —
+`options.anrEnabled = false` and `options.replay.sessionSampleRate/onErrorSampleRate = null`
+pinned in `configurePrivacyOptions`, per ADR-0006). Only `E14-T03` remains
+open, genuinely blocked on the human `new_dependency` gate (signing library
+choice)
 
 ## Tasks
 

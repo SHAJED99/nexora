@@ -1,7 +1,7 @@
 ---
 id: E14
 title: Version & Update Management
-status: todo
+status: in progress (2026-09-07; 5/6 tasks done, 8/8 bugs closed, P1/P2=0 — only E14-T03 remains, blocked on the human new_dependency gate for a signing library)
 type: feature
 priority: { moscow: should, wsjf: 2.75 }
 depends_on: []
