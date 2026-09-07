@@ -12,6 +12,8 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/abuse/rate_limiter.dart';
+import 'package:nexora/core/crypto/identity_key_hex.dart';
+import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/features/login/data/device_identity_repository.dart';
 import 'package:nexora/features/login/domain/sign_in_use_case.dart';
@@ -194,5 +196,173 @@ void main() {
     for (final id in ids) {
       expect(id, matches(RegExp(r'^[0-9a-f]{16}$')));
     }
+  });
+
+  group('test_E11_B06_first_sign_in_derives_device_id_from_local_identity',
+      () {
+    test(
+      'a genuinely first-ever sign-in (no existingDeviceId) uses this '
+      'device\'s own identity public key as its device id, hex-encoded — '
+      'NOT a random generateSecureDeviceId() token',
+      () async {
+        Get.testMode = true;
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        final repository = DeviceIdentityRepository(
+          db,
+          rateLimiter: RateLimiter(db),
+        );
+        final useCase = SignInUseCase(
+          repository,
+          authService: FakeGoogleAuthService.success('firebase-uid-e11b06'),
+        );
+
+        // Mirrors `lib/app/main.dart`'s own real first-launch construction
+        // EXACTLY: `selfDeviceId: ''`, since `db.latestDeviceIdentity()`
+        // is null pre-first-sign-in. This is the load-bearing part of
+        // this test — `MessagingStack.create` reports `status:
+        // unavailable` for this exact reason (empty selfDeviceId), which
+        // is precisely the case `_deriveDeviceIdFromLocalIdentity` must
+        // NOT gate on (see that method's own doc comment).
+        final messagingStack = await MessagingStack.create(
+          db: db,
+          selfDeviceId: '',
+        );
+        expect(
+          messagingStack.status.isReady,
+          isFalse,
+          reason: 'sanity check: this test only proves what it claims to '
+              'if MessagingStack really is unavailable here, matching '
+              'the real first-launch condition — if this ever starts '
+              'passing `isReady`, the scenario has changed and this '
+              'test needs re-examining, not silently trusting the '
+              'derivation still gets exercised',
+        );
+        final identityKeyPair = await messagingStack.signalStore.getIdentityKeyPair();
+        final expectedDeviceId =
+            hexEncodeIdentityKey(identityKeyPair.getPublicKey());
+
+        final controller = LoginController(
+          useCase,
+          messagingStack: messagingStack,
+        );
+        controller.onInit();
+        await controller.signingIn.stream.firstWhere((signingIn) => !signingIn);
+
+        final rows = await db.select(db.deviceIdentities).get();
+        expect(rows, hasLength(1));
+        expect(
+          rows.single.deviceId,
+          expectedDeviceId,
+          reason: 'the persisted device id must be the hex-encoded '
+              'identity public key, not a random token',
+        );
+        expect(
+          rows.single.deviceId,
+          matches(RegExp(r'^[0-9a-f]+$')),
+          reason: 'never the base64 encoding — must contain no "/", "+" '
+              'or "=" (Firebase path-safety, see identity_key_hex.dart)',
+        );
+
+        Get.reset();
+        await db.close();
+      },
+    );
+
+    test(
+      'a RETURNING device (existingDeviceId present) keeps reusing its '
+      'own already-registered id — the new derivation must never override '
+      'an existing identity, even when a MessagingStack is available',
+      () async {
+        Get.testMode = true;
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        final repository = DeviceIdentityRepository(
+          db,
+          rateLimiter: RateLimiter(db),
+        );
+        const accountUid = 'firebase-uid-e11b06-returning';
+        final useCase = SignInUseCase(
+          repository,
+          authService: FakeGoogleAuthService.success(accountUid),
+        );
+        final messagingStack = await MessagingStack.create(
+          db: db,
+          selfDeviceId: '',
+        );
+
+        // First launch establishes the device identity (whatever it
+        // derives to).
+        final firstController = LoginController(
+          useCase,
+          messagingStack: messagingStack,
+        );
+        firstController.onInit();
+        await firstController.signingIn.stream
+            .firstWhere((signingIn) => !signingIn);
+        final firstRows = await db.select(db.deviceIdentities).get();
+        expect(firstRows, hasLength(1));
+        final establishedDeviceId = firstRows.single.deviceId;
+
+        // Second launch: same account, same MessagingStack (same identity
+        // keypair still available) — must reuse the SAME id, not derive
+        // (or generate) a new one.
+        final secondController = LoginController(
+          useCase,
+          messagingStack: messagingStack,
+        );
+        secondController.onInit();
+        await secondController.signingIn.stream
+            .firstWhere((signingIn) => !signingIn);
+
+        final secondRows = await db.select(db.deviceIdentities).get();
+        expect(
+          secondRows,
+          hasLength(1),
+          reason: 'still exactly one device identity row — a returning '
+              'device must never register a second one',
+        );
+        expect(secondRows.single.deviceId, establishedDeviceId);
+
+        Get.reset();
+        await db.close();
+      },
+    );
+
+    test(
+      'when no MessagingStack is available at all (e.g. Get.find finds '
+      'nothing registered, no override given), sign-in still completes '
+      'via the pre-existing generateSecureDeviceId() fallback — this '
+      'derivation is additive, never a new way to fail sign-in',
+      () async {
+        Get.testMode = true;
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        final repository = DeviceIdentityRepository(
+          db,
+          rateLimiter: RateLimiter(db),
+        );
+        final useCase = SignInUseCase(
+          repository,
+          authService: FakeGoogleAuthService.success('firebase-uid-no-stack'),
+        );
+
+        // No `messagingStack:` override, and nothing registered via
+        // `Get.put` — `_resolveMessagingStack` must fail closed to `null`
+        // (caught, logged), not throw.
+        final controller = LoginController(useCase);
+        controller.onInit();
+        await controller.signingIn.stream.firstWhere((signingIn) => !signingIn);
+
+        final rows = await db.select(db.deviceIdentities).get();
+        expect(rows, hasLength(1));
+        expect(
+          rows.single.deviceId,
+          matches(RegExp(r'^[0-9a-f]{16}$')),
+          reason: 'falls back to generateSecureDeviceId()\'s own '
+              '16-hex-char shape, unchanged from before this fix',
+        );
+
+        Get.reset();
+        await db.close();
+      },
+    );
   });
 }

@@ -71,6 +71,8 @@ import 'dart:math';
 
 import 'package:get/get.dart';
 import 'package:nexora/core/auth/google_auth_service.dart';
+import 'package:nexora/core/crypto/identity_key_hex.dart';
+import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/services/firebase_metadata_service.dart';
 import 'package:nexora/features/login/data/device_identity_repository.dart';
@@ -113,12 +115,15 @@ class LoginController extends GetxController {
     this._signInUseCase, {
     FirebaseMetadataService? metadataService,
     DeviceIdentityRepository? deviceIdentityRepository,
+    MessagingStack? messagingStack,
   })  : _metadataService = metadataService ?? FirebaseMetadataService(),
-        _deviceIdentityRepositoryOverride = deviceIdentityRepository;
+        _deviceIdentityRepositoryOverride = deviceIdentityRepository,
+        _messagingStackOverride = messagingStack;
 
   final SignInUseCase _signInUseCase;
   final FirebaseMetadataService _metadataService;
   final DeviceIdentityRepository? _deviceIdentityRepositoryOverride;
+  final MessagingStack? _messagingStackOverride;
 
   /// Resolves the collaborator this task's branch needs: the explicit
   /// override if one was given (every test in
@@ -139,6 +144,83 @@ class LoginController extends GetxController {
     } catch (e) {
       ObservabilityService.instance.logError(
         'recovery.device_identity_repository_unresolved',
+        cause: e,
+      );
+      return null;
+    }
+  }
+
+  /// Same resolution pattern as [_resolveDeviceIdentityRepository]: the
+  /// explicit test override if one was given, otherwise the app-wide
+  /// singleton `lib/app/main.dart` constructs before `runApp()` ever runs
+  /// (`Get.find`, a lookup — never a second `MessagingStack.create`, which
+  /// would violate that file's own "exactly one" discipline). `Get.find`
+  /// throwing is caught and treated as "no local identity available",
+  /// never a sign-in failure — same best-effort shape as the repository
+  /// resolver above.
+  MessagingStack? _resolveMessagingStack() {
+    if (_messagingStackOverride != null) {
+      return _messagingStackOverride;
+    }
+    try {
+      return Get.find<MessagingStack>();
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'recovery.messaging_stack_unresolved',
+        cause: e,
+      );
+      return null;
+    }
+  }
+
+  /// E11-B06 finding 1 (`ADR-0008`'s 2026-09-05 addendum): when this
+  /// device has never signed in before (no `existingDeviceId`, the only
+  /// caller of this method), derive its device id from its own already-
+  /// generated Signal identity public key instead of an unrelated random
+  /// token — `lib/app/main.dart` constructs `MessagingStack` (which
+  /// generates this device's identity keypair on first run,
+  /// `IdentityService.ensureLocalIdentity`) BEFORE `runApp()`, so the key
+  /// material this reads already exists by the time any screen —
+  /// including this one — is ever shown. The SAME hex encoding
+  /// `DeviceDirectoryService._publish` uses for `identityPublicKey`
+  /// (`identity_key_hex.dart`), so a Realtime Database rule can enforce
+  /// `$deviceId === identityPublicKey` as a plain string equality — no
+  /// hash primitive, no Cloud Function, no bootstrap reshape needed.
+  ///
+  /// Best-effort: returns `null` (never throws) on any failure — no
+  /// `MessagingStack` resolvable, or the identity keypair read throwing
+  /// (e.g. crypto/identity init itself failed). A `null` here falls
+  /// through to [generateSecureDeviceId] at this method's own call site,
+  /// exactly like every other best-effort hint in this file — a device
+  /// can still sign in and use the app even when this derivation isn't
+  /// available; it only loses the self-certifying-id property until it
+  /// next has a chance to retry (this runs only on a genuine first-ever
+  /// sign-in, so "next chance" in practice means "next fresh install").
+  ///
+  /// **Deliberately does NOT check `messagingStack.status.isReady`.**
+  /// `MessagingStack.create` (`lib/app/main.dart`, before `runApp()`)
+  /// reports `unavailable` whenever `selfDeviceId` is empty — which, on a
+  /// genuinely fresh install, is EVERY time this method is ever called
+  /// (there is no `selfDeviceId` yet precisely because signing in for the
+  /// first time is this method's whole reason to exist). Gating on
+  /// `isReady` would make this derivation dead code in production: the
+  /// one case it exists for is exactly the case that flag reports as not
+  /// ready. `identityService.ensureLocalIdentity()` runs unconditionally
+  /// inside `MessagingStack.create`, BEFORE that empty-`selfDeviceId`
+  /// check — so the identity keypair this method reads is genuinely
+  /// available regardless of what `status` says; the try/catch below is
+  /// the correct and sufficient guard on its own.
+  Future<String?> _deriveDeviceIdFromLocalIdentity() async {
+    final messagingStack = _resolveMessagingStack();
+    if (messagingStack == null) {
+      return null;
+    }
+    try {
+      final identityKeyPair = await messagingStack.signalStore.getIdentityKeyPair();
+      return hexEncodeIdentityKey(identityKeyPair.getPublicKey());
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'recovery.local_identity_key_read_failed',
         cause: e,
       );
       return null;
@@ -214,7 +296,9 @@ class LoginController extends GetxController {
       } else {
         existingDeviceId = await _signInUseCase.existingDeviceId();
       }
-      final deviceId = existingDeviceId ?? generateSecureDeviceId();
+      final deviceId = existingDeviceId ??
+          await _deriveDeviceIdFromLocalIdentity() ??
+          generateSecureDeviceId();
       await _signInUseCase(deviceId);
       signingIn.value = false;
 

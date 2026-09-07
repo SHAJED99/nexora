@@ -15,6 +15,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 import 'package:nexora/core/crypto/drift_signal_store.dart';
+import 'package:nexora/core/crypto/identity_key_hex.dart';
 import 'package:nexora/core/crypto/identity_service.dart';
 import 'package:nexora/core/crypto/prekey_bundle_codec.dart';
 import 'package:nexora/core/persistence/database.dart';
@@ -382,7 +383,7 @@ void main() {
         identityService: identityService,
         database: db,
         response: {
-          'identityPublicKey': base64Encode(
+          'identityPublicKey': hexEncodeBytes(
             (await store.getIdentityKeyPair()).getPublicKey().serialize(),
           ),
           'prekeyBundle': base64Encode(
@@ -411,7 +412,7 @@ void main() {
       final lookup = _RespondingReadDeviceDirectoryService(
         identityService: identityService,
         database: db,
-        response: {'identityPublicKey': 'not-valid-base64-!!', 'prekeyBundle': 'x'},
+        response: {'identityPublicKey': 'not-valid-hex-!!', 'prekeyBundle': 'x'},
       );
 
       expect(await lookup.lookupDevice('device-1'), isNull);
@@ -474,7 +475,7 @@ void main() {
         );
 
         final forgedEntry = <String, Object?>{
-          'identityPublicKey': base64Encode(bundleA.getIdentityKey().serialize()),
+          'identityPublicKey': hexEncodeBytes(bundleA.getIdentityKey().serialize()),
           'prekeyBundle': base64Encode(PreKeyBundleCodec.serialize(bundleB)),
         };
 
@@ -496,7 +497,7 @@ void main() {
         final bundleA = await identityServiceA.getLocalPreKeyBundle();
 
         final consistentEntry = <String, Object?>{
-          'identityPublicKey': base64Encode(bundleA.getIdentityKey().serialize()),
+          'identityPublicKey': hexEncodeBytes(bundleA.getIdentityKey().serialize()),
           'prekeyBundle': base64Encode(PreKeyBundleCodec.serialize(bundleA)),
         };
 

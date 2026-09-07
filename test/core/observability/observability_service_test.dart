@@ -13,6 +13,7 @@ import 'dart:convert';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/crypto/drift_signal_store.dart';
+import 'package:nexora/core/crypto/identity_key_hex.dart';
 import 'package:nexora/core/crypto/identity_service.dart';
 import 'package:nexora/core/crypto/prekey_bundle_codec.dart';
 import 'package:nexora/core/observability/observability_service.dart';
@@ -204,7 +205,7 @@ void main() {
         // this is the exact E11-B02 mismatch `lookupDevice` detects and
         // logs.
         final forgedEntry = <String, Object?>{
-          'identityPublicKey': base64Encode(bundleA.getIdentityKey().serialize()),
+          'identityPublicKey': hexEncodeBytes(bundleA.getIdentityKey().serialize()),
           'prekeyBundle': base64Encode(PreKeyBundleCodec.serialize(bundleB)),
         };
 
