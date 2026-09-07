@@ -5,6 +5,7 @@
 // outside their own epics' test suites -- so, per the task file's own §6
 // risk note, this suite exists to prove the composition itself, not to
 // re-prove behaviour those epics' own suites already cover.
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:drift/drift.dart' hide isNull, isNotNull;
@@ -111,6 +112,37 @@ void main() {
     messenger.setMockMessageHandler(
       'dev.flutter.pigeon.nexora.TransportApi.send.$suffix',
       (ByteData? message) async {
+        return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+      },
+    );
+  }
+
+  /// E04-B05: `RelayEngine`'s `send` is now `ConnectionEnsuringSender.
+  /// ensureConnectedAndSend`, which calls `TransportApi.connect` before
+  /// ever calling `TransportApi.send` -- every test below that mocks
+  /// `send` for a real destination now also needs a `connect` mock, or
+  /// the connect step (never previously exercised here) fails and the
+  /// send is never attempted at all. Mirrors the native connect's own
+  /// two-part contract (`_api.connect` returns "accepted", the real
+  /// settle arrives later via `onConnectionStateChanged`) by firing the
+  /// connected event asynchronously rather than synchronously replying
+  /// "connected" inline -- matching `TransportService.connect`'s own
+  /// documented two-channel design (this file's header, `connectPeer`).
+  void mockConnectAlwaysSucceeds(String suffix) {
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.connect.$suffix',
+      (ByteData? message) async {
+        final args = TransportApi.pigeonChannelCodec.decodeMessage(message)!
+            as List<Object?>;
+        final deviceId = args[0]! as String;
+        scheduleMicrotask(() {
+          messenger.handlePlatformMessage(
+            'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$suffix',
+            TransportEventsApi.pigeonChannelCodec
+                .encodeMessage(<Object?>[deviceId, ConnectionState.connected])!,
+            (ByteData? _) {},
+          );
+        });
         return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
       },
     );
@@ -225,7 +257,9 @@ void main() {
     final aSuffix = 'group-send-a-${suffixCounter++}';
     final bSuffix = 'group-send-b-${suffixCounter++}';
     mockSendAlwaysSucceeds(aSuffix);
+    mockConnectAlwaysSucceeds(aSuffix);
     mockSendAlwaysSucceeds(bSuffix);
+    mockConnectAlwaysSucceeds(bSuffix);
 
     final aliceDb = AppDatabase.forTesting(NativeDatabase.memory());
     final aliceStore = DriftSignalProtocolStore(aliceDb);
@@ -366,6 +400,7 @@ void main() {
       // own `mockSendAlwaysSucceeds` helper, used the same way by every
       // other test in this suite that actually sends).
       mockSendAlwaysSucceeds(suffix);
+      mockConnectAlwaysSucceeds(suffix);
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       final stack = await MessagingStack.create(
         db: db,
