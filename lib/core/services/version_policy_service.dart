@@ -1,4 +1,5 @@
-// core/services -- VersionPolicyService (E14-T01, FR-VER-005, FR-VER-008).
+// core/services -- VersionPolicyService (E14-T01/T03, FR-VER-005,
+// FR-VER-008, FR-VER-011).
 //
 // Claims `OQ-E11-2`'s reserved `config/version_policy` node and gives every
 // later E14 task a locally-cached, offline-usable copy of the remote
@@ -6,11 +7,16 @@
 //
 // Scope fence (task §4): this service does NOT implement the version state
 // machine (UP_TO_DATE/UPDATE_AVAILABLE/UPDATE_REQUIRED -- `E14-T02`'s own
-// pure domain logic, consuming [cached]'s output) and does NOT verify
-// [VersionPolicy.signature] (`FR-VER-011` -- `E14-T05`'s own task; stored
-// as raw, unverified data only). It does NOT add a polling driver --
-// [refresh] has no caller in this task; when wired, the caller decides the
-// cadence, not a new always-on timer invented here.
+// pure domain logic, consuming [cached]'s output). It does NOT add a
+// polling driver -- [refresh] has no caller in this task; when wired, the
+// caller decides the cadence, not a new always-on timer invented here.
+//
+// Signature verification (E14-T03, FR-VER-011): a fetched payload is
+// verified via `VersionPolicySignatureVerifier` BEFORE it is cached --
+// fail-CLOSED (an invalid/missing signature is treated exactly like a
+// malformed payload, below). This composes with the pre-existing
+// fail-open default (no valid cached policy -> `EvaluateVersionStateUseCase`
+// falls back to `UP_TO_DATE`), not a stricter new failure mode.
 //
 // Firebase boundary (FR-FB-002, non-negotiable): [refresh] mirrors every
 // other wrapper's exact pattern (`FirebaseMetadataService`,
@@ -26,15 +32,18 @@ import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/services/firebase_boundary.dart';
 import 'package:nexora/core/services/firebase_paths.dart';
+import 'package:nexora/core/services/version_policy_signature_verifier.dart';
 
 /// The fixed row id [VersionPolicyCache] always uses -- there is exactly
 /// one cached policy, same "exactly one settings row" shape as
 /// `StoragePolicySettings`/`LocationSettings`/`NotificationPreferences`.
 const int _cacheRowId = 1;
 
-/// The last successfully fetched `config/version_policy` payload -- a plain
-/// data holder, not a domain object. `signature` is raw, unverified text
-/// (task §4, `FR-VER-011` is `E14-T05`'s own task).
+/// The last successfully fetched, SIGNATURE-VERIFIED `config/version_policy`
+/// payload -- a plain data holder, not a domain object. By the time a
+/// [VersionPolicy] exists here, `signature` has already been checked by
+/// `VersionPolicySignatureVerifier` (E14-T03, FR-VER-011); `refresh()`
+/// never caches a payload that failed that check.
 class VersionPolicy {
   const VersionPolicy({
     required this.minimumSupportedBuild,
@@ -56,6 +65,7 @@ class VersionPolicyService {
     required AppDatabase database,
     FirebaseDatabase? firebaseDatabase,
     Duration? timeout,
+    VersionPolicySignatureVerifier? signatureVerifier,
   })  : // Named param (`database`) is public API; the private field below
         // can't share that name, so `prefer_initializing_formals` doesn't
         // apply here -- same reasoning as `SyncCursorService`/
@@ -66,11 +76,14 @@ class VersionPolicyService {
         // Database read queued offline never completes at all, so this
         // bounds it -- a timeout is just another failure mode, caught
         // below like any other Realtime Database error.
-        _timeout = timeout ?? const Duration(seconds: 10);
+        _timeout = timeout ?? const Duration(seconds: 10),
+        _signatureVerifier =
+            signatureVerifier ?? VersionPolicySignatureVerifier();
 
   final AppDatabase _database;
   final FirebaseDatabase? _firebaseDatabaseOverride;
   final Duration _timeout;
+  final VersionPolicySignatureVerifier _signatureVerifier;
 
   // Resolved lazily, mirroring every other wrapper's `_firebaseDatabase` --
   // so constructing a VersionPolicyService with no override never touches
@@ -103,6 +116,27 @@ class VersionPolicyService {
       ObservabilityService.instance.logError(
         'firebase.version_policy_refresh_failed',
         cause: 'malformed or absent config/version_policy payload',
+      );
+      return;
+    }
+
+    // E14-T03 (FR-VER-011, EARS-VER-17): fail-CLOSED at the signature check
+    // itself -- an invalid/missing signature is treated exactly like a
+    // malformed payload above (no cache write, existing cache untouched),
+    // never as "trust it anyway". This composes with `EvaluateVersionStateUseCase`'s
+    // pre-existing fail-open default (no valid cached policy -> UP_TO_DATE)
+    // rather than inventing a stricter new failure mode.
+    final signatureValid = await _signatureVerifier.verify(
+      minimumSupportedBuild: parsed.minimumSupportedBuild,
+      currentBuild: parsed.currentBuild,
+      updateAvailableBuild: parsed.updateAvailableBuild,
+      updatedAt: parsed.updatedAt,
+      signatureBase64: parsed.signature,
+    );
+    if (!signatureValid) {
+      ObservabilityService.instance.logError(
+        'firebase.version_policy_signature_invalid',
+        cause: 'config/version_policy payload failed signature verification',
       );
       return;
     }
