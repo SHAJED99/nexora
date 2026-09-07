@@ -101,7 +101,7 @@ prevent.
 
 | Prospective task | Layer | Blocked by |
 |---|---|---|
-| Real-time media path — capture, encode, encrypt, transmit, decode, play | backend | 🧍 **`OQ-E07-3`** — no transport chosen, and it is a new-dependency decision (rule 3) |
+| Real-time media path — capture, encode, encrypt, transmit, decode, play | backend | **`OQ-E07-3` ✅ resolved 2026-08-31** (option (a), datagram audio over the existing mesh + Opus codec; (c) native Pigeon channel as the named fallback). Not yet shardable: `OQ-E07-3`'s own resolution text says `OQ-E06-T04-2` (real two-device Bluetooth hardware verification of E04-T03b/T03c/T05's actual data path, still 🟡 open, a human action — not satisfied by this session's own discovery-only device testing that produced `E04-B04`) should be prioritized first, so the fallback can be exercised cheaply if (a) doesn't hold up at real multi-hop latency |
 | Group thread rendering — per-sender attribution + membership event lines | frontend | GAP-020 (🟡) **and** `OQ-E07-10` (blocked-member behaviour in a group thread) |
 | Group create screen | frontend | GAP-018 (🟡) + `E07-T12`'s contract |
 | Group manage screen (roles, membership, delete) | frontend | GAP-019 (🟡) + `E07-T12`'s contract |
