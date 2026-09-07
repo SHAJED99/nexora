@@ -330,6 +330,132 @@ void main() {
     return (alice: alice, bob: bob, groupId: groupId);
   }
 
+  // --- E04-B05 review round 2 (F5): prove the wiring, not just the class --
+  //
+  // Every other test in this file (and the other 8 test files this bug
+  // touched) mocks BOTH `TransportApi.connect` and `TransportApi.send` to
+  // always succeed -- which means reverting `RelayEngine`/`directSend`'s
+  // wiring back to a raw `resolvedTransport.send` (the exact pre-fix bug)
+  // leaves every one of those tests passing identically, since a mocked-
+  // to-succeed connect and a mocked-to-succeed send are indistinguishable
+  // from a codepath that skips connect entirely. That is precisely the
+  // defect class this bug fixes (an unwired capability with nothing ever
+  // proving it's wired in) -- confirmed by review round 2 reverting the
+  // wiring and getting 1335/1335 green anyway. These two tests mock
+  // `connect` to FAIL and `send` to succeed-and-count, so they can only
+  // pass if `send` is never reached without `connect` succeeding first --
+  // exactly the one behavior distinguishing the fixed code from the bug.
+  void mockConnectAlwaysFails(String suffix) {
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.connect.$suffix',
+      (ByteData? message) async =>
+          TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[false]),
+    );
+  }
+
+  test(
+    'test_E04_B05_relay_engine_send_never_reaches_transport_send_when_connect_fails',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final suffix = 'e04-b05-wiring-relay-${suffixCounter++}';
+      var sendCalls = 0;
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.TransportApi.send.$suffix',
+        (ByteData? message) async {
+          sendCalls++;
+          return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+        },
+      );
+      mockConnectAlwaysFails(suffix);
+
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'device-a',
+        transport: TransportService(
+          binaryMessenger: messenger,
+          messageChannelSuffix: suffix,
+        ),
+      );
+      addTearDown(stack.dispose);
+      expect(stack.status, const MessagingStackStatus.ready());
+
+      final bob = await _RemoteParty.create();
+      addTearDown(bob.close);
+      await stack.cryptoService.establishSession(
+        const SignalProtocolAddress('device-b', 1),
+        await bob.bundle(),
+      );
+
+      // A real, direct one-hop route -- `RelayEngine._attempt` will call
+      // its injected `send` (this stack's `ConnectionEnsuringSender
+      // .ensureConnectedAndSend`) for this packet.
+      stack.routingEngine.recordLinkMeasurement(
+        'device-b',
+        latencyMs: 20,
+        lossRate: 0.0,
+        batteryDrain: 0.1,
+      );
+
+      await stack.sendMessage.call('conv-1', 'device-b', _plaintext('hi'));
+      await stack.relayEngine.processQueue();
+      await settle();
+
+      // The whole point: connect failed, so send must NEVER have been
+      // reached, whatever `RelayEngine`'s own retry/queue bookkeeping does
+      // with the failure. This is the assertion that fails on the pre-fix
+      // `send: resolvedTransport.send` wiring (which has no connect step
+      // to fail) and passes only on the fixed `ConnectionEnsuringSender`
+      // wiring.
+      expect(sendCalls, 0);
+    },
+  );
+
+  test(
+    'test_E04_B05_prekey_exchange_first_contact_never_reaches_transport_send_when_connect_fails',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final suffix = 'e04-b05-wiring-prekey-${suffixCounter++}';
+      var sendCalls = 0;
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.TransportApi.send.$suffix',
+        (ByteData? message) async {
+          sendCalls++;
+          return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[true]);
+        },
+      );
+      mockConnectAlwaysFails(suffix);
+
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'device-a',
+        transport: TransportService(
+          binaryMessenger: messenger,
+          messageChannelSuffix: suffix,
+        ),
+      );
+      addTearDown(stack.dispose);
+      expect(stack.status, const MessagingStackStatus.ready());
+
+      // First contact with 'device-b' -- no session exists yet, so
+      // `ensureSession` must call `PrekeyExchange._sendControlFrame`, which
+      // now goes through `_stack.directSend` (this stack's SAME
+      // `ConnectionEnsuringSender.ensureConnectedAndSend`). It must throw
+      // (this task's own root-cause fix: `_sendControlFrame` throws on a
+      // failed `directSend` instead of silently ignoring it and waiting
+      // out the full timeout) -- and, same assertion as above, `send`
+      // must never have been reached.
+      await expectLater(
+        stack.prekeyExchange.ensureSession(
+          'device-b',
+          timeout: const Duration(seconds: 2),
+        ),
+        throwsA(isA<AppFailure>()),
+      );
+
+      expect(sendCalls, 0);
+    },
+  );
+
   test('test_EARS_COMM_6_stack_is_a_single_instance', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     final stack = await MessagingStack.create(
