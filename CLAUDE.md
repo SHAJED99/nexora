@@ -49,17 +49,20 @@ draft prose that still has to be applied by spending Claude tokens on it.
   genuinely hard/high-stakes work, a `flash` tier (`high`/`medium`/`low`
   by how much reasoning the task needs) for lighter or more mechanical
   work, `gpt-oss-120b-medium` where it's a better fit or for an
-  independent second opinion. Run `agy models` to reconfirm the live list
-  — it can change.
-- Reserve Claude's own direct token spend for what only Claude/Claude Code
+  independent second opinion, **or `agy`'s own `claude-sonnet-4-6`/
+  `claude-opus-4-6-thinking` (human-confirmed 2026-09-07: these draw from
+  `agy`/Antigravity's own separate quota, NOT this session's own Anthropic
+  token budget — using them here costs nothing from the budget being
+  preserved, unlike calling Claude directly or via a Claude Code
+  subagent).** Run `agy models` to reconfirm the live list — it can
+  change.
+- Reserve Claude's own direct token spend (i.e. this session itself, or a
+  Claude Code Task/Agent subagent — NOT `agy`'s own `claude-*` models,
+  which are free of that cost per above) for what only Claude/Claude Code
   can actually do here: orchestrating and dispatching the work itself,
   reading back and acting on `agy`'s results, decisions that need this
   session's own accumulated context, and anything `agy` cannot do (or
   fails at) in this environment.
-- **Never invoke `agy`'s `claude-*` models** (`claude-sonnet-4-6`,
-  `claude-opus-4-6-thinking`) — routing Claude work through this proxy
-  spends the SAME Claude quota the human is trying to preserve, just
-  indirectly; it defeats the point entirely.
 - **Check `agy`'s remaining usage/limit before dispatching a task to it,
   every time, not just once.** As of CLI v1.1.27 there is no dedicated
   `agy usage`/`agy quota` subcommand — the check is: run a trivial probe
