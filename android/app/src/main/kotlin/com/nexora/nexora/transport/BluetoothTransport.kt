@@ -441,10 +441,20 @@ class BluetoothTransport(
           addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
         }
     // API 33+ requires an explicit exported/not-exported flag for
-    // context-registered receivers; ACTION_FOUND is a protected system
-    // broadcast, so RECEIVER_NOT_EXPORTED (no other app can spoof it) is
-    // correct and still delivers the real system broadcast.
-    ContextCompat.registerReceiver(activity, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+    // context-registered receivers. `E04-B04`: `ACTION_FOUND` is sent by
+    // `com.android.bluetooth` -- a DIFFERENT app/uid than this one -- as
+    // an explicit, package-targeted broadcast (`pkg=com.nexora.nexora`),
+    // not a same-app broadcast. `RECEIVER_NOT_EXPORTED` (this file's own
+    // prior, incorrect reasoning: "no other app can spoof it") means
+    // exactly the opposite of what's needed here -- it silently drops
+    // any broadcast from a different UID, confirmed on a real device via
+    // `Exported Denial: ... from com.android.bluetooth (uid=1002) ...
+    // not specifying RECEIVER_EXPORTED` in logcat. `RECEIVER_EXPORTED` is
+    // still safe: `ACTION_FOUND` is declared a protected system broadcast
+    // in the platform's own manifest, so only the OS Bluetooth stack can
+    // ever actually send it -- no third-party app can forge one, exported
+    // or not.
+    ContextCompat.registerReceiver(activity, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
     discoveryReceiver = receiver
   }
 
