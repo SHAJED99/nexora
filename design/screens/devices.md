@@ -178,6 +178,12 @@ character; a case or spacing change is a finding, not a nit.
   derivation in `design/gaps.md` GAP-028 and the new
   `design/screens/device-enrollment-approval.md` contract. ✅ approved
   (human, 2026-09-05) — not yet built.
+- **GAP-030 (E06, `FR-COMM-001`)** — no way to reach `chat.md` for an
+  already-trusted device with no conversation yet. Proposed: a `Message`
+  icon-button (`Icons.chat`) on `Trusted`/`Allowed` rows only, before the
+  existing kebab, navigating to `Routes.chat` with the row's own
+  `deviceId` — full derivation in `design/gaps.md` GAP-030. ✅ approved
+  (human, 2026-09-08).
 
 ## Notes for the implementing agent
 - (exact copy quirks, dynamic data, anything the probe cannot see)

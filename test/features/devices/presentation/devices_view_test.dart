@@ -235,4 +235,87 @@ void main() {
       expect(find.byType(DevicesView), findsOneWidget);
     });
   });
+
+  group('test_E06_T14_message_button_GAP_030', () {
+    // GAP-030 — a Message icon-button on Trusted/Allowed rows only,
+    // navigating to Routes.chat with that row's own deviceId. Found
+    // missing entirely during live two-device on-hardware testing
+    // (E06-B05's own Run log): mutual Bluetooth trust was established
+    // between two real phones, with no way afterward to actually reach
+    // a conversation with the newly-trusted peer.
+    Finder messageButtonFor(String deviceId) {
+      final row = find.ancestor(
+        of: find.text(deviceId),
+        matching: find.byType(Row),
+      );
+      return find.descendant(
+        of: row.first,
+        matching: find.byIcon(Icons.chat),
+      );
+    }
+
+    testWidgets('appears on a Trusted row and navigates to /chat/<id>',
+        (tester) async {
+      await tester.pumpWidget(
+        GetMaterialApp(
+          initialRoute: '/devices',
+          getPages: [
+            GetPage(name: '/devices', page: () => const DevicesView()),
+            GetPage(
+              name: '/chat/:id',
+              page: () => Text('CHAT_${Get.parameters['id']}'),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(messageButtonFor('device-trusted'), findsOneWidget);
+      await tester.tap(messageButtonFor('device-trusted'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('CHAT_device-trusted'), findsOneWidget);
+    });
+
+    testWidgets('appears on an Allowed row and navigates to /chat/<id>',
+        (tester) async {
+      await tester.pumpWidget(
+        GetMaterialApp(
+          initialRoute: '/devices',
+          getPages: [
+            GetPage(name: '/devices', page: () => const DevicesView()),
+            GetPage(
+              name: '/chat/:id',
+              page: () => Text('CHAT_${Get.parameters['id']}'),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(messageButtonFor('device-allowed'), findsOneWidget);
+      await tester.tap(messageButtonFor('device-allowed'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('CHAT_device-allowed'), findsOneWidget);
+    });
+
+    testWidgets(
+        'does NOT appear on an Unknown row (no session to message yet)',
+        (tester) async {
+      await tester.pumpWidget(GetMaterialApp(home: const DevicesView()));
+      await tester.pumpAndSettle();
+
+      expect(messageButtonFor('device-unknown'), findsNothing);
+    });
+
+    testWidgets(
+        'does NOT appear on a Blocked row (must not gain a new way to '
+        'reach a blocked peer)', (tester) async {
+      await tester.pumpWidget(GetMaterialApp(home: const DevicesView()));
+      await tester.pumpAndSettle();
+
+      expect(messageButtonFor('device-blocked'), findsNothing);
+    });
+  });
 }
