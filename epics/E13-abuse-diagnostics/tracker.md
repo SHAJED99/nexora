@@ -6,10 +6,13 @@ and `E13-B02` (S4/P4, identifier-leak audit) both fixed, reviewed, and
 merged directly into `development`. `E13-B03` was re-scoped down
 (2026-09-07, per `E13-B02`'s own reviewer recommendation, once its
 original "no test seam exists" premise became false) from S3/P2 to a
-narrower S4/P3 `SentryFlutter.init()` root-cause investigation — non-
-blocking, `status: todo`, no further gate pending. · **Started:**
-2026-09-05 · **Completed:** 2026-09-06 · **Progress:** 7/7 tasks done, 2/3
-bugs closed, 1 narrow non-blocking follow-up remains
+narrower S4/P3 `SentryFlutter.init()` root-cause investigation, then
+**fixed and merged** (2026-09-07, PR #158): `SentryObservabilityClient.init()`
+now returns early on an empty DSN instead of hanging inside
+`SentryFlutter.init()`'s unconditional integration pipeline; independently
+re-verified by the reviewer against both `sentry_flutter` 8.14.2 and
+9.29.0. **E13 has zero open bugs.** · **Started:** 2026-09-05 ·
+**Completed:** 2026-09-07 · **Progress:** 7/7 tasks done, 3/3 bugs closed
 
 ## Tasks
 
