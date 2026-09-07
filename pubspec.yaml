@@ -103,6 +103,15 @@ dependencies:
   # `lib/core/observability/observability_service.dart`.
   sentry_flutter: 9.29.0
 
+  # Ed25519 signature verification for the version policy — FR-VER-011,
+  # E14-T03, human-approved 2026-09-07 (new_dependency gate; the specific
+  # package was the human's own pick among the presented options). This
+  # app only ever VERIFIES (public key only, embedded at build time via
+  # `--dart-define`, see `lib/core/services/version_policy_service.dart`)
+  # — it never signs; the private key lives entirely outside this repo,
+  # in whatever ops/release process publishes `config/version_policy`.
+  cryptography: ^2.9.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

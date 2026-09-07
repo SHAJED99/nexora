@@ -7,12 +7,22 @@
 // production does), with only the remote read (`readVersionPolicyData`)
 // seamed. Connectivity is a plain `StreamController<bool>` -- no platform
 // channel, no real `FirebaseDatabase`, required to drive this class at all.
+//
+// E14-T03: `_payload()` now signs its fields with a fixed-seed test
+// keypair, and every `VersionPolicyService` subclass below is constructed
+// with the matching public key via `signatureVerifier` -- the literal
+// string `'sig-v1'` this file used before E14-T03 never verifies against
+// any key, so `refresh()` would now fail closed and leave `cached()` null,
+// which is exactly what broke these tests until this fixture was updated.
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:cryptography/cryptography.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/services/version_policy_service.dart';
+import 'package:nexora/core/services/version_policy_signature_verifier.dart';
 import 'package:nexora/features/version/domain/version_reconnect_watcher.dart';
 
 /// Returns a fixed payload from the read seam, so `refresh()` never touches
@@ -22,6 +32,7 @@ class _FixedReadVersionPolicyService extends VersionPolicyService {
   _FixedReadVersionPolicyService({
     required super.database,
     required this.payload,
+    super.signatureVerifier,
   });
 
   final Object? payload;
@@ -41,6 +52,7 @@ class _FailsOnceThenSucceedsVersionPolicyService extends VersionPolicyService {
   _FailsOnceThenSucceedsVersionPolicyService({
     required super.database,
     required this.payload,
+    super.signatureVerifier,
   });
 
   final Object? payload;
@@ -59,19 +71,41 @@ class _FailsOnceThenSucceedsVersionPolicyService extends VersionPolicyService {
   }
 }
 
-Map<String, Object?> _payload({
-  int minimumSupportedBuild = 100,
-  int currentBuild = 120,
-  int updateAvailableBuild = 130,
-}) => {
+void main() {
+  final algorithm = Ed25519();
+  late SimpleKeyPair keyPair;
+  late VersionPolicySignatureVerifier verifier;
+
+  Future<Map<String, Object?>> payload({
+    int minimumSupportedBuild = 100,
+    int currentBuild = 120,
+    int updateAvailableBuild = 130,
+    int updatedAt = 1700000000000,
+  }) async {
+    final message = VersionPolicySignatureVerifier.canonicalMessage(
+      minimumSupportedBuild: minimumSupportedBuild,
+      currentBuild: currentBuild,
+      updateAvailableBuild: updateAvailableBuild,
+      updatedAt: updatedAt,
+    );
+    final signature = await algorithm.sign(message, keyPair: keyPair);
+    return {
       'minimumSupportedBuild': minimumSupportedBuild,
       'currentBuild': currentBuild,
       'updateAvailableBuild': updateAvailableBuild,
-      'signature': 'sig-v1',
-      'updatedAt': 1700000000000,
+      'signature': base64.encode(signature.bytes),
+      'updatedAt': updatedAt,
     };
+  }
 
-void main() {
+  setUpAll(() async {
+    keyPair = await algorithm.newKeyPairFromSeed(List.filled(32, 11));
+    final publicKeyBytes = (await keyPair.extractPublicKey()).bytes;
+    verifier = VersionPolicySignatureVerifier(
+      publicKeyBytesOverride: publicKeyBytes,
+    );
+  });
+
   group('VersionReconnectWatcher', () {
     late AppDatabase db;
 
@@ -92,7 +126,8 @@ void main() {
       // reasoning as `version_update_controller_test.dart`'s own fixture.
       final versionPolicyService = _FixedReadVersionPolicyService(
         database: db,
-        payload: _payload(minimumSupportedBuild: 100),
+        payload: await payload(minimumSupportedBuild: 100),
+        signatureVerifier: verifier,
       );
 
       var navigateCalls = 0;
@@ -139,10 +174,11 @@ void main() {
       // Installed build (`1000`) is above both thresholds -- UP_TO_DATE.
       final versionPolicyService = _FixedReadVersionPolicyService(
         database: db,
-        payload: _payload(
+        payload: await payload(
           minimumSupportedBuild: 100,
           updateAvailableBuild: 130,
         ),
+        signatureVerifier: verifier,
       );
 
       var navigateCalls = 0;
@@ -178,7 +214,8 @@ void main() {
 
       final versionPolicyService = _FixedReadVersionPolicyService(
         database: db,
-        payload: _payload(minimumSupportedBuild: 100),
+        payload: await payload(minimumSupportedBuild: 100),
+        signatureVerifier: verifier,
       );
 
       var navigateCalls = 0;
@@ -226,7 +263,8 @@ void main() {
 
       final versionPolicyService = _FixedReadVersionPolicyService(
         database: db,
-        payload: _payload(minimumSupportedBuild: 100),
+        payload: await payload(minimumSupportedBuild: 100),
+        signatureVerifier: verifier,
       );
 
       var navigateCalls = 0;
@@ -282,7 +320,8 @@ void main() {
 
       final versionPolicyService = _FailsOnceThenSucceedsVersionPolicyService(
         database: db,
-        payload: _payload(minimumSupportedBuild: 100),
+        payload: await payload(minimumSupportedBuild: 100),
+        signatureVerifier: verifier,
       );
 
       var navigateCalls = 0;
@@ -335,7 +374,8 @@ void main() {
 
       final versionPolicyService = _FixedReadVersionPolicyService(
         database: db,
-        payload: _payload(minimumSupportedBuild: 100),
+        payload: await payload(minimumSupportedBuild: 100),
+        signatureVerifier: verifier,
       );
 
       var navigateCalls = 0;

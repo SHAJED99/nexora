@@ -14,6 +14,9 @@
 // `PopScope(canPop: false)`, is a widget-tree property asserted directly
 // against `VersionUpdateView` below, not something a plain `GetxController`
 // unit test could reach).
+import 'dart:convert';
+
+import 'package:cryptography/cryptography.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,6 +29,7 @@ import 'package:nexora/app/main.dart'
 import 'package:nexora/app/routes.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/services/version_policy_service.dart';
+import 'package:nexora/core/services/version_policy_signature_verifier.dart';
 import 'package:nexora/features/version/domain/version_state.dart';
 import 'package:nexora/features/version/presentation/version_update_controller.dart';
 import 'package:nexora/features/version/presentation/version_update_view.dart';
@@ -36,10 +40,16 @@ import 'package:package_info_plus/package_info_plus.dart';
 /// [VersionPolicyService.refresh] never touches a real `FirebaseDatabase`,
 /// while everything else -- the real Drift table, `cached()`'s real query --
 /// runs exactly as `main.dart`'s own composition does.
+///
+/// E14-T03: gained a `signatureVerifier` pass-through -- every payload
+/// below is now genuinely Ed25519-signed (`signedPayload`), since a
+/// literal `'sig-v1'` string never verifies against any key and would
+/// make `refresh()` fail closed.
 class _FixedReadVersionPolicyService extends VersionPolicyService {
   _FixedReadVersionPolicyService({
     required super.database,
     required this.payload,
+    super.signatureVerifier,
   });
 
   final Object? payload;
@@ -49,6 +59,40 @@ class _FixedReadVersionPolicyService extends VersionPolicyService {
 }
 
 void main() {
+  final algorithm = Ed25519();
+  late SimpleKeyPair keyPair;
+  late VersionPolicySignatureVerifier verifier;
+
+  Future<Map<String, Object?>> signedPayload({
+    int minimumSupportedBuild = 100,
+    int currentBuild = 120,
+    int updateAvailableBuild = 130,
+    int updatedAt = 1700000000000,
+  }) async {
+    final message = VersionPolicySignatureVerifier.canonicalMessage(
+      minimumSupportedBuild: minimumSupportedBuild,
+      currentBuild: currentBuild,
+      updateAvailableBuild: updateAvailableBuild,
+      updatedAt: updatedAt,
+    );
+    final signature = await algorithm.sign(message, keyPair: keyPair);
+    return {
+      'minimumSupportedBuild': minimumSupportedBuild,
+      'currentBuild': currentBuild,
+      'updateAvailableBuild': updateAvailableBuild,
+      'signature': base64.encode(signature.bytes),
+      'updatedAt': updatedAt,
+    };
+  }
+
+  setUpAll(() async {
+    keyPair = await algorithm.newKeyPairFromSeed(List.filled(32, 13));
+    final publicKeyBytes = (await keyPair.extractPublicKey()).bytes;
+    verifier = VersionPolicySignatureVerifier(
+      publicKeyBytesOverride: publicKeyBytes,
+    );
+  });
+
   group('initialRouteFor (EARS-VER-10)', () {
     test(
         'test_EARS_VER_10_update_required_routes_to_mandatory_screen',
@@ -80,15 +124,10 @@ void main() {
 
       final versionPolicyService = _FixedReadVersionPolicyService(
         database: db,
-        payload: {
-          // Far below `installedBuildProvider`'s `1` below -- guarantees
-          // `UPDATE_REQUIRED` regardless of the exact threshold semantics.
-          'minimumSupportedBuild': 100,
-          'currentBuild': 120,
-          'updateAvailableBuild': 130,
-          'signature': 'sig-v1',
-          'updatedAt': 1700000000000,
-        },
+        // Far below `installedBuildProvider`'s `1` below -- guarantees
+        // `UPDATE_REQUIRED` regardless of the exact threshold semantics.
+        payload: await signedPayload(),
+        signatureVerifier: verifier,
       );
 
       // Calls `main.dart`'s OWN `evaluateVersionStateAtLaunch` -- the exact
@@ -129,13 +168,8 @@ void main() {
 
         final versionPolicyService = _FixedReadVersionPolicyService(
           database: db,
-          payload: {
-            'minimumSupportedBuild': 100,
-            'currentBuild': 120,
-            'updateAvailableBuild': 130,
-            'signature': 'sig-v1',
-            'updatedAt': 1700000000000,
-          },
+          payload: await signedPayload(),
+          signatureVerifier: verifier,
         );
 
         // Before this bug's fix, `EvaluateVersionStateUseCase.call()`
@@ -164,13 +198,8 @@ void main() {
 
         final versionPolicyService = _FixedReadVersionPolicyService(
           database: db,
-          payload: {
-            'minimumSupportedBuild': 100,
-            'currentBuild': 120,
-            'updateAvailableBuild': 130,
-            'signature': 'sig-v1',
-            'updatedAt': 1700000000000,
-          },
+          payload: await signedPayload(),
+          signatureVerifier: verifier,
         );
 
         // A valid `CFBundleVersion` shape (task file's own repro §1) --
