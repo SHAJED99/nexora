@@ -1,12 +1,13 @@
 # E14 · Version & Update Management · Progress
 
-**Status:** in progress — 5/6 tasks done and merged (T01, T02, T04, T05,
-T06). **2026-09-06: `OQ-E14-T03-1` resolved** (asymmetric/Ed25519 signing,
-fail-closed at the signature check) — T03 is `unblocked` but still
-`status: todo`, since a concrete task-sharding pass (files:/functions:/EARS)
-can't be written without also picking the signing library, itself a
-separate 🧍 `new_dependency` gate (no Ed25519-capable dependency exists in
-`pubspec.yaml` today) — see `E14-T03.md` §2. Bug sweep found 8 bugs
+**Status:** done — all 6/6 tasks done and merged (T01, T02, T03, T04, T05,
+T06). **2026-09-07: `E14-T03` implemented and merged** (FR-VER-011 —
+Ed25519 signature verification of `config/version_policy`, human-approved
+`cryptography: ^2.9.0`, fail-closed on any invalid/unconfigured-key/
+malformed signature). Cross-model review (opus) found one real blocking
+bug on round 1 (F1: a malformed build-time public key threw straight out
+of `refresh()`, regressing `EARS-VER-4`'s never-throws contract) — fixed
+and re-approved round 2. Bug sweep found 8 bugs
 (B01-B08); **B01-B07 all fixed and merged.** `E14-B07` (the
 `sentry_flutter`/`package_info_plus` AAR-metadata compileSdk conflict)
 resolved 2026-09-07: human approved bumping `sentry_flutter` 8.14.2 →
@@ -23,9 +24,12 @@ real DSN ever being configured (zero runtime exposure until then). ·
 tasks done, 8/8 bugs closed. `E14-B08` fixed 2026-09-07 (implemented via
 `agy`/`gemini-3.1-pro-high`, reviewed via `agy`/`claude-opus-4-6-thinking` —
 `options.anrEnabled = false` and `options.replay.sessionSampleRate/onErrorSampleRate = null`
-pinned in `configurePrivacyOptions`, per ADR-0006). Only `E14-T03` remains
-open, genuinely blocked on the human `new_dependency` gate (signing library
-choice)
+pinned in `configurePrivacyOptions`, per ADR-0006). **E14 is now fully
+done — 6/6 tasks, 8/8 bugs, P1/P2=0 — ready for its epic→development
+merge** (already effectively merged task-by-task/bug-by-bug directly
+into `development` throughout, per this project's established pattern —
+see `docs_fix_stale_epic_status_e12_e13_e14` PR #166 for the equivalent
+E12/E13 precedent)
 
 ## Tasks
 
@@ -33,7 +37,7 @@ choice)
 |---|---|---|---|
 | E14-T01 | done | — | T02, T05 |
 | E14-T02 | done | T01 | T04 |
-| E14-T03 | todo, **unblocked** (`OQ-E14-T03-1` resolved 2026-09-06; sharding still needs a `new_dependency` gate) | T01 | — |
+| E14-T03 | done | T01 | — |
 | E14-T04 | done | T02 | — |
 | E14-T05 | done | — | — |
 | E14-T06 | done | — | — |
@@ -44,7 +48,7 @@ choice)
 graph TD
   T01[E14-T01: version-policy schema + cache]
   T02[E14-T02: version state machine]
-  T03[E14-T03: signature verification -- BLOCKED]
+  T03[E14-T03: signature verification -- done]
   T04[E14-T04: mandatory-update UI + Play integration]
   T05[E14-T05: relay frame version negotiation]
   T06[E14-T06: migration-safety regression suite]
@@ -126,17 +130,18 @@ on `T02` (serialized, never parallel).
   no code changed, bookkeeping only.
 
 ## Remaining work
-Only `E14-T03` (signed policy verification, `FR-VER-011`) is left, and it
-is genuinely blocked on `OQ-E14-T03-1` — a signing-key-infrastructure
-decision only the human can make (rule 3). Once that decision lands and
-`T03` either ships or is explicitly descoped, this epic is ready for its
-bug sweep and `epic_14` → `development` merge.
+None — `E14-T03` (signed policy verification, `FR-VER-011`) shipped
+2026-09-07 once `OQ-E14-T03-1` (signing scheme) and the `new_dependency`
+gate (signing library) both resolved. All 6/6 tasks and 8/8 bugs are now
+closed; this epic is fully done.
 
 ## Bug sweep (2026-09-06)
 
 Run by the reviewer (`claude-opus-5`) per `skills/bug-sweep`, in an isolated
 worktree off `origin/epic_14` @ `925977b`, against the merged epic — T03
-excluded as genuinely parked on `OQ-E14-T03-1`.
+excluded at the time, since it was still genuinely parked on
+`OQ-E14-T03-1` (resolved and shipped separately, 2026-09-07 — see this
+tracker's own header).
 
 **Suite + lint on the merged branch:** `flutter test` → **1179/1179 pass**.
 `flutter analyze` → **1 issue**, `annotate_overrides` (info) in
