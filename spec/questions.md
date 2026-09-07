@@ -38,7 +38,7 @@ Batching rule: **≤10 per round**, grouped by area.
 
 ### Q-ARCH-003 — E2E encryption protocol/key-exchange scheme unnamed
 - **Priority:** important
-- **Status:** 🟡 open
+- **Status:** 🟢 answered (updated 2026-09-07 — resolved at genesis but never flipped from open in this registry)
 - **Raised by:** `skills/project-intake`
 - **Question:** BRD §66.2 explicitly defers "exact cryptographic library" to the technical design phase — that's expected. But the *protocol shape* itself (e.g. Signal-style X3DH + Double Ratchet, MLS for groups, or a custom scheme) is an architecture decision that shapes group key-rotation (§51), multi-device sync (§37), and account recovery (§55) simultaneously. Is a specific protocol family already assumed, or fully open for genesis's ADR?
 - **Why it matters:** The chosen protocol constrains group-membership-change key rotation design, multi-device key distribution, and what "account recovery" can mean (BRD §55 already states keys are unrecoverable if lost — consistent with most modern E2E schemes, but group-key rotation on member removal (§51) is materially different between a pairwise-ratchet design and an MLS-style tree design).
@@ -49,16 +49,16 @@ Batching rule: **≤10 per round**, grouped by area.
   | B — Record a non-binding assumption now (e.g. "Signal-protocol-family for 1:1, MLS-family for groups") to speed up genesis's starting point | Risks the assumption being treated as a decision by a future agent skimming the knowledge map |
 - **Recommended default:** A — no assumption recorded; this is flagged purely so genesis's ADR set explicitly includes "cryptographic protocol family" as one of its human-decided items, alongside stack/architecture/auth.
 - **Blocks:** genesis ADR set (a new ADR slot, not one of ADR-0001..0005 currently named in `AGENTS.md`'s conventions table)
-- **Answer:** _<empty>_
-- **Answered by:** _<empty>_
-- **Date:** _<empty>_
-- **Fed into:** _<empty>_
+- **Answer:** Signal Protocol (X3DH + Double Ratchet) for 1:1, Sender-Keys-style group scheme layered for membership-change rotation — Option 1 from the options table.
+- **Answered by:** human, 2026-08-26 (per `agent/memory/decisions/ADR-0003-crypto-protocol.md`'s own `decided_by` field)
+- **Date:** 2026-08-26
+- **Fed into:** `agent/memory/decisions/ADR-0003-crypto-protocol.md` (accepted); `AGENTS.md`'s conventions table; built and shipped across E03 (E2E encryption), E07 (group key rotation on membership change, FR-GROUP-004/005/006), E11 (multi-device key distribution).
 
 ---
 
 ### Q-ARCH-004 — Routing cost function has no formula or weighting
 - **Priority:** important
-- **Status:** 🟡 open
+- **Status:** 🟢 answered (updated 2026-09-07 — resolved during E04 epic breakdown, 2026-08-27, but never flipped from open in this registry)
 - **Raised by:** `skills/project-intake`
 - **Question:** BRD §31 names nine routing-cost factors (battery, latency, reliability, bandwidth, hop count, congestion, stability, packet loss, traffic type) and states different traffic types prioritize different factors, but gives no formula, weighting, or even a relative ranking beyond "battery is never the sole criterion" (§3.4). §60 (Testing/Simulation) gives one worked numeric example (cost 80 vs 45) without explaining how those numbers were derived. What should the v1 routing-cost heuristic actually compute?
 - **Why it matters:** The routing/relay epic cannot be sharded into concrete tasks (task-sharding needs function signatures and behavior, not just factor names) without at least a v1 heuristic — e.g. a weighted sum, a lexicographic priority order, or a small decision tree per traffic type.
@@ -69,16 +69,16 @@ Batching rule: **≤10 per round**, grouped by area.
   | B — Defer the entire routing/relay epic until a human or a follow-up design session supplies the formula | Avoids inventing business logic (rule 1), but stalls a core feature (mesh routing is the product's core differentiator) |
 - **Recommended default:** A, with the specific weights/formula written into the routing epic's task file and flagged as a tunable placeholder rather than a final answer — keeps forward progress without pretending precision that doesn't exist yet.
 - **Blocks:** epic-breakdown/task-sharding for the routing/relay epic
-- **Answer:** _<empty>_
-- **Answered by:** _<empty>_
-- **Date:** _<empty>_
-- **Fed into:** _<empty>_
+- **Answer:** Option A, applied — v1 weighted-sum heuristic: `cost = w1*latency_ms + w2*(1-reliability) + w3*battery_drain_rate + w4*hop_count`, with two named weight profiles (`interactive` for 1:1 chat, `bulk` for large transfers), explicitly flagged as tunable placeholders.
+- **Answered by:** human (genesis-era decision, applied 2026-08-27)
+- **Date:** 2026-08-27
+- **Fed into:** `epics/E04-mesh-routing/epic.md` §Open Questions (`OQ-E04-1`, resolved) and its own task-sharding; built and merged across E04's 11 tasks.
 
 ---
 
 ### Q-FUNC-005 — "Sufficiently better route" migration threshold undefined
 - **Priority:** important
-- **Status:** 🟡 open
+- **Status:** 🟢 answered (updated 2026-09-07 — resolved alongside Q-ARCH-004 during E04 epic breakdown, 2026-08-27, but never flipped from open in this registry)
 - **Raised by:** `skills/project-intake`
 - **Question:** BRD §30 and §53 both gate route migration on the new route being "sufficiently better" than the current one, without defining what threshold (percentage improvement? absolute cost delta? minimum stability duration before triggering?) qualifies. This is closely related to but distinct from Q-ARCH-004 (the cost function itself) — this is specifically the *migration trigger* on top of whatever cost function is chosen.
 - **Why it matters:** Without a threshold, the system risks "route flapping" (constant migration between two similarly-costed routes), which directly threatens the "minimize call interruption" goal (§53) and battery-efficiency NFR (§62.4).
@@ -89,16 +89,16 @@ Batching rule: **≤10 per round**, grouped by area.
   | B — Defer to the same routing-epic task file as Q-ARCH-004, decided together | Keeps related unknowns co-located; delays neither more nor less than resolving them separately |
 - **Recommended default:** B — fold into the same routing-epic task/ADR as Q-ARCH-004 rather than resolving in isolation, since the threshold is meaningless without the cost function it's a delta of.
 - **Blocks:** epic-breakdown/task-sharding for the routing/relay epic
-- **Answer:** _<empty>_
-- **Answered by:** _<empty>_
-- **Date:** _<empty>_
-- **Fed into:** _<empty>_
+- **Answer:** Option A, applied — migrate only when a candidate route's cost is ≥20% better AND has held that advantage for ≥10 consecutive samples (stability window), both named constants, explicitly flagged tunable.
+- **Answered by:** human (genesis-era decision, applied 2026-08-27)
+- **Date:** 2026-08-27
+- **Fed into:** `epics/E04-mesh-routing/epic.md` §Open Questions (`OQ-E04-2`, resolved) and its own task-sharding; built and merged across E04's 11 tasks.
 
 ---
 
 ### Q-FUNC-006 — Mechanism for granting a re-added group member historical access
 - **Priority:** important
-- **Status:** 🟡 open
+- **Status:** 🟢 answered (updated 2026-09-07 — resolved and built as part of E07, but never flipped from open in this registry)
 - **Raised by:** `skills/project-intake`
 - **Question:** BRD §51 states a newly (re-)added group member "must not automatically gain access to historical communication unless explicitly permitted by the system" — but no mechanism for that explicit permission is described anywhere in BRD or Design (no UI, no owner/admin action, no setting). Does this permission exist for v1, or is §51's caveat describing a possible *future* capability that v1 should simply omit (i.e., v1 = re-added members never get history, full stop)?
 - **Why it matters:** If the capability is real, it needs a UI (Design.md has no screen for it), an owner/admin permission model addition, and a key-distribution mechanism (re-sharing old group keys to a specific member without exposing them to anyone else). If it's not real for v1, the group-encryption epic is simpler and the BRD sentence is just future-proofing language.
@@ -109,10 +109,10 @@ Batching rule: **≤10 per round**, grouped by area.
   | B — Build the exception mechanism now | No spec basis to build from — would require inventing UI and a permission model not in either document, violating rule 1 |
 - **Recommended default:** A.
 - **Blocks:** epic-breakdown/task-sharding for the groups/encryption epic
-- **Answer:** _<empty>_
-- **Answered by:** _<empty>_
-- **Date:** _<empty>_
-- **Fed into:** _<empty>_
+- **Answer:** Option A, applied — v1 omits the capability entirely: a re-added member never automatically gains historical access, no exception path exists.
+- **Answered by:** human (per prior decision, encoded as `OQ-E07-1` in `epics/E07-groups-calls/epic.md`)
+- **Date:** 2026-08-27 (per E07's own epic breakdown)
+- **Fed into:** `epics/E07-groups-calls/epic.md` (`EARS-GROUP-2`, `OQ-E07-1`); `E07-T05`, which encodes the refusal as a hard, mechanically-checked test (`test_EARS_GROUP_2_no_api_exists_to_grant_historical_access`), merged into `development`.
 
 ---
 
