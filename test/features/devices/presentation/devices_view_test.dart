@@ -177,4 +177,62 @@ void main() {
         .single;
     expect(blocked.state, RelationshipState.blocked);
   });
+
+  group('test_E06_B05_bottom_nav_actually_navigates', () {
+    // Regression for E06-B05: every non-active _NavItem on this screen was
+    // wired to `onTap: () {}` -- present, tappable, and a real dead end.
+    // Found via live two-device on-hardware testing: landing on Devices via
+    // the bottom nav left no way to reach any other tab without the
+    // system back gesture. `GetPage`s below stand in for the three real
+    // destinations so a tap can be proven to actually navigate, not merely
+    // exist.
+    Future<void> pumpDevicesViewWithRoutes(WidgetTester tester) async {
+      await tester.pumpWidget(
+        GetMaterialApp(
+          initialRoute: '/devices',
+          getPages: [
+            GetPage(name: '/devices', page: () => const DevicesView()),
+            GetPage(name: '/dashboard', page: () => const Text('DASHBOARD')),
+            GetPage(
+              name: '/conversations',
+              page: () => const Text('CONVERSATIONS'),
+            ),
+            GetPage(name: '/settings', page: () => const Text('SETTINGS')),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('tapping Dashboard navigates to /dashboard', (tester) async {
+      await pumpDevicesViewWithRoutes(tester);
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(find.text('DASHBOARD'), findsOneWidget);
+    });
+
+    testWidgets('tapping Conversations navigates to /conversations',
+        (tester) async {
+      await pumpDevicesViewWithRoutes(tester);
+      await tester.tap(find.text('Conversations'));
+      await tester.pumpAndSettle();
+      expect(find.text('CONVERSATIONS'), findsOneWidget);
+    });
+
+    testWidgets('tapping Settings navigates to /settings', (tester) async {
+      await pumpDevicesViewWithRoutes(tester);
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('SETTINGS'), findsOneWidget);
+    });
+
+    testWidgets(
+        'tapping the already-active Devices tab stays on /devices (no-op '
+        'by convention, not a regression target)', (tester) async {
+      await pumpDevicesViewWithRoutes(tester);
+      await tester.tap(find.text('Devices'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DevicesView), findsOneWidget);
+    });
+  });
 }

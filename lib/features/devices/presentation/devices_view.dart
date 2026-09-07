@@ -507,9 +507,20 @@ String _formatLastSeen(DateTime updatedAt) {
 }
 
 /// Elements 40-51: Dashboard/Conversations/Devices/Settings. Devices is the
-/// active tab (element 46's filled pill); the other three route to screens
-/// not yet built by their owning feature epics, so they are present and
-/// tappable but intentionally do nothing yet.
+/// active tab (element 46's filled pill, `onTap: () {}` since re-tapping
+/// the already-active tab is a no-op by convention — same shape as
+/// `dashboard_view.dart`'s own active tab).
+///
+/// E06-B05: the other three used to ALSO be `onTap: () {}`, with a doc
+/// comment claiming this was deliberate — "route to screens not yet built
+/// by their owning feature epics". That precondition stopped being true
+/// once Dashboard/Conversations/Settings all shipped (this session), and
+/// nothing ever revisited this screen's own nav bar to match — a real,
+/// previously-undiscovered dead end: landing on Devices via the bottom nav
+/// left a user unable to navigate to any other tab without the system back
+/// gesture. Found via live two-device on-hardware testing. Fixed to match
+/// `conversations_view.dart`'s own already-correct pattern
+/// (`Get.toNamed(...)` for every non-active item).
 class _BottomNav extends StatelessWidget {
   const _BottomNav();
 
@@ -533,14 +544,14 @@ class _BottomNav extends StatelessWidget {
                 icon: Icons.dashboard,
                 label: 'Dashboard',
                 active: false,
-                onTap: () {}),
+                onTap: () => Get.toNamed('/dashboard')),
           ),
           Expanded(
             child: _NavItem(
                 icon: Icons.chat,
                 label: 'Conversations',
                 active: false,
-                onTap: () {}),
+                onTap: () => Get.toNamed('/conversations')),
           ),
           Expanded(
             child: _NavItem(
@@ -554,7 +565,7 @@ class _BottomNav extends StatelessWidget {
                 icon: Icons.settings,
                 label: 'Settings',
                 active: false,
-                onTap: () {}),
+                onTap: () => Get.toNamed('/settings')),
           ),
         ],
       ),

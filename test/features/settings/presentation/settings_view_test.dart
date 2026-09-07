@@ -109,4 +109,65 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 4));
     },
   );
+
+  group('test_E06_B05_bottom_nav_actually_navigates', () {
+    // Regression for E06-B05: every non-active _NavItem on this screen was
+    // wired to `onTap: () {}` (copied from `devices_view.dart`'s own
+    // identical bug) -- present, tappable, and a real dead end. Found via
+    // live two-device on-hardware testing: landing on Settings via the
+    // bottom nav left no way to reach any other tab without the system
+    // back gesture. `GetPage`s below stand in for the three real
+    // destinations so a tap can be proven to actually navigate, not merely
+    // exist.
+    Future<void> pumpSettingsViewWithRoutes(WidgetTester tester) async {
+      await tester.pumpWidget(
+        GetMaterialApp(
+          initialRoute: '/settings',
+          getPages: [
+            GetPage(name: '/settings', page: () => const SettingsView()),
+            GetPage(name: '/dashboard', page: () => const Text('DASHBOARD')),
+            GetPage(
+              name: '/conversations',
+              page: () => const Text('CONVERSATIONS'),
+            ),
+            GetPage(name: '/devices', page: () => const Text('DEVICES')),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('tapping Dashboard navigates to /dashboard', (tester) async {
+      await pumpSettingsViewWithRoutes(tester);
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(find.text('DASHBOARD'), findsOneWidget);
+    });
+
+    testWidgets('tapping Conversations navigates to /conversations',
+        (tester) async {
+      await pumpSettingsViewWithRoutes(tester);
+      await tester.tap(find.text('Conversations'));
+      await tester.pumpAndSettle();
+      expect(find.text('CONVERSATIONS'), findsOneWidget);
+    });
+
+    testWidgets('tapping Devices navigates to /devices', (tester) async {
+      await pumpSettingsViewWithRoutes(tester);
+      await tester.tap(find.text('Devices'));
+      await tester.pumpAndSettle();
+      expect(find.text('DEVICES'), findsOneWidget);
+    });
+
+    testWidgets(
+        'tapping the already-active Settings tab stays on /settings '
+        '(no-op by convention, not a regression target)', (tester) async {
+      await pumpSettingsViewWithRoutes(tester);
+      // "Settings" is ambiguous here (page heading + nav label) -- the nav
+      // label is the LAST match on screen.
+      await tester.tap(find.text('Settings').last);
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsView), findsOneWidget);
+    });
+  });
 }

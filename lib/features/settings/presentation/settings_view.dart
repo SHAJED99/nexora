@@ -285,10 +285,16 @@ class _MenuRow extends StatelessWidget {
 }
 
 /// Elements 48-59 (probe #62-74): Dashboard/Conversations/Devices/Settings.
-/// Settings is the active tab (probe #72's filled pill); the other three
-/// route to screens not yet built by their owning feature epics, so they
-/// are present and tappable but intentionally do nothing yet (same
-/// pattern as devices_view.dart's `_BottomNav`).
+/// Settings is the active tab (probe #72's filled pill, `onTap: () {}` —
+/// re-tapping the already-active tab is a no-op by convention).
+///
+/// E06-B05: the other three used to ALSO be `onTap: () {}` (copied from
+/// `devices_view.dart`'s own identical bug, per this comment's own prior
+/// text — "same pattern as devices_view.dart's `_BottomNav`"). That was a
+/// real dead end: landing on Settings via the bottom nav left a user
+/// unable to reach any other tab without the system back gesture. Found
+/// via live two-device on-hardware testing; fixed alongside
+/// `devices_view.dart`'s identical bug.
 class _BottomNav extends StatelessWidget {
   const _BottomNav();
 
@@ -305,9 +311,9 @@ class _BottomNav extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _NavItem(icon: Icons.dashboard, label: 'Dashboard', active: false, onTap: () {}),
-          _NavItem(icon: Icons.chat, label: 'Conversations', active: false, onTap: () {}),
-          _NavItem(icon: Icons.router, label: 'Devices', active: false, onTap: () {}),
+          _NavItem(icon: Icons.dashboard, label: 'Dashboard', active: false, onTap: () => Get.toNamed('/dashboard')),
+          _NavItem(icon: Icons.chat, label: 'Conversations', active: false, onTap: () => Get.toNamed('/conversations')),
+          _NavItem(icon: Icons.router, label: 'Devices', active: false, onTap: () => Get.toNamed('/devices')),
           _NavItem(icon: Icons.settings, label: 'Settings', active: true, onTap: () {}),
         ],
       ),
