@@ -1,8 +1,10 @@
 # E04 · Mesh Discovery, Relay & Dynamic Routing · Progress
 
-**Status:** all tasks + bug fixes done, P1/P2 = 0 — pending on-device
-Bluetooth verification + retro before the human merge gate · **Started:**
-2026-08-27 · **Completed:** — · **Progress:** 10/10
+**Status:** all tasks + bug fixes done, P1/P2 = 0. On-device Bluetooth
+verification (E04-B04, E04-B05) found and fixed two real S1 defects that
+zero unit test could have caught — real-hardware retest in progress.
+**Started:** 2026-08-27 · **Completed:** — · **Progress:** 10/10 tasks,
+12/12 tasks+bugs
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -17,6 +19,8 @@ Bluetooth verification + retro before the human merge gate · **Started:**
 - [x] E04-B01 · Relay traffic permanently suppresses route migration (S2, P1) · done · builder (sonnet) → reviewer (opus)
 - [x] E04-B02 · Forwarded relay packets retained forever (S3, P2) · done · builder (sonnet) → reviewer (opus)
 - [x] E04-B03 · No production link-quality data source (S3, P2) · done · builder (sonnet) → reviewer (opus)
+- [x] E04-B04 · Bluetooth discovery's `ACTION_FOUND` receiver registered with the wrong export flag (S1, P1) · done · orchestrator (sonnet) → reviewer (opus)
+- [x] E04-B05 · `TransportService.connect()` had zero production callers — `RelayEngine`'s send path could never succeed against a real device (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x3
 
 ## Dependency graph
 ```mermaid
@@ -225,3 +229,30 @@ chain — can start once discovery is real, in parallel with T03c/T04.
   single largest real risk left in E04 and the one thing a review pass
   cannot substitute for. Retro next, then the human `epic_dev_merge`
   gate — with the on-device gap surfaced explicitly, not buried.
+- 2026-09-07 E04-B04 found + fixed on real hardware: discovery's own
+  `ACTION_FOUND`/`ACTION_DISCOVERY_FINISHED` broadcast receiver was
+  registered `RECEIVER_NOT_EXPORTED`, silently denying the cross-process
+  system broadcast — exactly the real, on-device gap the epic's own
+  retro flagged as unverified. Fixed (`RECEIVER_EXPORTED`), confirmed
+  live on two real devices with a genuine before/after logcat capture.
+  PR #160, reviewed (opus), merged.
+- 2026-09-08 E04-B05 found + fixed on real hardware, continuing
+  `OQ-E06-T04-2`'s live two-device test: `TransportService.connect()` —
+  fully implemented, fully reviewed (`E04-T03b`) — had zero production
+  callers anywhere in `lib/`. Native `BluetoothTransport.send()` requires
+  an already-open socket that nothing ever opened, so no real message
+  could ever be delivered to a real peer; confirmed live (a composed
+  message never arrived, zero Bluetooth-tagged logcat output on either
+  device). New `ConnectionEnsuringSender` connects then sends,
+  coalesced per-device. Three review rounds (all opus, all independent):
+  round 1 found four production call sites still bypassing the fix
+  entirely (widened via a new `MessagingStack.directSend` field, plus a
+  genuine root-cause bug in `PrekeyExchange._sendControlFrame` silently
+  swallowing a failed send, plus a genuine Dart `Future<Never>`
+  reification bug with `.timeout()`); round 2 found the whole suite
+  could not tell the fix apart from the original bug (reverting the
+  ENTIRE wiring left 1335/1335 green) — fixed with two new tests that
+  mock `connect` to fail and assert `send` is never reached; round 3
+  independently re-verified every prior finding plus attempted its own
+  additional partial-revert falsifications, **APPROVE**. PR #177 merged
+  into `development`.
