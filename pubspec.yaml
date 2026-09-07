@@ -101,7 +101,7 @@ dependencies:
   # convention used for `geolocator` above. DSN is never hardcoded — read
   # from a build-time `--dart-define`, see
   # `lib/core/observability/observability_service.dart`.
-  sentry_flutter: 8.14.2
+  sentry_flutter: 9.29.0
 
 dev_dependencies:
   flutter_test:
