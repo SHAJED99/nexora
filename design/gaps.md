@@ -1379,6 +1379,50 @@ and that is the strongest single argument for this disposition.**
   task-sharding). Golden is extracted **after** the build, per
   `design-fidelity` §3.
 
+## GAP-030 — no way to start a new conversation with an already-trusted device
+
+- **status:** ✅ approved
+- **screen:** `design/screens/devices.md` (existing screen, one new
+  per-row affordance — no new screen)
+- **spec:** `FR-COMM-001` ("the system SHALL support sending/receiving
+  text... in a 1:1 conversation") presumes a conversation can be reached
+  in the first place; `spec/feature-list.md`'s Personal Chat feature.
+- **design shows:** `conversations.md` lists existing conversations only
+  (no compose/add affordance — `GAP-007`'s own empty-state note never
+  proposed one either); `devices.md`'s established rows (`Trusted Node`/
+  `Allowed`) offer only the kebab menu's `Block` action — no way to reach
+  `chat.md` for a device with no conversation yet. Confirmed by live
+  two-device on-hardware testing (2026-09-08, `E06-B05`'s own Run log):
+  mutual Bluetooth trust between two real phones was established
+  end-to-end, and there was then no in-app path to actually exchange a
+  message — `ChatController`'s own `conversationId == peerDeviceId`
+  convention means the mechanism exists in code, nothing in any screen
+  ever reaches it for a peer with no prior message history.
+- **derived from:** `devices.md`'s own row already carries a trailing
+  kebab (`more_vert`, elements 12/20/28/36) for the one existing per-row
+  action (`Block`). The closest existing primitive for a SECOND per-row
+  action is the `Unknown` row's own `Verify` button (`OnProcessButtonWidget`,
+  `11px · rgb(53, 37, 205) · r4px`, `devices.md`'s own measured value) —
+  same button treatment, new icon/label, placed in the same trailing
+  position, only on rows that already have somewhere to go (`Trusted`/
+  `Allowed` — never `Unknown`, which has no session to message yet, and
+  never `Blocked`, which must not gain a new way to reach a blocked peer).
+- **proposal:** add a `Message` icon-button (`Icons.chat`, matching this
+  app's own bottom-nav glyph for the same concept) to each `Trusted`/
+  `Allowed` row, positioned before the existing kebab. Tapping it
+  navigates to `Routes.chat` (`/chat/<deviceId>`, the peer's own device
+  id as `conversationId` — already a real, working route with its own
+  binding; nothing about the destination screen changes). No new screen,
+  no new state on `devices.md` itself — this is the entry point
+  `conversations.md`'s own empty state has never had, filed against
+  `devices.md` instead since that is where a trust decision (and now a
+  "start talking to them" decision) is already made about a specific
+  device.
+- **approved by:** human (shajed99), 2026-09-08 — approved as proposed,
+  in response to a direct question about whether to build this now to
+  complete real two-device hardware verification (`OQ-E06-T04-2`).
+- **built:** prospective — `E06` (`E06-T14`, sharded same day as approval).
+
 ## The usual suspects
 
 Checklist for the gap pass. In rough order of how often each is missed:

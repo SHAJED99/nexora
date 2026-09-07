@@ -228,6 +228,18 @@ class _DeviceRow extends StatelessWidget {
                   ],
                 ),
               ),
+              // GAP-030 (E06-T14, FR-COMM-001): only a Trusted/Allowed row
+              // has anywhere to go — Unknown has no session yet, Blocked
+              // must not gain a new way to reach a blocked peer.
+              if (relationship.state == RelationshipState.trusted ||
+                  relationship.state == RelationshipState.allowed)
+                IconButton(
+                  icon: const Icon(Icons.chat,
+                      size: 24, color: NexoraColors.devicesMuted),
+                  tooltip: 'Message',
+                  onPressed: () =>
+                      Get.toNamed('/chat/${relationship.deviceId}'),
+                ),
               PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert,
                     size: 24, color: NexoraColors.devicesMuted),
