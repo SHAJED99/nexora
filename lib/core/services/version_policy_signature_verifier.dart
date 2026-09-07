@@ -46,17 +46,28 @@ const String _publicKeyBase64 = String.fromEnvironment(
 );
 
 class VersionPolicySignatureVerifier {
-  // Public param name (`publicKeyBytesOverride`) can't match the private
-  // field below, so `prefer_initializing_formals` doesn't apply -- same
-  // reasoning as `VersionPolicyService`'s own `_database = database`.
-  VersionPolicySignatureVerifier({List<int>? publicKeyBytesOverride})
-      : _publicKeyBytesOverride = publicKeyBytesOverride; // ignore: prefer_initializing_formals
+  // Public param names can't match the private fields below, so
+  // `prefer_initializing_formals` doesn't apply -- same reasoning as
+  // `VersionPolicyService`'s own `_database = database`.
+  VersionPolicySignatureVerifier({
+    List<int>? publicKeyBytesOverride,
+    String? publicKeyBase64Override,
+  })  : _publicKeyBytesOverride = publicKeyBytesOverride, // ignore: prefer_initializing_formals
+        _publicKeyBase64Override = publicKeyBase64Override; // ignore: prefer_initializing_formals
 
   /// Test seam: lets a test inject a known keypair's public key instead of
   /// relying on a `--dart-define` being present at test-run time. `null` in
   /// production, where [_publicKeyBase64] (or its absence) is the only
   /// source of truth.
   final List<int>? _publicKeyBytesOverride;
+
+  /// Test seam: lets a test inject a raw base64 STRING (rather than
+  /// pre-decoded bytes) through the exact same decode path production
+  /// uses -- the only way to exercise a malformed
+  /// `--dart-define=VERSION_POLICY_PUBLIC_KEY=...` deterministically
+  /// without actually passing that flag to `flutter test`. Ignored if
+  /// [_publicKeyBytesOverride] is also set (bytes win).
+  final String? _publicKeyBase64Override;
 
   static final Ed25519 _algorithm = Ed25519();
 
@@ -89,8 +100,27 @@ class VersionPolicySignatureVerifier {
     required int updatedAt,
     required String signatureBase64,
   }) async {
-    final publicKeyBytes = _publicKeyBytesOverride ??
-        (_publicKeyBase64.isEmpty ? null : base64.decode(_publicKeyBase64));
+    List<int>? publicKeyBytes = _publicKeyBytesOverride;
+    if (publicKeyBytes == null) {
+      final base64Key = _publicKeyBase64Override ?? _publicKeyBase64;
+      if (base64Key.isNotEmpty) {
+        // A malformed `--dart-define=VERSION_POLICY_PUBLIC_KEY=...` (an
+        // ops paste error, not attacker-controlled) must fail closed like
+        // everything else here, never throw -- this exact class of bug (a
+        // decode call sitting outside every try/catch) was already fixed
+        // once in this same method for `signatureBase64` below; this
+        // guards the public key the same way.
+        try {
+          publicKeyBytes = base64.decode(base64Key);
+        } on FormatException catch (e) {
+          ObservabilityService.instance.logError(
+            'version_policy.public_key_not_base64',
+            cause: e,
+          );
+          return false;
+        }
+      }
+    }
     if (publicKeyBytes == null) {
       // No key configured -- fail closed, not "skip verification". This is
       // the expected state for a build that never embedded one; it is not

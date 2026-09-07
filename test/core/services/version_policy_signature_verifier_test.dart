@@ -180,6 +180,32 @@ void main() {
     });
   });
 
+  group('test_review_F1_malformed_configured_public_key_fails_closed', () {
+    test('a malformed (non-base64) public key injected via the SAME base64 '
+        'decode path production uses (--dart-define) fails verification '
+        'WITHOUT THROWING -- reviewer finding F1: this exact base64.decode '
+        'call used to sit outside every try/catch, so a bad '
+        '`VERSION_POLICY_PUBLIC_KEY` value crashed straight out of '
+        'refresh(), breaking EARS-VER-4 at exactly the moment an ops '
+        'paste error would ship one', () async {
+      final verifier = VersionPolicySignatureVerifier(
+        publicKeyBase64Override: 'not!!valid!!base64',
+      );
+      final signatureBase64 = await sign(keyPair);
+
+      await expectLater(
+        verifier.verify(
+          minimumSupportedBuild: minimumSupportedBuild,
+          currentBuild: currentBuild,
+          updateAvailableBuild: updateAvailableBuild,
+          updatedAt: updatedAt,
+          signatureBase64: signatureBase64,
+        ),
+        completion(isFalse),
+      );
+    });
+  });
+
   group('test_canonicalMessage_is_stable_and_field_order_sensitive', () {
     test('the same fields always produce the same message bytes', () {
       final a = VersionPolicySignatureVerifier.canonicalMessage(
