@@ -219,4 +219,62 @@ void main() {
 
     handle.dispose();
   });
+
+  testWidgets(
+    'test_E15_hardware_regression_navigating_away_mid_send_does_not_crash_on_the_disposed_composer',
+    (tester) async {
+      // Real-hardware regression (Pixel 8 Pro): tapping back on a chat
+      // while a `send` was still resolving crashed with "A
+      // TextEditingController was used after being disposed" --
+      // `_sendAndRestoreOnFailure` resumed after `dispose()` and wrote to
+      // `_textController`. An unreachable peer (no relationship row, so no
+      // fast `messaging.peer_blocked` rejection) drives `send` down
+      // `PrekeyExchange.ensureSession`'s real bundle-request path, which
+      // nobody answers here -- it fails only after its own default 20s
+      // `TimeoutException` (`prekey_exchange.dart`'s
+      // `_defaultEnsureSessionTimeout`). `tester.pump(duration)` runs on
+      // `flutter_test`'s fake async clock, so this is deterministic, not a
+      // real 20-second test.
+      final controller = controllerFor('unreachable-peer');
+      Get.put<ChatController>(controller);
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => Get.to(() => const ChatView()),
+              child: const Text('open chat'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open chat'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'are you there?');
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      // Advance the fake clock partway into `ensureSession`'s 20s timeout --
+      // `send()` is still pending, `sendError` still empty.
+      await tester.pump(const Duration(seconds: 10));
+      expect(controller.sendError.value, isEmpty);
+
+      // Navigate away NOW, before `send()` resolves -- disposes `_Composer`
+      // (and its `_textController`) mid-flight, exactly like the physical
+      // back-tap that produced the crash.
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      // Let the pop's route transition actually finish and dispose the old
+      // route -- a single zero-duration pump() only starts it.
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatView), findsNothing);
+
+      // Cross both the 20s `ensureSession` timeout AND
+      // `ConnectionEnsuringSender`'s own nested 30s connection timeout, so
+      // no Timer is left pending when the test ends.
+      await tester.pump(const Duration(seconds: 35));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      expect(controller.sendError.value, isNotEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

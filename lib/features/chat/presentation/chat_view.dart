@@ -386,6 +386,12 @@ class _ComposerState extends State<_Composer> {
 
   Future<void> _sendAndRestoreOnFailure(String trimmed) async {
     await widget.controller.send(trimmed);
+    // Real-hardware regression: `send` can still be in flight when the user
+    // navigates away from the chat (taps back, or the peer resolves and the
+    // route is popped) -- `dispose()` already ran and `_textController` is
+    // gone by the time this resumes. Never touch controller/Get.snackbar
+    // state after that.
+    if (!mounted) return;
     if (widget.controller.sendError.value.isNotEmpty) {
       _textController.text = trimmed;
       Get.snackbar(
