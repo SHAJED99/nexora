@@ -96,6 +96,8 @@ import '../messaging/relay_packet_frame.dart';
 import '../routing_engine/relay_engine.dart'
     show RelayDeliveryState, RelayPriority;
 import '../routing_engine/route_cost_calculator.dart' show TrafficProfile;
+import '../routing_engine/routing_engine.dart' show Route;
+import 'call_migration_controller.dart';
 import 'call_session.dart';
 
 /// Matches `messaging_stack.dart`/`prekey_exchange.dart`/
@@ -395,9 +397,25 @@ abstract class CallMediaTransport {
   /// migration candidate route. Returns an [AppFailure] if media could not
   /// be established; `null` on success. Never itself decides whether a
   /// failure ends the call — see this class's own doc comment.
-  Future<AppFailure?> attach(CallSession session);
+  ///
+  /// [route] (E07-B03/E07-B03's own O2 finding) — the route media should
+  /// actually attach to: [CallSession.activeRoute] cannot serve this
+  /// purpose, because during a migration it still holds the OLD route at
+  /// the moment [attach] is called for the CANDIDATE (`RoutingEngine`'s own
+  /// bookkeeping is updated at this point, per the ordered sequence, but
+  /// `CallSession.recordActiveRoute` deliberately runs only after the new
+  /// route is proven live — this file's own header). Threading the route
+  /// explicitly removes that ambiguity for whichever real implementation
+  /// eventually answers `OQ-E07-3`, rather than leaving it to guess from
+  /// session state that lags by design. `null` only for the one case where
+  /// no route to the peer exists at all yet (a genuinely routeless initial
+  /// attach) — a pre-existing gap, out of this fix's own fence.
+  Future<AppFailure?> attach(CallSession session, Route? route);
 
-  Future<void> detach();
+  /// [route] — the route being torn down, for the same reason [attach]
+  /// needs one: never inferred from session state, always the exact route
+  /// this call is releasing.
+  Future<void> detach(Route? route);
 
   Stream<CallMediaHealth> get health;
 }
@@ -433,13 +451,13 @@ class NullCallMediaTransport implements CallMediaTransport {
       StreamController<CallMediaHealth>.broadcast();
 
   @override
-  Future<AppFailure?> attach(CallSession session) async {
+  Future<AppFailure?> attach(CallSession session, Route? route) async {
     _healthController.add(CallMediaHealth.unavailable);
     return const AppFailure('call.no_media_transport');
   }
 
   @override
-  Future<void> detach() async {}
+  Future<void> detach(Route? route) async {}
 
   @override
   Stream<CallMediaHealth> get health => _healthController.stream;
@@ -844,6 +862,34 @@ class CallSignaling {
 
   // --- Shared bookkeeping ------------------------------------------------
 
+  /// One [CallMigrationController] per in-flight call, keyed by
+  /// [CallSession.callId] (E07-B03). Constructed and [CallMigrationController.start]ed
+  /// the moment a session reaches [CallState.active] -- discharging
+  /// FR-CALL-003's "constructed once per call attempt, started when the
+  /// session reaches active" contract, previously true only under
+  /// `call_migration_controller_test.dart`, never in the shipped app (this
+  /// bug's own repro). Removed from the map on [CallState.ended];
+  /// [CallMigrationController.start] already installs its OWN listener on
+  /// the same (broadcast) `session.states` stream that calls
+  /// [CallMigrationController.stop] on `ending`/`ended`, so the entry here
+  /// is bookkeeping only -- an explicit extra [CallMigrationController.stop]
+  /// call is harmless (that method's own doc comment: "safe to call
+  /// twice") and kept for the same reason `_currentSession` is cleared
+  /// explicitly here rather than relying solely on the controller's own
+  /// internal state.
+  final Map<String, CallMigrationController> _activeMigrations =
+      <String, CallMigrationController>{};
+
+  /// Test-only seam (E07-B03): lets a test confirm a real
+  /// [CallMigrationController] gets constructed through THIS class's own
+  /// production wiring — the whole point of this bug fix — rather than
+  /// only ever being constructed directly by
+  /// `call_migration_controller_test.dart`. Deliberately a plain public
+  /// getter rather than `@visibleForTesting` (mirrors `call_session.dart`'s
+  /// own established reasoning: not worth a `package:meta` import for one
+  /// annotation). Never read by production code.
+  int get debugActiveMigrationCountForTest => _activeMigrations.length;
+
   /// Adopts [session] as [_currentSession] and wires the bookkeeping every
   /// session needs regardless of which side created it or how it was
   /// created: attach media once [CallState.active] is reached, release
@@ -854,7 +900,21 @@ class CallSignaling {
     _currentSession = session;
     session.states.listen((state) {
       if (state == CallState.active) {
-        unawaited(_attachInitialMedia(session));
+        // E07-B03: construct + start the migration controller BEFORE the
+        // initial media attach below -- `start()` seeds
+        // `RoutingEngine.setActiveRoute`/`CallSession.recordActiveRoute`
+        // for this destination (its own doc comment's named silent-no-op
+        // trap: `considerMigration` always returns `stay()` without an
+        // active route already registered), so `session.activeRoute` is
+        // populated by the time `_attachInitialMedia` reads it below.
+        final migration = CallMigrationController(
+          routing: _stack.routingEngine,
+          signaling: this,
+          media: _mediaTransport,
+        );
+        _activeMigrations[session.callId] = migration;
+        migration.start(session);
+        unawaited(_attachInitialMedia(session, session.activeRoute));
         // E10-T04: reached from BOTH `outgoingPending/outgoingRinging` and
         // `incomingRinging` (see `CallSession.onEvent`'s `accept` row) --
         // emitted unconditionally rather than gated on `!session.isOutgoing`
@@ -868,6 +928,8 @@ class CallSignaling {
         if (session.endReason == CallEndReason.timeout) {
           counters.callTimeout++;
         }
+        final migration = _activeMigrations.remove(session.callId);
+        if (migration != null) unawaited(migration.stop());
         _emitTerminalNotice(session);
         if (identical(_currentSession, session)) {
           _currentSession = null;
@@ -919,8 +981,8 @@ class CallSignaling {
   /// calls [CallMediaTransport.attach] again for a migration candidate on an
   /// already-active call, and a failure there must NOT end the call
   /// (EARS-CALL-10) — only this, the first attach, is fatal.
-  Future<void> _attachInitialMedia(CallSession session) async {
-    final failure = await _mediaTransport.attach(session);
+  Future<void> _attachInitialMedia(CallSession session, Route? route) async {
+    final failure = await _mediaTransport.attach(session, route);
     if (failure != null) {
       session.endLocally(CallEndReason.failed);
     }

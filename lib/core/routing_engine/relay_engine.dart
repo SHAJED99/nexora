@@ -357,7 +357,10 @@ class RelayEngine {
         return;
       }
 
-      final alternative = _routingEngine.onRouteFailure(row.destinationId);
+      // E07-B02: this engine always knows its own profile -- passed
+      // explicitly rather than relying on RoutingEngine's own now-removed
+      // sticky profile map.
+      final alternative = _routingEngine.onRouteFailure(row.destinationId, _profile);
       if (alternative == null) {
         // No alternative — leave queued until a route recovers or the
         // packet expires (§3, EARS-ROUTE-4b), not dropped immediately.

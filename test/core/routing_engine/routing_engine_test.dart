@@ -521,7 +521,7 @@ void main() {
       final result = sim.send('A', 'B', Uint8List.fromList([9]));
       expect(result, isA<SendResultNoRoute>());
 
-      final alternative = engine.onRouteFailure('dest');
+      final alternative = engine.onRouteFailure('dest', TrafficProfile.interactive);
 
       expect(alternative, isNotNull);
       expect(alternative!.hops.first, 'C');
@@ -549,7 +549,7 @@ void main() {
       expect(initial, isNotNull);
       engine.setActiveRoute(initial!);
 
-      final alternative = engine.onRouteFailure('dest');
+      final alternative = engine.onRouteFailure('dest', TrafficProfile.interactive);
 
       expect(alternative, isNull);
       expect(engine.activeRouteFor('dest'), isNull);
