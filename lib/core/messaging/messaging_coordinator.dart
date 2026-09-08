@@ -306,6 +306,14 @@ class MessagingCoordinator {
   /// call `connect()` for any of them — same no-eager-connect reasoning.
   Future<void> _seedKnownDevices() async {
     final relationships = await RelationshipRepository(_stack.db).listAll();
+    // Review finding, E04-B07 (symmetric with InboundPipeline's own
+    // identical fix): `stop()` could in principle run while the `await`
+    // above is still in flight, even though today's only caller `await`s
+    // `start()` itself before this method's own await ever has a chance to
+    // race a `stop()` call. Guarding anyway keeps both files' identical
+    // shape genuinely identical rather than diverging on an assumption
+    // about how a future caller uses `start()`.
+    if (!_started) return;
     for (final relationship in relationships) {
       if (relationship.state != RelationshipState.trusted &&
           relationship.state != RelationshipState.allowed) {

@@ -602,5 +602,37 @@ void main() {
         );
       },
     );
+
+    test(
+      'test_E04_B07_stop_racing_ahead_of_the_seed_leaves_no_subscription_behind',
+      () async {
+        final receiver = await newStack('device-b', nextSuffix());
+        addTearDown(receiver.dispose);
+        await RelationshipRepository(
+          receiver.db,
+        ).upsert('device-a', RelationshipState.trusted);
+
+        final pipeline = InboundPipeline(stack: receiver);
+        pipeline.start();
+        // `stop()` races ahead of `_seedKnownDevices()`'s own
+        // `await listAll()` -- no intervening await between `start()` and
+        // `stop()`, so `_started` flips to `false` before that DB read has
+        // a real chance to resolve (review finding, E04-B07: without the
+        // `if (!_started) return;` guard, the seed would repopulate
+        // `_connectionSubscriptions` on an already-stopped pipeline once
+        // the DB read finally completed).
+        await pipeline.stop();
+        // Give the DB read (and, absent the guard, the seed loop) a real
+        // chance to run before asserting.
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(
+          pipeline.debugConnectionSubscriptionCountForTest,
+          0,
+          reason: 'a seed that resolves AFTER stop() must not repopulate '
+              '_connectionSubscriptions on an already-stopped pipeline',
+        );
+      },
+    );
   });
 }

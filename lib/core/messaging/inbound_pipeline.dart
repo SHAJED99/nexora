@@ -429,6 +429,13 @@ class InboundPipeline {
   /// chosen over subscribing every relationship state).
   Future<void> _seedKnownDevices() async {
     final relationships = await RelationshipRepository(_stack.db).listAll();
+    // Review finding, E04-B07: `stop()` may run while the `await` above is
+    // still in flight (this is fire-and-forget from `start()`) — without
+    // this guard, the loop below would repopulate `_connectionSubscriptions`
+    // with live subscriptions against an already-stopped pipeline, and a
+    // frame arriving on one of them would hit the already-closed
+    // `_deliveredController` with an uncaught `StateError`.
+    if (!_started) return;
     for (final relationship in relationships) {
       if (relationship.state != RelationshipState.trusted &&
           relationship.state != RelationshipState.allowed) {
