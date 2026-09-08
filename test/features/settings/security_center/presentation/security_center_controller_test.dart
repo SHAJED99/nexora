@@ -97,18 +97,29 @@ void main() {
     // called `onInit()` and asserted `revocations.value isNotNull` --
     // which proves the read happened, and proves nothing at all about
     // whether anything was ALSO written. This version snapshots every
-    // table this screen reads, runs the full screen lifecycle (`onInit`
-    // through a real render + settle, exactly the path a user takes), and
-    // asserts every table's contents are byte-identical afterward. That
-    // catches a write regression introduced by ANY future code path --
-    // this screen's own controller, a shared seam, a widget's `onTap` --
-    // rather than depending on today's specific (empty) set of write
-    // seams to enumerate and call-count.
+    // table this screen reads, runs `onInit()` through `pumpEventQueue()`
+    // (the controller's own read lifecycle -- NOT a widget-level render;
+    // this is a plain `test`, not a `testWidgets`, and calls no
+    // `pumpWidget`/`pumpAndSettle`, review round 3 correction: the comment
+    // here previously overclaimed "through a real render + settle, exactly
+    // the path a user takes", which this test does not do), and asserts
+    // every table's contents are byte-identical afterward. That catches a
+    // write regression introduced by ANY future code path -- this screen's
+    // own controller, a shared seam, a widget's `onTap` -- rather than
+    // depending on today's specific (empty) set of write seams to
+    // enumerate and call-count.
     await _seedOneRowPerSection(db);
     final before = await _snapshotSecurityTables(db);
 
     controller.onInit();
     await pumpEventQueue();
+
+    // Review round 3 addition: prove the reads actually completed before
+    // the after-snapshot is taken. Without this, a silently broken drain
+    // (e.g. `onInit()` never actually running its reads) would leave both
+    // snapshots empty/identical and this test would pass vacuously without
+    // ever exercising a write path at all.
+    expect(controller.revocations.value, hasLength(1));
 
     final after = await _snapshotSecurityTables(db);
     expect(
@@ -204,18 +215,34 @@ void main() {
         ]) {
           for (final element in finder.evaluate()) {
             final widget = element.widget;
-            final onTap = widget is InkWell
-                ? widget.onTap
+            // F6 (review round 3 on this PR): the previous version of this
+            // check only inspected `onTap`, so a widget carrying ONLY
+            // `onLongPress`/`onDoubleTap` -- e.g. a forbidden long-press
+            // "unblock" menu on a row -- was skipped outright by the
+            // `if (onTap == null) continue` below and could never be
+            // caught. `EARS-DIAG-5`/task §4/§8 name "no long-press menu"
+            // explicitly among the forbidden affordances this test must
+            // catch. Any of the three gesture callbacks makes the widget a
+            // real affordance to classify -- it is run through the SAME
+            // back-affordance/Manage-in-Devices allowlist check below,
+            // whichever callback triggered it.
+            final affordanceCallback = widget is InkWell
+                ? (widget.onTap ?? widget.onLongPress ?? widget.onDoubleTap)
                 : widget is GestureDetector
-                ? widget.onTap
+                ? (widget.onTap ?? widget.onLongPress ?? widget.onDoubleTap)
                 : null;
             if (widget is Dismissible) {
               fail('Dismissible found -- no swipe action is permitted here');
             }
-            if (onTap == null) continue;
+            if (affordanceCallback == null) continue;
             // The only permitted tappable widget is the back affordance
             // (from the shared scaffold) or the "Manage in Devices" link.
-            final ancestorTexts = tester
+            // Named `descendantTexts` (F6 review round: renamed from
+            // `ancestorTexts`, a naming leftover from the F2 rewrite -- the
+            // `find.descendant` search below walks DOWN from `widget` into
+            // its own children, so what it collects are descendants, not
+            // ancestors).
+            final descendantTexts = tester
                 .widgetList<Text>(
                   find.descendant(
                     of: find.byWidget(widget),
@@ -245,10 +272,10 @@ void main() {
                 )
                 .toList();
             final isBackAffordance =
-                ancestorTexts.isEmpty &&
+                descendantTexts.isEmpty &&
                 descendantIcons.length == 1 &&
                 descendantIcons.single.icon == Icons.arrow_back;
-            final isManageInDevices = ancestorTexts.contains(
+            final isManageInDevices = descendantTexts.contains(
               'Manage in Devices',
             );
             expect(
@@ -256,7 +283,7 @@ void main() {
               isTrue,
               reason:
                   'Unexpected tappable widget found with labels '
-                  '$ancestorTexts and icons '
+                  '$descendantTexts and icons '
                   '${descendantIcons.map((i) => i.icon).toList()} -- this '
                   'screen renders no action affordance beyond the back '
                   'button and the Manage in Devices navigation link.',
