@@ -18,6 +18,8 @@ import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/services/firebase_paths.dart';
 import 'package:nexora/core/services/version_policy_service.dart';
+import 'package:nexora/core/session/local_data_wipe_service.dart';
+import 'package:nexora/features/settings/account/domain/resolve_initial_route_use_case.dart';
 import 'package:nexora/features/version/domain/evaluate_version_state_use_case.dart';
 import 'package:nexora/features/version/domain/version_reconnect_watcher.dart';
 import 'package:nexora/features/version/domain/version_state.dart';
@@ -38,6 +40,15 @@ Future<void> main() async {
   // plugin at build time.
   await Firebase.initializeApp();
 
+  // E15-T02 (FR-AUTH-009): completes any sign-out that was interrupted
+  // before its erase finished — BEFORE `AppDatabase()` is constructed
+  // below. This is the subtlest ordering constraint in this file (task
+  // file §6 risk row 4): a live `AppDatabase` opened on the same path
+  // `LocalDataWipeService` is about to delete would re-create the very
+  // file the wipe just erased (SQLite's lazy-open semantics), so the wipe
+  // must run first, on a path nothing else has touched yet this launch.
+  await LocalDataWipeService().completePendingWipe();
+
   // The single app-wide AppDatabase (task file §5) — constructed here,
   // never inside `AppBinding`/`MessagingStack.create`, so there is
   // structurally only ever one (task file §2).
@@ -49,7 +60,22 @@ Future<void> main() async {
   // `MessagingStack.create` itself reports `unavailable` rather than this
   // file inventing a placeholder id (see `messaging_stack.dart`'s header,
   // judgment call 3).
-  final localIdentity = await db.latestDeviceIdentity();
+  //
+  // E15-T02 (task file §6 risk row 2): a corrupt/unreadable identity row
+  // must never crash the launch or be treated as "an identity exists" —
+  // fails to `null` (same direction as `login_controller.dart`'s own
+  // best-effort reads), logged, so `resolveInitialRoute` below sees it as
+  // no local identity (routes to `/welcome`, never `/dashboard`).
+  DeviceIdentity? localIdentity;
+  try {
+    localIdentity = await db.latestDeviceIdentity();
+  } catch (e) {
+    ObservabilityService.instance.logError(
+      'session.local_identity_read_failed',
+      cause: e,
+    );
+    localIdentity = null;
+  }
   final selfDeviceId = localIdentity?.deviceId ?? '';
 
   final messagingStack = await MessagingStack.create(
@@ -68,7 +94,13 @@ Future<void> main() async {
     versionPolicyService,
     readInstalledBuildNumber,
   );
-  final initialRoute = initialRouteFor(versionState);
+  // E15-T02 (FR-AUTH-010/011/012): extends `initialRouteFor`'s existing
+  // `updateRequired` precedence (delegated to, never re-implemented — see
+  // `resolveInitialRoute`'s own header) with the returning-device skip.
+  final initialRoute = resolveInitialRoute(
+    versionState: versionState,
+    hasLocalIdentity: localIdentity != null,
+  );
 
   runApp(
     NexoraApp(
