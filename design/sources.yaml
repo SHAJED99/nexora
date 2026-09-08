@@ -165,6 +165,87 @@ screens:
     # contract's own elements (DEA1-DEA9), same isolation principle already
     # used for the `_fixture_*` probes below.
 
+  # E15-T03: all nine `source: derived` Settings-area screens GAP-031…GAP-039
+  # cover, registered up front — the single-ownership shape the epic's own
+  # Analyze report Collision matrix requires (`design/sources.yaml` → T03
+  # alone; none of T04-T10 lists this file in their own `files:` fence, so
+  # each one's `make design-verify SCREEN=<id>` has nothing to filter on
+  # unless its entry already exists here). Nine, not eight: GAP-031's own
+  # text ("eight of them are now needed at once") counts the eight rows
+  # settings.md's hub menu draws; `sign-out-confirm` (GAP-039) is a ninth
+  # destination reached *from* the Account screen, not a hub row, and
+  # `settings-storage` (GAP-024, approved 2026-09-02, byte-unchanged, not
+  # reopened by this pass) is E08's carry-forward, rehomed here as E15-T09 —
+  # both `E15-T07` and `E15-T09`'s own `files:` fences list a golden under
+  # `design/golden/<id>/` but no update to this file, so both screens must
+  # already be registered before either task can run its own gate. Every id
+  # below is cross-checked against its contract's own frontmatter `id:` line
+  # (design/screens/<id>.md) and against the epic's own Screens table
+  # (`epics/E15-session-and-settings/epic.md`) for its route.
+  - id: settings-notifications
+    source: derived
+    design_path: n/a — derived, design/screens/settings-notifications.md (GAP-032)
+    impl_path: /settings/notifications
+    viewports: [390x844]
+    states: [{ name: default }]
+
+  - id: settings-privacy
+    source: derived
+    design_path: n/a — derived, design/screens/settings-privacy.md (GAP-033)
+    impl_path: /settings/privacy
+    viewports: [390x844]
+    states: [{ name: default }]
+
+  - id: settings-security-center
+    source: derived
+    design_path: n/a — derived, design/screens/settings-security-center.md (GAP-034)
+    impl_path: /settings/security-center
+    viewports: [390x844]
+    states: [{ name: default }]
+
+  - id: settings-account
+    source: derived
+    design_path: n/a — derived, design/screens/settings-account.md (GAP-035)
+    impl_path: /settings/account
+    viewports: [390x844]
+    states: [{ name: default }]
+
+  - id: sign-out-confirm
+    source: derived
+    design_path: n/a — derived, design/screens/sign-out-confirm.md (GAP-039)
+    impl_path: /settings/sign-out-confirm
+    viewports: [390x844]
+    states: [{ name: default }]
+
+  - id: settings-network
+    source: derived
+    design_path: n/a — derived, design/screens/settings-network.md (GAP-036)
+    impl_path: /settings/network
+    viewports: [390x844]
+    states: [{ name: default }]
+
+  - id: settings-battery
+    source: derived
+    design_path: n/a — derived, design/screens/settings-battery.md (GAP-037)
+    impl_path: /settings/battery
+    viewports: [390x844]
+    states: [{ name: default }]
+
+  - id: settings-storage
+    source: derived
+    design_path: n/a — derived, design/screens/settings-storage.md (GAP-024,
+      approved 2026-09-02 — not reopened by this pass)
+    impl_path: /settings/storage
+    viewports: [390x844]
+    states: [{ name: default }]
+
+  - id: settings-about
+    source: derived
+    design_path: n/a — derived, design/screens/settings-about.md (GAP-038)
+    impl_path: /settings/about
+    viewports: [390x844]
+    states: [{ name: default }]
+
 # - id: login
 #   source: ui
 #   design_path: /login.html      # the path inside the design source
