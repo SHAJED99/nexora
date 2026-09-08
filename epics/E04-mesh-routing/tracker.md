@@ -1,14 +1,16 @@
 # E04 · Mesh Discovery, Relay & Dynamic Routing · Progress
 
-**Status:** all tasks done. On-device Bluetooth verification
-(E04-B04/B05/B06) found and fixed three real S1 defects that zero unit
-test could have caught. E04-B07 (found by E04-B06's own review, S1) is
-`blocked` awaiting the 🧍 `bug_priorities` gate — P1/P2 not yet 0 pending
-that gate. Real-hardware retest of E04-B06 deferred (`OQ-E04-B06-1`) —
-second physical device unavailable mid-session; an Android emulator
-cannot substitute (no real Bluetooth Classic radio).
+**Status:** all tasks + bug fixes done, P1/P2 = 0. On-device Bluetooth
+verification (E04-B04/B05/B06/B07) found and fixed four real S1 defects
+that zero unit test could have caught — the fix stack for real Bluetooth
+mesh delivery (connect() wired in, an accept loop added, and known-peer
+connection subscriptions seeded independent of live discovery) is now
+believed complete. Real-hardware two-device retest still deferred
+(`OQ-E04-B06-1`) — a second physical device has not been available since
+mid-session; an Android emulator cannot substitute (no real Bluetooth
+Classic radio).
 **Started:** 2026-08-27 · **Completed:** — · **Progress:** 10/10 tasks,
-13/13 tasks+bugs (E04-B07 blocked, not yet counted done)
+14/14 tasks+bugs
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -26,7 +28,7 @@ cannot substitute (no real Bluetooth Classic radio).
 - [x] E04-B04 · Bluetooth discovery's `ACTION_FOUND` receiver registered with the wrong export flag (S1, P1) · done · orchestrator (sonnet) → reviewer (opus)
 - [x] E04-B05 · `TransportService.connect()` had zero production callers — `RelayEngine`'s send path could never succeed against a real device (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x3
 - [x] E04-B06 · `BluetoothTransport` had no server-side accept loop — `connect()` was client-only, so two real devices could never connect to each other (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x3
-- [ ] E04-B07 · `InboundPipeline`/`MessagingCoordinator` only subscribe to a device's connection state after discovering it THIS process run — an accepted connection from an already-known peer is silently dropped (S1, P1 pending 🧍 gate) · blocked · found by E04-B06's own review
+- [x] E04-B07 · `InboundPipeline`/`MessagingCoordinator` only subscribe to a device's connection state after discovering it THIS process run — an accepted connection from an already-known peer is silently dropped (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x2
 
 ## Dependency graph
 ```mermaid
@@ -286,3 +288,25 @@ chain — can start once discovery is real, in parallel with T03c/T04.
   Android emulator was confirmed unable to substitute (no real Bluetooth
   Classic radio). E04-B07 filed as `blocked`, awaiting the human
   `bug_priorities` gate before it can be dispatched.
+- 2026-09-08 Human said "do what is good, do not wait for me" (standing
+  extended autonomy grant). Resolved E04-B07's `bug_priorities` gate
+  (severity S1 unchanged from the reviewer, priority P1) and its own
+  scope Open Question (seed `trusted`/`allowed` relationships only, not
+  `unknown`/`blocked`) and dispatched it. Fix: both `InboundPipeline` and
+  `MessagingCoordinator` gained `_seedKnownDevices()`, called from
+  `start()`, seeding a `connectionState` subscription for every
+  already-known `trusted`/`allowed` device up front — reusing
+  `_onDeviceDiscovered`'s own existing idempotency guard rather than
+  duplicating it. No eager `connect()` anywhere. Two review rounds (both
+  opus, both independent): round 1 found a real bug (a fire-and-forget
+  seed could repopulate subscriptions on an already-stopped pipeline if
+  `stop()` raced ahead of its own DB read, then crash on an
+  already-closed stream controller) — fixed with a one-line guard plus a
+  regression test reproducing the reviewer's own probe; round 2
+  **APPROVE**, after independently confirming the fix via its own
+  20-iteration timing probe and Dart event-loop/microtask reasoning. PR
+  #182 merged into `development`. **P1/P2 = 0.** The fix stack for real
+  Bluetooth mesh delivery (E04-B05 connect()-wiring + E04-B06 accept-loop
+  + E04-B07 known-peer subscription seeding) is now believed complete;
+  `OQ-E04-B06-1`'s real two-device retest remains the one thing only
+  physical hardware can prove.
