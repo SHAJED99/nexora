@@ -175,6 +175,8 @@ import '../storage/storage_manager.dart';
 import '../transport/transport_service.dart';
 import '../../features/messaging/domain/delivery_state_machine.dart';
 import '../../features/messaging/domain/message.dart';
+import '../../features/trust/data/relationship_repository.dart';
+import '../../features/trust/domain/relationship.dart' show RelationshipState;
 import 'inbound_pipeline.dart';
 import 'messaging_stack.dart';
 
@@ -285,9 +287,38 @@ class MessagingCoordinator {
 
     _discoverySubscription =
         _stack.transport.discoveredDevices.listen(_onDeviceDiscovered);
+    await _seedKnownDevices();
     _timer = Timer.periodic(_tickInterval, (_) => unawaited(tick()));
 
     await reconcileQueuedMessages();
+  }
+
+  /// E04-B07: mirrors `InboundPipeline._seedKnownDevices`'s own identical
+  /// reasoning (see that method's doc comment for the full defect/fix
+  /// story) — `_onDeviceDiscovered` alone only ever learns about a device
+  /// id THIS process's own discovery scan happened to find, so an inbound
+  /// connection accepted from an already-trusted peer (`E04-B06`) that was
+  /// never freshly (re)discovered misses this coordinator's event-driven
+  /// `tick()` on `CONNECTED` too — degrading (not losing outright, unlike
+  /// `InboundPipeline`'s own data loss) to the `tickInterval` timer floor
+  /// instead of firing immediately. Seeds a `connectionState` subscription
+  /// for every already-known `trusted`/`allowed` device up front. Does NOT
+  /// call `connect()` for any of them — same no-eager-connect reasoning.
+  Future<void> _seedKnownDevices() async {
+    final relationships = await RelationshipRepository(_stack.db).listAll();
+    for (final relationship in relationships) {
+      if (relationship.state != RelationshipState.trusted &&
+          relationship.state != RelationshipState.allowed) {
+        continue;
+      }
+      _onDeviceDiscovered(
+        TransportDevice(
+          id: relationship.deviceId,
+          displayName: relationship.deviceId,
+          type: TransportType.bluetooth,
+        ),
+      );
+    }
   }
 
   /// Cancels every subscription and the timer, awaits any in-flight [tick],

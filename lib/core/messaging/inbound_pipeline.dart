@@ -164,6 +164,8 @@ import '../../features/groups/data/group_repository.dart';
 import '../../features/groups/domain/group_message_envelope.dart';
 import '../../features/messaging/domain/delivery_state_machine.dart';
 import '../../features/messaging/domain/message.dart';
+import '../../features/trust/data/relationship_repository.dart';
+import '../../features/trust/domain/relationship.dart' show RelationshipState;
 import 'ciphertext_codec.dart';
 import 'messaging_stack.dart';
 import 'relay_packet_frame.dart';
@@ -340,6 +342,15 @@ class InboundPipeline {
   final Map<String, StreamSubscription<Uint8List>> _dataSubscriptions =
       <String, StreamSubscription<Uint8List>>{};
 
+  /// Test-only seam (E04-B07): lets a test confirm `_seedKnownDevices`
+  /// genuinely does NOT pre-subscribe a device with no relationship row
+  /// (or a non-`trusted`/`allowed` one) — never read by production code.
+  /// Deliberately a plain public getter rather than `@visibleForTesting`
+  /// (mirrors `call_session.dart`'s own established reasoning: adding a
+  /// `package:meta` import to this file for one annotation isn't worth it).
+  int get debugConnectionSubscriptionCountForTest =>
+      _connectionSubscriptions.length;
+
   /// `OQ-E06-T08-2` retrofit: one named slot per `controlKind` byte instead
   /// of one named slot total — `PrekeyExchange` (T07, `controlKind == 1`)
   /// and `DeliveryAckService` (T08, `controlKind == 2`) each get their own
@@ -387,6 +398,50 @@ class InboundPipeline {
     _started = true;
     _discoverySubscription =
         _stack.transport.discoveredDevices.listen(_onDeviceDiscovered);
+    unawaited(_seedKnownDevices());
+  }
+
+  /// E04-B07: [_onDeviceDiscovered] alone only ever learns about a device
+  /// id THIS process's own discovery scan happened to find. An inbound
+  /// connection ACCEPTED from an already-trusted peer (`E04-B06`'s own
+  /// accept loop) that this process never happened to (re)discover has no
+  /// [_connectionSubscriptions] entry at all, so its `CONNECTED` event —
+  /// and every byte the peer ever sends over that very-really-open socket —
+  /// lands on a broadcast stream with no replay and is gone forever
+  /// (this file's header, "Peer subscription lifecycle", already disclosed
+  /// the narrower "already connected before `start()`" version of this gap;
+  /// this is the same root cause reached a second way).
+  ///
+  /// Seeds a `connectionState` subscription for every already-known
+  /// `trusted`/`allowed` device up front, independent of live discovery —
+  /// so a connection reaching either device by ANY means (this device
+  /// dialling out, or a peer dialling in) is never missed purely because
+  /// discovery didn't happen to run first. Does NOT call `connect()` for
+  /// any of them — no eager/proactive connection, matching `E04-B05`'s own
+  /// established "lazy, on-demand" reasoning (`ADR-0004`); this only
+  /// listens for a connection that might already be settling, or settle
+  /// later, dialled by either side. `unknown`/`blocked` relationships are
+  /// deliberately excluded — first contact with an `unknown` peer still
+  /// goes through the existing discovery-triggered path unchanged, and a
+  /// `blocked` peer gets no new way to reach this device (`E06-T14`'s own
+  /// `GAP-030` fence states the identical reasoning for the Message
+  /// button — see this task's own Open Questions for why this scope was
+  /// chosen over subscribing every relationship state).
+  Future<void> _seedKnownDevices() async {
+    final relationships = await RelationshipRepository(_stack.db).listAll();
+    for (final relationship in relationships) {
+      if (relationship.state != RelationshipState.trusted &&
+          relationship.state != RelationshipState.allowed) {
+        continue;
+      }
+      _onDeviceDiscovered(
+        TransportDevice(
+          id: relationship.deviceId,
+          displayName: relationship.deviceId,
+          type: TransportType.bluetooth,
+        ),
+      );
+    }
   }
 
   /// Cancels every subscription this pipeline holds. Required for test

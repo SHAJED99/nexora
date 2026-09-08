@@ -37,6 +37,8 @@ import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/messaging/domain/message.dart';
+import 'package:nexora/features/trust/data/relationship_repository.dart';
+import 'package:nexora/features/trust/domain/relationship.dart';
 
 Uint8List _plaintext(String s) => Uint8List.fromList(s.codeUnits);
 
@@ -688,6 +690,95 @@ void main() {
       });
     },
   );
+
+  group(
+    'E04-B07 — an accepted connection from an already-known peer still '
+    'drives an immediate tick, not just the timer floor',
+    () {
+      test(
+        'test_E04_B07_trusted_peer_connected_with_no_prior_discovery_still_ticks_immediately',
+        () async {
+          final suffix = nextSuffix();
+          final stack = await newStack('device-a', suffix, neighborId: 'device-b');
+          addTearDown(stack.dispose);
+          addTearDown(stack.coordinator.stop);
+          _mockSendAlwaysSucceeds(messenger, suffix);
+          _mockConnectAlwaysSucceeds(messenger, suffix);
+
+          // The receiver already trusts device-b -- e.g. from a previous
+          // process run -- but THIS run never calls `_pushDiscovered` for
+          // it (E04-B06's own accept-loop scenario: the peer dialled IN).
+          await RelationshipRepository(
+            stack.db,
+          ).upsert('device-b', RelationshipState.trusted);
+
+          await stack.cryptoService.establishSession(
+            const SignalProtocolAddress('device-b', 1),
+            await _freshPeerBundle(),
+          );
+          await stack.sendMessage.call(
+            'conv-1',
+            'device-b',
+            _plaintext('should go out on the accepted connection event'),
+          );
+          final beforeConnect =
+              await stack.db.select(stack.db.relayPackets).get();
+          expect(beforeConnect.single.deliveryState, RelayDeliveryState.queued.name);
+
+          // `coordinator.start()` seeds `_connectionSubscriptions` from
+          // already-known relationships (E04-B07's own fix) -- await it so
+          // that seeding has genuinely completed before the connection
+          // event fires, not racing it.
+          await stack.coordinator.start();
+
+          // Simulate an ACCEPTED connection: onConnectionStateChanged
+          // fires directly, with no onDeviceDiscovered for this device id
+          // at all in this process run. `coordinatorTickInterval` is 60s
+          // (this file's own `newStack` default) -- if this event does not
+          // drive an immediate `tick()`, the packet stays `queued` for the
+          // whole timer floor, which this test's own timeout would catch.
+          _pushConnectionState(
+            messenger,
+            suffix,
+            'device-b',
+            ConnectionState.connected,
+          );
+
+          final delivered = await _waitUntil(
+            () async {
+              final rows = await stack.db.select(stack.db.relayPackets).get();
+              return rows.single.deliveryState == RelayDeliveryState.delivered.name;
+            },
+            timeout: const Duration(seconds: 5),
+            onTimeout: () => throw StateError(
+              'E04-B07 regression: an accepted connection from an '
+              'already-trusted, non-freshly-discovered peer did not drive '
+              'an immediate tick -- the packet is still waiting on the '
+              '60s timer floor',
+            ),
+          );
+          expect(delivered, isTrue);
+        },
+      );
+    },
+  );
+}
+
+/// Polls [check] every 20ms until it returns `true` or [timeout] elapses,
+/// in which case [onTimeout] is called (expected to throw). Used instead of
+/// a single fixed `Future.delayed` wait so this test settles as soon as the
+/// event-driven tick actually runs, rather than always paying a fixed delay.
+Future<bool> _waitUntil(
+  Future<bool> Function() check, {
+  required Duration timeout,
+  required Never Function() onTimeout,
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    if (await check()) return true;
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+  onTimeout();
 }
 
 /// A [StorageManager] whose [runPass] always throws -- proves

@@ -19,6 +19,8 @@ import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/messaging/domain/message.dart';
+import 'package:nexora/features/trust/data/relationship_repository.dart';
+import 'package:nexora/features/trust/domain/relationship.dart';
 
 Uint8List _plaintext(String s) => Uint8List.fromList(s.codeUnits);
 
@@ -504,5 +506,101 @@ void main() {
     final delivered = await deliveredFuture;
     expect(delivered.senderDeviceId, 'device-a');
     expect(pipeline.counters.delivered, 1);
+  });
+
+  group('E04-B07 — an accepted connection from an already-known peer is '
+      'not dropped just because this process never discovered it', () {
+    test(
+      'test_E04_B07_trusted_peer_connected_with_no_prior_discovery_still_delivers',
+      () async {
+        final senderSuffix = nextSuffix();
+        final receiverSuffix = nextSuffix();
+        final sender = await newStack('device-a', senderSuffix);
+        final receiver = await newStack('device-b', receiverSuffix);
+        addTearDown(sender.dispose);
+        addTearDown(receiver.dispose);
+
+        await sender.cryptoService.establishSession(
+          const SignalProtocolAddress('device-b', 1),
+          await receiver.identityService.getLocalPreKeyBundle(),
+        );
+        final sent = await sender.sendMessage.call(
+          'conv-1',
+          'device-b',
+          _plaintext('hello via an accepted, not dialled, connection'),
+        );
+
+        // The receiver already trusts device-a -- e.g. from a previous
+        // process run -- but THIS run never calls _pushDiscovered for it.
+        // This is exactly E04-B06's own accept-loop scenario: the OTHER
+        // device dialled in, this device never ran a discovery scan that
+        // found it.
+        await RelationshipRepository(
+          receiver.db,
+        ).upsert('device-a', RelationshipState.trusted);
+
+        final pipeline = InboundPipeline(stack: receiver);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+        // _seedKnownDevices() is fire-and-forget from start() -- let its
+        // own async DB read complete before the connection event fires.
+        await _settle();
+
+        // Simulate an ACCEPTED connection: onConnectionStateChanged fires
+        // directly, with no onDeviceDiscovered for this device id at all
+        // in this process run.
+        _pushConnectionState(
+          messenger,
+          receiverSuffix,
+          'device-a',
+          ConnectionState.connected,
+        );
+        await _settle();
+
+        final deliveredFuture = pipeline.delivered.first.timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => throw StateError(
+            'E04-B07 regression: an accepted connection from an '
+            'already-trusted, non-freshly-discovered peer was silently '
+            'dropped',
+          ),
+        );
+        _pushIncomingData(
+          messenger,
+          receiverSuffix,
+          'device-a',
+          sent.ciphertext,
+        );
+
+        final delivered = await deliveredFuture;
+        expect(delivered.senderDeviceId, 'device-a');
+        expect(pipeline.counters.delivered, 1);
+      },
+    );
+
+    test(
+      'test_E04_B07_unknown_peer_is_not_seeded_-- still requires a real '
+      'discovery event',
+      () async {
+        final receiver = await newStack('device-b', nextSuffix());
+        addTearDown(receiver.dispose);
+
+        // No relationship row at all for device-a -- an `unknown` peer
+        // must still go through the existing discovery-triggered path,
+        // not be silently pre-subscribed by _seedKnownDevices.
+        final pipeline = InboundPipeline(stack: receiver);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+        await _settle();
+
+        expect(
+          pipeline.debugConnectionSubscriptionCountForTest,
+          0,
+          reason:
+              'an unknown/never-related device must not get a seeded '
+              'connectionState subscription',
+        );
+      },
+    );
   });
 }
