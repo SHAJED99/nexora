@@ -47,7 +47,34 @@ Future<void> main() async {
   // `LocalDataWipeService` is about to delete would re-create the very
   // file the wipe just erased (SQLite's lazy-open semantics), so the wipe
   // must run first, on a path nothing else has touched yet this launch.
-  await LocalDataWipeService().completePendingWipe();
+  //
+  // Review round 2 (F1): `completePendingWipe()` calls straight into
+  // `LocalDataWipeService.wipe()`'s own failure path
+  // (`local_data_wipe_service.dart`), which deliberately leaves the
+  // sentinel in place on failure so a retry can happen "at next launch" —
+  // that is correct for `wipe()`'s own contract, but it means a failure
+  // here is NOT a one-off: the identical failure recurs on every future
+  // launch too. Left unguarded, that throw would escape `main()` before
+  // `runApp` ever runs, and because the sentinel survives, every
+  // subsequent launch would crash-loop identically (unrecoverable short of
+  // a reinstall). Guarded the same way the `latestDeviceIdentity()` read
+  // below already is, for exactly the same reason: never let a local
+  // failure crash the launch. The sentinel itself is untouched here —
+  // `LocalDataWipeService`'s own retry-at-next-launch mechanism is left
+  // alone; this catch only stops `main()` from crashing and forces the
+  // route decision below to treat the device as having no local identity
+  // (task file §2 step 1: "nothing else may be decided against a
+  // half-erased device").
+  var pendingWipeCompletionFailed = false;
+  try {
+    await LocalDataWipeService().completePendingWipe();
+  } catch (e) {
+    ObservabilityService.instance.logError(
+      'session.pending_wipe_completion_failed',
+      cause: e,
+    );
+    pendingWipeCompletionFailed = true;
+  }
 
   // The single app-wide AppDatabase (task file §5) — constructed here,
   // never inside `AppBinding`/`MessagingStack.create`, so there is
@@ -97,9 +124,14 @@ Future<void> main() async {
   // E15-T02 (FR-AUTH-010/011/012): extends `initialRouteFor`'s existing
   // `updateRequired` precedence (delegated to, never re-implemented — see
   // `resolveInitialRoute`'s own header) with the returning-device skip.
+  //
+  // Review round 2 (F1): a failed pending-wipe completion above forces
+  // `hasLocalIdentity: false` here regardless of what
+  // `db.latestDeviceIdentity()` actually returned — a half-wiped device
+  // must never reach `/dashboard`, per task file §2 step 1.
   final initialRoute = resolveInitialRoute(
     versionState: versionState,
-    hasLocalIdentity: localIdentity != null,
+    hasLocalIdentity: !pendingWipeCompletionFailed && localIdentity != null,
   );
 
   runApp(

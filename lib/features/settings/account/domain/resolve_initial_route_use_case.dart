@@ -5,12 +5,26 @@
 // `initialRouteFor` (`lib/app/main.dart`, E14-T04/`EARS-VER-10`) rather than
 // standing up a second, competing routing decision beside it (task file §2:
 // "Two functions deciding one route is how FR-VER-006's block gets
-// bypassed by the one that runs first"). Concretely: the `updateRequired`
-// branch is not re-implemented here — it is delegated straight to
-// `initialRouteFor`, so the exact same already-tested mapping
-// (`test_EARS_VER_10_update_required_routes_to_mandatory_screen`) decides
-// that branch, unmodified, forever in precedence over the identity check
-// below it.
+// bypassed by the one that runs first"). Concretely: this function asks
+// `initialRouteFor` for the DECISION, not merely a constant — see below —
+// so a future `VersionState` value `initialRouteFor` treats as blocking is
+// automatically respected here too, without this file's own `if` needing to
+// be updated to recognise it. Review round 2 (F2): an earlier version of
+// this function re-implemented the `updateRequired` predicate itself
+// (`if (versionState == VersionState.updateRequired) return
+// initialRouteFor(versionState)`) — only the destination constant was
+// delegated, the condition for reaching it was duplicated. That shape is
+// harmless today (there are only three `VersionState` values, see
+// `version_state.dart`), but the moment a fourth blocking state is added,
+// `initialRouteFor` would correctly block it while the duplicated `==
+// updateRequired` check here would not, silently routing that new blocking
+// state to `/dashboard` — exactly the two-functions-deciding-one-route
+// bypass this task file's own §2 warns against. The fix below asks
+// `initialRouteFor` what it decided and only falls through to the identity
+// check when `initialRouteFor` itself chose `Routes.welcome` — its own
+// non-blocking default — so the two functions cannot disagree about
+// whether a given `VersionState` blocks, only about what a non-blocking
+// state routes to next.
 //
 // Pure and synchronous on purpose (task file §6 "the one-line-edit trap" /
 // risk row 1): any async work this decision might look like it needs
@@ -36,12 +50,19 @@ String resolveInitialRoute({
   required VersionState versionState,
   required bool hasLocalIdentity,
 }) {
-  if (versionState == VersionState.updateRequired) {
-    // Delegates to the existing, independently-tested mapping — see this
-    // file's header comment. `hasLocalIdentity` is deliberately never
-    // consulted on this branch (task file §2, step 2): the mandatory-update
-    // screen wins regardless of what a local identity read would have said.
-    return initialRouteFor(versionState);
-  }
+  // Delegates the DECISION, not just the destination constant — see this
+  // file's header comment (review round 2, F2). `initialRouteFor` returns
+  // its own non-blocking default (`Routes.welcome`) for every
+  // [VersionState] it does not treat as blocking; only when it returns that
+  // exact default does this function go on to consult `hasLocalIdentity`.
+  // Any OTHER value `initialRouteFor` might ever return — today only
+  // `Routes.versionUpdateRequired`, but not re-checked by name here — is
+  // returned as-is, unmodified and un-second-guessed, so a future blocking
+  // `VersionState` added to `initialRouteFor` is honoured here automatically.
+  final versionRoute = initialRouteFor(versionState);
+  if (versionRoute != Routes.welcome) return versionRoute;
+  // `hasLocalIdentity` is deliberately never consulted above (task file §2,
+  // step 2): the mandatory-update screen (or any future blocking state)
+  // wins regardless of what a local identity read would have said.
   return hasLocalIdentity ? Routes.dashboard : Routes.welcome;
 }

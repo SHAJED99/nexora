@@ -399,8 +399,13 @@ void main() {
       // means `resolveInitialRoute` sends the launch straight to
       // `/dashboard`, so this device never even reaches `LoginController`
       // (and therefore never re-registers, never touches the rate limiter
-      // at all) — a strictly stronger proof than routing it back through
-      // login and trusting `SignInUseCase` to reuse the existing row.
+      // at all). Review round 2: this is a narrower proof than the original
+      // — it mounts `GetMaterialApp` directly with the route pre-computed,
+      // rather than driving the real `LoginController`/`SignInUseCase` path
+      // — not a stronger one; the original S1 concern (a returning device
+      // going through login and being denied by the rate limiter) is
+      // separately covered by
+      // `test/features/login/domain/sign_in_use_case_test.dart:196`.
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       final repository = DeviceIdentityRepository(
         db,
