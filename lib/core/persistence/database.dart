@@ -667,12 +667,21 @@ class AppDatabase extends _$AppDatabase {
           ..limit(1))
         .getSingleOrNull();
   }
+
+  /// The on-disk path this database's own connection opens — one source of
+  /// truth for where the database lives (E15-T01, task §5). `_openConnection`
+  /// below calls this too, rather than deriving the path a second time, so a
+  /// caller that needs to target the same file `AppDatabase` itself uses
+  /// (`LocalDataWipeService`, `FR-AUTH-006`) can never drift from it.
+  static Future<File> databaseFile() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File(p.join(dir.path, 'nexora.sqlite'));
+  }
 }
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dir.path, 'nexora.sqlite'));
+    final file = await AppDatabase.databaseFile();
     return NativeDatabase.createInBackground(file);
   });
 }
