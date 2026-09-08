@@ -29,6 +29,29 @@ sourced during intake; this is their first atomic-id rendering)
 - **FR-AUTH-004**: The system shall support multiple devices per user account, each maintaining its own local state and cryptographic identity. *(traces_to: BRD §6)*
 - **FR-AUTH-005**: The welcome/first-launch screen shall offer Google Sign-In as the sole authentication method — no alternate login path shall exist. *(traces_to: documentation/Design.md §81; design/screens/welcome.md, confirmed during design review)*
 
+> **Amendment 2026-09-08 (`IMP-003`, human product decision).** `FR-AUTH-006`
+> … `FR-AUTH-013` below are **new ids**. Nothing above is superseded: in
+> particular `FR-AUTH-005` is unchanged and still binding — it governs *which*
+> authentication method exists, not *when* the welcome screen is shown, and
+> `FR-AUTH-010` adds no alternate login path.
+
+### Session termination (sign-out)
+
+- **FR-AUTH-006**: When the user confirms sign-out, the system shall permanently erase all local application state — the local database file in its entirety (device cryptographic identity, Signal Protocol identity/pre-keys/sessions/trusted-identity records, conversation history and delivery state, group state, relationship/trust/block state, routing and relay state, location state, storage statistics and policy, notification preferences, revocation records, rate-limit counters, and the cached version policy) — and shall additionally terminate the Firebase Authentication session and clear the cached Google credential. *(traces_to: human product decision 2026-09-08, `IMP-003`; scoped against ADR-0001 and ADR-0005)*
+- **FR-AUTH-007**: The system shall present sign-out as a destructive, irreversible action and shall require an explicit confirmation that names what is permanently lost, including that content encrypted under the erased keys is unrecoverable. *(traces_to: `IMP-003`; constrains against FR-RECOVER-002)*
+- **FR-AUTH-008**: After a completed sign-out, the system shall hold no local device cryptographic identity; the next sign-in shall create a brand-new device cryptographic identity and shall be indistinguishable to the rest of the system from a first-ever install. *(traces_to: `IMP-003`)*
+- **FR-AUTH-009**: If a sign-out is interrupted before the erase completes, then on the next launch the system shall complete the erase before presenting any signed-in state, and shall never resume into a partially erased identity. *(traces_to: `IMP-003`)*
+
+### Launch routing
+
+- **FR-AUTH-010**: While a local device cryptographic identity exists on the device, the system shall route directly to the dashboard at launch, without presenting the welcome screen or requiring a sign-in interaction. *(traces_to: human product decision 2026-09-08, `IMP-003`)*
+- **FR-AUTH-011**: Launch routing per FR-AUTH-010 shall be evaluated only after the version-state evaluation, and shall never take precedence over the mandatory-update block. *(traces_to: `IMP-003`; subordinate to FR-VER-006)*
+- **FR-AUTH-012**: If no local device cryptographic identity exists — a first-ever install, or a device that has completed sign-out — then the system shall route to the welcome screen at launch. *(traces_to: `IMP-003`)*
+
+### Account settings surface
+
+- **FR-AUTH-013**: The system shall provide an Account screen presenting the signed-in account identifier, this device's own cryptographic identity fingerprint, and the other devices registered to this account; the sign-out action of FR-AUTH-006 shall be reachable only from this screen. *(traces_to: `IMP-003`; presents FR-AUTH-001, FR-AUTH-003, FR-AUTH-004)*
+
 ## FR-TRUST — Device Relationships & Authorization
 
 - **FR-TRUST-001**: When a trusted relationship is established between two devices, the system shall persist that relationship. *(traces_to: BRD §7)*
@@ -98,6 +121,7 @@ sourced during intake; this is their first atomic-id rendering)
 - **FR-ROUTE-007**: The system shall calculate route cost from battery, latency, reliability, bandwidth, hop count, congestion, stability, packet loss, and traffic type; battery consumption alone shall never be the sole routing criterion. *(traces_to: BRD §3.4, §31)* **[NEEDS FORMULA — see Q-ARCH-004]**
 - **FR-ROUTE-008**: Different traffic types shall prioritize different cost factors — text: reliability/battery/bandwidth; file transfer: bandwidth/reliability/battery; voice calls: latency/jitter/packet-loss/stability/battery; discovery: battery efficiency. *(traces_to: BRD §31)*
 - **FR-ROUTE-009**: When a route fails, the system shall search for alternatives and migrate if one exists, or queue/retry if none exists. *(traces_to: BRD §32)*
+- **FR-ROUTE-010**: The system shall provide a Network settings screen presenting the transports currently available, the active route to each reachable destination with its hop count and measured link quality, and shall present each unavailable signal as unavailable rather than as a value. *(traces_to: `IMP-003`; the user-facing surface for FR-DISC-001, FR-ROUTE-005, FR-ROUTE-007, and FR-UI-004's "one tap away" advanced detail)*
 
 ## FR-MSG — Messaging Semantics
 
@@ -116,6 +140,7 @@ sourced during intake; this is their first atomic-id rendering)
 - **FR-SEC-002**: Relay devices, Firebase, network infrastructure, and other intermediary devices shall not have access to plaintext communication content. *(traces_to: BRD §41)*
 - **FR-SEC-003**: The system shall protect against device impersonation, man-in-the-middle attacks, replay attacks, packet modification, malicious relay behavior, flooding, unauthorized synchronization, stolen-device scenarios, compromised devices, fake devices, and Sybil-style abuse. *(traces_to: BRD §42)*
 - **FR-SEC-004**: The system shall implement end-to-end encryption using a defined cryptographic protocol family (key-exchange + ratchet scheme). *(traces_to: BRD §66.2 defers the library, not the protocol shape)* **[NEEDS DECISION — Q-ARCH-003, feeds ADR]**
+- **FR-SEC-005**: The system shall provide a Privacy & Security settings screen presenting the cryptographic protocol actually in force and the privacy controls the application holds — global location sharing, per-peer location sharing, and the notification privacy level — and shall not present a control for a capability the application does not implement. *(traces_to: `IMP-003`; the user-facing surface for FR-SEC-001, FR-LOC-001, FR-LOC-002, FR-NOTIFY-002)*
 
 ## FR-LOC — Location Sharing
 
@@ -129,11 +154,13 @@ sourced during intake; this is their first atomic-id rendering)
 
 - **FR-NOTIFY-001**: The system shall support notifications for new messages, voice messages, PTT, incoming calls, connection requests, trust requests, group events, security events, and storage warnings. *(traces_to: BRD §47)*
 - **FR-NOTIFY-002**: Notification privacy shall be configurable. *(traces_to: BRD §47)*
+- **FR-NOTIFY-003**: The system shall provide a Notifications settings screen through which the user can independently switch each user-facing notification category and select the notification privacy level. *(traces_to: `IMP-003`; the user-facing surface for FR-NOTIFY-001 and FR-NOTIFY-002)*
 
 ## FR-PLAT — Platform / Background Operation
 
 - **FR-PLAT-001**: The system shall support background operation — peer discovery, message synchronization, network maintenance, calls, PTT, location sharing — where permitted by Android. *(traces_to: BRD §48)*
 - **FR-PLAT-002**: The system shall account for Android Doze, Battery Saver, background execution restrictions, app process termination, and screen lock when performing background operations. *(traces_to: BRD §48)*
+- **FR-PLAT-004**: The system shall provide a Battery settings screen presenting whether background operation is currently running, which Android power restrictions are in effect, and the resulting background plan; where the platform exposes one, it shall offer a path to the operating system's own battery-optimization settings rather than reimplementing them. *(traces_to: `IMP-003`; the user-facing surface for FR-PLAT-001, FR-PLAT-002, NFR-BATT-001)*
 - **FR-PLAT-003**: Android-native components shall handle system-sensitive functionality — Bluetooth, nearby devices, Wi-Fi, foreground services, background networking, notifications, microphone, location, system connectivity — with Flutter communicating through defined interfaces. *(traces_to: BRD §49)*
 
 ## FR-GROUP — Groups
@@ -169,6 +196,7 @@ sourced during intake; this is their first atomic-id rendering)
 
 - **FR-DIAG-001**: Diagnostics shall provide useful operational information without exposing sensitive content. *(traces_to: BRD §57)*
 - **FR-DIAG-002**: The system shall never log message plaintext, private keys, session keys, voice content, sensitive personal data, or sensitive location data. *(traces_to: BRD §57)*
+- **FR-DIAG-003**: The system shall provide a Security Center screen presenting the security-relevant local records the system already holds — device revocations, trusted-identity records, blocked peers, and abuse rate-limit denials — subject in full to FR-DIAG-002. *(traces_to: `IMP-003`; the user-facing surface for FR-SEC-003, FR-ABUSE-001, FR-DIAG-001)*
 
 ## FR-VER — Protocol & Application Versioning
 
@@ -183,6 +211,7 @@ sourced during intake; this is their first atomic-id rendering)
 - **FR-VER-009**: Mandatory application updates shall not delete local messages, voice messages, call recordings, attachments, user settings, or conversation history. *(traces_to: BRD §61.9)*
 - **FR-VER-010**: The system shall support emergency minimum-version enforcement, capable of retroactively marking all builds below a newly published minimum as unsupported. *(traces_to: BRD §61.11)*
 - **FR-VER-011**: Where appropriate, version policy shall be cryptographically signed and verified by the application, to protect against unauthorized modification. *(traces_to: BRD §61.12)*
+- **FR-VER-012**: The system shall provide an About / Updates settings screen presenting the installed application version and build number, the cached version policy and the version state it evaluates to, and the local diagnostic log — subject in full to FR-DIAG-002. *(traces_to: `IMP-003`; the user-facing surface for FR-VER-005, FR-VER-008, FR-DIAG-001)*
 
 ## FR-UI — Design System & Interaction (see also design/screens/*.md, the binding contracts)
 
@@ -191,6 +220,9 @@ sourced during intake; this is their first atomic-id rendering)
 - **FR-UI-003**: Navigation shall adapt by width class — NavigationBar (compact), NavigationRail (medium), NavigationDrawer (expanded). *(traces_to: documentation/Design.md §11–13)*
 - **FR-UI-004**: The default view shall communicate connectivity state simply ("You're connected"); advanced technical detail (route, transport, latency) shall be available one tap away, not shown by default. *(traces_to: documentation/Design.md §100–103, §132)*
 - **FR-UI-005**: All visible strings shall come from localization resources; the UI shall support RTL layout via logical (not literal left/right) padding. *(traces_to: documentation/Design.md §111–112)*
+- **FR-UI-006**: Every row on the Settings screen shall navigate to a dedicated sub-screen; no Settings row shall respond with a non-navigating acknowledgement. *(traces_to: human product decision 2026-09-08, `IMP-003`; design/screens/settings.md elements 8/13/18/23/28/33/38/43)*
+- **FR-UI-007**: Where a Settings row's designed subtitle names a capability the application does not implement, the corresponding sub-screen shall disclose the absence explicitly and shall not present a control, a value, or a placeholder for it. *(traces_to: `IMP-003`; the same disposition GAP-027 already recorded for the Storage row's "export")*
+- **FR-UI-008**: Every Settings sub-screen shall be dismissible by the platform's standard back affordance, returning to the Settings hub. *(traces_to: `IMP-003`)*
 
 ---
 
