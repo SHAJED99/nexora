@@ -157,8 +157,9 @@ class CallMigrationController {
     });
   }
 
-  /// The completer backing whichever of [_awaitProbeEcho]/[_awaitMediaLive]
-  /// is currently waiting, if any -- [stop] completes it early (`false`) so
+  /// The completer backing whichever of [_awaitProbeEcho] or
+  /// [evaluateOnce]'s own inline health-live wait is currently waiting, if
+  /// any -- [stop] completes it early (`false`) so
   /// an in-flight probe/health wait is actually cancelled immediately
   /// rather than merely being left to run out its own timeout naturally
   /// (task file §5: "cancels the timer and every in-flight probe", not
@@ -194,7 +195,11 @@ class CallMigrationController {
   Route? notifyRouteFailure() {
     final session = _session;
     if (session == null) return null;
-    final next = routing.onRouteFailure(session.peerDeviceId);
+    // E07-B02: this controller always knows its own profile is `realtime`
+    // -- passed explicitly rather than relying on `RoutingEngine`'s own
+    // now-removed sticky profile map, which an unrelated caller (the
+    // Dashboard's own connectivity poll) could silently overwrite.
+    final next = routing.onRouteFailure(session.peerDeviceId, TrafficProfile.realtime);
     if (next != null) {
       session.recordActiveRoute(next);
     }
@@ -257,18 +262,61 @@ class CallMigrationController {
       // header note).
       routing.setActiveRoute(candidate);
 
-      // Step 6: media.attach(new).
-      final attachFailure = await media.attach(session);
-      if (_superseded(myGeneration)) return MigrationOutcome.stayed;
+      // Step 6: media.attach(new). The health-live wait's subscription is
+      // set up BEFORE calling attach (review finding O1): a real transport
+      // could report `live` synchronously during `attach` on a broadcast
+      // stream with no listener yet, which would otherwise be lost forever
+      // and time out a migration that actually succeeded. [candidate] is
+      // passed explicitly (O2) rather than relying on `session.activeRoute`,
+      // which still holds `oldRoute` at this exact point (see
+      // `CallMediaTransport.attach`'s own doc comment).
+      final healthCompleter = Completer<bool>();
+      _pendingWait = healthCompleter;
+      final healthSub = media.health.listen((health) {
+        if (health == CallMediaHealth.live && !healthCompleter.isCompleted) {
+          healthCompleter.complete(true);
+        }
+      });
+      final healthTimer = Timer(probeTimeout, () {
+        if (!healthCompleter.isCompleted) healthCompleter.complete(false);
+      });
+
+      final attachFailure = await media.attach(session, candidate);
+      if (_superseded(myGeneration)) {
+        healthTimer.cancel();
+        await healthSub.cancel();
+        // O3: a `stop()` landing here must restore `oldRoute` exactly like
+        // the sibling `attachFailure != null` branch below does -- task
+        // file §3: "leave the active route exactly as it was".
+        routing.setActiveRoute(oldRoute);
+        return MigrationOutcome.stayed;
+      }
       if (attachFailure != null) {
+        healthTimer.cancel();
+        await healthSub.cancel();
         routing.setActiveRoute(oldRoute);
         callMigrationMediaFailed++;
         return _abandon(session, 'mediaFailed', MigrationOutcome.mediaFailed);
       }
 
-      // Step 7: await CallMediaHealth.live.
-      final live = await _awaitMediaLive(myGeneration);
-      if (_superseded(myGeneration)) return MigrationOutcome.stayed;
+      // Step 7: await CallMediaHealth.live -- the subscription above was
+      // already listening before `attach` ran.
+      final bool live;
+      try {
+        live = await healthCompleter.future;
+      } finally {
+        healthTimer.cancel();
+        await healthSub.cancel();
+        if (identical(_pendingWait, healthCompleter)) {
+          _pendingWait = null;
+        }
+      }
+      if (_superseded(myGeneration)) {
+        // O3: same restoration as above -- `setActiveRoute(candidate)` at
+        // step 5 already ran, so a supersede here must also be compensated.
+        routing.setActiveRoute(oldRoute);
+        return MigrationOutcome.stayed;
+      }
       if (!live) {
         routing.setActiveRoute(oldRoute);
         callMigrationMediaFailed++;
@@ -277,7 +325,8 @@ class CallMigrationController {
 
       // Step 8: media.detach(old) -- only now, with the new route proven
       // live, is the old route torn down (task file §2/§6's named #1 risk).
-      await media.detach();
+      // [oldRoute] passed explicitly (O2), same reasoning as step 6.
+      await media.detach(oldRoute);
       session.recordActiveRoute(candidate);
       callMigrationCompleted++;
       session.recordMigrationEvent(CallMigrationCompleted(candidate));
@@ -338,40 +387,4 @@ class CallMigrationController {
     }
   }
 
-  /// Waits for [CallMediaHealth.live] on [media]'s own health stream,
-  /// bounded by [probeTimeout] (task file §5: "await `CallMediaHealth.live`").
-  /// The listener is attached BEFORE this method is ever reached (see
-  /// [evaluateOnce]'s call to `media.attach` immediately prior) is not
-  /// actually required here since `attach`'s own `Future` has already
-  /// resolved by this point and a real transport is expected to report
-  /// health asynchronously afterwards; a synchronous `NullCallMediaTransport`
-  /// emission that happened during `attach` itself would be missed by a
-  /// broadcast stream with no listener yet, but `NullCallMediaTransport`
-  /// never emits `live` at all, so that ordering detail cannot hide a false
-  /// positive for the one shipped implementation. A fake transport used in
-  /// tests that emits `live` synchronously inside `attach` before this
-  /// listener attaches must instead emit it asynchronously (e.g. via a
-  /// microtask or `Timer.run`) for this method to observe it -- documented
-  /// on the fake in the test file.
-  Future<bool> _awaitMediaLive(int myGeneration) async {
-    final completer = Completer<bool>();
-    _pendingWait = completer;
-    final sub = media.health.listen((health) {
-      if (health == CallMediaHealth.live && !completer.isCompleted) {
-        completer.complete(true);
-      }
-    });
-    final timer = Timer(probeTimeout, () {
-      if (!completer.isCompleted) completer.complete(false);
-    });
-    try {
-      return await completer.future;
-    } finally {
-      timer.cancel();
-      await sub.cancel();
-      if (identical(_pendingWait, completer)) {
-        _pendingWait = null;
-      }
-    }
-  }
 }

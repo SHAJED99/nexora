@@ -327,7 +327,7 @@ void main() {
         );
 
         // Now the ACTIVE (C) route fails.
-        engine.onRouteFailure('dest');
+        engine.onRouteFailure('dest', TrafficProfile.interactive);
 
         expect(
           engine.computeRoute('dest', TrafficProfile.interactive)!.hops.first,

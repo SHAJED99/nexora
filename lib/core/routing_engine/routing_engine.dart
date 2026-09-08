@@ -118,7 +118,6 @@ class RoutingEngine {
   final Map<String, Map<String, RouteCostFactors>> _knownLinks = {};
 
   final Map<String, Route> _activeRoutes = {};
-  final Map<String, TrafficProfile> _lastProfile = {};
   final Map<String, _MigrationTracking> _migrationTracking = {};
 
   /// The most recent route a caller told us it is CURRENTLY transmitting
@@ -217,7 +216,6 @@ class RoutingEngine {
   /// `null` if none exists (no known links form a path — e.g. a
   /// partitioned graph).
   Route? computeRoute(String destinationId, TrafficProfile profile) {
-    _lastProfile[destinationId] = profile;
     return _bestRoute(destinationId, profile);
   }
 
@@ -230,7 +228,6 @@ class RoutingEngine {
     String destinationId,
     TrafficProfile profile,
   ) {
-    _lastProfile[destinationId] = profile;
     final active = _activeRoutes[destinationId];
     if (active == null) {
       // Nothing to migrate away from yet.
@@ -283,18 +280,25 @@ class RoutingEngine {
   /// route — or `null` if none exists, so the caller can queue/retry
   /// rather than silently dropping the send.
   ///
-  /// The failed link is identified from [_lastAttemptedRoute] first (set by
-  /// [noteAttemptedRoute] — the route a per-packet forwarder like
-  /// `RelayEngine` actually just tried), falling back to [_activeRoutes]
-  /// (set by [setActiveRoute]) when no attempt was recorded — e.g. a future
-  /// caller that validates and switches routes directly without going
-  /// through the attempt-tracking path (E04-B01).
-  Route? onRouteFailure(String destinationId) {
+  /// [profile] (E07-B02 fix) — the recovery route is computed under
+  /// EXACTLY this profile, always supplied by the caller, who always knows
+  /// it (`RelayEngine._attempt` passes its own `_profile`;
+  /// `CallMigrationController.notifyRouteFailure` passes
+  /// `TrafficProfile.realtime`). This method used to fall back to a sticky
+  /// `_lastProfile[destinationId]` map written by `computeRoute`/
+  /// `considerMigration` — but that map is shared across every caller for
+  /// one destination, so an unrelated caller (e.g. the Dashboard's own
+  /// connectivity poll, which calls `computeRoute(peerId, interactive)` for
+  /// every known peer) could silently overwrite it and make a call's
+  /// route-failure recovery pick the wrong profile purely because a
+  /// different screen happened to be open (review finding, E07-B02). No
+  /// caller-agnostic sticky state can ever be correct here — each call
+  /// site's own profile is the only thing that can be.
+  Route? onRouteFailure(String destinationId, TrafficProfile profile) {
     final failed = _lastAttemptedRoute[destinationId] ?? _activeRoutes[destinationId];
     if (failed != null && failed.hops.isNotEmpty) {
       removeLink(selfId, failed.hops.first);
     }
-    final profile = _lastProfile[destinationId] ?? TrafficProfile.interactive;
     final next = _bestRoute(destinationId, profile);
     if (next != null) {
       _activeRoutes[destinationId] = next;

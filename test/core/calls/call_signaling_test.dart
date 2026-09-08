@@ -854,4 +854,62 @@ void main() {
       expect(done, isTrue);
     });
   });
+
+  group('E07-B03 — CallMigrationController is actually constructed', () {
+    test(
+      'test_E07_B03_migration_controller_is_constructed_and_started_through_real_call_signaling',
+      () async {
+        // The whole point of this bug: before the fix, nothing in `lib/`
+        // ever constructed `CallMigrationController` -- only
+        // `call_migration_controller_test.dart` did, directly. This test
+        // drives a call through the REAL `CallSignaling`/`MessagingStack`
+        // composition (the same path a real user's call takes), never
+        // constructing the controller itself, and proves one exists.
+        final aSuffix = nextSuffix();
+        final bSuffix = nextSuffix();
+        final a = await newStack('device-a', aSuffix);
+        final b = await newStack('device-b', bSuffix);
+        addTearDown(a.dispose);
+        addTearDown(b.dispose);
+
+        await wireStacks(a, aSuffix, b, bSuffix);
+        await a.prekeyExchange.ensureSession('device-b');
+
+        expect(a.callSignaling.debugActiveMigrationCountForTest, 0);
+
+        final session = await a.callSignaling.invite('device-b');
+
+        // `NullCallMediaTransport` honestly fails the call a moment after
+        // `active` is reached (EARS-CALL-5), so racing a fixed delay
+        // against that transition is flaky -- capture the migration count
+        // synchronously, INSIDE the `active` state callback itself.
+        // `_track`'s own listener (which constructs the controller) is
+        // registered before this one, so by the time this callback runs,
+        // construction has already happened.
+        int? migrationCountAtActive;
+        final reachedActive = Completer<void>();
+        session.states.listen((state) {
+          if (state == CallState.active && !reachedActive.isCompleted) {
+            migrationCountAtActive = a.callSignaling.debugActiveMigrationCountForTest;
+            reachedActive.complete();
+          }
+        });
+
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        final callee = b.callSignaling.currentSession!;
+        await b.callSignaling.accept(callee.callId);
+        await reachedActive.future.timeout(const Duration(seconds: 2));
+
+        expect(migrationCountAtActive, 1);
+
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+
+        // The call has since ended (media-attach failure, EARS-CALL-5) --
+        // the migration controller must have been torn down with it, not
+        // leaked.
+        expect(session.state, CallState.ended);
+        expect(a.callSignaling.debugActiveMigrationCountForTest, 0);
+      },
+    );
+  });
 }

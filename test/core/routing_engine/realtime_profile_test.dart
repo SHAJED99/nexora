@@ -83,11 +83,10 @@ void main() {
     test(
       'test_EARS_CALL_7_realtime_is_a_registered_profile_routing_engine_can_replay',
       () {
-        // computeRoute() records the profile it was last asked for
-        // (`_lastProfile`), which `onRouteFailure`'s own fallback route
-        // computation reads -- a route computed under `realtime` must not
-        // silently fall back to `interactive` on the very next lookup for
-        // the same destination.
+        // `onRouteFailure` takes its profile explicitly from the caller
+        // (E07-B02 fix) -- passing `realtime` again must recover under the
+        // SAME weighting the original route was chosen under, not fall
+        // back to `interactive`.
         final routingEngine = RoutingEngine(selfId: 'A');
         routingEngine.recordLinkMeasurement(
           'B',
@@ -112,14 +111,102 @@ void main() {
         final first = routingEngine.computeRoute('B', TrafficProfile.realtime);
         expect(first?.hops, ['relay', 'B']);
 
-        // Fail the active route via the realtime path and remove the
-        // relay link entirely -- only the direct hop remains, so the next
-        // best route (still computed under the remembered `realtime`
-        // profile) must be the direct one.
+        // Fail the active route and remove the relay link entirely --
+        // only the direct hop remains, so the next best route (computed
+        // again under `realtime`, passed explicitly) must be the direct
+        // one.
         routingEngine.setActiveRoute(first!);
         routingEngine.removeLink('relay', 'B');
-        final alternative = routingEngine.onRouteFailure('B');
+        final alternative =
+            routingEngine.onRouteFailure('B', TrafficProfile.realtime);
         expect(alternative?.hops, ['B']);
+      },
+    );
+
+    test(
+      'test_E07_B02_onRouteFailure_uses_the_callers_own_profile_never_a_sticky_one',
+      () {
+        // The actual defect: `onRouteFailure` used to fall back to a
+        // sticky map written by ANY prior `computeRoute`/`considerMigration`
+        // call for this destination, regardless of who made it -- so an
+        // unrelated caller (the Dashboard's own connectivity poll, which
+        // calls `computeRoute(peerId, interactive)` for every known peer)
+        // could silently make a call's route-failure recovery pick the
+        // wrong profile. Now the profile is always exactly what THIS call
+        // passes, independent of what any other caller asked for a moment
+        // ago.
+        //
+        // Three paths, since `onRouteFailure` always blacklists the FAILED
+        // route's own first hop as part of its contract (a route that
+        // just failed cannot be recovered onto again) -- the interesting
+        // comparison is between the two SURVIVING candidates:
+        //   direct     : high latency, excellent reliability/battery.
+        //   via-active : very low latency, worse reliability -- the call's
+        //                current route, about to fail and be blacklisted.
+        //   via-backup : also low latency (though not quite as low as
+        //                via-active) and equally poor reliability --
+        //                `realtime` still prefers it over `direct`;
+        //                `interactive` prefers `direct`.
+        final routingEngine = RoutingEngine(selfId: 'A');
+        routingEngine.recordLinkMeasurement(
+          'B',
+          latencyMs: 500,
+          lossRate: 0.001,
+          batteryDrain: 0.05,
+        );
+        routingEngine.recordLinkMeasurement(
+          'active',
+          latencyMs: 5,
+          lossRate: 0.05,
+          batteryDrain: 3.0,
+        );
+        routingEngine.recordLinkMeasurement(
+          'B',
+          latencyMs: 5,
+          lossRate: 0.05,
+          batteryDrain: 3.0,
+          from: 'active',
+        );
+        routingEngine.recordLinkMeasurement(
+          'backup',
+          latencyMs: 10,
+          lossRate: 0.05,
+          batteryDrain: 3.0,
+        );
+        routingEngine.recordLinkMeasurement(
+          'B',
+          latencyMs: 10,
+          lossRate: 0.05,
+          batteryDrain: 3.0,
+          from: 'backup',
+        );
+
+        // A call is placed on the low-latency `active` route.
+        final realtimeRoute =
+            routingEngine.computeRoute('B', TrafficProfile.realtime);
+        expect(realtimeRoute?.hops, ['active', 'B']);
+        routingEngine.setActiveRoute(realtimeRoute!);
+
+        // An UNRELATED caller (mirrors the Dashboard's own connectivity
+        // poll) reads a route for the SAME destination under a DIFFERENT
+        // profile in between -- this must have zero effect on the call's
+        // own recovery below.
+        routingEngine.computeRoute('B', TrafficProfile.interactive);
+
+        // The active route fails (its first hop, `active`, gets
+        // blacklisted). Recovering under `realtime` (this call's own,
+        // correct profile) must still prefer the low-latency `backup`
+        // path over the reliable-but-slow direct hop -- proving the
+        // interleaved interactive poll never leaked into this recovery.
+        final recovered =
+            routingEngine.onRouteFailure('B', TrafficProfile.realtime);
+        expect(
+          recovered?.hops,
+          ['backup', 'B'],
+          reason: 'an unrelated interactive computeRoute() call must not '
+              'leak into this call\'s own realtime recovery -- recovering '
+              'under interactive would have picked the direct hop instead',
+        );
       },
     );
   });

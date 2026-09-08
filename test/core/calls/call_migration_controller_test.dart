@@ -74,29 +74,31 @@ class _RecordingRoutingEngine extends RoutingEngine {
   }
 
   @override
-  Route? onRouteFailure(String destinationId) {
+  Route? onRouteFailure(String destinationId, TrafficProfile profile) {
     log?.add('onRouteFailure');
-    return super.onRouteFailure(destinationId);
+    return super.onRouteFailure(destinationId, profile);
   }
 }
 
 /// A test-owned `CallMediaTransport` (E07-T09's seam) that records
 /// `attach`/`detach` order and can be configured to fail or to never report
 /// [CallMediaHealth.live] -- the two shapes EARS-CALL-10 requires every test
-/// to attack. `live` is deliberately emitted via a real [Timer], never
-/// [scheduleMicrotask] or synchronously inside [attach] itself: the
-/// controller only subscribes to [health] AFTER `attach`'s own `Future` has
-/// resolved (task file §5's ordered sequence puts `media.attach(new)` before
-/// `health live`), and a broadcast stream never replays a missed event to a
-/// late subscriber -- emitting synchronously inside `attach` would race the
-/// controller's own subscription and make every "happy path" test flake into
-/// a false timeout.
+/// to attack. By default `live` is emitted via a real [Timer], never
+/// [scheduleMicrotask] and never synchronously inside [attach] itself --
+/// this is a deliberate CHOICE for the "happy path" tests, not a
+/// requirement of the controller's own contract: since the E07-B03/O1 fix,
+/// the health-live subscription is set up BEFORE `attach` is even called,
+/// so a transport emitting synchronously (see [emitLiveSynchronouslyInsideAttach])
+/// is now correctly observed too -- see the dedicated O1 test for that
+/// case specifically.
 class _RecordingCallMediaTransport implements CallMediaTransport {
   _RecordingCallMediaTransport({
     this.log,
     this.attachFails = false,
     this.emitsLive = true,
     this.liveDelay = const Duration(milliseconds: 5),
+    this.emitLiveSynchronouslyInsideAttach = false,
+    this.attachGate,
   });
 
   final List<String>? log;
@@ -104,19 +106,46 @@ class _RecordingCallMediaTransport implements CallMediaTransport {
   final bool emitsLive;
   final Duration liveDelay;
 
+  /// E07-B03 (review finding O3): when set, [attach] awaits this completer
+  /// before returning -- lets a test hold `evaluateOnce` paused exactly at
+  /// step 6, so it can call [CallMigrationController.stop] mid-flight and
+  /// assert the resulting `stayed` outcome correctly restores the OLD
+  /// route rather than leaving `RoutingEngine` pointed at the candidate.
+  final Completer<void>? attachGate;
+
+  /// E07-B03 (review finding O1): when `true`, [CallMediaHealth.live] is
+  /// added to [health] SYNCHRONOUSLY, before [attach] ever returns --
+  /// exactly the ordering a real transport might use, and exactly the case
+  /// that used to be silently lost when the controller only subscribed to
+  /// [health] AFTER `attach`'s own `Future` had already resolved.
+  final bool emitLiveSynchronouslyInsideAttach;
+
   int attachCalls = 0;
   int detachCalls = 0;
+
+  /// E07-B03 (review finding O2): the exact [Route] each call passed --
+  /// lets a test prove the candidate/old-route identity is threaded
+  /// through explicitly rather than inferred from `session.activeRoute`
+  /// (which still holds the OLD route at attach time, by design).
+  final List<Route?> attachedRoutes = [];
+  final List<Route?> detachedRoutes = [];
   final StreamController<CallMediaHealth> _healthController =
       StreamController<CallMediaHealth>.broadcast();
 
   @override
-  Future<AppFailure?> attach(CallSession session) async {
+  Future<AppFailure?> attach(CallSession session, Route? route) async {
     attachCalls++;
+    attachedRoutes.add(route);
     log?.add('mediaAttach');
+    final gate = attachGate;
+    if (gate != null) await gate.future;
     if (attachFails) {
       return const AppFailure('media.fake_attach_failed');
     }
-    if (emitsLive) {
+    if (emitLiveSynchronouslyInsideAttach) {
+      log?.add('healthLive');
+      _healthController.add(CallMediaHealth.live);
+    } else if (emitsLive) {
       Timer(liveDelay, () {
         if (_healthController.isClosed) return;
         log?.add('healthLive');
@@ -127,8 +156,9 @@ class _RecordingCallMediaTransport implements CallMediaTransport {
   }
 
   @override
-  Future<void> detach() async {
+  Future<void> detach(Route? route) async {
     detachCalls++;
+    detachedRoutes.add(route);
     log?.add('mediaDetach');
   }
 
@@ -365,6 +395,163 @@ void main() {
       expect(order.indexOf('mediaDetach'), greaterThan(order.indexOf('healthLive')));
       expect(media.attachCalls, 1);
       expect(media.detachCalls, 1);
+    });
+
+    test(
+        'test_E07_B03_attach_and_detach_carry_the_correct_route_identity_not_session_activeRoute',
+        () async {
+      // Review finding O2: `attach`/`detach` must be told exactly which
+      // route to bring up/tear down -- `session.activeRoute` cannot serve
+      // this purpose, since at the moment `attach` is called for the
+      // CANDIDATE, `session.activeRoute` still holds the OLD route (it is
+      // only updated after the new route is proven live, by design).
+      final stack = await newThrowawayStack();
+      addTearDown(stack.dispose);
+      final routing = _RecordingRoutingEngine(selfId: 'device-a');
+      final signaling = _FakeSignaling(stack: stack);
+      addTearDown(signaling.dispose);
+      final media = _RecordingCallMediaTransport();
+      addTearDown(media.dispose);
+
+      seedWorseDirectRoute(routing);
+      final session = activeSession();
+      final controller = CallMigrationController(
+        routing: routing,
+        signaling: signaling,
+        media: media,
+        tickInterval: const Duration(hours: 1),
+        probeTimeout: const Duration(milliseconds: 500),
+      );
+      addTearDown(controller.stop);
+      controller.start(session);
+      // `start()` seeds the direct one-hop route as active -- capture it
+      // before the candidate ever exists, so this test compares against
+      // the REAL old route rather than assuming its shape.
+      final oldRoute = routing.activeRouteFor('device-b')!;
+      expect(oldRoute.hops, ['device-b']);
+
+      seedBetterTwoHopRoute(routing);
+      await warmUpStabilityWindow(controller);
+      final outcome = await controller.evaluateOnce();
+      expect(outcome, MigrationOutcome.migrated);
+
+      final candidate = routing.activeRouteFor('device-b')!;
+      expect(candidate.hops, ['device-c', 'device-b']);
+      expect(candidate, isNot(oldRoute));
+
+      // The whole point of O2: attach got the CANDIDATE, detach got the
+      // OLD route -- neither one guessed from `session.activeRoute`,
+      // which at attach time still held `oldRoute` (proof: `activeRoute`
+      // wasn't updated to `candidate` until AFTER this migration
+      // completed, per `evaluateOnce`'s own step 8, well after `attach`
+      // was called at step 6).
+      expect(media.attachedRoutes, [candidate]);
+      expect(media.detachedRoutes, [oldRoute]);
+    });
+
+    test(
+        'test_E07_B03_a_health_live_event_emitted_synchronously_inside_attach_is_not_lost',
+        () async {
+      // Review finding O1: before this fix, the health-live subscription
+      // was only ever attached AFTER `media.attach`'s own `Future` had
+      // already resolved. A real transport that reports `live`
+      // SYNCHRONOUSLY inside `attach` -- entirely plausible for whichever
+      // implementation eventually answers `OQ-E07-3` -- would be missed by
+      // a broadcast stream with no listener yet, and the migration would
+      // time out even though media genuinely came up.
+      final stack = await newThrowawayStack();
+      addTearDown(stack.dispose);
+      final routing = _RecordingRoutingEngine(selfId: 'device-a');
+      final signaling = _FakeSignaling(stack: stack);
+      addTearDown(signaling.dispose);
+      final media = _RecordingCallMediaTransport(
+        emitLiveSynchronouslyInsideAttach: true,
+      );
+      addTearDown(media.dispose);
+
+      seedWorseDirectRoute(routing);
+      final session = activeSession();
+      final controller = CallMigrationController(
+        routing: routing,
+        signaling: signaling,
+        media: media,
+        tickInterval: const Duration(hours: 1),
+        // Short enough that, without the O1 fix, this test would time out
+        // and report `mediaFailed` rather than hang -- a fast, deterministic
+        // falsification signal instead of a slow one.
+        probeTimeout: const Duration(milliseconds: 200),
+      );
+      addTearDown(controller.stop);
+      controller.start(session);
+      seedBetterTwoHopRoute(routing);
+      await warmUpStabilityWindow(controller);
+
+      final outcome = await controller.evaluateOnce();
+
+      expect(outcome, MigrationOutcome.migrated);
+      expect(media.detachCalls, 1);
+    });
+
+    test(
+        'test_E07_B03_stop_landing_mid_attach_restores_the_old_route',
+        () async {
+      // Review finding O3: `setActiveRoute(candidate)` runs at step 5,
+      // BEFORE the media steps -- so a `stop()` (call ending mid-migration)
+      // landing while `media.attach` is still in flight must restore
+      // `oldRoute`, exactly like the sibling `attachFailure != null`
+      // branch already does. Before this fix, this exact branch silently
+      // left `RoutingEngine` pointed at a candidate route nobody validated
+      // as actually live.
+      final stack = await newThrowawayStack();
+      addTearDown(stack.dispose);
+      final routing = _RecordingRoutingEngine(selfId: 'device-a');
+      final signaling = _FakeSignaling(stack: stack);
+      addTearDown(signaling.dispose);
+      final attachGate = Completer<void>();
+      final media = _RecordingCallMediaTransport(attachGate: attachGate);
+      addTearDown(media.dispose);
+
+      seedWorseDirectRoute(routing);
+      final session = activeSession();
+      final controller = CallMigrationController(
+        routing: routing,
+        signaling: signaling,
+        media: media,
+        tickInterval: const Duration(hours: 1),
+        probeTimeout: const Duration(seconds: 5),
+      );
+      controller.start(session);
+      final oldRoute = routing.activeRouteFor('device-b')!;
+
+      seedBetterTwoHopRoute(routing);
+      await warmUpStabilityWindow(controller);
+
+      // Don't await yet -- evaluateOnce() is now paused inside
+      // media.attach(), with `routing.setActiveRoute(candidate)` (step 5)
+      // already applied.
+      final outcomeFuture = controller.evaluateOnce();
+      // `_FakeSignaling`'s own default `echoDelay` (5ms) must elapse before
+      // the probe echo arrives and step 5/6 run.
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(media.attachCalls, 1, reason: 'attach must be in flight now');
+      expect(
+        routing.activeRouteFor('device-b'),
+        isNot(oldRoute),
+        reason: 'step 5 already switched to the candidate',
+      );
+
+      // The call ends mid-migration.
+      await controller.stop();
+      attachGate.complete();
+      final outcome = await outcomeFuture;
+
+      expect(outcome, MigrationOutcome.stayed);
+      expect(
+        routing.activeRouteFor('device-b'),
+        oldRoute,
+        reason: 'O3: a stop() landing here must restore the old route, '
+            'not leave RoutingEngine pointed at an unvalidated candidate',
+      );
     });
 
     test('test_EARS_CALL_1_call_state_stays_active_across_a_migration',
