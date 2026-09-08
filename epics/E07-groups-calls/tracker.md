@@ -105,12 +105,20 @@ any more. Left visible for history; do not delete.
   `design_contract_approval` on GAP-018…GAP-022, which is ✅ cleared per
   §Gates. Neither is sharded yet; see `epic.md` §Tasks.
 
-**Currently blocked, added by the 2026-09-02 bug sweep:** all fix work on
-`E07-B01`..`B04` is blocked on the 🧍 `bug_priorities` human gate (rule 3)
-— severities are the reviewer's call, priorities are the human's, and
-`E07-B01`/`B03` additionally carry a protocol/product-shape decision the
-human must make before a fix direction exists (see each bug file's
-"Proposed fix direction").
+**Stale as of 2026-09-08:** the paragraph below described the state
+immediately after the 2026-09-02 bug sweep. `bug_priorities` cleared that
+same day (see §Gates); `E07-B01`/`B04` were fixed and merged before this
+epic's own `development` merge; `E07-B02`/`B03` were deferred at that
+gate, then fixed and merged together on 2026-09-08 under the human's
+"do what is good, do not wait for me" standing grant (see each bug file's
+own Feedback log and Review section). All four `E07-B01`..`B04` are
+`done`. Left visible for history; do not delete.
+
+- ~~`E07-B01`..`B04` is blocked on the 🧍 `bug_priorities` human gate (rule
+  3) — severities are the reviewer's call, priorities are the human's,
+  and `E07-B01`/`B03` additionally carry a protocol/product-shape
+  decision the human must make before a fix direction exists (see each
+  bug file's "Proposed fix direction").~~
 
 ## Gates
 
@@ -225,33 +233,43 @@ highest-severity finding, `E06-B02` (S1), sat correctly recorded in this
 exact section for eight tasks with no reader.)_
 
 - **2026-09-01 · E07-T09/T10 seam · per-destination route-profile
-  stickiness (advisory, S4).** `RoutingEngine._lastProfile`
-  (`routing_engine.dart:121`) is keyed per-destination and never reset.
-  E07-T10 makes call signaling compute routes under `TrafficProfile.realtime`
-  for a peer; if that same peer is later messaged ordinarily and the send
-  fails, the fallback route is computed under the leftover `realtime`
-  profile rather than `interactive`/`bulk`. Not reachable as a
-  confidentiality or correctness bug — only a routing-cost artifact — and
-  documented in `E07-T10.md` §9 Deviations. **Owner: the epic sweep** —
-  check whether messaging's route-failure path should reset or ignore a
-  stale `realtime` profile left by an unrelated call.
+  stickiness (advisory, S4).** ~~`RoutingEngine._lastProfile`
+  (`routing_engine.dart:121`) is keyed per-destination and never reset.~~
+  **CLOSED 2026-09-08 by `E07-B02`** — the reviewer's own end-of-epic
+  sweep found the real direction of this leak was the reverse of what's
+  recorded here (an unrelated caller's `interactive` poll overwriting a
+  call's own `realtime` recovery, not the other way around); `_lastProfile`
+  is now removed entirely and `onRouteFailure` takes an explicit profile
+  from its caller. See `E07-B02.md`.
 
 - **2026-09-02 · E07-T11 · `CallMigrationController` is not wired into
   the app (advisory, S3 — the same shape as `OQ-E07-T06-2`).**
-  `grep -rn "CallMigrationController(" lib/` returns only its own
+  ~~`grep -rn "CallMigrationController(" lib/` returns only its own
   declaration — nothing in `lib/` constructs or starts it, so FR-CALL-003
-  is unreachable at runtime, only under test. Defensible while
-  `OQ-E07-3`'s media transport remains a human decision (there is nothing
-  useful to migrate to without one), but **owner: the prospective
-  real-time media-path task**, which will need to compose this controller
-  into `MessagingStack`/`CallSignaling` alongside whatever it wires for
-  the transport itself. Two related seam gaps to hand that task at the
-  same time (from T11's review, non-blocking today): (1) `_awaitMediaLive`
-  subscribes to the health stream after calling `attach()`, which would
-  drop a `live` event a real transport emits synchronously; (2) the seam's
-  `attach(CallSession)`/`detach()` signatures carry no route identity —
-  `session.activeRoute` still holds the OLD route at attach time — so a
-  real transport can't learn which route to bring up.
+  is unreachable at runtime, only under test.~~ **CLOSED 2026-09-08 by
+  `E07-B03`** — `CallSignaling._track` now constructs and starts it per
+  call, keyed by `callId`, torn down on `CallState.ended`. The two related
+  seam gaps named here were fixed in the same pass as O1/O2 (see
+  `E07-B03.md`).
+
+- **2026-09-08 · `E07-B03` review (2 new, S4, non-blocking) · O1/O3 edge
+  cases unproven or slightly regressed for a media transport that does
+  not exist yet.** **Owner: whichever task eventually builds the real
+  media transport** (`OQ-E07-3`'s remaining scope) — check both before
+  wiring a real transport in:
+  - **F1** — no committed test exercises the second O3 "superseded"
+    branch in `evaluateOnce()` (`call_migration_controller.dart:314`, the
+    one after the health-live wait rather than inside `attach`). The
+    reviewer's own scratch probe confirmed the code is correct there, but
+    it isn't a committed regression test — add one.
+  - **F2** — O1's fix (subscribe to `media.health` before calling
+    `attach()`) also moved the `probeTimeout` `Timer`'s construction to
+    before `attach()`, so a slow real `attach()` (e.g. ICE gathering)
+    now eats into the health-live budget instead of the budget starting
+    fresh once `attach()` returns. Inert against `NullCallMediaTransport`
+    (fails immediately); reviewer's suggested fix: keep the `listen`
+    before `attach` but move the `Timer` construction to after `attach`
+    returns.
 
 - **2026-09-02 · E07-T07 → owner E07-T08 · three read-model seams to
   decide on deliberately (advisory, S3-S4).** From T07's review: (1) a
@@ -2197,3 +2215,43 @@ the record.
 and `E07-B02`/`E07-B03` correctly deferred (not blocking), P1/P2 = 0
 across the epic's bug sweep. The `epic_07`→`development` PR gate is
 clear** pending only the human `verified` gate.
+
+### `E07-B02`/`E07-B03` fixed and merged — 2026-09-08
+
+Deferred at the 2026-09-02 `bug_priorities` gate to "the prospective
+real-time media-path task" (P3, both). That task was never sharded. The
+human, stepping away, said "do what is good, do not wait for me" and
+separately directed both be fixed now, together, under the standing
+extended autonomy grant (AGENTS.md rule 3, 2026-09-06) — recorded in each
+bug file's own Feedback log.
+
+Implemented together in one PR (`#185`, branch `epic_07_bugs_02_03`)
+since `E07-B03`'s own O2 reshaping is `E07-B02`'s fix vehicle, exactly as
+both bug files' "Fix direction" sections anticipated. `E07-B03` wired
+`CallMigrationController` into `CallSignaling._track` (constructed +
+started per call on `CallState.active`, torn down on `ended`) and fixed
+three seam findings (O1/O2/O3) found alongside it. `E07-B02` removed
+`RoutingEngine._lastProfile`'s sticky per-destination state entirely,
+making `onRouteFailure` take an explicit profile from its caller — the
+fix E07-B02 itself named as "coordinate with E07-B03, whose owner already
+has to reshape this seam for O2."
+
+Reviewed **APPROVE** by `claude-opus-5` (≠ `claude-sonnet-5` implementer,
+rule 5), independently re-verifying every claim rather than accepting
+the PR body: full suite 1350/1350, `flutter analyze` clean (2
+pre-existing unrelated info-lints), 3 falsifications independently
+reproduced, all four O3 exit branches walked and confirmed, both
+`CallMediaTransport` implementers confirmed updated, `_lastProfile`
+confirmed fully removed. Two non-blocking S4 findings (F1: no committed
+test for the second O3 branch; F2: O1's fix narrows the health-live
+timeout budget by `attach()`'s own duration) carried forward above in
+§Carried-forward observations for whichever task eventually builds the
+real media transport (`OQ-E07-3`'s remaining scope) — both inert against
+today's `NullCallMediaTransport`.
+
+Merged to `development` via squash, branch deleted, delegated per rule
+3's 2026-09-05 epic→`development` grant. `E07-B02.md`/`E07-B03.md` both
+now `status: done`. The stale §Blocked/Frozen paragraph naming these as
+blocked on `bug_priorities` was reconciled in the same pass (see above).
+`E07`'s bug list is now fully closed: `B01`/`B04` (2026-09-02),
+`B02`/`B03` (2026-09-08) — zero open bugs.
