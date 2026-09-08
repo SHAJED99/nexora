@@ -25,6 +25,9 @@ import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/login/data/device_identity_repository.dart';
+import 'package:nexora/features/login/presentation/login_controller.dart';
+import 'package:nexora/features/welcome/presentation/welcome_controller.dart';
+import 'package:nexora/features/home/presentation/home_controller.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -91,4 +94,84 @@ void main() {
       );
     },
   );
+
+  // Real-hardware regression (found on a physical Pixel 8 Pro): welcome ->
+  // login -> dashboard, then back to welcome and sign in a second time in
+  // the same process crashed with "LoginController not found". Root cause:
+  // `AppBinding.dependencies()` is the app's `initialBinding` -- it runs
+  // exactly ONCE per process, not per route visit like a page-scoped
+  // `Bindings` would. `Get.lazyPut` without `fenix: true` consumes its
+  // factory the first time the controller is deleted (GetX's smart
+  // management disposes it once its route is popped), so any SECOND visit
+  // to that route has no factory left to rebuild it. `fenix: true` keeps
+  // the factory alive for the lifetime of the process, letting GetX
+  // recreate the controller on demand every time. Same shape applies to
+  // `WelcomeController` and `HomeController` -- both are visited more than
+  // once whenever a user backgrounds/returns or (once E15 ships) logs out.
+  group('E15 real-hardware regression -- lazyPut controllers survive a '
+      'second visit after GetX disposes the first', () {
+    Future<MessagingStack> newStack() async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'self-device',
+        transport: TransportService(
+          binaryMessenger: messenger,
+          messageChannelSuffix: 'bindings-fenix-test-${suffixCounter++}',
+        ),
+      );
+      expect(stack.status, const MessagingStackStatus.ready());
+      return stack;
+    }
+
+    test(
+      'test_E15_lazyPut_login_controller_survives_a_second_find_after_delete',
+      () async {
+        final stack = await newStack();
+        addTearDown(stack.dispose);
+        addTearDown(stack.coordinator.stop);
+        AppBinding(db: stack.db, messagingStack: stack).dependencies();
+
+        // First visit: normal.
+        expect(Get.find<LoginController>(), isNotNull);
+
+        // GetX's own smart management disposing the controller once its
+        // route is popped -- forced here to isolate the disposal effect
+        // from real navigation.
+        await Get.delete<LoginController>(force: true);
+
+        // Second visit -- the actual repro. Without `fenix: true` this
+        // throws `"LoginController" not found`.
+        expect(Get.find<LoginController>(), isNotNull);
+      },
+    );
+
+    test(
+      'test_E15_lazyPut_welcome_controller_survives_a_second_find_after_delete',
+      () async {
+        final stack = await newStack();
+        addTearDown(stack.dispose);
+        addTearDown(stack.coordinator.stop);
+        AppBinding(db: stack.db, messagingStack: stack).dependencies();
+
+        expect(Get.find<WelcomeController>(), isNotNull);
+        await Get.delete<WelcomeController>(force: true);
+        expect(Get.find<WelcomeController>(), isNotNull);
+      },
+    );
+
+    test(
+      'test_E15_lazyPut_home_controller_survives_a_second_find_after_delete',
+      () async {
+        final stack = await newStack();
+        addTearDown(stack.dispose);
+        addTearDown(stack.coordinator.stop);
+        AppBinding(db: stack.db, messagingStack: stack).dependencies();
+
+        expect(Get.find<HomeController>(), isNotNull);
+        await Get.delete<HomeController>(force: true);
+        expect(Get.find<HomeController>(), isNotNull);
+      },
+    );
+  });
 }

@@ -127,10 +127,19 @@ class AppBinding extends Bindings {
       permanent: true,
     );
 
-    Get.lazyPut(WelcomeController.new);
-    Get.lazyPut(() => LoginController(Get.find<SignInUseCase>()));
+    // `fenix: true` on all three: each is registered once, here, in
+    // `initialBinding` -- never re-registered per visit like a page-scoped
+    // `Bindings` would. Without it, GetX's smart management disposes the
+    // controller after its route is popped, the lazy factory is consumed
+    // on first use and not retained, and any SECOND visit to that route
+    // within the same process (e.g. welcome -> login -> dashboard, then
+    // back to welcome and signing in again) throws "X not found" instead
+    // of rebuilding it. Confirmed as a real crash on physical hardware.
+    Get.lazyPut(WelcomeController.new, fenix: true);
+    Get.lazyPut(() => LoginController(Get.find<SignInUseCase>()), fenix: true);
     Get.lazyPut(
       () => HomeController(Get.find<DeviceIdentityRepository>()),
+      fenix: true,
     );
 
     // `SettingsController` (E02-T03) has no shared dependencies of its
