@@ -24,13 +24,27 @@ import 'package:nexora/features/location/data/location_settings_repository.dart'
 
 /// FR-SEC-005's screen controller.
 class PrivacySettingsController extends GetxController {
+  // The external constructor parameter name stays `notificationRepository`
+  // (unchanged public API, matches the test/probe call sites); only the
+  // field it feeds is private (F2 below), so an initializing formal
+  // (`this._x`) can't be used here without also renaming the parameter.
   PrivacySettingsController({
     required this.locationRepository,
-    required this.notificationRepository,
-  });
+    required NotificationSettingsRepository notificationRepository,
+    // ignore: prefer_initializing_formals
+  }) : _notificationRepository = notificationRepository;
 
   final LocationSettingsRepository locationRepository;
-  final NotificationSettingsRepository notificationRepository;
+
+  /// Private (review round 2, F2): `PrivacySettingsView` -- or anything
+  /// else -- must reach `NotificationSettingsRepository.setPrivacyLevel`
+  /// through nothing this controller exposes. When this field was public,
+  /// the view could call `controller.notificationRepository.setPrivacyLevel`
+  /// in one hop with no controller-side gate at all (task §4 -- "if the
+  /// diff contains `setPrivacyLevel`, it is wrong" had no structural
+  /// backing). This closes that hole for good rather than leaving it open
+  /// for the next person to accidentally wire.
+  final NotificationSettingsRepository _notificationRepository;
 
   /// FR-LOC-001's global switch, `null` until `watchGlobalEnabled()` has
   /// emitted at least once -- the `loading` state (task §5: "values
@@ -92,7 +106,7 @@ class PrivacySettingsController extends GetxController {
 
   Future<void> _loadNotificationPrivacy() async {
     try {
-      final level = await notificationRepository.privacyLevel();
+      final level = await _notificationRepository.privacyLevel();
       notificationPrivacyLabel.value = _labelFor(level);
     } catch (_) {
       notificationPrivacyError.value = true;

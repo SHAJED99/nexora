@@ -9,15 +9,19 @@
 // read that fails -- never `fail()` inside an injected seam (a broad catch
 // in the SUT would swallow it, L-testing).
 import 'dart:async';
+import 'dart:io';
 
 import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:nexora/core/notifications/notification_settings_repository.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/persistence/notification_tables.dart'
     show NotificationPrivacyLevel;
 import 'package:nexora/features/location/data/location_settings_repository.dart';
 import 'package:nexora/features/settings/privacy/presentation/privacy_settings_controller.dart';
+import 'package:nexora/features/settings/privacy/presentation/privacy_settings_view.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -154,47 +158,211 @@ void main() {
     },
   );
 
-  test('test_EARS_SEC_5_privacy_level_is_read_only', () async {
-    await notificationRepository.setPrivacyLevel(
+  testWidgets('test_EARS_SEC_5_privacy_level_is_read_only', (tester) async {
+    // Review round 2, F2: the label-equality assertion this test used to
+    // make (`notificationPrivacyLabel.value == 'Sender only'`) is real but
+    // insufficient -- the task's own §8 test plan specifies a CALL COUNTER
+    // on `setPrivacyLevel`, `expect(calls, 0)`, after interacting with
+    // PV11/PV12. That is the assertion that actually falsifies a write
+    // path; a label match alone would pass even if the view secretly wrote
+    // through to the repository on every tap.
+    final countingRepository = _CountingNotificationRepository(db: db);
+    await countingRepository.setPrivacyLevel(
       NotificationPrivacyLevel.senderOnly,
     );
+    countingRepository.setPrivacyLevelCalls = 0; // reset after the seed write above
 
-    controller.onInit();
-    await pumpEventQueue();
+    Get.testMode = true;
+    final countingController = PrivacySettingsController(
+      locationRepository: locationRepository,
+      notificationRepository: countingRepository,
+    );
+    Get.put<PrivacySettingsController>(countingController);
+    // No `pumpEventQueue()` here -- inside a `testWidgets` body the test
+    // runs in a fake-async zone, where `pumpEventQueue`'s
+    // `Future.delayed(Duration.zero)` chain does not reliably resolve on
+    // its own (unlike inside a plain `test()`, where the other tests in
+    // this file use it successfully). `pumpWidget` + the bounded
+    // `pumpAndSettle` below give the controller's `onInit` futures the
+    // real pump cycles they need instead.
 
-    expect(controller.notificationPrivacyLabel.value, 'Sender only');
-    // The controller's public surface (task §5 Functions) exposes no
-    // setter for this value at all -- `notificationPrivacyLabel` is a
-    // read-only Rx<String>. There is nothing named `setPrivacyLevel`,
-    // `selectPrivacy` or similar anywhere on this type; the absence
-    // itself is the proof (mirrors T04's own "call counter, expect 0"
-    // shape, but there is no write method to even call here).
+    await tester.pumpWidget(
+      GetMaterialApp(
+        initialRoute: '/settings/privacy',
+        getPages: [
+          GetPage(
+            name: '/settings/privacy',
+            page: () => const PrivacySettingsView(),
+            // `noTransition` -- this test only needs the tap to land and
+            // the counter to stay at 0, not a settled page-transition
+            // animation. A real transition's `AnimationController` can
+            // leave a Timer pending past the widget tree's disposal at
+            // test end ("A Timer is still pending"), which is an artifact
+            // of testing navigation this way, not something EARS-SEC-5
+            // makes a claim about.
+            transition: Transition.noTransition,
+          ),
+          GetPage(
+            name: '/settings/notifications',
+            page: () => const Text('NOTIFICATIONS'),
+            transition: Transition.noTransition,
+          ),
+        ],
+      ),
+    );
+    // Bounded settle -- `flutter_probe_dumper.dart`'s own documented
+    // gotcha (docs/design-gate-flutter.md §6): this screen can leave the
+    // tree never settling under a plain unbounded `pumpAndSettle()`, which
+    // hangs the whole suite rather than failing. Same bound the probe
+    // dumper uses.
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      const Duration(seconds: 5),
+    );
+
+    expect(find.text('Sender only'), findsOneWidget);
+
+    // PV11's own text row -- reading it must not write.
+    await tester.tap(find.text('Sender only'));
+    await tester.pump();
+
+    // PV12's link row -- navigating away must not write either.
+    await tester.tap(find.text('Change in Notifications'));
+    // Bounded settle -- `flutter_probe_dumper.dart`'s own documented
+    // gotcha (docs/design-gate-flutter.md §6): this screen can leave the
+    // tree never settling under a plain unbounded `pumpAndSettle()`, which
+    // hangs the whole suite rather than failing. Same bound the probe
+    // dumper uses.
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      const Duration(seconds: 5),
+    );
+
+    expect(
+      countingRepository.setPrivacyLevelCalls,
+      0,
+      reason: 'EARS-SEC-5: this screen must never call setPrivacyLevel, '
+          'from any row',
+    );
+
+    countingController.onClose();
+    // `onClose` cancels the global-location stream subscription, and
+    // drift's own `QueryStream._onCancelOrPause` schedules a zero-duration
+    // cleanup Timer (`StreamQueryStore.markAsClosed`) as a result -- one
+    // more pump lets it fire before the test ends, or
+    // `AutomatedTestWidgetsFlutterBinding._verifyInvariants` fails with "A
+    // Timer is still pending" (a drift-internal artifact, nothing to do
+    // with this test's own claim).
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      const Duration(seconds: 2),
+    );
+    Get.reset();
   });
 
-  test(
-    'test_EARS_UI_9_no_app_lock_control_is_present',
-    () async {
-      // GAP-033's app-lock fork carries no proposal (task §4, OQ-E15-T05-1).
-      // This controller exposes no method, flag or state for one -- the
-      // four Rx groups above (encryption is static, so has none) are the
-      // whole surface.
-      controller.onInit();
-      await pumpEventQueue();
-      // No member named anything to do with a lock, PIN or biometric gate
-      // exists on this controller; the type's own public surface is
-      // exactly what task §3/§5 lists.
-      expect(controller.globalLocationEnabled, isNotNull);
+  testWidgets(
+    'test_EARS_UI_9_no_app_lock_or_permissions_text_renders_anywhere',
+    (tester) async {
+      // Review round 2, F1: `isNotNull` on an always-initialized Rx field
+      // proved nothing (the reviewer added real app-lock/permissions
+      // surface and this suite stayed green). This pumps the REAL view
+      // and inspects the rendered tree for the copy such a control would
+      // plausibly carry if it existed -- per `settings-privacy.md`'s own
+      // §Derivation boundary items 1-2, a hub-style heading + subtitle
+      // ("App lock", a PIN/biometric row) or a link row ("Manage
+      // permissions", "Permissions"), matching this screen's own
+      // heading/link-row shapes (PV5/PV10/PV12/PV15).
+      Get.testMode = true;
+      final controller = PrivacySettingsController(
+        locationRepository: locationRepository,
+        notificationRepository: notificationRepository,
+      );
+      Get.put<PrivacySettingsController>(controller);
+      // No `pumpEventQueue()` here -- see the F2 test above for why (a
+      // fake-async zone, unlike this file's plain `test()` bodies).
+
+      await tester.pumpWidget(
+        const GetMaterialApp(home: PrivacySettingsView()),
+      );
+      // Bounded settle -- `flutter_probe_dumper.dart`'s own documented
+      // gotcha (docs/design-gate-flutter.md §6): this screen can leave the
+      // tree never settling under a plain unbounded `pumpAndSettle()`,
+      // which hangs the whole suite rather than failing. Same bound the
+      // probe dumper uses.
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 5),
+      );
+
+      final forbidden = RegExp(
+        r'lock|pin|biometric|permission|fingerprint|face id|touch id',
+        caseSensitive: false,
+      );
+
+      for (final widget in tester.widgetList<Text>(find.byType(Text))) {
+        final data = widget.data ?? widget.textSpan?.toPlainText() ?? '';
+        expect(
+          forbidden.hasMatch(data),
+          isFalse,
+          reason: 'forbidden Text found: "$data"',
+        );
+      }
+
+      for (final widget
+          in tester.widgetList<Semantics>(find.byType(Semantics))) {
+        final label = widget.properties.label ?? '';
+        expect(
+          forbidden.hasMatch(label),
+          isFalse,
+          reason: 'forbidden Semantics label: "$label"',
+        );
+      }
+
+      controller.onClose();
+      // Same drift-internal cleanup Timer as the F2 test above -- a
+      // bounded settle (not a single `pump()`) lets it actually fire
+      // before the test ends.
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 2),
+      );
+      Get.reset();
     },
   );
 
   test(
-    'test_EARS_UI_9_no_permissions_control_is_present',
-    () async {
-      // Same fork, same reason (task §4). No permissions list, no
-      // permissions state, anywhere on this controller.
-      controller.onInit();
-      await pumpEventQueue();
-      expect(controller.peerLocationEnabled, isNotNull);
+    'test_EARS_UI_9_no_app_lock_or_permissions_identifier_in_controller_source',
+    () {
+      // The companion structural half: even if no row is ever rendered
+      // today, the controller CLASS itself must not carry the surface --
+      // mirrors `group_key_rotation_service_test.dart`'s own
+      // "no CODE line names a forbidden identifier" source check
+      // (comments excluded; this very file's header prose and the
+      // controller's own doc comments necessarily discuss "lock"/"PIN" at
+      // length while explaining why neither exists).
+      final file = File(
+        'lib/features/settings/privacy/presentation/privacy_settings_controller.dart',
+      );
+      final source = file.readAsStringSync();
+      final codeOnly = source
+          .split('\n')
+          .where((line) => !line.trim().startsWith('//'))
+          .join('\n');
+      final forbidden = RegExp(
+        r'[Ll]ock|[Bb]iometric|[Pp]ermission|[Pp]in(?=[A-Z_]|$)|PIN',
+      );
+      expect(
+        forbidden.hasMatch(codeOnly),
+        isFalse,
+        reason: 'no app-lock/PIN/biometric/permissions field or method '
+            'may exist on PrivacySettingsController (task §4, GAP-033, '
+            'OQ-E15-T05-1)',
+      );
     },
   );
 
@@ -289,5 +457,23 @@ class _ErroringGlobalWatchRepository extends LocationSettingsRepository {
   @override
   Stream<bool> watchGlobalEnabled() {
     return Stream<bool>.error(StateError('simulated read failure'));
+  }
+}
+
+/// Counts `setPrivacyLevel` calls -- review round 2, F2's contracted
+/// call-counter seam (task §8: "a CALL COUNTER on `setPrivacyLevel`,
+/// `expect(calls, 0)`"), the same shape
+/// `notification_settings_controller_test.dart`'s own `_CountingRepository`
+/// uses for `EARS-NOTIFY-17`. A call counter, never `fail()` inside the
+/// seam (a broad catch in the SUT would swallow it, L-testing).
+class _CountingNotificationRepository extends NotificationSettingsRepository {
+  _CountingNotificationRepository({required super.db});
+
+  int setPrivacyLevelCalls = 0;
+
+  @override
+  Future<void> setPrivacyLevel(NotificationPrivacyLevel level) async {
+    setPrivacyLevelCalls++;
+    await super.setPrivacyLevel(level);
   }
 }
