@@ -29,6 +29,15 @@ Classic radio).
 - [x] E04-B05 · `TransportService.connect()` had zero production callers — `RelayEngine`'s send path could never succeed against a real device (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x3
 - [x] E04-B06 · `BluetoothTransport` had no server-side accept loop — `connect()` was client-only, so two real devices could never connect to each other (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x3
 - [x] E04-B07 · `InboundPipeline`/`MessagingCoordinator` only subscribe to a device's connection state after discovering it THIS process run — an accepted connection from an already-known peer is silently dropped (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x2
+- [ ] E04-B08 · Two real, never-manually-paired devices still cannot complete a Bluetooth Classic connection — discoverability, bonding, and (newly confirmed 2026-09-08) a peer-identity/real-MAC mismatch, all unowned (S2, priority unset) · **blocked** · 🧍 needs human `bug_priorities` scope call before any fix is attempted
+
+**B08 note:** this is the third time this exact gap has surfaced —
+`E04-B04.md` §Carried-forward #2 and `E04-B06.md`'s equivalent both flagged
+"the app never makes itself discoverable" with no owner; live 2026-09-08
+hardware testing (Redmi 10 2022 + Pixel 8 Pro) rediscovered it and added a
+third, more specific finding (peer identity ≠ real Bluetooth MAC). Filed as
+its own bug per `skills/bug-sweep`'s L-process-008 rather than left as a
+third unread carried-forward note.
 
 ## Dependency graph
 ```mermaid
