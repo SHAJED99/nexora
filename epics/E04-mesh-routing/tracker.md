@@ -1,10 +1,14 @@
 # E04 · Mesh Discovery, Relay & Dynamic Routing · Progress
 
-**Status:** all tasks + bug fixes done, P1/P2 = 0. On-device Bluetooth
-verification (E04-B04, E04-B05) found and fixed two real S1 defects that
-zero unit test could have caught — real-hardware retest in progress.
+**Status:** all tasks done. On-device Bluetooth verification
+(E04-B04/B05/B06) found and fixed three real S1 defects that zero unit
+test could have caught. E04-B07 (found by E04-B06's own review, S1) is
+`blocked` awaiting the 🧍 `bug_priorities` gate — P1/P2 not yet 0 pending
+that gate. Real-hardware retest of E04-B06 deferred (`OQ-E04-B06-1`) —
+second physical device unavailable mid-session; an Android emulator
+cannot substitute (no real Bluetooth Classic radio).
 **Started:** 2026-08-27 · **Completed:** — · **Progress:** 10/10 tasks,
-12/12 tasks+bugs
+13/13 tasks+bugs (E04-B07 blocked, not yet counted done)
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -21,6 +25,8 @@ zero unit test could have caught — real-hardware retest in progress.
 - [x] E04-B03 · No production link-quality data source (S3, P2) · done · builder (sonnet) → reviewer (opus)
 - [x] E04-B04 · Bluetooth discovery's `ACTION_FOUND` receiver registered with the wrong export flag (S1, P1) · done · orchestrator (sonnet) → reviewer (opus)
 - [x] E04-B05 · `TransportService.connect()` had zero production callers — `RelayEngine`'s send path could never succeed against a real device (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x3
+- [x] E04-B06 · `BluetoothTransport` had no server-side accept loop — `connect()` was client-only, so two real devices could never connect to each other (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x3
+- [ ] E04-B07 · `InboundPipeline`/`MessagingCoordinator` only subscribe to a device's connection state after discovering it THIS process run — an accepted connection from an already-known peer is silently dropped (S1, P1 pending 🧍 gate) · blocked · found by E04-B06's own review
 
 ## Dependency graph
 ```mermaid
@@ -256,3 +262,27 @@ chain — can start once discovery is real, in parallel with T03c/T04.
   independently re-verified every prior finding plus attempted its own
   additional partial-revert falsifications, **APPROVE**. PR #177 merged
   into `development`.
+- 2026-09-08 E04-B06 found immediately after rebuilding/reinstalling both
+  physical devices with E04-B05's merged fix: a real chat message
+  (composed via the new E06-T14 Message button) reverted its own
+  optimistic local echo and never persisted. `adb dumpsys
+  bluetooth_manager` showed the real `connect()` attempt (now genuinely
+  happening thanks to E04-B05) failing with a link-layer `Page Timeout`.
+  Grepped the entire native Android source for any listen/accept
+  implementation and found none — `BluetoothTransport.connect()` was, and
+  always had been, purely client-side. Fixed with a new
+  `ensureListening()`/`acceptLoop()` pair mirroring `connect()`'s own
+  successful-path bookkeeping exactly. Three review rounds (all opus, all
+  independent): round 1 found a cross-thread visibility race
+  (`serverSocket`/`acceptThread` needed `@Volatile` + a conditional clear,
+  mirroring `startReadLoop`'s own established pattern) and a real,
+  out-of-fence Dart-side bug (filed as E04-B07); round 2 found a
+  one-word invalid `status:` field on E04-B07's own task file
+  (`L-process-012`) plus a scope-widening suggestion (E04-B07 also
+  belongs to `MessagingCoordinator`, not just `InboundPipeline`); round 3
+  **APPROVE**. PR #180 merged into `development`. Real on-device
+  two-device retest deferred (`OQ-E04-B06-1`) — the second physical
+  device became unavailable mid-session (human needed it back), and an
+  Android emulator was confirmed unable to substitute (no real Bluetooth
+  Classic radio). E04-B07 filed as `blocked`, awaiting the human
+  `bug_priorities` gate before it can be dispatched.
