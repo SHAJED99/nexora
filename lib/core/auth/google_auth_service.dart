@@ -7,6 +7,7 @@
 // refresh, expiry, or outage can never affect it.
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:nexora/core/observability/observability_service.dart';
 
 /// The project's one error envelope for cross-layer failures
 /// (`docs/conventions.md` "Error handling"). This is the first real call
@@ -84,5 +85,38 @@ class GoogleAuthService {
   Future<String?> signInAndGetAccountUid() async {
     final credential = await signIn();
     return credential.user?.uid;
+  }
+
+  /// ADR-0005's account-pointer half of sign-out (`E15-T01`, `FR-AUTH-006`):
+  /// terminates the Firebase Authentication session and revokes the cached
+  /// Google credential.
+  ///
+  /// Calls `GoogleSignIn.disconnect()`, not `signOut()` — `IMP-003` found
+  /// that a plain `signOut()` risks the next `signIn()` silently reusing a
+  /// still-cached Google account with no chooser shown, which would falsify
+  /// FR-AUTH-008's "next sign-in is indistinguishable from a first-ever
+  /// install." `disconnect()` revokes the previous authentication outright.
+  ///
+  /// Never throws: the Firebase half and the Google half are caught and
+  /// logged independently via `ObservabilityService` (never `print()`, per
+  /// `docs/conventions.md`) — `SignOutUseCase`'s local erase must never be
+  /// blocked by either failing, and one failing must not skip the other.
+  Future<void> signOut() async {
+    try {
+      await _firebaseAuth.signOut();
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'auth.firebase_sign_out_failed',
+        cause: e,
+      );
+    }
+    try {
+      await _googleSignIn.disconnect();
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'auth.google_disconnect_failed',
+        cause: e,
+      );
+    }
   }
 }
