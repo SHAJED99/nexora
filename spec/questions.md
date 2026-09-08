@@ -7,17 +7,20 @@
 
 ## Gate status — 🧍 `blocking_questions_resolved`
 
-**Gate:** 🧍 `blocking_questions_resolved` — ✅ cleared by human on 2026-08-26
-(both 🟡 blocking questions of round 1 — Q-SCOPE-002, Q-DESIGN-001 — answered
-by the human directly; see their entries below. The 4 important/optional
-questions remaining open/assumed do not block this gate per rule 3.)
+**Gate:** 🧍 `blocking_questions_resolved` — ✅ cleared by human on 2026-09-08
+(answering both questions the E15 planning pass reopened it for:
+**Q-SEC-009** ((b), revoke best-effort) and **Q-FUNC-010** ((a), fix the
+enrollment gate, accept the rate limit as-is) — both via `AskUserQuestion`,
+matching the recommended defaults exactly. `E15-T01`/`E15-T02` unblocked.)
+Previously ✅ cleared by human on 2026-08-26 for round 1's Q-SCOPE-002/
+Q-DESIGN-001; that clearance stands unchanged.
 
 | | Count |
 |---|---|
 | 🟡 blocking | 0 |
 | 🟡 important | 4 |
 | 🟡 optional | 0 |
-| 🟢 answered | 2 |
+| 🟢 answered | 4 |
 | ⚪ assumed / deferred | 2 |
 
 **Genesis and implementation may not proceed while any 🟡 blocking row exists.**
@@ -29,12 +32,96 @@ questions remaining open/assumed do not block this gate per rule 3.)
 | Round | Date | Asked | Answered | Notes |
 |---|---|---|---|---|
 | 1 | 2026-08-26 | 8 | 0 | intake unknowns from `documentation/BRD.md` + `documentation/Design.md`, grouped by area |
+| 2 | 2026-09-08 | 2 | 0 | `IMP-003` / E15 planning pass — both blocking, both about what a wipe-logout does to state this app does **not** hold locally (the remote device registry) and to the two gates that read it (`E12-T03` enrollment, `E13-T02` rate limit). Two, not ten: everything else E15 needed was decidable from `spec/`, the ADRs, or the code, and a question that changes nothing is not a question |
 
 Batching rule: **≤10 per round**, grouped by area.
 
 ---
 
 ## Open questions (🟡)
+
+### Q-SEC-009 — What happens to the REMOTE device-registry row when a device signs out?
+- **Priority:** 🟡 **blocking** — blocks `E15-T01` (and therefore `E15-T07`)
+- **Raised by:** `skills/change-impact` / `IMP-003`, 2026-09-08
+- **Question:** `FR-AUTH-006` wipes everything **local**. It says nothing about
+  `users/$uid/devices/<deviceId>` in the Realtime Database (`FR-FB-001`'s device
+  registry), which is remote and survives. Should signing out also remove or
+  revoke that remote entry?
+- **Why it matters:** it decides whether an account's remote registry silently
+  accumulates one dead device entry per logout — each one a public identity key
+  that peers may still treat as a valid endpoint, and each one visible to
+  `E12-T03`'s enrollment gate (see `Q-FUNC-010`). It is a security-model call:
+  option (b) tells peers the keys are dead; option (a) leaves them merely stale.
+- **Options considered:**
+  - **(a) Do nothing remote.** Simplest, no new failure mode in the wipe path.
+    Cost: dead entries accumulate; peers cannot distinguish a logged-out device
+    from an offline one; `Q-FUNC-010`'s dead end becomes real.
+  - **(b) Revoke via the existing mechanism** —
+    `DeviceRevocationService.revoke(uid, deviceId)` already exists (`E12`) and is
+    exactly the "this device's keys are no longer valid" signal. Cost: it is a
+    network write inside a destructive local operation, so the wipe must not
+    depend on it succeeding (best-effort, logged, never blocking — the pattern
+    `FirebaseMetadataService.registerDevice` already uses).
+  - **(c) Delete the registry row outright.** Cleanest registry, but loses the
+    revocation *record* — a peer that never sees the deletion just keeps a key
+    it will never hear about again.
+- **Recommended default (advisory):** **(b)**, best-effort and non-blocking. It
+  reuses a shipped mechanism, it is the only option that actively tells peers
+  anything, and its failure mode (network down during logout) degrades to (a)
+  rather than to a stuck wipe.
+- **Status:** ✅ answered
+- **Answer:** **(b)** — revoke via `DeviceRevocationService.revoke(uid, deviceId)`,
+  best-effort and non-blocking. If the network write fails (offline at
+  logout), the local wipe proceeds anyway and the failure is logged, not
+  surfaced as an error — degrading to option (a)'s outcome, never to a
+  stuck wipe.
+- **Answered by:** human, via `AskUserQuestion` ("Revoke it, best-effort")
+- **Date:** 2026-09-08
+- **fed_into:** `FR-AUTH-006`'s remote clause and `E15-T01` §2/§5
+
+### Q-FUNC-010 — Logout+login on one phone trips E12's enrollment gate and E13's rate limiter
+- **Priority:** 🟡 **blocking** — blocks `E15-T01`
+- **Raised by:** `skills/change-impact` / `IMP-003`, 2026-09-08
+- **Question:** After a wipe-logout, the next sign-in mints a **new** device id.
+  If the old remote registry row survives (`Q-SEC-009` option (a)),
+  `LoginController`'s `readOwnDeviceIds(uid).any((id) => id != deviceId)` is
+  true, so the user is routed to `/device-enrollment` — an approval flow that
+  needs another trusted device, which a single-phone user does not have.
+  Separately, every logout+login is a genuine new registration against
+  `DeviceIdentityRepository`'s 5-per-24h per-account limit, so the sixth cycle
+  in a day is denied. Is either acceptable, and if not, which one moves?
+- **Why it matters:** this is a **reachable dead end for the most ordinary user
+  there is** — one person, one phone, who signs out and back in. It is not
+  hypothetical: `E12-B01` shipped and had to be fixed for the structurally
+  identical symptom (returning users permanently misrouted to
+  `/device-enrollment`).
+- **Options considered:**
+  - **(a) Answer `Q-SEC-009` as (b)/(c)** so the stale row is gone — the
+    enrollment gate then correctly sees no other device. Does **not** address
+    the rate limit.
+  - **(b) Exempt a post-logout re-registration from the rate limiter.** Needs a
+    trustworthy local signal that survives the wipe, which by construction there
+    isn't — so this is really "raise or window the limit", which weakens
+    `FR-ABUSE-001`'s device-registration control.
+  - **(c) Accept both.** The enrollment screen already has a documented
+    "no recovery possible" notice (`GAP-028`); a single-phone user could be
+    shown that and continue. Cheapest, but it means a normal logout lands on a
+    recovery screen, which reads as a bug even when it is not.
+- **Recommended default (advisory):** **(a)** for the enrollment gate — it falls
+  out of `Q-SEC-009`(b) for free and needs no new code — and **accept the rate
+  limit as-is** for now: five logout/login cycles per account per day is an
+  abnormal pattern, and weakening `FR-ABUSE-001` to serve it is the wrong trade.
+  If the human disagrees, that is a genuinely different answer, which is why
+  this is asked rather than assumed.
+- **Status:** ✅ answered
+- **Answer:** **(a)** for the enrollment gate — falls out of `Q-SEC-009`(b)
+  for free, no new code needed. **Accept the rate limit as-is** — weakening
+  `FR-ABUSE-001` to serve an abnormal logout-cycling pattern is the wrong
+  trade.
+- **Answered by:** human, via `AskUserQuestion` ("Fix the enrollment
+  dead-end, accept the rate limit")
+- **Date:** 2026-09-08
+- **fed_into:** `E15-T01` §2 and `E15-T02`'s launch-routing composition
 
 ### Q-ARCH-003 — E2E encryption protocol/key-exchange scheme unnamed
 - **Priority:** important

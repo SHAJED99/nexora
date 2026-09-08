@@ -1,12 +1,31 @@
 # Master epic map
 
-**Gate:** 🧍 `epic_breakdown_and_wave` — ✅ cleared by human on 2026-08-26
-("Approve as proposed" — the 14-epic map, WSJF scores, and Wave 1
-[E01..E06] all approved as drafted.)
+**Gate:** 🧍 `epic_breakdown_and_wave` — ✅ **cleared by human, 2026-09-08**
+(`AskUserQuestion` — "Yes, approve and start dispatching tasks") for
+**Wave 3 [E15]**, see below.
+
+**Wave history:**
+- ✅ cleared by human on 2026-08-26 ("Approve as proposed" — the 14-epic map,
+  WSJF scores, and Wave 1 [E01..E06] all approved as drafted.)
+- ✅ cleared by human on 2026-09-02 (Wave 2 [E07, E08]).
+
+Both clearances stand for the work they covered; reopening the line for Wave 3
+does not withdraw either.
 
 **Wave 2 [E07, E08]** — ✅ cleared by human on 2026-09-02, covering E07
 retroactively (sharded and shipped without a wave re-open — `OQ-E08-6`
 caught this at E08's own sharding) and E08 going forward.
+
+**Wave 3 [E15]** — ✅ **cleared by human, 2026-09-08**, alongside
+`docs/impact/IMP-003-session-lifecycle-and-settings-subscreens.md`'s own
+🧍 `change_impact_approval`, the epic's own 🧍 `analyze_report`
+(`epics/E15-session-and-settings/epic.md`), and 🧍 `design_contract_approval`
+(`design/gaps.md`, GAP-031…039) — all four cleared in one `AskUserQuestion`
+round. E15 is not a wave in the usual sense — it is a single injected epic
+that depends on eight already-shipped ones and blocks nothing. It is
+presented here as its own wave because the previous clearances covered work
+nobody had seen at the time, and one cleared line does not authorise a
+future wave.
 
 > Derived from `spec/srs.md` + `spec/feature-list.md`, scored via
 > `skills/epic-breakdown`.
@@ -38,6 +57,7 @@ graph TD
   E12[E12 Account Recovery & Device Enrollment]
   E13[E13 Abuse Prevention & Diagnostics]
   E14[E14 Version & Update Management]
+  E15[E15 Session Lifecycle & Settings Sub-Screens]
 
   E01 --> E02
   E01 --> E03
@@ -60,7 +80,19 @@ graph TD
   E06 --> E08
   E06 --> E10
   E06 --> E13
+  E01 --> E15
+  E02 --> E15
+  E08 --> E15
+  E09 --> E15
+  E10 --> E15
+  E12 --> E15
+  E13 --> E15
+  E14 --> E15
 ```
+
+`E15` is a **leaf**: it depends on eight shipped epics (it displays their
+state and terminates the session E01 creates) and nothing depends on it.
+Injected 2026-09-08 via `IMP-003`, not part of the original map.
 
 `E14` has no dependencies (it only needs the genesis app shell, already on
 `main`) and can run any time — shown as an isolated node deliberately.
@@ -84,6 +116,7 @@ graph TD
 | E12 | Account Recovery & Device Enrollment | Account Recovery | FR-RECOVER-001..002 | 3.5 | E01, E03 | todo |
 | E13 | Abuse Prevention & Diagnostics | Abuse Prevention & Diagnostics | FR-ABUSE-001, FR-DIAG-001..002 | 4.0 | E06 | todo |
 | E14 | Version & Update Management | App Version Management | FR-VER-001..011 | 2.75 | — | todo |
+| E15 | Session Lifecycle & Settings Sub-Screens | Identity & Auth (session half), Design System & Interaction | FR-AUTH-006..013, FR-UI-006..008, FR-NOTIFY-003, FR-SEC-005, FR-DIAG-003, FR-ROUTE-010, FR-PLAT-004, FR-VER-012 | 3.0 | E01, E02, E08, E09, E10, E12, E13, E14 | todo |
 
 WSJF = (business_value + time_criticality + risk_reduction) / job_size, each
 1–10 — advisory, scored by the planner, **subject to your revision** at

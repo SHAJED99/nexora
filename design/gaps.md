@@ -1,6 +1,34 @@
 # Design gaps — what the design doesn't cover, and what we'll do about it
 
-**Gate:** 🧍 `design_contract_approval` — ✅ CLEARED BY HUMAN, 2026-08-31
+**Gate:** 🧍 `design_contract_approval` — ✅ **CLEARED BY HUMAN, 2026-09-08**
+(`AskUserQuestion` — "Yes, approve and start dispatching tasks", given
+alongside approval of `change_impact_approval`, `epic_breakdown_and_wave`
+and `analyze_report` in the same answer) for **GAP-031 … GAP-039** — the
+settings-sub-screen and sign-out gap pass — and for the nine derived
+contracts written against them: `design/screens/settings-shell.md` (not a
+screen — the shared shell, recorded as a contract so eight screens cannot
+each invent one), `settings-notifications.md`, `settings-privacy.md`,
+`settings-security-center.md`, `settings-account.md`, `settings-network.md`,
+`settings-battery.md`, `settings-about.md`, and `sign-out-confirm.md`.
+**`design/screens/settings-storage.md` (GAP-024) is NOT reopened** — it was
+approved 2026-09-02, is byte-unchanged, and `E15-T09` simply builds it.
+The clearances recorded below this line stand exactly as the human set them; an
+agent does not re-open them and does not re-clear them.
+
+**The nine named forks with no proposal** (LED, app lock, permissions,
+certificates, data usage, proxy, OS deep link, release notes, and the
+shared destructive-colour fork inherited from GAP-021) were **not**
+individually resolved by this approval — the human approved dispatch in
+general, not each specific design micro-decision. Per AGENTS.md rule 3's
+2026-09-06 extended autonomy grant (human stepping away, decide rather
+than wait), these are delegated to whichever task owns each fork: pick
+the option most consistent with this design system's existing
+conventions, record the choice and reasoning in that task's own file the
+way a human answer would be recorded, and only escalate back to a
+genuine Open Question if no existing convention gives a reasonable
+default.
+
+**Previously:** ✅ CLEARED BY HUMAN, 2026-08-31
 (reopened by the **E07 sharding pass**, 2026-08-31, for **GAP-018 ·
 GAP-019 · GAP-020 · GAP-021 · GAP-022** — the groups-and-calls gap pass —
 and for the three derived contracts `E07-T12` will write against them:
@@ -1422,6 +1450,315 @@ and that is the strongest single argument for this disposition.**
   in response to a direct question about whether to build this now to
   complete real two-device hardware verification (`OQ-E06-T04-2`).
 - **built:** prospective — `E06` (`E06-T14`, sharded same day as approval).
+
+## GAP-031 — a Settings *destination* has no design source; eight of them are now needed at once
+
+- **status:** 🟡 proposed
+- **screen:** _(new, derived — a **shell**, not a screen)_
+  `design/screens/settings-shell.md`
+- **spec:** `FR-UI-006` (every Settings row navigates to a dedicated
+  sub-screen), `FR-UI-008` (back returns to the hub).
+- **design shows:** `settings.md` is a **menu and only a menu** — eight rows
+  that lead somewhere, and *not one* of the somewheres is drawn anywhere in the
+  measured set. `settings-storage.md` (GAP-024, approved 2026-09-02) already
+  crossed this boundary once, for one row, and wrote down exactly how
+  (§Derivation boundary 1–7, §Surface story). Nothing has changed about the
+  design since.
+- **derived from:** `settings-storage.md` itself — promoted from "one screen's
+  private derivation" to **the shared shell all eight destinations use**.
+  Concretely: `settings.md`'s frame and palette (the 40×40 `r9999px` header
+  icon-button with its `24px` `rgb(195, 192, 255)` glyph; the screen
+  title/subtitle pair; the card surface `rgb(26, 44, 66)` at `r12px` with the
+  `rgba(199, 196, 216, 0.1)` hairline; `heading:3` at `22px` `w500`
+  `rgb(248, 249, 255)`; the body line at `14px` `rgb(199, 196, 216)`; the
+  tertiary glyph colour `rgb(119, 117, 135)`), plus `chat.md` element 2's
+  `arrow_back` for the back affordance — the same cross-screen borrow
+  `group-manage.md` GM2 and `settings-storage.md` §6 already make.
+- **proposal:** one hand-written shell contract that fixes the frame once — back
+  button, screen heading, screen subtitle, and the card/row vocabulary — and
+  which each of the eight sub-screen contracts cites as its parent instead of
+  re-deriving it. The eight contracts then describe **only their own content**.
+  Nothing new is invented here at all: every value is already measured in
+  `settings.md` or already derived and approved in `settings-storage.md`.
+- **why a shell and not eight independent derivations:** eight agents each
+  deriving a frame from the same parent will produce eight slightly different
+  frames, and the gate will pass all eight (each is internally consistent with
+  its own contract). That is the exact failure `design-fidelity` opens with,
+  moved up a level.
+- **out of scope:** the *content* of any individual screen — each has its own
+  entry below.
+- **approved by:**
+- **built:** prospective — `E15-T03`.
+
+## GAP-032 — Notifications settings screen (row 7) has no design source
+
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/settings-notifications.md`
+- **spec:** `FR-NOTIFY-003` (the screen), presenting `FR-NOTIFY-001`'s
+  categories and `FR-NOTIFY-002`'s privacy level.
+- **design shows:** `settings.md` elements 38-42 only — one row: `notifications`
+  · `Notifications` · `Alerts, silent modes, LED behaviors`.
+- **derived from:** `GAP-031`'s shell for the frame. For the per-category
+  switches there is **no measured switch/toggle primitive anywhere in this
+  design** — checked across all seven measured contracts. The nearest measured
+  "this is currently on / this is currently off" vocabulary is
+  `devices.md`'s `radio_button_checked` (element 21) /
+  `dashboard.md`'s `radio_button_unchecked` (element 33), which
+  `settings-storage.md` SS14-16 already uses for exactly this purpose (mode
+  selection) and which GAP-024 approved.
+- **proposal:** the shell frame; one card listing the **nine user-facing
+  categories** (`message`, `voiceMessage`, `ptt`, `incomingCall`,
+  `connectionRequest`, `trustRequest`, `groupEvent`, `securityEvent`,
+  `storageWarning` — `backgroundService` is deliberately absent, it is not a
+  user preference: `notification_tables.dart`'s own header), each a row with a
+  title, a one-line description and the checked/unchecked glyph as its state;
+  and a second card with the three privacy levels (`full`, `senderOnly`,
+  `hidden`) in the same `settings-storage.md` mode-selector treatment.
+- **the one honest disclosure this screen must carry:** `full` (sender name +
+  message preview) **has no supported mechanism today** — plaintext is
+  decrypted only in the screen layer, and a background dispatcher cannot reach
+  it (`E10-T02`'s own header, `E06-T09.md:64-68`). The value is storable and
+  stored; it is not honoured. Per `FR-UI-007` the screen states this on the
+  `full` row rather than offering a control that silently does nothing.
+- **fork, no proposal — `LED behaviors`:** the row's designed subtitle promises
+  it. **No `FR-NOTIFY-*` id requires an LED control, and no code implements
+  one.** Same shape as `GAP-027` (the Storage row's "export"), which the human
+  resolved as (c) — no control, the subtitle stays a disclosed copy artifact.
+  Named here rather than assumed: (a) mirror GAP-027 — no LED control;
+  (b) add one, which is new scope needing a new FR id. **No proposal.**
+- **approved by:**
+- **built:** prospective — `E15-T04`.
+
+## GAP-033 — Privacy & Security settings screen (row 2) has no design source
+
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/settings-privacy.md`
+- **spec:** `FR-SEC-005`, presenting `FR-SEC-001`, `FR-LOC-001`, `FR-LOC-002`,
+  `FR-NOTIFY-002`.
+- **design shows:** `settings.md` elements 13-17 only — `security` ·
+  `Privacy & Security` · `Encryption protocols, app lock, permissions`.
+- **derived from:** `GAP-031`'s shell; the on/off vocabulary from GAP-032; the
+  per-peer list row from `devices.md` elements 8-15 (leading glyph, title,
+  secondary line, trailing state) — this design's only measured
+  "list of peers each with a state".
+- **proposal:** the shell frame; a read-only **Encryption** card naming the
+  protocol actually in force (`ADR-0003`: X3DH + Double Ratchet for 1:1, a
+  sender-keys scheme for groups) with no control — it is not a setting;
+  a **Location** card with the global switch (`LocationSettingsRepository
+  .watchGlobalEnabled`/`writeGlobalEnabled`, shipped in `E09-T01`) and, beneath
+  it, the per-peer rows from `readAllPeerEnabled()`; and a **Notification
+  privacy** row that states the current level and navigates to
+  `settings-notifications` rather than duplicating its control (one setting,
+  one owner — the `E05-B03` "state defined in two documents" trap).
+- **fork, no proposal — `app lock`:** the subtitle promises it. `ADR-0005`'s
+  consequences say "the app implements its own local session/lock mechanism
+  independent of Firebase Auth's session state" — but **no such lock exists in
+  `lib/` and no FR id requires one**. Options: (a) GAP-027 treatment — no
+  control, disclosed absence; (b) build an app lock, which is genuinely new
+  scope (a new FR, plausibly a new ADR, certainly not this epic).
+  **No proposal.**
+- **fork, no proposal — `permissions`:** the subtitle promises it. Android
+  runtime permissions are real and the app holds several
+  (`FR-PLAT-003`), but nothing in `spec/` requires a permissions *screen*, and
+  the platform already owns that UI. Options: (a) a read-only list of which
+  permissions are granted, with a deep link to the OS settings; (b) GAP-027
+  treatment. **No proposal.**
+- **approved by:**
+- **built:** prospective — `E15-T05`.
+
+## GAP-034 — Security Center screen (row 3) has no design source
+
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/settings-security-center.md`
+- **spec:** `FR-DIAG-003`, presenting `FR-SEC-003`, `FR-ABUSE-001`,
+  `FR-DIAG-001`, bounded absolutely by `FR-DIAG-002`.
+- **design shows:** `settings.md` elements 18-22 only — `policy` ·
+  `Security Center` · `Threat logs, network audits, certificates`.
+- **derived from:** `GAP-031`'s shell; `devices.md`'s row-with-status-chip
+  vocabulary for each record; `settings-storage.md` SS27's centred single-line
+  empty treatment (itself GAP-002's approved treatment) for "nothing to show",
+  which on a healthy install is the **expected** state, not an edge case.
+- **proposal:** the shell frame and four read-only sections, each rendering
+  records the app **already holds** and nothing else: device revocations
+  (`DeviceRevocations`), trusted-identity records
+  (`SignalTrustedIdentities`), blocked peers (`Relationships` where state is
+  blocked), and abuse rate-limit denials (`RateLimitCounters`). No action
+  affordance of any kind on this screen — it reports, it does not remediate;
+  blocking/unblocking already lives on `devices.md` and must not gain a second
+  home.
+- **the prohibition this screen exists to keep:** `FR-DIAG-002` is absolute.
+  No key material, no session material, no plaintext, no location. A record
+  renders as *what happened, to which device id, when* — never as *what was in
+  it*. Written into the contract, not only into the task, because a "security
+  log" is the single most tempting place in this app to print a key.
+- **fork, no proposal — `certificates`:** the subtitle promises it. This app has
+  no certificate concept at all — `ADR-0003` is a Signal-protocol design with
+  identity keys, not X.509. Options: (a) GAP-027 treatment; (b) render the
+  identity-key fingerprints under that heading, which renames an existing
+  concept to match a subtitle and is arguably worse. **No proposal.**
+- **approved by:**
+- **built:** prospective — `E15-T06`.
+
+## GAP-035 — Account screen (row 1) has no design source, and must carry a destructive action
+
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/settings-account.md`
+- **spec:** `FR-AUTH-013` (the screen), `FR-AUTH-006`/`FR-AUTH-007` (the
+  sign-out action it hosts and how it must be presented).
+- **design shows:** `settings.md` elements 8-12 only — `account_circle` ·
+  `Account` · `Profile, identity keys, linked devices`. **No sign-out, no
+  destructive action, and no destructive treatment exists anywhere in the
+  measured set** except `devices.md`'s `rgb(186, 26, 26)`, which carries
+  *blocked/destructive* semantics (GAP-021 left its treatment explicitly
+  undecided and it has stayed that way).
+- **derived from:** `GAP-031`'s shell; `devices.md`'s row vocabulary for the
+  linked-device list; `device-enrollment.md`'s already-approved treatment for
+  presenting *this device's own* identity.
+- **proposal:** the shell frame; an **Account** card (the signed-in Google
+  account identifier from `DeviceIdentities.accountUid`); a **This device**
+  card (the identity-key fingerprint, in the `JetBrains Mono` treatment
+  `settings.md` already measures for machine values); a **Linked devices**
+  list (`FirebaseMetadataService.readOwnDeviceIds`) in `devices.md`'s row
+  shape; and, last on the screen and visually separated, a single **Sign out**
+  row that navigates to `sign-out-confirm` (GAP-039) — never acting directly.
+- **fork, no proposal — the destructive colour:** `rgb(186, 26, 26)` is the
+  only red this design measures, and GAP-021 deliberately left "what
+  destructive looks like" undecided rather than settling it by agent taste.
+  Options: (a) reuse `rgb(186, 26, 26)` and thereby settle GAP-021 by
+  precedent; (b) keep the Sign out row in the ordinary row treatment and carry
+  the whole destructive weight on the confirmation screen (GAP-039), which
+  already has nothing else on it. **No proposal** — this is the same decision
+  GAP-021 parked, and it should be made once, deliberately, for both.
+- **note:** `Profile` in the subtitle is satisfied by the account identifier;
+  this app has no profile *object* and none is invented.
+- **approved by:**
+- **built:** prospective — `E15-T07`.
+
+## GAP-036 — Network settings screen (row 4) has no design source
+
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/settings-network.md`
+- **spec:** `FR-ROUTE-010`, presenting `FR-DISC-001`, `FR-ROUTE-005`,
+  `FR-ROUTE-007`, and satisfying `FR-UI-004`'s "advanced technical detail one
+  tap away, not shown by default".
+- **design shows:** `settings.md` elements 23-27 only — `wifi_tethering` ·
+  `Network` · `Data usage, mesh routing, proxy`.
+- **derived from:** `GAP-031`'s shell; `dashboard.md`'s already-measured
+  connectivity vocabulary (this design's own way of saying what the network is
+  doing); `devices.md`'s row-with-status for per-destination routes.
+- **proposal:** the shell frame; a **Transports** card listing the transports
+  the platform reports available (`TransportService`); a **Routes** card
+  listing, per reachable destination, the active route's hop count and its
+  measured link quality (`RoutingEngine.activeRouteFor`, `LinkQuality`) — each
+  in `devices.md`'s row shape. Read-only: there is no user-settable routing
+  knob in `spec/` and none is invented.
+- **`FR-ROUTE-010`'s "unavailable rather than a value" clause is load-bearing
+  here.** `RoutingEngine` and `RouteCostCalculator` already report some cost
+  factors as unavailable rather than defaulting them (`E08-T04` set this
+  precedent for storage and `FR-ROUTE-007` is still `[NEEDS FORMULA]`,
+  `Q-ARCH-004`). The screen renders "unavailable", never a zero.
+- **fork, no proposal — `Data usage` and `proxy`:** the subtitle promises both.
+  **Neither exists**: nothing in `lib/` meters bytes, and this app has no proxy
+  concept at all. Options: (a) GAP-027 treatment for both; (b) add byte
+  metering, which is new scope and a new FR. **No proposal.**
+- **approved by:**
+- **built:** prospective — `E15-T08`.
+
+## GAP-037 — Battery settings screen (row 6) has no design source
+
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/settings-battery.md`
+- **spec:** `FR-PLAT-004`, presenting `FR-PLAT-001`, `FR-PLAT-002`,
+  `NFR-BATT-001`.
+- **design shows:** `settings.md` elements 33-37 only — `battery_full_alt` ·
+  `Battery` · `Background execution, power saving modes`.
+- **derived from:** `GAP-031`'s shell; `devices.md`'s row-with-status for each
+  restriction; the same read-only posture as GAP-036.
+- **proposal:** the shell frame; a **Background operation** card stating
+  whether the foreground service is currently running; a **Restrictions in
+  effect** list (Doze, Battery Saver, background-execution restriction — the
+  three `FR-PLAT-002` names, read from `PowerState`), each a row with a state
+  label; and the resulting **Background plan** (`BackgroundPlan`) stated
+  plainly. Where the platform exposes it, one row deep-links to the OS's own
+  battery-optimization settings — `FR-PLAT-004` explicitly forbids
+  reimplementing them.
+- **fork, no proposal — the deep link:** opening the OS battery settings needs
+  a platform call this app's Pigeon boundary does not have today
+  (`ADR-0004`). Options: (a) add it to the existing background Pigeon API —
+  small, but it is a native-boundary change; (b) ship the screen read-only with
+  no deep link. **No proposal.**
+- **approved by:**
+- **built:** prospective — `E15-T08`.
+
+## GAP-038 — About / Updates screen (row 8) has no design source
+
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/settings-about.md`
+- **spec:** `FR-VER-012`, presenting `FR-VER-005`, `FR-VER-008`,
+  `FR-DIAG-001`, bounded by `FR-DIAG-002`.
+- **design shows:** `settings.md` elements 43-47 only — `info` ·
+  `About / Updates` · `Version 2.4.1, release notes, diagnostic logs`.
+- **derived from:** `GAP-031`'s shell; `version-update-required.md`'s
+  already-approved version vocabulary; `settings-storage.md`'s `JetBrains Mono`
+  treatment for machine values.
+- **proposal:** the shell frame; a **Version** card (installed version and
+  build number from `PackageInfo`, and the version state
+  `EvaluateVersionStateUseCase` evaluates to); a **Policy** card (the cached
+  minimum-supported build and when it was last fetched,
+  `VersionPolicyService.cached()`); and a **Diagnostics** section rendering the
+  local log, subject in full to `FR-DIAG-002`.
+- **a disclosed copy artifact, already shipped:** `settings.md` element 46
+  measures the literal string `Version 2.4.1, release notes, diagnostic logs`
+  and the gate compares it character for character. **The real build number is
+  not 2.4.1 and never will be.** That string is on the *hub* row, which
+  `E02-T03` already built and gated; it is recorded here so nobody "fixes" it
+  into a dynamic value and reds the `settings` gate. The **sub-screen** shows
+  the real version; the hub row keeps the design's literal copy. Same class of
+  artifact as `GAP-027`.
+- **fork, no proposal — `release notes`:** the subtitle promises them. There is
+  no release-note source, local or remote, and no FR requires one. Options:
+  (a) GAP-027 treatment; (b) a link out to the Play listing, which is a new
+  external dependency on a page this app does not control. **No proposal.**
+- **approved by:**
+- **built:** prospective — `E15-T10`.
+
+## GAP-039 — the sign-out confirmation has no design source, and must not be a dialog
+
+- **status:** 🟡 proposed
+- **screen:** _(new, derived)_ `design/screens/sign-out-confirm.md`
+- **spec:** `FR-AUTH-007` (destructive, irreversible, explicit confirmation
+  naming what is lost), citing `FR-AUTH-006` for the scope of the loss and
+  `FR-RECOVER-002` for why it is unrecoverable.
+- **design shows:** nothing. No confirmation of any kind anywhere in the
+  measured set — and, materially, **this design draws no dialog or
+  bottom-sheet primitive anywhere**, a finding `GAP-025` established and
+  `GAP-029` re-confirmed and acted on.
+- **derived from:** `welcome.md`'s centred single-focus layout — this design's
+  only "one decision, nothing else on screen" shape — exactly as `GAP-029`
+  derived the mandatory-update block. `devices.md`'s `warning` token
+  (`rgb(245, 158, 11)`) is this design's own vocabulary for "needs attention"
+  and is reused rather than inventing a severity colour.
+- **proposal:** one full screen, one state. The `warning` glyph at
+  `welcome.md`'s icon size; a heading naming the action; body copy that states
+  **plainly and specifically** what is destroyed — this device's identity and
+  keys, every message and its history, every trusted relationship, every
+  group, and all settings — and that content encrypted under those keys can
+  never be recovered (`FR-RECOVER-002`, stated so a user is not left guessing);
+  then two stacked affordances, the destructive confirm and a cancel that
+  returns to `settings-account`. **A dialog is forbidden here** for the same
+  reason `GAP-029` forbade one: inventing a dialog primitive invents a visual
+  language.
+- **why a whole screen for a confirmation:** because the alternative in this
+  design is inventing one. It is also the correct weight — this is the single
+  most destructive action in the product, and it is irreversible.
+- **fork, inherited from GAP-035 — the destructive colour:** the same
+  unresolved question. Whatever GAP-035 is answered as applies here.
+- **out of scope:** any "are you sure?" second confirmation, any typed
+  confirmation phrase, and any progress/spinner state during the wipe — none
+  of the three has a measured precedent, and the first two are scope the spec
+  does not contain.
+- **approved by:**
+- **built:** prospective — `E15-T07`.
 
 ## The usual suspects
 
