@@ -43,7 +43,16 @@ class NotificationSettingsView extends GetView<NotificationSettingsController> {
                     title: _categoryTitle[category]!,
                     secondary: _categorySecondary[category]!,
                     enabled: controller.isEnabled(category),
-                    onTap: () => controller.toggle(category),
+                    // `null` while `enabled == null` (the `loading` state,
+                    // task §5) -- the row renders no glyph and must not be
+                    // tappable either; the real write guard lives in
+                    // `NotificationSettingsController.toggle` (unknown state
+                    // never writes), this only keeps the tap target itself
+                    // from suggesting an action is possible before the first
+                    // stream emission arrives.
+                    onTap: controller.isEnabled(category) == null
+                        ? null
+                        : () => controller.toggle(category),
                   ),
             ],
           ),
@@ -176,7 +185,7 @@ class _CategoryRow extends StatelessWidget {
   final String title;
   final String secondary;
   final bool? enabled;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

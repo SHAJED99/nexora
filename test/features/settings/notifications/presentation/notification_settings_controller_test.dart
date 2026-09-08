@@ -56,6 +56,35 @@ void main() {
     },
   );
 
+  test(
+    'test_EARS_NOTIFY_16_toggle_before_first_emission_performs_no_write',
+    () async {
+      // Falsifies the re-derived-default bug a reviewer found in round 1:
+      // `toggle` used to read `_categoryEnabled[category]!.value ?? true`,
+      // guessing `true` for a category whose `watchEnabled` stream had not
+      // yet emitted and writing `false` from that guess. Calling `toggle`
+      // in the same tick as `onInit` (before `pumpEventQueue` lets the
+      // stream's first event land) reproduces exactly that window --
+      // `isEnabled` is still `null` here, not yet `true`.
+      final countingRepository = _CountingEnabledRepository(db: db);
+      final countingController = NotificationSettingsController(
+        repository: countingRepository,
+      );
+      countingController.onInit();
+
+      expect(
+        countingController.isEnabled(NotificationCategory.message),
+        isNull,
+      );
+
+      await countingController.toggle(NotificationCategory.message);
+
+      expect(countingRepository.setEnabledCalls, 0);
+
+      countingController.onClose();
+    },
+  );
+
   test('test_EARS_NOTIFY_16_screen_reflects_an_external_write', () async {
     controller.onInit();
     await pumpEventQueue();
@@ -164,6 +193,23 @@ class _ErroringRepository extends NotificationSettingsRepository {
   @override
   Stream<bool> watchEnabled(NotificationCategory category) {
     return Stream<bool>.error(StateError('simulated read failure'));
+  }
+}
+
+/// Counts `setEnabled` calls -- the same call-counter shape as
+/// `_CountingRepository` below, used to falsify the loading-window write
+/// bug (`test_EARS_NOTIFY_16_toggle_before_first_emission_performs_no_write`).
+/// A call counter, never `fail()` inside the seam (a broad catch in the
+/// controller would swallow it, L-testing).
+class _CountingEnabledRepository extends NotificationSettingsRepository {
+  _CountingEnabledRepository({required super.db});
+
+  int setEnabledCalls = 0;
+
+  @override
+  Future<void> setEnabled(NotificationCategory category, bool value) async {
+    setEnabledCalls++;
+    await super.setEnabled(category, value);
   }
 }
 

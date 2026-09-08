@@ -100,8 +100,17 @@ class NotificationSettingsController extends GetxController {
   /// FR-NOTIFY-003's write path (task §5 contract). No local state is
   /// mutated here -- [repository]'s stream is what re-renders the row
   /// (EARS-NOTIFY-16).
+  ///
+  /// While the category's own `watchEnabled` stream has not yet emitted
+  /// (`isEnabled(category) == null`, the `loading` state -- task §5), the
+  /// current value is genuinely unknown. This screen holds no defaulting
+  /// rule of its own (task §2) -- guessing `true` here would silently
+  /// re-implement the repository's own fail-open default one layer up, and
+  /// a guess can write the OPPOSITE of the real stored value. So: unknown
+  /// state never writes.
   Future<void> toggle(NotificationCategory category) async {
-    final current = _categoryEnabled[category]!.value ?? true;
+    final current = _categoryEnabled[category]!.value;
+    if (current == null) return;
     await repository.setEnabled(category, !current);
   }
 
