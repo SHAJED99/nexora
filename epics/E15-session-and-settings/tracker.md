@@ -27,9 +27,9 @@ Account (also needs T01) → **T08** Network+Battery → **T09** Storage →
 sub-screens).
 
 ## Tasks
-- [ ] E15-T01 · Sign-out: local data wipe service and sign-out use case · todo · —
+- [x] E15-T01 · Sign-out: local data wipe service and sign-out use case · done · PR #189, APPROVE (opus, escalations F1/F2 below) — merged `7ed8001`
 - [ ] E15-T02 · Session-aware launch routing, after the mandatory-update gate · todo · —
-- [ ] E15-T03 · Settings sub-screen shell widget and design-gate registration · todo · —
+- [x] E15-T03 · Settings sub-screen shell widget and design-gate registration · done · PR #188, APPROVE (opus) — merged `62a8514`
 - [ ] E15-T04 · Notifications settings screen · todo · —
 - [ ] E15-T05 · Privacy & Security settings screen · todo · —
 - [ ] E15-T06 · Security Center screen · todo · —
@@ -112,11 +112,48 @@ T08 now owns that file."* `E15-T09` touches neither.
 
 ## Review log
 (date · task · reviewer model · outcome · design gate %)
+- 2026-09-08 · E15-T03 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · APPROVE · design gate n/a (shell has no screen id/golden of its
+  own, confirmed structurally not runnable, not a dodge). 1354/1354. Merged
+  `62a8514`.
+- 2026-09-08 · E15-T01 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · APPROVE, with two mandatory planner escalations (F1, F2 below)
+  · design gate n/a (backend). 1363/1363. Merged `7ed8001`.
+
+## Carried-forward observations (not yet a task)
+- **F1 (S2) — the human's answered `Q-SEC-009`(b) (revoke the remote
+  device-registry row) has no owner.** `E15-T01`'s own contract forbids
+  remote calls (§5 Remote still reads "🟡 UNRESOLVED... do not implement
+  any remote behaviour until the answer is recorded") — the planner's
+  `fed_into` promise to amend `FR-AUTH-006` with a remote clause was never
+  executed after the answer landed. `E15-T07` doesn't claim it either
+  (`files: update: []`, no `device_revocation_service.dart`, §5 Functions
+  names no such call). Left unfixed, `Q-SEC-009`(b) silently degrades to
+  (a) — the outcome the human explicitly rejected — and reopens
+  `Q-FUNC-010`'s enrollment-gate dead end (`Q-FUNC-010` was answered "(a)
+  falls out of `Q-SEC-009`(b) for free", which requires the row actually
+  gone). **Owner: whichever task wires `SignOutUseCase` for real (`E15-T07`
+  has `uid`/`deviceId` on hand) — amend its `files:`/§5 to call
+  `DeviceRevocationService.revoke(uid, deviceId)`, or shard a small
+  follow-up. Must be read before `E15-T07` dispatches (`L-process-008`).**
+- **F2 (S2) — the singleton teardown (`_teardown` closure) has no owner
+  either.** `sign_out_use_case.dart:44` defaults it to a no-op; production
+  wiring (closing/unregistering the live `AppDatabase` before its file is
+  deleted) is out of `E15-T01`'s own fence (`bindings.dart`) and `E15-T07`
+  currently states its own SO6 "calls `SignOutUseCase.call()` and nothing
+  else." Same shape as F1 — an obligation the epic needs, claimed by
+  nobody. **Owner: whoever wires production `SignOutUseCase` (`E15-T07`)
+  must state the real GetX teardown closure in its own contract.**
+- **F3 (S4) — `LocalDataWipeService.wipe()` is not re-entrant.** Two
+  concurrent calls leave correct final state but the losing call throws
+  `AppFailure` despite the wipe succeeding — an unguarded double-tap on
+  `E15-T07`'s confirm button would show a spurious "erase failed" after a
+  successful sign-out. **Owner: `E15-T07`'s confirm button must disable
+  itself after the first tap.**
 
 ## Blocked / Frozen
-- **E15-T01** — 🟡 blocked on `Q-SEC-009` and `Q-FUNC-010` (both blocking, both
-  in `spec/questions.md`). Rule 1: it does not start until both are answered.
-- **E15-T02** — 🟡 blocked transitively via `depends_on: [E15-T01]`.
+- **E15-T02** — 🟡 blocked transitively via `depends_on: [E15-T01]`. `T01`
+  is now done, so this is unblocked — dispatch open.
 
 ## Event log (append-only)
 - 2026-09-08 E15 sharded by the planner (11 tasks) from `IMP-003`. Three human
