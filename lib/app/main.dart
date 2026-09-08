@@ -18,6 +18,8 @@ import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/services/firebase_paths.dart';
 import 'package:nexora/core/services/version_policy_service.dart';
+import 'package:nexora/core/session/local_data_wipe_service.dart';
+import 'package:nexora/features/settings/account/domain/resolve_initial_route_use_case.dart';
 import 'package:nexora/features/version/domain/evaluate_version_state_use_case.dart';
 import 'package:nexora/features/version/domain/version_reconnect_watcher.dart';
 import 'package:nexora/features/version/domain/version_state.dart';
@@ -38,6 +40,42 @@ Future<void> main() async {
   // plugin at build time.
   await Firebase.initializeApp();
 
+  // E15-T02 (FR-AUTH-009): completes any sign-out that was interrupted
+  // before its erase finished — BEFORE `AppDatabase()` is constructed
+  // below. This is the subtlest ordering constraint in this file (task
+  // file §6 risk row 4): a live `AppDatabase` opened on the same path
+  // `LocalDataWipeService` is about to delete would re-create the very
+  // file the wipe just erased (SQLite's lazy-open semantics), so the wipe
+  // must run first, on a path nothing else has touched yet this launch.
+  //
+  // Review round 2 (F1): `completePendingWipe()` calls straight into
+  // `LocalDataWipeService.wipe()`'s own failure path
+  // (`local_data_wipe_service.dart`), which deliberately leaves the
+  // sentinel in place on failure so a retry can happen "at next launch" —
+  // that is correct for `wipe()`'s own contract, but it means a failure
+  // here is NOT a one-off: the identical failure recurs on every future
+  // launch too. Left unguarded, that throw would escape `main()` before
+  // `runApp` ever runs, and because the sentinel survives, every
+  // subsequent launch would crash-loop identically (unrecoverable short of
+  // a reinstall). Guarded the same way the `latestDeviceIdentity()` read
+  // below already is, for exactly the same reason: never let a local
+  // failure crash the launch. The sentinel itself is untouched here —
+  // `LocalDataWipeService`'s own retry-at-next-launch mechanism is left
+  // alone; this catch only stops `main()` from crashing and forces the
+  // route decision below to treat the device as having no local identity
+  // (task file §2 step 1: "nothing else may be decided against a
+  // half-erased device").
+  var pendingWipeCompletionFailed = false;
+  try {
+    await LocalDataWipeService().completePendingWipe();
+  } catch (e) {
+    ObservabilityService.instance.logError(
+      'session.pending_wipe_completion_failed',
+      cause: e,
+    );
+    pendingWipeCompletionFailed = true;
+  }
+
   // The single app-wide AppDatabase (task file §5) — constructed here,
   // never inside `AppBinding`/`MessagingStack.create`, so there is
   // structurally only ever one (task file §2).
@@ -49,7 +87,22 @@ Future<void> main() async {
   // `MessagingStack.create` itself reports `unavailable` rather than this
   // file inventing a placeholder id (see `messaging_stack.dart`'s header,
   // judgment call 3).
-  final localIdentity = await db.latestDeviceIdentity();
+  //
+  // E15-T02 (task file §6 risk row 2): a corrupt/unreadable identity row
+  // must never crash the launch or be treated as "an identity exists" —
+  // fails to `null` (same direction as `login_controller.dart`'s own
+  // best-effort reads), logged, so `resolveInitialRoute` below sees it as
+  // no local identity (routes to `/welcome`, never `/dashboard`).
+  DeviceIdentity? localIdentity;
+  try {
+    localIdentity = await db.latestDeviceIdentity();
+  } catch (e) {
+    ObservabilityService.instance.logError(
+      'session.local_identity_read_failed',
+      cause: e,
+    );
+    localIdentity = null;
+  }
   final selfDeviceId = localIdentity?.deviceId ?? '';
 
   final messagingStack = await MessagingStack.create(
@@ -68,7 +121,18 @@ Future<void> main() async {
     versionPolicyService,
     readInstalledBuildNumber,
   );
-  final initialRoute = initialRouteFor(versionState);
+  // E15-T02 (FR-AUTH-010/011/012): extends `initialRouteFor`'s existing
+  // `updateRequired` precedence (delegated to, never re-implemented — see
+  // `resolveInitialRoute`'s own header) with the returning-device skip.
+  //
+  // Review round 2 (F1): a failed pending-wipe completion above forces
+  // `hasLocalIdentity: false` here regardless of what
+  // `db.latestDeviceIdentity()` actually returned — a half-wiped device
+  // must never reach `/dashboard`, per task file §2 step 1.
+  final initialRoute = resolveInitialRoute(
+    versionState: versionState,
+    hasLocalIdentity: !pendingWipeCompletionFailed && localIdentity != null,
+  );
 
   runApp(
     NexoraApp(

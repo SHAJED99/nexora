@@ -35,6 +35,8 @@ import 'package:nexora/features/login/data/device_identity_repository.dart';
 import 'package:nexora/features/login/domain/sign_in_use_case.dart';
 import 'package:nexora/features/login/presentation/login_controller.dart';
 import 'package:nexora/features/login/presentation/login_view.dart';
+import 'package:nexora/features/settings/account/domain/resolve_initial_route_use_case.dart';
+import 'package:nexora/features/version/domain/version_state.dart';
 import 'package:nexora/features/welcome/presentation/welcome_controller.dart';
 import 'package:nexora/features/welcome/presentation/welcome_view.dart';
 
@@ -373,13 +375,13 @@ void main() {
   });
 
   testWidgets(
-    'F1 regression (E13-T07 review round 2, S1/S2): a returning device '
-    '(one that already has a local identity, e.g. relaunch #6+ of the '
-    'app) still reaches the dashboard through the real welcome -> login '
-    '-> dashboard navigation, never denied by the per-account '
-    'registration rate limiter',
+    'F1 regression (E13-T07 review round 2, S1/S2; route updated by '
+    'E15-T02): a returning device (one that already has a local identity, '
+    'e.g. relaunch #6+ of the app) reaches the dashboard DIRECTLY at '
+    'launch — no welcome screen, no login tap — never denied by the '
+    'per-account registration rate limiter',
     (WidgetTester tester) async {
-      // Before this fix, `LoginController._signIn` minted a brand-new
+      // Before E13-T07's fix, `LoginController._signIn` minted a brand-new
       // random device id on EVERY launch and always went through
       // `SignInUseCase`'s registration path, gated by
       // `DeviceIdentityRepository`'s per-account rate limit
@@ -388,9 +390,22 @@ void main() {
       // still count against that same limit and could be denied. A real
       // `RateLimiter` is used here, pre-loaded (via direct repository
       // writes, no UI) with 5 PRIOR registrations under the SAME account —
-      // exactly at the cap — so this device's OWN relaunch, through the
-      // real welcome->login->dashboard navigation, proves it is never
-      // counted as attempt #6.
+      // exactly at the cap — kept exactly as E13-T07 left it, unchanged by
+      // this task.
+      //
+      // E15-T02 (FR-AUTH-010): the SUBJECT this test proves — "a returning
+      // device is never denied by the rate limiter" — does not change; only
+      // the NAVIGATION PATH does. A returning device's local identity now
+      // means `resolveInitialRoute` sends the launch straight to
+      // `/dashboard`, so this device never even reaches `LoginController`
+      // (and therefore never re-registers, never touches the rate limiter
+      // at all). Review round 2: this is a narrower proof than the original
+      // — it mounts `GetMaterialApp` directly with the route pre-computed,
+      // rather than driving the real `LoginController`/`SignInUseCase` path
+      // — not a stronger one; the original S1 concern (a returning device
+      // going through login and being denied by the rate limiter) is
+      // separately covered by
+      // `test/features/login/domain/sign_in_use_case_test.dart:196`.
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       final repository = DeviceIdentityRepository(
         db,
@@ -409,11 +424,17 @@ void main() {
         await db.markSignedIn(id, accountUid: accountUid);
       }
       // THIS device's own existing local identity — the one
-      // `LoginController` must read back and reuse instead of minting a
-      // fresh id (which would be attempt #6 and denied).
+      // `resolveInitialRoute`'s `hasLocalIdentity` must be computed from
+      // (via `db.latestDeviceIdentity()`, the same read `main()` performs),
+      // never re-derived or re-registered.
       final ownId = await db.createDeviceIdentity('this-devices-own-id');
       await db.markSignedIn(ownId, accountUid: accountUid);
 
+      // `SignInUseCase`/`LoginController` are unused by this test's own
+      // navigation now (E15-T02 §4: this task does not touch
+      // `LoginController`) — kept only as evidence that, even though both
+      // are registered exactly as before, a returning device's launch
+      // never calls into them.
       final signInUseCase = SignInUseCase(
         repository,
         authService: FakeGoogleAuthService.success(accountUid),
@@ -422,9 +443,19 @@ void main() {
       Get.lazyPut(WelcomeController.new);
       Get.lazyPut(() => LoginController(signInUseCase));
 
+      // The exact decision `main()` makes at launch (`resolveInitialRoute`,
+      // fed by the SAME `db.latestDeviceIdentity()` read main() performs)
+      // — not a hard-coded `/dashboard`, so this test would fail the same
+      // way main() would if that function's precedence ever regressed.
+      final hasLocalIdentity = await db.latestDeviceIdentity() != null;
+      final initialRoute = resolveInitialRoute(
+        versionState: VersionState.upToDate,
+        hasLocalIdentity: hasLocalIdentity,
+      );
+
       await tester.pumpWidget(
         GetMaterialApp(
-          initialRoute: '/welcome',
+          initialRoute: initialRoute,
           getPages: [
             GetPage<dynamic>(name: '/welcome', page: () => const WelcomeView()),
             GetPage<dynamic>(name: '/login', page: () => const LoginView()),
@@ -435,29 +466,24 @@ void main() {
           ],
         ),
       );
-
-      await tester.tap(find.text('Continue with Google'));
-      await tester.pump(); // process the tap
-      await tester.pump(); // process the route transition
       await tester.pumpAndSettle();
 
-      // Reaching the dashboard, not stuck on "Signing in..." with no
-      // navigation and no error surfaced, is the whole proof here — the
-      // exact user-visible symptom F1 describes.
-      expect(
-        find.text('Signing in with Google...'),
-        findsNothing,
-      );
+      // Lands on the dashboard WITHOUT ever showing welcome or login — the
+      // whole point of E15-T02, and a strictly stronger version of F1's
+      // original "not stuck on Signing in..." proof.
+      expect(find.text('Continue with Google'), findsNothing);
+      expect(find.text('Signing in with Google...'), findsNothing);
       expect(
         find.text('dashboard placeholder'),
         findsOneWidget,
-        reason: 'a returning device must reach /dashboard — a rate-limit '
-            'denial would leave the user stuck on "Signing in..." with no '
-            'navigation and no error affordance',
+        reason: 'a returning device must launch straight to /dashboard — a '
+            'rate-limit denial on a login round-trip is no longer even '
+            'possible once the launch never routes through login at all',
       );
 
-      // Still exactly 6 rows total (5 other devices + this one) — this
-      // device's relaunch reused its own row rather than writing a 7th.
+      // Still exactly 6 rows total (5 other devices + this one) — nothing
+      // about this launch wrote a 7th row; `resolveInitialRoute` only
+      // READS whether an identity exists, it never registers one.
       final rows = await db.select(db.deviceIdentities).get();
       expect(rows, hasLength(6));
 
