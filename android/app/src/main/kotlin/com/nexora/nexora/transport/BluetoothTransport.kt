@@ -4,6 +4,7 @@ import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -38,6 +39,21 @@ import kotlinx.coroutines.launch
  * `send()` call producing exactly one `onDataReceived` call on the other
  * end (§2/§3 of E04-T03c). `LoopbackTransport` is no longer used for
  * `send`/receive once a real Bluetooth session is connected.
+ *
+ * As of E04-B06: this class also LISTENS. Before this fix, `connect()` was
+ * the only Bluetooth Classic operation ever performed — a pure client-side
+ * outbound dial, with nothing on either device's end ever accepting an
+ * incoming connection. Two real Nexora installs could never complete an
+ * RFCOMM handshake with each other as a result (confirmed live: a real
+ * `connect()` attempt between two physical devices failed with a genuine
+ * link-layer `Page Timeout`, visible in `dumpsys bluetooth_manager`, the
+ * unambiguous symptom of paging a device with no listening socket on the
+ * target service UUID) — regardless of `E04-B05`'s own, separate fix
+ * (confirming the Dart layer now genuinely calls `connect()` at all).
+ * `ensureListening()`/`acceptLoop()` open this device's own
+ * `BluetoothServerSocket` on the same `NEXORA_SPP_UUID` and accept
+ * incoming connections symmetrically, so either side of a Nexora<->Nexora
+ * pair can be the one that dials.
  */
 class BluetoothTransport(
     private val activity: Activity,
@@ -56,6 +72,12 @@ class BluetoothTransport(
      * tooling (e.g. `sdptool`) during manual verification.
      */
     private val NEXORA_SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+
+    /** Human-readable SDP service name advertised alongside [NEXORA_SPP_UUID]
+     * by [listenUsingRfcommWithServiceRecord] — cosmetic only (shown by
+     * generic Bluetooth tooling doing an SDP inquiry), never read by this
+     * app's own client side, which locates the service purely by UUID. */
+    private const val SERVICE_NAME = "Nexora"
 
     /**
      * Sentinel device id used to report discovery/adapter-level failures
@@ -130,6 +152,31 @@ class BluetoothTransport(
 
   private var discoveryReceiver: BroadcastReceiver? = null
 
+  /**
+   * E04-B06: this device's own listening socket, so a REMOTE device's
+   * outbound [connect] has something to connect TO. Before this fix,
+   * [connect] was the only Bluetooth Classic operation this class ever
+   * performed — every connection was client-only, with nothing on either
+   * end ever accepting one. Two real Nexora installs could never complete
+   * an RFCOMM handshake with each other: confirmed live, two physical
+   * devices, `dumpsys bluetooth_manager` showing the real outbound attempt
+   * fail with `Page Timeout` (the link-layer symptom of paging a device
+   * with no open server socket on the target UUID). `null` whenever not
+   * currently listening (not yet started, or torn down by [release]).
+   * `@Volatile` — written from both the main/platform thread
+   * ([ensureListening]/[release]) and [acceptLoop]'s own thread (its
+   * `finally`); a plain `var` gives no cross-thread visibility guarantee
+   * at all (review finding, E04-B06 round 2).
+   */
+  @Volatile private var serverSocket: BluetoothServerSocket? = null
+
+  /** The thread running [acceptLoop] — `null` whenever [serverSocket] is
+   * `null`. Tracked separately (not just inferred from [serverSocket]) so
+   * [ensureListening] can tell "listening already in progress" apart from
+   * "never started". `@Volatile` for the same cross-thread-visibility
+   * reason as [serverSocket]. */
+  @Volatile private var acceptThread: Thread? = null
+
   /** Set when a call is deferred behind a runtime permission request;
    * invoked from `onRequestPermissionsResult` once granted. */
   private var pendingPermissionAction: (() -> Unit)? = null
@@ -156,6 +203,104 @@ class BluetoothTransport(
     doStartDiscovery()
   }
 
+  /**
+   * Opens this device's own listening RFCOMM socket on [NEXORA_SPP_UUID]
+   * and starts [acceptLoop] on a background thread, if not already
+   * running (E04-B06). Idempotent — safe to call from every permission-
+   * gated entry point ([startDiscovery], [connect]) so listening starts
+   * the moment permissions are actually granted, whichever call happens
+   * to trigger that first, without this class needing its own separate
+   * "am I initialized yet" lifecycle hook.
+   *
+   * Deliberately NOT gated behind discovery or an active outbound
+   * `connect` attempt — a peer can only ever reach this device if
+   * something is listening, symmetrically, on BOTH sides, all the time
+   * this device's Bluetooth is on. This is the mesh's whole premise
+   * (`ADR-0004`): a device with the app open is a potential relay hop for
+   * ANY other device, not only ones it happens to be actively discovering
+   * or messaging right now.
+   */
+  private fun ensureListening() {
+    if (acceptThread != null) return // already listening
+    val bt = adapter ?: return
+    if (!bt.isEnabled || !BluetoothPermissions.hasAll(activity)) return
+    val socket =
+        try {
+          bt.listenUsingRfcommWithServiceRecord(SERVICE_NAME, NEXORA_SPP_UUID)
+        } catch (e: IOException) {
+          // Could not open the listening socket right now (e.g. adapter
+          // mid-toggle) -- not fatal, the next permission-gated call
+          // retries since acceptThread is still null.
+          return
+        } catch (e: SecurityException) {
+          return
+        }
+    serverSocket = socket
+    val thread = Thread({ acceptLoop(socket) }, "nexora-bt-accept")
+    acceptThread = thread
+    thread.start()
+  }
+
+  /**
+   * Runs until [socket] is closed (by [release], the only place this
+   * class ever closes its OWN listening socket) or a real I/O error
+   * occurs. `BluetoothServerSocket.accept()` returns one already-connected
+   * [BluetoothSocket] per completed incoming handshake and can be called
+   * again immediately after to accept the next one -- unlike a client
+   * [connect]'s single-use socket, one server socket serves an unbounded
+   * sequence of incoming connections for as long as this device keeps
+   * running, exactly mirroring [connect]'s own successful-path bookkeeping
+   * (`openSockets`/[startReadLoop]/`onConnectionStateChanged(CONNECTED)`)
+   * so a caller of [send] cannot tell whether a given `deviceId`'s
+   * connection was dialled out or accepted in.
+   */
+  private fun acceptLoop(socket: BluetoothServerSocket) {
+    try {
+      while (!Thread.currentThread().isInterrupted) {
+        val accepted =
+            try {
+              socket.accept() // BLOCKING -- this thread only.
+            } catch (e: IOException) {
+              break // socket closed (release()) or a real accept error.
+            }
+        val remoteId =
+            try {
+              accepted.remoteDevice?.address
+            } catch (e: SecurityException) {
+              null
+            }
+        if (remoteId == null) {
+          try {
+            accepted.close()
+          } catch (e: IOException) {
+            // Nothing to do with an already-broken socket we can't even
+            // identify the far end of.
+          }
+          continue
+        }
+        openSockets[remoteId] = accepted
+        startReadLoop(remoteId, accepted)
+        eventsScope.launch { eventsApi.onConnectionStateChanged(remoteId, ConnectionState.CONNECTED) }
+      }
+    } finally {
+      // Conditional, mirroring `startReadLoop`'s own identical reasoning
+      // (its `readThreads.remove(deviceId, Thread.currentThread())`,
+      // two-arg for exactly this reason): an unconditional clear here
+      // would let this (dying) thread wipe out a NEWER `ensureListening()`
+      // call's own socket/thread if one raced ahead and started while
+      // this one was already on its way out -- leaving that newer
+      // listener's socket unreachable from `release()` (a real leak) and
+      // `ensureListening()` permanently no-op-ing on a now-stale non-null
+      // `acceptThread` that no longer belongs to any live loop (review
+      // finding, E04-B06 round 2). Only clear the fields if THIS thread
+      // is still the one currently registered.
+      if (acceptThread === Thread.currentThread()) {
+        serverSocket = null
+        acceptThread = null
+      }
+    }
+  }
+
   fun stopDiscovery() {
     adapter?.let { if (it.isDiscovering) it.cancelDiscovery() }
   }
@@ -180,6 +325,7 @@ class BluetoothTransport(
       BluetoothPermissions.requestAll(activity)
       return false
     }
+    ensureListening() // E04-B06 -- see that method's own doc comment.
 
     eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTING) }
 
@@ -393,6 +539,21 @@ class BluetoothTransport(
    * any open sockets so a torn-down Flutter engine doesn't leak either. */
   fun release() {
     stopDiscovery()
+    // E04-B06: close this device's own listening socket -- `accept()`
+    // throws `IOException` the moment its underlying `BluetoothServerSocket`
+    // is closed from another thread, which is what lets `acceptLoop`'s own
+    // catch exit the loop and let this thread die, mirroring `disconnect()`'s
+    // identical reasoning for a client-side read loop.
+    acceptThread?.interrupt()
+    serverSocket?.let {
+      try {
+        it.close()
+      } catch (e: IOException) {
+        // Already closed / adapter gone — not actionable here.
+      }
+    }
+    serverSocket = null
+    acceptThread = null
     discoveryReceiver?.let {
       try {
         activity.unregisterReceiver(it)
@@ -420,6 +581,7 @@ class BluetoothTransport(
       emitFailure(DISCOVERY_SENTINEL_ID)
       return
     }
+    ensureListening() // E04-B06 -- see that method's own doc comment.
     discoveredAddresses.clear()
     registerReceiverIfNeeded()
     if (bt.isDiscovering) bt.cancelDiscovery()
