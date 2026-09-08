@@ -38,6 +38,14 @@ sub-screens).
 - [ ] E15-T09 · Storage settings screen (E08 carry-forward) · todo · —
 - [ ] E15-T10 · About / Updates screen · todo · —
 - [ ] E15-T11 · Settings hub wiring: eight routes, eight rows, probe consolidation · todo · —
+- [x] E15-B01 · GetX lazyPut without fenix crashes on a second welcome/login/home visit · done · PR #191, APPROVE (opus) — merged `967fe84`
+- [x] E15-B02 · Chat composer writes to a disposed TextEditingController mid-send · done · PR #191, APPROVE (opus) — merged `967fe84`
+
+**B01/B02 note:** found live on physical hardware (Redmi 10 2022 + Pixel 8
+Pro) during the E04-B06/B07 real-device Bluetooth mesh retest, not from
+either task's own scope — filed here (E15) rather than E00/E06 because
+`E15-T02`'s launch-routing rework and `E15-T07`'s logout→login round trip
+are the features most directly exposed to both crashes going forward.
 
 ## Dependency graph
 
