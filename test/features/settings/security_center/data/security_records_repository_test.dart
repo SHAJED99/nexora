@@ -2,6 +2,7 @@
 // (E15-T06). Real in-memory `AppDatabase` throughout: these tests prove the
 // repository's own projection against the real Drift schema, not a mock's
 // promise that it would.
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:drift/native.dart';
@@ -52,12 +53,20 @@ void main() {
   });
 
   test(
-    'test_EARS_DIAG_4_trusted_identity_row_never_renders_key_bytes',
+    'test_EARS_DIAG_4_trusted_identity_repository_projects_address_name_not_key_bytes',
     () async {
-      // A recognisable key pattern -- the falsification test for this
-      // screen's whole reason to exist (task §8). If this pattern ever
-      // shows up in a `SecurityRecord`'s own field, `FR-DIAG-002` is
-      // violated at the repository layer, before a widget even exists.
+      // A recognisable key pattern -- proves the *repository's own query*
+      // never reads `identityKey` off the row in the first place (the
+      // `selectOnly` projection in `trustedIdentities()`), independent of
+      // whatever a widget later does with the returned model. The
+      // widget-tree half of this falsification --  that the same pattern
+      // never reaches a rendered `Text` anywhere on screen -- is proven
+      // separately by
+      // `test_EARS_DIAG_4_trusted_identity_row_never_renders_key_bytes` in
+      // `security_center_controller_test.dart` (F1, review round on this
+      // PR): a plain `SecurityRecord.toString()` comparison here can never
+      // fail (the class has no `toString` override, so it always compares
+      // `"Instance of 'SecurityRecord'"`) and proved nothing on its own.
       final suspiciousKey = Uint8List.fromList(
         List<int>.generate(32, (i) => 0xAB),
       );
@@ -74,25 +83,80 @@ void main() {
       final records = await repository.trustedIdentities();
 
       expect(records, hasLength(1));
+      // The ONLY string the returned record may carry is the device id --
+      // never the key bytes, hex, or any substring of the key's own
+      // `toString()`/`toRadixString()` representations.
       expect(records.single.displayIdentifier, 'device-b');
+      expect(
+        records.single.displayIdentifier,
+        isNot(contains(suspiciousKey.toString())),
+      );
       expect(records.single.recordType, SecurityRecordType.trusted);
       // `signal_trusted_identities` has no first-seen column at all
       // (`crypto_tables.dart`) -- null, not fabricated (rule 1).
       expect(records.single.timestamp, isNull);
       expect(records.single.count, isNull);
-      // Structural: the type itself carries no field a key could hide in.
-      expect(
-        records.single.toString(),
-        isNot(contains(suspiciousKey.toString())),
-      );
     },
   );
 
   test('test_EARS_DIAG_4_record_model_has_no_key_field', () {
-    // A structural assertion on `SecurityRecord` (task §8): its only
-    // fields are a display identifier, a record type, an optional
-    // timestamp and an optional count -- reflection-free, this is a
-    // compile-time fact checked here by construction.
+    // A structural assertion on `SecurityRecord` (task §8): reflection is
+    // unavailable in Flutter (no `dart:mirrors`), so -- the same idiomatic
+    // pattern this codebase already uses for a "structurally cannot leak
+    // X" claim (`test/core/storage/storage_inventory_test.dart`'s
+    // `test_EARS_STORE_6_inventory_never_decrypts`) -- this reads the
+    // class's own source and asserts, at the text level, that no field
+    // capable of holding key/session/plaintext/location material is
+    // declared anywhere in the class body. A construction-only check (the
+    // previous version of this test) only proves the four fields that
+    // *are* named behave as expected; it says nothing about whether a
+    // fifth, unexercised field exists -- exactly the gap the reviewer's
+    // reverted-`selectOnly` experiment (F1) walked through by adding one.
+    final source = File(
+      'lib/features/settings/security_center/data/security_records_repository.dart',
+    ).readAsStringSync();
+    final classBody = _extractClassBody(source, 'SecurityRecord');
+
+    // Forbidden field/type tokens -- any of these inside the class body
+    // would be a place key/session/plaintext/location material could hide.
+    const forbiddenTokens = [
+      'identityKey',
+      'sessionKey',
+      'session',
+      'plaintext',
+      'messageContent',
+      'location',
+      'latitude',
+      'longitude',
+      'Uint8List',
+      'ByteData',
+      'ByteBuffer',
+    ];
+    for (final token in forbiddenTokens) {
+      expect(
+        classBody.contains(token),
+        isFalse,
+        reason:
+            '`SecurityRecord` must not declare a field capable of holding '
+            'key/session/plaintext/location material, but its class body '
+            'contains "$token":\n$classBody',
+      );
+    }
+    // The four fields the contract actually allows, positively confirmed
+    // present so this test cannot pass on an empty/gutted class either.
+    for (final expectedField in [
+      'displayIdentifier',
+      'recordType',
+      'timestamp',
+      'count',
+    ]) {
+      expect(
+        classBody.contains(expectedField),
+        isTrue,
+        reason: '`SecurityRecord` is missing its own "$expectedField" field.',
+      );
+    }
+
     const record = SecurityRecord(
       displayIdentifier: 'x',
       recordType: SecurityRecordType.trusted,
@@ -172,4 +236,32 @@ void main() {
       expect(records.single.displayIdentifier, 'future_limit');
     },
   );
+}
+
+/// Extracts the `{ ... }` body of the first `class <name> {` declaration in
+/// [source] (brace-depth counting -- good enough for this file's own single,
+/// non-nested class; not a general Dart parser). Used by
+/// `test_EARS_DIAG_4_record_model_has_no_key_field` to make a "this class
+/// cannot structurally hold X" claim against the class's own text rather
+/// than against a handful of constructed instances (the same idiomatic
+/// shape `storage_inventory_test.dart`'s `test_EARS_STORE_6_inventory_never_decrypts`
+/// already uses for an equivalent claim).
+String _extractClassBody(String source, String className) {
+  // Word-boundary match on the class name -- `class SecurityRecord` would
+  // otherwise also match the start of `class SecurityRecordsRepository`.
+  final match = RegExp('class $className\\b').firstMatch(source);
+  if (match == null) {
+    fail('No `class $className` declaration found in the given source.');
+  }
+  final classIndex = match.start;
+  final openBrace = source.indexOf('{', classIndex);
+  var depth = 0;
+  for (var i = openBrace; i < source.length; i++) {
+    if (source[i] == '{') depth++;
+    if (source[i] == '}') {
+      depth--;
+      if (depth == 0) return source.substring(openBrace, i + 1);
+    }
+  }
+  fail('Unterminated `class $className` body in the given source.');
 }
