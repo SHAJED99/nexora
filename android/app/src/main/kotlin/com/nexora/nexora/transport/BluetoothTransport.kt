@@ -163,15 +163,19 @@ class BluetoothTransport(
    * fail with `Page Timeout` (the link-layer symptom of paging a device
    * with no open server socket on the target UUID). `null` whenever not
    * currently listening (not yet started, or torn down by [release]).
+   * `@Volatile` — written from both the main/platform thread
+   * ([ensureListening]/[release]) and [acceptLoop]'s own thread (its
+   * `finally`); a plain `var` gives no cross-thread visibility guarantee
+   * at all (review finding, E04-B06 round 2).
    */
-  private var serverSocket: BluetoothServerSocket? = null
+  @Volatile private var serverSocket: BluetoothServerSocket? = null
 
   /** The thread running [acceptLoop] — `null` whenever [serverSocket] is
    * `null`. Tracked separately (not just inferred from [serverSocket]) so
    * [ensureListening] can tell "listening already in progress" apart from
-   * "never started", without a data race between the field write and the
-   * thread's own startup. */
-  private var acceptThread: Thread? = null
+   * "never started". `@Volatile` for the same cross-thread-visibility
+   * reason as [serverSocket]. */
+  @Volatile private var acceptThread: Thread? = null
 
   /** Set when a call is deferred behind a runtime permission request;
    * invoked from `onRequestPermissionsResult` once granted. */
@@ -279,16 +283,21 @@ class BluetoothTransport(
         eventsScope.launch { eventsApi.onConnectionStateChanged(remoteId, ConnectionState.CONNECTED) }
       }
     } finally {
-      // This thread owns exactly one `serverSocket`/`acceptThread` pair
-      // for its entire lifetime -- clearing both here (rather than in
-      // `release()` alone) means a server-side error that broke the
-      // accept loop on its own (not a `release()` call) is still
-      // correctly reflected as "not listening" so a later
-      // permission-gated call can open a fresh listening socket instead
-      // of `ensureListening()` seeing a stale non-null `acceptThread` and
-      // silently doing nothing forever.
-      serverSocket = null
-      acceptThread = null
+      // Conditional, mirroring `startReadLoop`'s own identical reasoning
+      // (its `readThreads.remove(deviceId, Thread.currentThread())`,
+      // two-arg for exactly this reason): an unconditional clear here
+      // would let this (dying) thread wipe out a NEWER `ensureListening()`
+      // call's own socket/thread if one raced ahead and started while
+      // this one was already on its way out -- leaving that newer
+      // listener's socket unreachable from `release()` (a real leak) and
+      // `ensureListening()` permanently no-op-ing on a now-stale non-null
+      // `acceptThread` that no longer belongs to any live loop (review
+      // finding, E04-B06 round 2). Only clear the fields if THIS thread
+      // is still the one currently registered.
+      if (acceptThread === Thread.currentThread()) {
+        serverSocket = null
+        acceptThread = null
+      }
     }
   }
 
