@@ -8,8 +8,6 @@
 // task's own risk list calls for -- a call counter on the retention-pass
 // entry point, never `fail()` inside an injected seam (a broad catch in the
 // SUT would swallow it, L-testing).
-import 'dart:async';
-
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -51,6 +49,31 @@ class _CountingStorageManager extends StorageManager {
   }) {
     runPassCallCount++;
     return super.runPass(nowEpochMs: nowEpochMs, apply: apply);
+  }
+}
+
+/// A spy on [StorageSettingsRepository.setMode] -- the write path
+/// `EARS-STORE-20`'s "rejected ... without writing" clause must prove was
+/// never reached on the invalid branch. A call counter, not `fail()` inside
+/// the seam (`L-testing`, this file's own header): a broad catch in the SUT
+/// would swallow a thrown assertion, but never a counter that stays wrong.
+class _CountingStorageSettingsRepository extends StorageSettingsRepository {
+  _CountingStorageSettingsRepository({required super.db});
+
+  int setModeCallCount = 0;
+
+  @override
+  Future<void> setMode(
+    StorageMode mode, {
+    int? olderThanDays,
+    int? maxBytes,
+  }) {
+    setModeCallCount++;
+    return super.setMode(
+      mode,
+      olderThanDays: olderThanDays,
+      maxBytes: maxBytes,
+    );
   }
 }
 
@@ -156,22 +179,74 @@ void main() {
     );
 
     test(
-      'test_EARS_STORE_20_invalid_parameter_value_is_rejected_without_writing',
+      'test_EARS_STORE_20_invalid_older_than_days_is_rejected_without_writing',
       () async {
-        controller.onInit();
+        final countingSettings = _CountingStorageSettingsRepository(db: db);
+        final countingController = StorageSettingsController(
+          settings: countingSettings,
+          log: log,
+          inventory: inventory,
+        );
+        addTearDown(countingController.onClose);
+
+        countingController.onInit();
         await pumpEventQueue();
-        await controller.selectMode(StorageMode.olderThanDays);
+        await countingController.selectMode(StorageMode.olderThanDays);
         await pumpEventQueue();
 
-        final ok = await controller.updateOlderThanDays(0);
+        final callsBeforeInvalid = countingSettings.setModeCallCount;
+        expect(callsBeforeInvalid, 1);
+
+        final ok = await countingController.updateOlderThanDays(0);
         expect(ok, isFalse);
 
-        final reread = await settings.read();
+        // The proof `EARS-STORE-20`'s "rejected ... without writing" clause
+        // needs: the invalid call never reached the repository at all --
+        // not merely that it happened to write the same value the prior
+        // valid call already wrote (that reread-equality check is exactly
+        // what a reviewer proved defeatable by making the invalid branch
+        // write the same value before returning `false`).
         expect(
-          reread.olderThanDays,
-          1,
-          reason: 'an invalid value must not overwrite the last-good one',
+          countingSettings.setModeCallCount,
+          callsBeforeInvalid,
+          reason: 'an invalid value must not call setMode at all',
         );
+
+        final reread = await countingSettings.read();
+        expect(reread.olderThanDays, 1);
+      },
+    );
+
+    test(
+      'test_EARS_STORE_20_invalid_max_bytes_mb_is_rejected_without_writing',
+      () async {
+        final countingSettings = _CountingStorageSettingsRepository(db: db);
+        final countingController = StorageSettingsController(
+          settings: countingSettings,
+          log: log,
+          inventory: inventory,
+        );
+        addTearDown(countingController.onClose);
+
+        countingController.onInit();
+        await pumpEventQueue();
+        await countingController.selectMode(StorageMode.overSizeMb);
+        await pumpEventQueue();
+
+        final callsBeforeInvalid = countingSettings.setModeCallCount;
+        expect(callsBeforeInvalid, 1);
+
+        final ok = await countingController.updateMaxBytesMb(0);
+        expect(ok, isFalse);
+
+        expect(
+          countingSettings.setModeCallCount,
+          callsBeforeInvalid,
+          reason: 'an invalid value must not call setMode at all',
+        );
+
+        final reread = await countingSettings.read();
+        expect(reread.maxBytes, StorageSettingsRepository.minMaxBytes);
       },
     );
 
@@ -290,6 +365,36 @@ void main() {
     );
 
     testWidgets(
+      'test_EARS_STORE_21_zero_candidate_sentinel_renders_nothing_scheduled',
+      (tester) async {
+        // A genuinely zero-candidate pass writes `StorageDecisionLog`'s own
+        // sentinel row (`categoryKey: 'none'`, `reasonCode: 'none'`) rather
+        // than no row at all -- unlike the sibling test above, this one
+        // exercises `_filterActionable`'s real `categoryKey != 'none'`
+        // filter against a real sentinel row a default install would
+        // actually produce, not an empty decision log that never reaches
+        // that filter line at all.
+        await log.recordPass(
+          _plan(mode: StorageMode.smart.name, groups: const []),
+          outcome: DecisionOutcome.planned,
+          nowEpochMs: 1000,
+        );
+
+        Get.testMode = true;
+        Get.put<StorageSettingsController>(controller);
+
+        await tester.pumpWidget(
+          const GetMaterialApp(home: StorageSettingsView()),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.text('Nothing to remove right now.'), findsOneWidget);
+        expect(find.text('Will remove:'), findsNothing);
+      },
+    );
+
+    testWidgets(
       'test_EARS_STORE_21_smart_mode_message_decision_is_not_shown',
       (tester) async {
         // A Smart Mode `messages` row must never render here -- it would
@@ -340,13 +445,108 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      // No button of any kind, enabled or disabled -- this screen's only
-      // tap targets are `InkWell`s that select a mode.
+      // This screen's ONLY legitimate tap targets are the three `_ModeRow`
+      // `InkWell`s plus the shared `SettingsSubScreenScaffold`'s own
+      // `_BackRow` `InkWell` (`E15-T03`, out of this task's scope but
+      // present in every rendered frame) -- four in total. Asserting the
+      // exact count -- not merely "no button TYPE" -- means an extra
+      // `InkWell`/`GestureDetector`/`Listener` added anywhere else on the
+      // screen fails this test even though it is not one of the five
+      // Material button classes below.
+      expect(find.byType(InkWell), findsNWidgets(4));
+      // A blanket "no GestureDetector"/"no GestureDetector with onTap"
+      // check is not meaningful here -- Flutter's own `Scrollable` renders
+      // bare `GestureDetector`s for drag handling on this legitimately
+      // scrolling screen, AND `InkWell` itself is built on an internal
+      // `GestureDetector` with its own `onTap` wired through -- so every
+      // one of the 4 legitimate `InkWell`s above already contributes one.
+      // What actually matters -- an extra tap surface with forbidden TEXT
+      // content -- is caught by the `tappableFinder` text/semantics scan
+      // below, which walks GestureDetector- and Listener-based tap
+      // surfaces too, regardless of whether they sit inside an `InkWell`
+      // or bare. A blanket "no `Listener` with a pointer callback" check
+      // is, for the same reason as `GestureDetector` above, not
+      // meaningful on its own: `Scrollable`'s pan/scroll-wheel handling
+      // renders several bare `Listener`s with `onPointerDown`/
+      // `onPointerSignal` wired for reasons that have nothing to do with
+      // a clean-now affordance.
+
+      // No button of any kind, enabled or disabled -- kept as a named,
+      // narrower check alongside the count-based one above.
       expect(find.byType(ElevatedButton), findsNothing);
       expect(find.byType(TextButton), findsNothing);
       expect(find.byType(OutlinedButton), findsNothing);
       expect(find.byType(IconButton), findsNothing);
       expect(find.byType(FloatingActionButton), findsNothing);
+
+      // The affordance this criterion actually forbids is a TAPPABLE
+      // element whose rendered TEXT reads as an apply/clean/delete
+      // action -- not merely the absence of five specific widget class
+      // names. A plain `InkWell(onTap: ..., child: Text('Clean Now'))`
+      // -- the exact idiom `_ModeRow` already uses legitimately elsewhere
+      // in this screen -- must fail THIS check even though it is not any
+      // of the five button types above.
+      // Deliberately NOT a bare `delete|remove` match: this screen's own
+      // approved contract copy legitimately says "Delete data older than
+      // X days" (a mode NAME) and "...can remove conversation content."
+      // (a mode's own consequence line) -- both inside a tappable
+      // `_ModeRow`, both already covered by `test_EARS_STORE_21_*`/the
+      // design gate, and NOT a clean-now affordance. What EARS-STORE-22
+      // actually forbids is an action-imperative CTA -- "Clean Now" being
+      // the reviewer's own proof-of-concept -- so `delete`/`remove` only
+      // count here paired with `now`, exactly as they would read on a
+      // real apply-now button; `clean` and `apply` alone are safe bare
+      // matches because neither appears anywhere in this screen's
+      // approved copy today.
+      final forbidden = RegExp(
+        r'clean|\bapply\b|remove\s*now|delete\s*now|free\s*up\s*now',
+        caseSensitive: false,
+      );
+      final tappableFinder = find.byWidgetPredicate((widget) {
+        if (widget is InkWell) return widget.onTap != null;
+        if (widget is GestureDetector) return widget.onTap != null;
+        if (widget is Listener) {
+          return widget.onPointerDown != null ||
+              widget.onPointerUp != null ||
+              widget.onPointerSignal != null;
+        }
+        return widget is ElevatedButton ||
+            widget is TextButton ||
+            widget is OutlinedButton ||
+            widget is IconButton ||
+            widget is FloatingActionButton;
+      });
+
+      for (final element in tester.elementList(tappableFinder)) {
+        final ofElement = find.byElementPredicate((e) => e == element);
+
+        for (final text in tester.widgetList<Text>(
+          find.descendant(of: ofElement, matching: find.byType(Text)),
+        )) {
+          final data = text.data ?? text.textSpan?.toPlainText() ?? '';
+          expect(
+            forbidden.hasMatch(data),
+            isFalse,
+            reason:
+                'a tappable element renders forbidden text: "$data" '
+                '(EARS-STORE-22 forbids any clean/apply/delete-shaped '
+                'affordance, regardless of widget type)',
+          );
+        }
+
+        for (final semantics in tester.widgetList<Semantics>(
+          find.descendant(of: ofElement, matching: find.byType(Semantics)),
+        )) {
+          final label = semantics.properties.label ?? '';
+          expect(
+            forbidden.hasMatch(label),
+            isFalse,
+            reason:
+                'a tappable element carries a forbidden semantics label: '
+                '"$label"',
+          );
+        }
+      }
 
       // No delete/clean/apply-shaped glyph anywhere on screen.
       for (final icon in const [
