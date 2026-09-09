@@ -1,0 +1,618 @@
+{
+  "url": "/settings-battery",
+  "title": "settings-battery",
+  "viewport": {
+    "w": 390.0,
+    "h": 844.0
+  },
+  "scrollHeight": 844.0,
+  "elements": [
+    {
+      "tag": "BUTTON",
+      "role": "button",
+      "text": "",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 12,
+        "y": 8,
+        "w": 40,
+        "h": 40
+      },
+      "style": {
+        "color": "rgb(0, 0, 0)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "",
+        "fontSize": "0px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "HEADING:1",
+      "role": "heading:1",
+      "text": "Battery",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 20,
+        "y": 48,
+        "w": 198,
+        "h": 40
+      },
+      "style": {
+        "color": "rgb(248, 249, 255)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "28px",
+        "fontWeight": "600",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "GENERIC",
+      "role": "generic",
+      "text": "What this device is allowed to do in the background, and what the system is restricting.",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 20,
+        "y": 92,
+        "w": 350,
+        "h": 80
+      },
+      "style": {
+        "color": "rgb(199, 196, 216)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "GENERIC",
+      "role": "generic",
+      "text": "",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": true,
+      "box": {
+        "x": 20,
+        "y": 188,
+        "w": 350,
+        "h": 233
+      },
+      "style": {
+        "color": "rgb(0, 0, 0)",
+        "background": "rgb(26, 44, 66)",
+        "fontFamily": "",
+        "fontSize": "0px",
+        "fontWeight": "400",
+        "radius": "12px",
+        "borderWidth": "1px",
+        "borderColor": "rgba(199, 196, 216, 0.102)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "HEADING:2",
+      "role": "heading:2",
+      "text": "Background operation",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 37,
+        "y": 205,
+        "w": 284,
+        "h": 62
+      },
+      "style": {
+        "color": "rgb(248, 249, 255)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "22px",
+        "fontWeight": "500",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "GENERIC",
+      "role": "generic",
+      "text": "battery_full",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 329,
+        "y": 224,
+        "w": 24,
+        "h": 24
+      },
+      "style": {
+        "color": "rgb(220, 233, 255)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "MaterialIcons",
+        "fontSize": "24px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "GENERIC",
+      "role": "generic",
+      "text": "Running",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 37,
+        "y": 279,
+        "w": 86,
+        "h": 17
+      },
+      "style": {
+        "color": "rgb(199, 196, 216)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "12px",
+        "fontWeight": "500",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "GENERIC",
+      "role": "generic",
+      "text": "Discovery, message sync and calls continue while the app is closed — only while this is running.",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 37,
+        "y": 304,
+        "w": 316,
+        "h": 100
+      },
+      "style": {
+        "color": "rgb(199, 196, 216)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "GENERIC",
+      "role": "generic",
+      "text": "",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": true,
+      "box": {
+        "x": 20,
+        "y": 437,
+        "w": 350,
+        "h": 327
+      },
+      "style": {
+        "color": "rgb(0, 0, 0)",
+        "background": "rgb(26, 44, 66)",
+        "fontFamily": "",
+        "fontSize": "0px",
+        "fontWeight": "400",
+        "radius": "12px",
+        "borderWidth": "1px",
+        "borderColor": "rgba(199, 196, 216, 0.102)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "HEADING:2",
+      "role": "heading:2",
+      "text": "Restrictions in effect",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 37,
+        "y": 454,
+        "w": 316,
+        "h": 62
+      },
+      "style": {
+        "color": "rgb(248, 249, 255)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "22px",
+        "fontWeight": "500",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "GENERIC",
+      "role": "generic",
+      "text": "Doze",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 37,
+        "y": 536,
+        "w": 280,
+        "h": 20
+      },
+      "style": {
+        "color": "rgb(199, 196, 216)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "GENERIC",
+      "role": "generic",
+      "text": "On",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 329,
+        "y": 536,
+        "w": 25,
+        "h": 17
+      },
+      "style": {
+        "color": "rgb(199, 196, 216)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "12px",
+        "fontWeight": "500",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "GENERIC",
+      "role": "generic",
+      "text": "Battery Saver",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 37,
+        "y": 572,
+        "w": 267,
+        "h": 20
+      },
+      "style": {
+        "color": "rgb(199, 196, 216)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "GENERIC",
+      "role": "generic",
+      "text": "Off",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 316,
+        "y": 572,
+        "w": 37,
+        "h": 17
+      },
+      "style": {
+        "color": "rgb(199, 196, 216)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "12px",
+        "fontWeight": "500",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "GENERIC",
+      "role": "generic",
+      "text": "Background restricted",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 37,
+        "y": 608,
+        "w": 267,
+        "h": 40
+      },
+      "style": {
+        "color": "rgb(199, 196, 216)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "GENERIC",
+      "role": "generic",
+      "text": "Off",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 316,
+        "y": 608,
+        "w": 37,
+        "h": 17
+      },
+      "style": {
+        "color": "rgb(199, 196, 216)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "12px",
+        "fontWeight": "500",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "HEADING:2",
+      "role": "heading:2",
+      "text": "Current plan",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 37,
+        "y": 668,
+        "w": 267,
+        "h": 31
+      },
+      "style": {
+        "color": "rgb(248, 249, 255)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "22px",
+        "fontWeight": "500",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    },
+    {
+      "tag": "GENERIC",
+      "role": "generic",
+      "text": "Checks every 300s; peer discovery paused.",
+      "depth": 0,
+      "type": "",
+      "name": "",
+      "placeholder": "",
+      "alt": "",
+      "required": false,
+      "disabled": false,
+      "surface": false,
+      "box": {
+        "x": 37,
+        "y": 707,
+        "w": 316,
+        "h": 40
+      },
+      "style": {
+        "color": "rgb(199, 196, 216)",
+        "background": "rgba(0, 0, 0, 0)",
+        "fontFamily": "Roboto",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "radius": "0px",
+        "borderWidth": "0px",
+        "borderColor": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "shadow": "none",
+        "textTransform": "none"
+      }
+    }
+  ],
+  "tokens": {
+    "color": {
+      "rgb(248, 249, 255)": 4,
+      "rgb(199, 196, 216)": 10
+    },
+    "background": {
+      "rgb(26, 44, 66)": 2
+    },
+    "fontFamily": {
+      "Roboto": 14
+    },
+    "fontSize": {
+      "28px": 1,
+      "14px": 6,
+      "22px": 3,
+      "12px": 4
+    },
+    "fontWeight": {
+      "600": 1,
+      "400": 6,
+      "500": 7
+    },
+    "radius": {
+      "12px": 2
+    },
+    "borderColor": {
+      "rgba(199, 196, 216, 0.102)": 2
+    },
+    "shadow": {},
+    "spacing": {}
+  }
+}
