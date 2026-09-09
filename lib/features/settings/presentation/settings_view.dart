@@ -101,6 +101,7 @@ class _TitleBlock extends StatelessWidget {
 
 class _RowSpec {
   const _RowSpec({
+    required this.row,
     required this.icon,
     required this.title,
     required this.description,
@@ -108,6 +109,10 @@ class _RowSpec {
     required this.iconBackdrop,
   });
 
+  /// The closed row identity `openRow` routes on (E15-T11) — never the
+  /// title string below, which is copy and may not be routed on (see
+  /// `settings_controller.dart`'s own header).
+  final SettingsRow row;
   final IconData icon;
   final String title;
   final String description;
@@ -120,6 +125,7 @@ class _RowSpec {
 /// 12/19/25/32/38/45/51/57 — not reproduced in the printed contract table.
 final _rows = <_RowSpec>[
   _RowSpec(
+    row: SettingsRow.account,
     icon: Icons.account_circle,
     title: 'Account',
     description: 'Profile, identity keys, linked devices',
@@ -127,6 +133,7 @@ final _rows = <_RowSpec>[
     iconBackdrop: NexoraColors.settingsIconBackdropBlue,
   ),
   _RowSpec(
+    row: SettingsRow.privacy,
     icon: Icons.security,
     title: 'Privacy & Security',
     description: 'Encryption protocols, app lock, permissions',
@@ -134,6 +141,7 @@ final _rows = <_RowSpec>[
     iconBackdrop: NexoraColors.settingsIconBackdropGreen,
   ),
   _RowSpec(
+    row: SettingsRow.securityCenter,
     icon: Icons.policy,
     title: 'Security Center',
     description: 'Threat logs, network audits, certificates',
@@ -141,6 +149,7 @@ final _rows = <_RowSpec>[
     iconBackdrop: NexoraColors.settingsIconBackdropGreen,
   ),
   _RowSpec(
+    row: SettingsRow.network,
     icon: Icons.wifi_tethering,
     title: 'Network',
     description: 'Data usage, mesh routing, proxy',
@@ -148,6 +157,7 @@ final _rows = <_RowSpec>[
     iconBackdrop: NexoraColors.settingsIconBackdropViolet,
   ),
   _RowSpec(
+    row: SettingsRow.storage,
     icon: Icons.sd_storage,
     title: 'Storage',
     description: 'Local cache, message retention, export',
@@ -155,6 +165,7 @@ final _rows = <_RowSpec>[
     iconBackdrop: NexoraColors.settingsIconBackdropViolet,
   ),
   _RowSpec(
+    row: SettingsRow.battery,
     icon: Icons.battery_full, // design glyph: battery_full_alt — see file header deviation note
     title: 'Battery',
     description: 'Background execution, power saving modes',
@@ -162,6 +173,7 @@ final _rows = <_RowSpec>[
     iconBackdrop: NexoraColors.devicesHeaderBg, // rgb(33,49,69) — identical value
   ),
   _RowSpec(
+    row: SettingsRow.notifications,
     icon: Icons.notifications,
     title: 'Notifications',
     description: 'Alerts, silent modes, LED behaviors',
@@ -169,6 +181,7 @@ final _rows = <_RowSpec>[
     iconBackdrop: NexoraColors.devicesHeaderBg, // rgb(33,49,69) — identical value
   ),
   _RowSpec(
+    row: SettingsRow.about,
     icon: Icons.info,
     title: 'About / Updates',
     description: 'Version 2.4.1, release notes, diagnostic logs',
@@ -240,7 +253,7 @@ class _MenuRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => controller.openRow(spec.title),
+        onTap: () => controller.openRow(spec.row),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -295,6 +308,23 @@ class _MenuRow extends StatelessWidget {
 /// unable to reach any other tab without the system back gesture. Found
 /// via live two-device on-hardware testing; fixed alongside
 /// `devices_view.dart`'s identical bug.
+///
+/// E15-T11: each `_NavItem` below is now wrapped in `Expanded` — a real,
+/// pre-existing `RenderFlex` overflow (183px at the real 390px mobile
+/// viewport, "Conversations" being the widest label) was invisible until
+/// this task wired `settings` into `test/design/design_probe_test.dart`
+/// for the first time (it was never registered there before — genesis's
+/// own golden for this screen was captured from the HTML design source,
+/// never from a pumped Flutter build). `devices_view.dart`'s own
+/// `_BottomNav` already wraps each of its four `_NavItem`s in `Expanded`;
+/// this brings `settings_view.dart` in line with that same, already-
+/// established pattern. No element, icon, label, order or behaviour
+/// changes — only the missing width constraint that was letting the row
+/// overflow instead of sharing space evenly, exactly as the design's own
+/// four equal-width tabs require. This is the minimal fix needed to make
+/// this task's own required `design-verify SCREEN=settings` gate (§7/§9)
+/// runnable at all; logged in §9 Deviations as an out-of-band fix to a
+/// bug this task's own probe wiring exposed, not one it introduced.
 class _BottomNav extends StatelessWidget {
   const _BottomNav();
 
@@ -311,10 +341,18 @@ class _BottomNav extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _NavItem(icon: Icons.dashboard, label: 'Dashboard', active: false, onTap: () => Get.toNamed('/dashboard')),
-          _NavItem(icon: Icons.chat, label: 'Conversations', active: false, onTap: () => Get.toNamed('/conversations')),
-          _NavItem(icon: Icons.router, label: 'Devices', active: false, onTap: () => Get.toNamed('/devices')),
-          _NavItem(icon: Icons.settings, label: 'Settings', active: true, onTap: () {}),
+          Expanded(
+            child: _NavItem(icon: Icons.dashboard, label: 'Dashboard', active: false, onTap: () => Get.toNamed('/dashboard')),
+          ),
+          Expanded(
+            child: _NavItem(icon: Icons.chat, label: 'Conversations', active: false, onTap: () => Get.toNamed('/conversations')),
+          ),
+          Expanded(
+            child: _NavItem(icon: Icons.router, label: 'Devices', active: false, onTap: () => Get.toNamed('/devices')),
+          ),
+          Expanded(
+            child: _NavItem(icon: Icons.settings, label: 'Settings', active: true, onTap: () {}),
+          ),
         ],
       ),
     );
