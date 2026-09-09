@@ -210,7 +210,16 @@ class _PolicyBody extends StatelessWidget {
         const SizedBox(height: 8),
         _KeyValueRow(
           label: 'Last checked',
-          value: SettingsMachineValue('${resolvedPolicy.updatedAt}'),
+          // `updatedAt` is epoch millis (`VersionPolicyService`) -- render
+          // it as an absolute ISO-8601 instant, the same format the
+          // Diagnostics card's own `_LogEntryRow` already uses for its
+          // timestamp, rather than the raw unreadable integer.
+          value: SettingsMachineValue(
+            DateTime.fromMillisecondsSinceEpoch(
+              resolvedPolicy.updatedAt,
+              isUtc: true,
+            ).toIso8601String(),
+          ),
         ),
       ],
     );
@@ -269,7 +278,15 @@ class _KeyValueRow extends StatelessWidget {
       children: [
         Expanded(child: SettingsBodyLine(label)),
         const SizedBox(width: 12),
-        value,
+        // `Flexible` rather than a bare unconstrained `value` (F6, review
+        // round 1): "Last checked" now renders a full ISO-8601 instant
+        // (24 characters) rather than a raw epoch-millis integer, which
+        // overflows this row's remaining width at this screen's 390px
+        // viewport with no wrap constraint at all -- the exact overflow
+        // shape `_LogEntryRow` already documents for the same reason at
+        // this same viewport. Every other `_KeyValueRow` value is short
+        // enough that this is a no-op for it.
+        Flexible(child: value),
       ],
     );
   }

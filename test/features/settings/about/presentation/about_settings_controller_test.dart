@@ -22,6 +22,8 @@ import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/services/version_policy_service.dart';
 import 'package:nexora/features/settings/about/presentation/about_settings_controller.dart';
 import 'package:nexora/features/settings/about/presentation/about_settings_view.dart';
+import 'package:nexora/features/settings/presentation/widgets/settings_sub_screen_scaffold.dart'
+    show SettingsSectionCard;
 import 'package:nexora/features/version/domain/version_state.dart';
 
 void main() {
@@ -77,47 +79,13 @@ void main() {
       },
     );
 
-    test(
-      'test_EARS_VER_18_null_build_number_renders_the_failure_line_not_zero',
-      () async {
-        final controller = AboutSettingsController(
-          versionPolicyService: policyService,
-          versionProvider: () async => '9.9.9',
-          buildNumberProvider: () async => null,
-        );
-
-        controller.onInit();
-        await pumpEventQueue();
-
-        expect(controller.buildInfoError.value, isTrue);
-        // The risk this checklist item names directly (task §6/§7): a
-        // null build number must never render as a bare "0".
-        expect(controller.buildNumber.value, isNot(0));
-        expect(controller.buildNumber.value, isNull);
-      },
-    );
-
-    test(
-      'test_EARS_VER_18_absent_policy_renders_the_fail_open_statement',
-      () async {
-        // No row inserted -- `cached()` legitimately returns null.
-        final controller = AboutSettingsController(
-          versionPolicyService: policyService,
-          versionProvider: () async => '9.9.9',
-          buildNumberProvider: () async => 999,
-        );
-
-        controller.onInit();
-        await pumpEventQueue();
-
-        expect(controller.policyLoaded.value, isTrue);
-        expect(controller.policyError.value, isFalse);
-        expect(controller.cachedPolicy.value, isNull);
-        // AB13's fail-open default (EARS-VER-9): no cached policy at all
-        // evaluates to upToDate, never updateRequired.
-        expect(controller.versionState.value, VersionState.upToDate);
-      },
-    );
+    // `test_EARS_VER_18_null_build_number_renders_the_failure_line_not_zero`
+    // and `test_EARS_VER_18_absent_policy_renders_the_fail_open_statement`
+    // moved to the `AboutSettingsView` group below (F3/F4, review round 1):
+    // asserting only controller state proved nothing about what the
+    // screen actually renders -- the reviewer showed both AB18's `'0'`
+    // and AB13's mutated copy could ship undetected. They now pump the
+    // real view and assert on `find.text(...)`.
 
     test(
       'test_EARS_UI_11_policy_read_failure_leaves_the_build_card_rendered',
@@ -166,33 +134,38 @@ void main() {
         ).readAsStringSync();
         final classBody = _extractClassBody(source, 'DiagnosticEntry');
 
-        const forbiddenTokens = [
-          'cause',
-          'stackTrace',
-          'StackTrace',
-          'exception',
-          'Exception',
-          'error',
-          'Error',
-        ];
-        for (final token in forbiddenTokens) {
-          expect(
-            classBody.contains(token),
-            isFalse,
-            reason:
-                '`DiagnosticEntry` must not declare a field capable of '
-                'holding a cause/stack trace, but its class body contains '
-                '"$token":\n$classBody',
-          );
-        }
-        for (final expectedField in ['code', 'timestamp']) {
-          expect(
-            classBody.contains(expectedField),
-            isTrue,
-            reason: '`DiagnosticEntry` is missing its own "$expectedField" '
-                'field.',
-          );
-        }
+        // F2 (review round 1): a denylist over banned tokens fails on an
+        // innocuous doc comment and passes straight through an undetected
+        // field named e.g. `detail`/`payload`/`message`/`trace`/`context`/
+        // `extra` (the reviewer proved this by adding
+        // `final String? detail = null;` -- the old denylist test still
+        // passed). Invert it: strip comments, then count the class's own
+        // `final`-declared instance fields and assert the set is EXACTLY
+        // `{code, timestamp}` -- no more, no fewer, whatever they're named.
+        final withoutComments = classBody
+            .replaceAll(RegExp(r'///[^\n]*'), '')
+            .replaceAll(RegExp(r'//[^\n]*'), '');
+        final fieldPattern = RegExp(
+          r'final\s+[\w<>,\?\s]+?\s+(\w+)\s*(?:=[^;]+)?;',
+        );
+        final declaredFields = fieldPattern
+            .allMatches(withoutComments)
+            .map((m) => m.group(1)!)
+            .toList();
+        expect(
+          declaredFields.toSet(),
+          {'code', 'timestamp'},
+          reason:
+              '`DiagnosticEntry` must declare EXACTLY the field set '
+              '{code, timestamp} -- found: $declaredFields\n$classBody',
+        );
+        expect(
+          declaredFields.length,
+          2,
+          reason:
+              '`DiagnosticEntry` must declare exactly two `final` fields '
+              '-- found ${declaredFields.length}: $declaredFields\n$classBody',
+        );
 
         final entry = DiagnosticEntry(code: 'x', timestamp: DateTime(2026));
         expect(entry.code, 'x');
@@ -242,6 +215,49 @@ void main() {
           findsOneWidget,
         );
 
+        // F1 (review round 1): the POSITIVE invariant. A denylist over one
+        // marker string can only ever pass if that specific string never
+        // gets rendered -- it says nothing about a DIFFERENT extra line
+        // (e.g. a real stack trace) added anywhere under this card. The
+        // reviewer proved exactly this: adding
+        // `const SettingsBodyLine('StateError #0 main (file:///secret.dart:42)')`
+        // under every diagnostics row left the old denylist-only test
+        // green. Instead: assert every `Text` rendered under the
+        // Diagnostics card (the third `SettingsSectionCard`, in this
+        // screen's own fixed card order) is EXACTLY the card's own
+        // heading, or one seeded entry's own `code`/`timestamp` -- an
+        // allowlist over the whole card, not a denylist for one string.
+        final diagnosticsCard = find.byType(SettingsSectionCard).at(2);
+        const seededEntryCode = 'version.installed_build_read_failed';
+        final seededEntryTimestamp = DateTime.utc(
+          2026,
+          1,
+          1,
+        ).toIso8601String();
+        final allowedDiagnosticsText = <String>{
+          'Diagnostics',
+          seededEntryCode,
+          seededEntryTimestamp,
+        };
+        final diagnosticsTexts = tester
+            .widgetList<Text>(
+              find.descendant(of: diagnosticsCard, matching: find.byType(Text)),
+            )
+            .map((t) => t.data ?? '')
+            .toList();
+        expect(diagnosticsTexts, isNotEmpty);
+        for (final text in diagnosticsTexts) {
+          expect(
+            allowedDiagnosticsText.contains(text),
+            isTrue,
+            reason:
+                'Unexpected text rendered under the Diagnostics card: '
+                '"$text" (allowlist: $allowedDiagnosticsText). Falsify this '
+                'by adding an extra line under a log row and confirming '
+                'this assertion fails.',
+          );
+        }
+
         // The real production call site this screen's own controller
         // uses (`_readInstalledVersion`'s catch block) reports failures
         // through the app's real `ObservabilityService.instance.logError`
@@ -288,13 +304,23 @@ void main() {
           versionPolicyService: policyService,
           versionProvider: () async => '9.9.9',
           buildNumberProvider: () async => 999,
+          // A seeded entry, not an empty log (F5, review round 1): an
+          // empty diagnostics list never builds a `_LogEntryRow` at all,
+          // so the interactive-control scoping check below would exercise
+          // nothing if the log stayed empty here.
+          logEntriesProvider: () async => [
+            DiagnosticEntry(
+              code: 'version.installed_build_read_failed',
+              timestamp: DateTime.utc(2026, 1, 1),
+            ),
+          ],
         );
         Get.put<AboutSettingsController>(controller);
 
         await tester.runAsync(() async {
           while (controller.version.value == null ||
               controller.policyLoaded.value == false ||
-              controller.logEntriesLoaded.value == false) {
+              controller.logEntries.isEmpty) {
             await Future<void>.delayed(const Duration(milliseconds: 5));
           }
         });
@@ -316,6 +342,125 @@ void main() {
         expect(find.byType(TextButton), findsNothing);
         expect(find.byType(OutlinedButton), findsNothing);
         expect(find.byType(IconButton), findsNothing);
+
+        // F5 (review round 1): checking only for Material BUTTON types
+        // let a tap-to-expand affordance through undetected -- the
+        // reviewer proved this by wrapping a log row in
+        // `InkWell(onTap: () {})` (exactly the "expand an entry into its
+        // cause" control task §4 prohibits); all four assertions above
+        // still passed. Widen it to any gesture-catching widget
+        // (`InkWell`/`GestureDetector`/`Listener`), but scope the search
+        // to below this screen's own three content cards -- excluding the
+        // shared shell's own legitimate back-affordance `InkWell`
+        // (`_BackRow`, `settings_sub_screen_scaffold.dart`), which this
+        // task did not build and must not flag.
+        final interactiveInsideCards = find.descendant(
+          of: find.byType(SettingsSectionCard),
+          matching: find.byWidgetPredicate(
+            (w) => w is InkWell || w is GestureDetector || w is Listener,
+          ),
+        );
+        expect(
+          interactiveInsideCards,
+          findsNothing,
+          reason:
+              'A gesture-catching widget (InkWell/GestureDetector/Listener) '
+              'was found inside one of this screen\'s own content cards -- '
+              'this screen has no control of any kind. Falsify this by '
+              'wrapping a log row in `InkWell(onTap: () {})` and confirming '
+              'this assertion fails.',
+        );
+      },
+    );
+
+    testWidgets(
+      'test_EARS_VER_18_null_build_number_renders_the_failure_line_not_zero',
+      (tester) async {
+        final controller = AboutSettingsController(
+          versionPolicyService: policyService,
+          versionProvider: () async => '9.9.9',
+          buildNumberProvider: () async => null,
+        );
+        Get.put<AboutSettingsController>(controller);
+
+        await tester.runAsync(() async {
+          while (controller.buildInfoError.value == false) {
+            await Future<void>.delayed(const Duration(milliseconds: 5));
+          }
+          while (controller.policyLoaded.value == false ||
+              controller.logEntriesLoaded.value == false) {
+            await Future<void>.delayed(const Duration(milliseconds: 5));
+          }
+        });
+
+        await tester.pumpWidget(
+          const GetMaterialApp(home: AboutSettingsView()),
+        );
+        await tester.pumpAndSettle();
+
+        expect(controller.buildInfoError.value, isTrue);
+        // The risk this checklist item names directly (task §6/§7): a
+        // null build number must never render as a bare "0".
+        expect(controller.buildNumber.value, isNot(0));
+        expect(controller.buildNumber.value, isNull);
+
+        // F3 (review round 1): the OLD version of this test only checked
+        // controller state and never pumped a widget at all -- the
+        // reviewer proved this by changing the view's AB18 branch to
+        // `return const SettingsMachineValue('0');` and every assertion
+        // still passed. Assert what is actually RENDERED.
+        expect(
+          find.text('Version information could not be read.'),
+          findsOneWidget,
+        );
+        expect(find.text('0'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'test_EARS_VER_18_absent_policy_renders_the_fail_open_statement',
+      (tester) async {
+        // No row inserted -- `cached()` legitimately returns null.
+        final controller = AboutSettingsController(
+          versionPolicyService: policyService,
+          versionProvider: () async => '9.9.9',
+          buildNumberProvider: () async => 999,
+        );
+        Get.put<AboutSettingsController>(controller);
+
+        await tester.runAsync(() async {
+          while (controller.version.value == null ||
+              controller.policyLoaded.value == false ||
+              controller.logEntriesLoaded.value == false) {
+            await Future<void>.delayed(const Duration(milliseconds: 5));
+          }
+        });
+
+        await tester.pumpWidget(
+          const GetMaterialApp(home: AboutSettingsView()),
+        );
+        await tester.pumpAndSettle();
+
+        expect(controller.policyLoaded.value, isTrue);
+        expect(controller.policyError.value, isFalse);
+        expect(controller.cachedPolicy.value, isNull);
+        // AB13's fail-open default (EARS-VER-9): no cached policy at all
+        // evaluates to upToDate, never updateRequired.
+        expect(controller.versionState.value, VersionState.upToDate);
+
+        // F4 (review round 1): the OLD version of this test only checked
+        // controller state -- the reviewer proved this by mutating AB13's
+        // copy in the view to `'MUTATED-NO-FAIL-OPEN-TEXT'` and every
+        // assertion still passed (the design gate didn't catch it either,
+        // since the only golden seeds a policy row). Assert the exact
+        // verbatim AB13 copy (`settings-about.md`'s §Copy) is rendered.
+        expect(
+          find.text(
+            'No policy has been fetched yet. This build is treated as '
+            'supported until one is.',
+          ),
+          findsOneWidget,
+        );
       },
     );
   });
