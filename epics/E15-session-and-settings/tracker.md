@@ -1,6 +1,6 @@
 # E15 · Session Lifecycle & Settings Sub-Screens · Progress
 
-**Status:** in-progress · **Started:** 2026-09-08 · **Completed:** — · **Progress:** 7/12
+**Status:** in-progress · **Started:** 2026-09-08 · **Completed:** — · **Progress:** 8/12
 
 > Only the ORCHESTRATOR edits this file.
 > todo → in-progress → review-requested → (changes-requested →) done → verified
@@ -35,7 +35,7 @@ sub-screens).
 - [x] E15-T06 · Security Center screen · done · PR #196, APPROVE (opus, round 5) — merged `cdbe253`
 - [x] E15-T07 · Account screen and sign-out confirmation · done · PR #199, round 1 CHANGES-REQUESTED (F1 non-deterministic design-gate fixture, F2 vacuous failure-isolation test, F3 two missing tests, F4 bookkeeping) → round 2 APPROVE (opus). design gates 100% both (settings-account 19/19, sign-out-confirm 13/13). Merged `275d589`
 - [ ] E15-T08 · Network and Battery settings screens · review-requested · PR #200 open, review in progress (opus)
-- [ ] E15-T09 · Storage settings screen (E08 carry-forward) · in-progress · a real `RenderFlex` overflow found in the default state during self-verification, being fixed before PR
+- [x] E15-T09 · Storage settings screen (E08 carry-forward) · done · PR #203, round 1 CHANGES-REQUESTED (S1 blocker: "no clean-now affordance" test defeated by the screen's own legitimate `InkWell` idiom; S2×2: invalid-parameter write-proof gap, untested zero-candidate sentinel filter; S3: unstamped OQ) → round 2 APPROVE (opus), every finding independently re-falsified. Fixed a real `RenderFlex` overflow found during orchestrator self-verification before the PR even opened. design gate 100% (10/10). Merged `3eda7d9`
 - [ ] E15-T10 · About / Updates screen · in-progress · implemented, self-verification (analyze/tests/design-verify) in progress
 - [ ] E15-T11 · Settings hub wiring: eight routes, eight rows, probe consolidation · todo · — (blocked on T07-T10 landing)
 - [ ] E15-T12 · Wire SignOutUseCase's production teardown and remote-revoke closures · todo · — (new, 2026-09-10: shards the tracker's own F1/F2 resolution note below; depends on E15-T11)
@@ -179,6 +179,23 @@ T08 now owns that file."* `E15-T09` touches neither.
   13/13). 1432/1432. Merged `275d589`. See §Carried-forward for one
   residual observation (EARS-UI-10 has no test, ticked DoD anyway — owner
   is E15-T11).
+- 2026-09-10 · E15-T09 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · round 1 CHANGES-REQUESTED (S1 blocker: the "no clean-now
+  affordance" test was defeated by a plain `InkWell` — the same gesture
+  idiom the screen's own `_ModeRow` already legitimately uses, the worst
+  form of this epic's recurring "no control rendered" defect class yet;
+  S2×2: an invalid-parameter test that couldn't distinguish "rejected" from
+  "wrote the same value anyway", and EARS-STORE-21's zero-candidate
+  sentinel-filter code path never exercised by any test; S3: `OQ-E15-T09-1`
+  unstamped at merge time despite a trivial "yes" answer) → round 2
+  APPROVE, every finding independently re-falsified (two separate PoCs for
+  S1 alone — an `InkWell` and a `GestureDetector` variant — to prove the
+  fix's two layers each catch it independently). design gate 100% (10/10),
+  self-referential-by-construction (a derived screen's own first clean
+  dump), noted but not a defect. 1430/1430. Merged `3eda7d9`. Also fixed a
+  real `RenderFlex` overflow the orchestrator found during
+  self-verification before the PR opened (same shape as
+  `security_center_view.dart`'s existing fix).
 
 ## Carried-forward observations (not yet a task)
 - **E15-T07's DoD ticked "every §8 criterion passes via a test named by
