@@ -158,6 +158,32 @@ T08 now owns that file."* `E15-T09` touches neither.
   `E15-T07`'s confirm button would show a spurious "erase failed" after a
   successful sign-out. **Owner: `E15-T07`'s confirm button must disable
   itself after the first tap.**
+- **E15-T06 review round 4, finding #1 (S4) — `test_EARS_DIAG_5_no_action_
+  affordance_is_rendered` (Security Center) does not scan `Listener` or
+  low-level `GestureDetector` pointer callbacks** (`onTapDown`,
+  `onSecondaryTap`, `onPointerDown`, etc.) — only `onTap`/`onLongPress`/
+  `onDoubleTap` on `InkWell`/`GestureDetector`/`Dismissible`. Proven by the
+  reviewer: wrapping a row in `Listener(onPointerDown: (_) {})` or
+  `GestureDetector(onTapDown: (_) {})` stays undetected. Zero real-world
+  impact today (the shipped screen has no such widget), but `L-frontend-001`
+  is precedent for exactly this evasion shape (E06-T10 swapped `InkWell`
+  for a raw `Listener` to dodge a different probe classifier). **Owner:
+  whichever future task touches `security_center_view.dart`** — if it adds
+  any `Listener`/low-level pointer widget, extend this test's scan set
+  first (`find.byType(Listener)` alongside the existing three) rather than
+  assume the existing test still covers new affordances.
+- **E15-T06's `OQ-E15-T06-2` (S3) — `signal_trusted_identities` has no
+  first-seen-timestamp column, so the Security Center's "Trusted
+  identities" row cannot show when an identity was first seen (design
+  contract's own SC10), and `E15-T06` shipped with `timestamp: null` there
+  rather than fabricating a value.** Full detail (table name, the needed
+  column, the 🧍 `db_schema_migration` gate, and the exact call site to wire
+  once the column exists — `trustedIdentities()`) lives in `E15-T06.md`'s
+  own Open Questions section, but that section stops being read once the
+  task is `done` and a future sharding pass reads the epic tracker and
+  `spec/`, not closed task files. **Owner: whichever epic/task next touches
+  `signal_trusted_identities`'s schema** — read `E15-T06.md`'s
+  `OQ-E15-T06-2` in full before scoping that migration.
 
 ## Blocked / Frozen
 - **E15-T02** — 🟡 blocked transitively via `depends_on: [E15-T01]`. `T01`
