@@ -138,9 +138,8 @@ class SettingsBinding extends Bindings {
     // this properly means `AppBinding` registering its single
     // `BackgroundControl` as a findable permanent singleton, which is a
     // one-line change to a file this task may not touch (task §4: "does NOT
-    // touch main.dart, bindings.dart"). Logged here, in this task's own
-    // Deviations/Open Questions, and recommended as a fast-follow bug
-    // against `E15-T08`/`bindings.dart` rather than fixed by this task —
+    // touch main.dart, bindings.dart"). Filed as `E15-B03` (S2) rather than
+    // fixed by this task — see this task's own §9 Deviations/Open Questions —
     // constructing a fresh instance here is otherwise the same pattern every
     // other registration in this method already uses (fresh
     // repository/service per screen over shared state), and does not affect
