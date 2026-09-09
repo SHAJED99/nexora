@@ -1,6 +1,6 @@
 # E15 · Session Lifecycle & Settings Sub-Screens · Progress
 
-**Status:** in-progress · **Started:** 2026-09-08 · **Completed:** — · **Progress:** 10/12
+**Status:** in-progress · **Started:** 2026-09-08 · **Completed:** — · **Progress:** 11/14
 
 > Only the ORCHESTRATOR edits this file.
 > todo → in-progress → review-requested → (changes-requested →) done → verified
@@ -37,8 +37,10 @@ sub-screens).
 - [x] E15-T08 · Network and Battery settings screens · done · PR #200, round 1 CHANGES-REQUESTED (Listener-gaming of "no control rendered" tests, unrendered "Not measured"/"Unknown" text, mislabelled PLAT-15 test, bookkeeping) → round 2 APPROVE (opus), every finding independently re-falsified. design gates 100% both (settings-battery 18/18, settings-network 14/14). Merged `ade6133`
 - [x] E15-T09 · Storage settings screen (E08 carry-forward) · done · PR #203, round 1 CHANGES-REQUESTED (S1 blocker: "no clean-now affordance" test defeated by the screen's own legitimate `InkWell` idiom; S2×2: invalid-parameter write-proof gap, untested zero-candidate sentinel filter; S3: unstamped OQ) → round 2 APPROVE (opus), every finding independently re-falsified. Fixed a real `RenderFlex` overflow found during orchestrator self-verification before the PR even opened. design gate 100% (10/10). Merged `3eda7d9`
 - [x] E15-T10 · About / Updates screen · done · PR #202, round 1 CHANGES-REQUESTED (FR-DIAG-002 falsification test couldn't fail against a real stack-trace leak; model-shape test guarded a denylist not the shape; two tests never built a widget/asserted controller state only; "no control" test missed non-Material gesture wrappers; "Last checked" rendered a raw epoch-millis integer) → round 2 APPROVE (opus), all six independently re-falsified. Fixed a second real `RenderFlex` overflow found while formatting the timestamp fix. design gate 100% (22/22). Merged `2b20986`. OQ-E15-T10-2 (no local diagnostic log store) resolved by the orchestrator, see §Carried-forward.
-- [ ] E15-T11 · Settings hub wiring: eight routes, eight rows, probe consolidation · todo · — (blocked on T07-T10 landing)
-- [ ] E15-T12 · Wire SignOutUseCase's production teardown and remote-revoke closures · todo · — (new, 2026-09-10: shards the tracker's own F1/F2 resolution note below; depends on E15-T11)
+- [x] E15-T11 · Settings hub wiring: eight routes, eight rows, probe consolidation · done · PR #208, round 1 CHANGES-REQUESTED (S2 blocker: a second `BackgroundService()` in `settings_binding.dart` silently hijacks `BackgroundLifecycleObserver`'s native event registration, and a source comment falsely claimed it was already disclosed) → round 2 APPROVE (opus), docs-only fix verified as touching zero product code. design gates 100% on all nine sub-screens through the new consolidated fixture; the hub's own gate (`settings`) is honestly red (33.8%, pre-existing HTML-vs-Flutter golden mismatch, not a regression — see E15-T13). Merged `1facb7f`. Filed `E15-B03` (S2, the BackgroundService fix) and `E15-T13` (the hub design-gate reconciliation) as real follow-up tasks rather than fixed/guessed at here.
+- [ ] E15-T12 · Wire SignOutUseCase's production teardown and remote-revoke closures · todo · — depends on E15-T11 (now merged) — ready to dispatch
+- [ ] E15-B03 · A second `BackgroundService()` hijacks `BackgroundLifecycleObserver`'s native event registration · todo · S2, found by E15-T11's review — needs 🧍 `bug_priorities` gate (p: unset) before dispatch
+- [ ] E15-T13 · Reconcile `settings.md`'s HTML-sourced golden against a real Flutter build · todo · S3, found during E15-T11 — needs a planner/human choice between two fix directions before dispatch; needs 🧍 `bug_priorities` gate (p: unset)
 - [x] E15-B01 · GetX lazyPut without fenix crashes on a second welcome/login/home visit · done · PR #191, APPROVE (opus) — merged `967fe84`
 - [x] E15-B02 · Chat composer writes to a disposed TextEditingController mid-send · done · PR #191, APPROVE (opus) — merged `967fe84`
 
@@ -228,6 +230,29 @@ T08 now owns that file."* `E15-T09` touches neither.
   `2b20986`. See §Carried-forward for one residual observation
   (EARS-UI-9's "state the absence" half is untested — planner item,
   gated behind OQ-E15-T10-1/GAP-038's release-notes fork).
+- 2026-09-10 · E15-T11 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · round 1 CHANGES-REQUESTED (S2 blocker: a second
+  `BackgroundService()` in this task's own `settings_binding.dart`
+  silently hijacks `BackgroundLifecycleObserver`'s native event
+  registration — no crash, no log, just background-lifecycle management
+  quietly stopping the moment anyone opens Settings → Battery — and a
+  source comment falsely claimed the finding was already disclosed) →
+  round 2 APPROVE, the fix verified as docs-only (byte-identical product
+  code, `git diff` confirmed by the reviewer) — genuine disclosure filed
+  as `E15-B03` (the real fix, out of this task's own `bindings.dart`-
+  excluding fence) plus a corrected comment. Also converted round 1's
+  second (non-blocking) suggestion into `E15-T13`, a real tracked task
+  for the hub's own disclosed-red design gate. Closed two carried-forward
+  epic findings: `test_EARS_UI_10_back_from_each_sub_screen_returns_to_
+  settings` (parameterized ×8, genuinely pumps the real view and taps
+  the real back affordance — the gap E15-T07's own review couldn't close
+  because no route existed yet), and confirmed the pre-existing
+  bottom-nav `RenderFlex` overflow (found via this task's own
+  first-ever `settings` hub probe dump) predates this task entirely.
+  design gates 100% on all nine sub-screens; hub gate honestly red
+  (33.8%, tracked as E15-T13, not a regression — reviewer independently
+  reproduced the identical score with this task's own routing changes
+  reverted). 1493/1493. Merged `1facb7f`.
 
 ## Carried-forward observations (not yet a task)
 - **E15-T10's `no_release_notes_and_no_update_button` test proves only
