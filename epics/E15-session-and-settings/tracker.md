@@ -1,6 +1,6 @@
 # E15 · Session Lifecycle & Settings Sub-Screens · Progress
 
-**Status:** in-progress · **Started:** 2026-09-08 · **Completed:** — · **Progress:** 6/12
+**Status:** in-progress · **Started:** 2026-09-08 · **Completed:** — · **Progress:** 7/12
 
 > Only the ORCHESTRATOR edits this file.
 > todo → in-progress → review-requested → (changes-requested →) done → verified
@@ -33,7 +33,7 @@ sub-screens).
 - [x] E15-T04 · Notifications settings screen · done · PR #195 — merged
 - [x] E15-T05 · Privacy & Security settings screen · done · PR #197, APPROVE (opus, round 3) — merged `00193ce`
 - [x] E15-T06 · Security Center screen · done · PR #196, APPROVE (opus, round 5) — merged `cdbe253`
-- [ ] E15-T07 · Account screen and sign-out confirmation · changes-requested · PR #199 open, round 1 CHANGES-REQUESTED (opus) — fix in progress
+- [x] E15-T07 · Account screen and sign-out confirmation · done · PR #199, round 1 CHANGES-REQUESTED (F1 non-deterministic design-gate fixture, F2 vacuous failure-isolation test, F3 two missing tests, F4 bookkeeping) → round 2 APPROVE (opus). design gates 100% both (settings-account 19/19, sign-out-confirm 13/13). Merged `275d589`
 - [ ] E15-T08 · Network and Battery settings screens · review-requested · PR #200 open, review in progress (opus)
 - [ ] E15-T09 · Storage settings screen (E08 carry-forward) · in-progress · a real `RenderFlex` overflow found in the default state during self-verification, being fixed before PR
 - [ ] E15-T10 · About / Updates screen · in-progress · implemented, self-verification (analyze/tests/design-verify) in progress
@@ -168,8 +168,29 @@ T08 now owns that file."* `E15-T09` touches neither.
   unlabeled control evades both the test and the design gate — a
   harness/probe limitation, not a task defect; O2: a one-line denylist
   tidy).
+- 2026-09-10 · E15-T07 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · round 1 CHANGES-REQUESTED (F1: non-deterministic design-gate
+  fixture — a fresh random `IdentityKeyPair` baked into the committed
+  golden every run; F2: vacuous failure-isolation test whose double never
+  actually threw; F3: two §8-mandated tests never written; F4: bookkeeping
+  never filled in) → round 2 APPROVE, each finding independently
+  re-falsified by the reviewer, not accepted on the fix's own claim.
+  design gates 100% both (settings-account 19/19, sign-out-confirm
+  13/13). 1432/1432. Merged `275d589`. See §Carried-forward for one
+  residual observation (EARS-UI-10 has no test, ticked DoD anyway — owner
+  is E15-T11).
 
 ## Carried-forward observations (not yet a task)
+- **E15-T07's DoD ticked "every §8 criterion passes via a test named by
+  its EARS id" with no `test_EARS_UI_10_*` test in existence (S4).**
+  `EARS-UI-10` (back affordance returns to the Settings hub) has no
+  asserting test anywhere in the suite; the nearest test
+  (`test_EARS_AUTH_7_cancel_does_not_sign_out`) only asserts the use case
+  was not invoked, never that the pop happened. Round-2 reviewer did not
+  block on this (round 1 never raised it, and the criterion's other half
+  — Account → Settings hub — is unreachable until `E15-T11` registers the
+  routes). **Owner: `E15-T11`**, which registers both routes and can
+  assert the back-affordance destination for both screens end-to-end.
 - **F1 (S2) — the human's answered `Q-SEC-009`(b) (revoke the remote
   device-registry row) has no owner.** ~~Owner: whichever task wires
   `SignOutUseCase` for real…~~ **RESOLVED 2026-09-10: sharded as
