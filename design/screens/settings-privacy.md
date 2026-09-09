@@ -67,6 +67,7 @@ Frame: SH1-SH4, with SH3 = `Privacy & Security`.
 | PV19 | row ×N | one per peer with a location setting — peer id + state | `devices.md` row shape via SH8/SH7/SH12 |
 | PV20 | `generic` | `No one has location sharing turned on yet.` | SH13 |
 | PV21 | `generic` | `Settings could not be read.` | SH13 |
+| PV22 | `generic` | `App lock and a permissions manager are not available in this version.` | SH7, `GAP-040`, human-approved 2026-09-09 |
 
 ## Copy — verbatim
 
@@ -84,6 +85,7 @@ Frame: SH1-SH4, with SH3 = `Privacy & Security`.
 - `Per person`
 - `No one has location sharing turned on yet.`
 - `Settings could not be read.`
+- `App lock and a permissions manager are not available in this version.`
 
 PV17 is not decoration: `FR-LOC-003` makes the global switch an **AND** over
 four conditions, and a user who does not know that will read a per-person "on"
@@ -91,8 +93,9 @@ row as a promise the global switch silently overrides.
 
 ## States
 
-1. **`default`** — three cards, real values.
+1. **`default`** — three cards, real values, plus PV22.
 2. **`loading`** — frame and cards render, values unpopulated. No spinner.
+   PV22 still renders — it is a static statement, not a read.
 3. **`empty`** — the per-person list only: PV20. The global switch and the
    encryption card are unchanged — an empty peer list is the ordinary state on
    a new install, not an error.
@@ -100,16 +103,24 @@ row as a promise the global switch silently overrides.
    location switch is never cleared by a failed read of something else**
    (`settings-shell.md` §States).
 
+PV22 is constant across every state above: it names a capability this build
+never implements, not a value read from a repository, so no failure mode
+touches it (`GAP-040`).
+
 ## Derivation boundary — what is NOT derived
 
 1. **No app lock, and no placeholder for one.** The hub row's subtitle promises
    it and `ADR-0005`'s consequences mention "its own local session/lock
    mechanism" — but **no lock exists in `lib/` and no FR id requires one**.
-   `GAP-033` carries this as a fork with **no proposal**. Building one from a
-   subtitle and an ADR consequence would be inventing scope; drawing a disabled
-   control for it would be worse.
-2. **No permissions list.** Same fork, same reason: nothing in `spec/` requires
-   a permissions screen, and Android already owns that UI.
+   `GAP-033` carried this as a fork with **no proposal**; `GAP-040` (human,
+   2026-09-09) closed it in favour of the `GAP-027` "no control" answer, plus
+   PV22's explicit statement of the absence (`EARS-UI-9`'s second clause).
+   Building an actual lock from a subtitle and an ADR consequence would still
+   be inventing scope; a disabled control for it would be worse — PV22 is a
+   sentence, not a control.
+2. **No permissions list.** Same fork, same reason, same `GAP-040` resolution:
+   nothing in `spec/` requires a permissions screen, Android already owns that
+   UI, and PV22 states the absence rather than drawing a list.
 3. **No protocol *choice*.** PV7/PV8 are read-only statements of fact.
    `ADR-0003` is an accepted architectural decision, not a preference; a
    control here would imply otherwise.

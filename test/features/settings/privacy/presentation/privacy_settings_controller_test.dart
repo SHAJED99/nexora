@@ -264,17 +264,37 @@ void main() {
   });
 
   testWidgets(
-    'test_EARS_UI_9_no_app_lock_or_permissions_text_renders_anywhere',
+    'test_EARS_UI_9_rendered_text_is_exactly_the_contract_allowlist',
     (tester) async {
-      // Review round 2, F1: `isNotNull` on an always-initialized Rx field
-      // proved nothing (the reviewer added real app-lock/permissions
-      // surface and this suite stayed green). This pumps the REAL view
-      // and inspects the rendered tree for the copy such a control would
-      // plausibly carry if it existed -- per `settings-privacy.md`'s own
-      // §Derivation boundary items 1-2, a hub-style heading + subtitle
-      // ("App lock", a PIN/biometric row) or a link row ("Manage
-      // permissions", "Permissions"), matching this screen's own
-      // heading/link-row shapes (PV5/PV10/PV12/PV15).
+      // Review round 3, F3: a DENYLIST of forbidden words is falsifiable
+      // by any control that uses different, equally natural vocabulary --
+      // the round-2 reviewer proved this by building a fully working
+      // "App passcode" toggle plus a "Camera access" permissions list and
+      // watching the old denylist test (and the whole 10/10 suite) stay
+      // green, because neither string matched
+      // `lock|pin|biometric|permission|fingerprint|face id|touch id`.
+      //
+      // An ALLOWLIST closes that hole structurally: it does not care what
+      // a hypothetical control is *called* -- only whether its rendered
+      // text is IN the closed set this screen's own design contract
+      // specifies (`design/screens/settings-privacy.md` §Copy). Read from
+      // the contract file itself, not retyped by hand, so a future
+      // contract edit and this test cannot silently drift apart. Anything
+      // rendered that is NOT in that set -- any vocabulary, any wording --
+      // fails, which is the whole point: this is now a closed-set
+      // membership check, not a keyword scan.
+      //
+      // The check below is `renderedTexts` ⊆ `allowedTexts` (an EXTRA
+      // string fails), not full two-way set equality: the contract's
+      // closed set spans every state this screen can be in (`default`,
+      // `loading`, `empty`, `error`, and PV11's three possible labels),
+      // while a single pumped render only ever shows one state's subset
+      // of it. Requiring every contract string to appear in one render
+      // would make this test fail for reasons that have nothing to do
+      // with EARS-UI-9 (e.g. PV21's error copy never appearing outside a
+      // read failure). Subset-of-the-closed-set is the property that
+      // actually falsifies the reviewer's evasion, and does so
+      // regardless of which state is rendered.
       Get.testMode = true;
       final controller = PrivacySettingsController(
         locationRepository: locationRepository,
@@ -298,29 +318,55 @@ void main() {
         const Duration(seconds: 5),
       );
 
-      final forbidden = RegExp(
-        r'lock|pin|biometric|permission|fingerprint|face id|touch id',
-        caseSensitive: false,
-      );
+      // Review round 3, F4 (item 3): a positive render assertion, the
+      // same shape `test_EARS_SEC_5_privacy_level_is_read_only` already
+      // makes with `find.text('Sender only')` -- if the widget tree ever
+      // fails to build, THIS fails loudly instead of the allowlist check
+      // below passing vacuously over an empty tree.
+      expect(find.text('Privacy & Security'), findsOneWidget);
 
+      final contractFile = File('design/screens/settings-privacy.md');
+      final contractSource = contractFile.readAsStringSync();
+      final copySection = contractSource
+          .split('## Copy — verbatim')[1]
+          .split('\n## ')[0];
+      final backtickPattern = RegExp('`([^`]+)`');
+      final allowedTexts = <String>{
+        for (final line in copySection.split('\n'))
+          if (line.trim().startsWith('-'))
+            for (final match in backtickPattern.allMatches(line))
+              match.group(1)!,
+        // PV11's dynamic value is enumerated in the contract's Elements
+        // table, not the Copy section (it is not a single static
+        // string): "current level, one of `Hidden` / `Sender only` /
+        // `Full`". All three are this row's own closed set.
+        'Hidden',
+        'Sender only',
+        'Full',
+      };
+
+      final renderedTexts = <String>{};
       for (final widget in tester.widgetList<Text>(find.byType(Text))) {
-        final data = widget.data ?? widget.textSpan?.toPlainText() ?? '';
-        expect(
-          forbidden.hasMatch(data),
-          isFalse,
-          reason: 'forbidden Text found: "$data"',
-        );
+        final data =
+            (widget.data ?? widget.textSpan?.toPlainText() ?? '').trim();
+        if (data.isNotEmpty) renderedTexts.add(data);
       }
-
       for (final widget
           in tester.widgetList<Semantics>(find.byType(Semantics))) {
-        final label = widget.properties.label ?? '';
-        expect(
-          forbidden.hasMatch(label),
-          isFalse,
-          reason: 'forbidden Semantics label: "$label"',
-        );
+        final label = (widget.properties.label ?? '').trim();
+        if (label.isNotEmpty) renderedTexts.add(label);
       }
+
+      final notAllowed = renderedTexts.difference(allowedTexts);
+      expect(
+        notAllowed,
+        isEmpty,
+        reason: 'EARS-UI-9: rendered text outside settings-privacy.md\'s '
+            'closed §Copy set -- a hypothetical app-lock/permissions '
+            'control using unlisted vocabulary (e.g. "App passcode", '
+            '"Camera access") would be caught here regardless of '
+            'wording: $notAllowed',
+      );
 
       controller.onClose();
       // Same drift-internal cleanup Timer as the F2 test above -- a
@@ -335,34 +381,96 @@ void main() {
     },
   );
 
+  testWidgets(
+    'test_EARS_UI_9_the_absence_statement_actually_renders',
+    (tester) async {
+      // GAP-040 (human, 2026-09-09): EARS-UI-9 has TWO clauses -- (a) SHALL
+      // NOT present a control (the allowlist test above), and (b) SHALL
+      // STATE the absence. This proves clause (b): PV22 actually renders,
+      // not merely that the contract/task file claims it does.
+      Get.testMode = true;
+      final controller = PrivacySettingsController(
+        locationRepository: locationRepository,
+        notificationRepository: notificationRepository,
+      );
+      Get.put<PrivacySettingsController>(controller);
+
+      await tester.pumpWidget(
+        const GetMaterialApp(home: PrivacySettingsView()),
+      );
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 5),
+      );
+
+      expect(
+        find.text(
+          'App lock and a permissions manager are not available in this '
+          'version.',
+        ),
+        findsOneWidget,
+      );
+
+      controller.onClose();
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 2),
+      );
+      Get.reset();
+    },
+  );
+
   test(
-    'test_EARS_UI_9_no_app_lock_or_permissions_identifier_in_controller_source',
+    'test_EARS_UI_9_no_app_lock_or_permissions_identifier_in_source',
     () {
       // The companion structural half: even if no row is ever rendered
-      // today, the controller CLASS itself must not carry the surface --
-      // mirrors `group_key_rotation_service_test.dart`'s own
-      // "no CODE line names a forbidden identifier" source check
-      // (comments excluded; this very file's header prose and the
-      // controller's own doc comments necessarily discuss "lock"/"PIN" at
-      // length while explaining why neither exists).
-      final file = File(
-        'lib/features/settings/privacy/presentation/privacy_settings_controller.dart',
-      );
-      final source = file.readAsStringSync();
-      final codeOnly = source
-          .split('\n')
-          .where((line) => !line.trim().startsWith('//'))
-          .join('\n');
+      // today, neither the controller NOR the view CLASS may carry the
+      // surface. Review round 2's F4 found this only ever scanned the
+      // controller -- a control living entirely in
+      // `privacy_settings_view.dart` (a `bool` field on a
+      // `StatefulWidget`'s state, say) was invisible to it. Both source
+      // files are scanned the same way now. This is a reasonable
+      // SECONDARY check on identifier shape; the PRIMARY defence against
+      // vocabulary evasion is the rendered-text allowlist above, which
+      // does not care about wording at all. Mirrors
+      // `group_key_rotation_service_test.dart`'s own "no CODE line names
+      // a forbidden identifier" source check (comments excluded; this
+      // very file's header prose and both files' own doc comments
+      // necessarily discuss "lock"/"PIN" at length while explaining why
+      // neither exists).
       final forbidden = RegExp(
         r'[Ll]ock|[Bb]iometric|[Pp]ermission|[Pp]in(?=[A-Z_]|$)|PIN',
       );
-      expect(
-        forbidden.hasMatch(codeOnly),
-        isFalse,
-        reason: 'no app-lock/PIN/biometric/permissions field or method '
-            'may exist on PrivacySettingsController (task §4, GAP-033, '
-            'OQ-E15-T05-1)',
-      );
+      for (final path in [
+        'lib/features/settings/privacy/presentation/privacy_settings_controller.dart',
+        'lib/features/settings/privacy/presentation/privacy_settings_view.dart',
+      ]) {
+        final source = File(path).readAsStringSync();
+        final codeOnly = source
+            .split('\n')
+            .where(
+              (line) =>
+                  !line.trim().startsWith('//') &&
+                  // GAP-040's PV22 disclosure string literal necessarily
+                  // NAMES "app lock" and "permissions manager" in prose --
+                  // that is the whole point of the line (EARS-UI-9's
+                  // "SHALL state the absence" clause). This scan's job is
+                  // to catch a FIELD or METHOD implementing either
+                  // capability, not a sentence disclosing that neither
+                  // exists, so this one known literal is excluded the
+                  // same way a comment line already is.
+                  !line.contains('not available in this'),
+            )
+            .join('\n');
+        expect(
+          forbidden.hasMatch(codeOnly),
+          isFalse,
+          reason: 'no app-lock/PIN/biometric/permissions field or method '
+              'may exist in $path (task §4, GAP-033, OQ-E15-T05-1)',
+        );
+      }
     },
   );
 

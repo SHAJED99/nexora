@@ -1760,6 +1760,58 @@ and that is the strongest single argument for this disposition.**
 - **approved by:**
 - **built:** prospective — `E15-T07`.
 
+## GAP-040 — Privacy & Security must SAY it has no app lock or permissions manager, not just omit them
+
+- **status:** ✅ approved
+- **screen:** `design/screens/settings-privacy.md` (adds PV22 to the
+  already-approved GAP-033 contract; not reopening GAP-033 itself, which
+  stands as the human cleared it 2026-09-08).
+- **spec:** `FR-UI-007`, specifically `EARS-UI-9`'s second clause — "WHERE a
+  Settings row's subtitle names a capability the application does not
+  implement, the sub-screen SHALL state the absence **and** SHALL NOT
+  present a control or a value for it." `E15-T05` round 2 review
+  implemented the second half (no control — closed-set allowlist test,
+  this same round) but never the first: the "SHALL state the absence"
+  clause had no rendered element anywhere, because GAP-033's own two forks
+  (app lock, permissions) were carried as forks with **no proposal** and
+  nothing was ever built against either.
+- **design shows:** nothing — same as GAP-033 itself. The `settings.md` hub
+  row's subtitle (`Encryption protocols, app lock, permissions`) is the
+  only place either word appears in the measured design.
+- **derived from:** `settings-privacy.md`'s own SH7 body-line vocabulary —
+  the same style PV6 and PV17 already use for a plain factual statement
+  about what this screen does and doesn't do. No new token, no new
+  component: this is one more SH7 line, placed at the end of the screen's
+  content the way PV2's subtitle sits outside any card.
+- **the fork this closes:** GAP-033 carried two forks with no proposal —
+  "fork, no proposal — `app lock`" and "fork, no proposal — `permissions`"
+  — each offering, as option (a), the `GAP-027` treatment: no control,
+  disclosed absence. GAP-027's own resolution (`OQ-E08-T07-1`, human,
+  2026-09-02) applied that as a **silent omission** (no control, no
+  on-screen text either) — sufficient there because nothing in
+  `settings-storage.md`'s own spec required stating the absence. Here
+  `EARS-UI-9` itself requires the statement, so silent omission alone does
+  not satisfy the criterion. This entry adds the missing half: the same
+  "no control" answer, plus one rendered line saying so, because the EARS
+  criterion — not agent taste — requires it.
+- **proposal (now built, per the human decision below):** one new element,
+  PV22, an SH7 body line reading `App lock and a permissions manager are
+  not available in this version.`, placed after the Location sharing card,
+  outside any card (same "generic, outside a card" placement PV2's
+  subtitle already uses). No icon, no control, no link — a statement only.
+- **approved by:** human, 2026-09-09 — direct decision in the E15-T05
+  round-3 review-fix session (not an agent assumption): "add a new small
+  text element to the screen stating that app lock and permissions
+  controls are not implemented," closing both of GAP-033's no-proposal
+  forks the same way, in favour of `GAP-027`'s option (a) plus the
+  explicit statement `EARS-UI-9` itself requires. Not routed through
+  `skills/change-impact`: this narrows an already-forked absence into a
+  disclosed statement of that same absence — it adds no control, no
+  write path and no new capability, so there is no scope to assess an
+  impact against.
+- **built:** `E15-T05` (round 3) — `lib/features/settings/privacy/presentation/privacy_settings_view.dart`,
+  `design/screens/settings-privacy.md` PV22, golden regenerated.
+
 ## The usual suspects
 
 Checklist for the gap pass. In rough order of how often each is missed:

@@ -1,7 +1,7 @@
-// features/settings/privacy/presentation -- PV1-PV21
-// (design/screens/settings-privacy.md, GAP-033). Composes E15-T03's
-// `SettingsSubScreenScaffold`; no local frame, no route, no row wiring
-// (task §4 -- all three are E15-T11's alone).
+// features/settings/privacy/presentation -- PV1-PV22
+// (design/screens/settings-privacy.md, GAP-033 + GAP-040). Composes
+// E15-T03's `SettingsSubScreenScaffold`; no local frame, no route, no row
+// wiring (task §4 -- all three are E15-T11's alone).
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/design/tokens.dart';
@@ -9,7 +9,7 @@ import 'package:nexora/features/settings/presentation/widgets/settings_sub_scree
 
 import 'privacy_settings_controller.dart';
 
-/// PV1-PV21. Every string below is `settings-privacy.md`'s §Copy, copied
+/// PV1-PV22. Every string below is `settings-privacy.md`'s §Copy, copied
 /// character for character.
 class PrivacySettingsView extends GetView<PrivacySettingsController> {
   const PrivacySettingsView({super.key});
@@ -123,6 +123,19 @@ class PrivacySettingsView extends GetView<PrivacySettingsController> {
                     ),
                   ),
             ],
+          ),
+          const SizedBox(height: 16),
+          // PV22 -- GAP-040 (human-approved 2026-09-09): EARS-UI-9's second
+          // clause requires this screen to STATE the absence of an app
+          // lock/permissions manager, not merely omit a control for one.
+          // A constant SH7 line, outside any card (PV2's own placement),
+          // present in every state (task §5 / settings-privacy.md
+          // §States) -- it names a capability this build never
+          // implements, so no read failure can ever touch it. No icon, no
+          // control, no link: a statement, nothing else.
+          const SettingsBodyLine(
+            'App lock and a permissions manager are not available in this '
+            'version.',
           ),
         ],
       ),
