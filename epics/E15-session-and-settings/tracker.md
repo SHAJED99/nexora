@@ -1,6 +1,6 @@
 # E15 · Session Lifecycle & Settings Sub-Screens · Progress
 
-**Status:** in-progress · **Started:** 2026-09-08 · **Completed:** — · **Progress:** 8/12
+**Status:** in-progress · **Started:** 2026-09-08 · **Completed:** — · **Progress:** 10/12
 
 > Only the ORCHESTRATOR edits this file.
 > todo → in-progress → review-requested → (changes-requested →) done → verified
@@ -34,9 +34,9 @@ sub-screens).
 - [x] E15-T05 · Privacy & Security settings screen · done · PR #197, APPROVE (opus, round 3) — merged `00193ce`
 - [x] E15-T06 · Security Center screen · done · PR #196, APPROVE (opus, round 5) — merged `cdbe253`
 - [x] E15-T07 · Account screen and sign-out confirmation · done · PR #199, round 1 CHANGES-REQUESTED (F1 non-deterministic design-gate fixture, F2 vacuous failure-isolation test, F3 two missing tests, F4 bookkeeping) → round 2 APPROVE (opus). design gates 100% both (settings-account 19/19, sign-out-confirm 13/13). Merged `275d589`
-- [ ] E15-T08 · Network and Battery settings screens · review-requested · PR #200 open, review in progress (opus)
+- [x] E15-T08 · Network and Battery settings screens · done · PR #200, round 1 CHANGES-REQUESTED (Listener-gaming of "no control rendered" tests, unrendered "Not measured"/"Unknown" text, mislabelled PLAT-15 test, bookkeeping) → round 2 APPROVE (opus), every finding independently re-falsified. design gates 100% both (settings-battery 18/18, settings-network 14/14). Merged `ade6133`
 - [x] E15-T09 · Storage settings screen (E08 carry-forward) · done · PR #203, round 1 CHANGES-REQUESTED (S1 blocker: "no clean-now affordance" test defeated by the screen's own legitimate `InkWell` idiom; S2×2: invalid-parameter write-proof gap, untested zero-candidate sentinel filter; S3: unstamped OQ) → round 2 APPROVE (opus), every finding independently re-falsified. Fixed a real `RenderFlex` overflow found during orchestrator self-verification before the PR even opened. design gate 100% (10/10). Merged `3eda7d9`
-- [ ] E15-T10 · About / Updates screen · in-progress · implemented, self-verification (analyze/tests/design-verify) in progress
+- [x] E15-T10 · About / Updates screen · done · PR #202, round 1 CHANGES-REQUESTED (FR-DIAG-002 falsification test couldn't fail against a real stack-trace leak; model-shape test guarded a denylist not the shape; two tests never built a widget/asserted controller state only; "no control" test missed non-Material gesture wrappers; "Last checked" rendered a raw epoch-millis integer) → round 2 APPROVE (opus), all six independently re-falsified. Fixed a second real `RenderFlex` overflow found while formatting the timestamp fix. design gate 100% (22/22). Merged `2b20986`. OQ-E15-T10-2 (no local diagnostic log store) resolved by the orchestrator, see §Carried-forward.
 - [ ] E15-T11 · Settings hub wiring: eight routes, eight rows, probe consolidation · todo · — (blocked on T07-T10 landing)
 - [ ] E15-T12 · Wire SignOutUseCase's production teardown and remote-revoke closures · todo · — (new, 2026-09-10: shards the tracker's own F1/F2 resolution note below; depends on E15-T11)
 - [x] E15-B01 · GetX lazyPut without fenix crashes on a second welcome/login/home visit · done · PR #191, APPROVE (opus) — merged `967fe84`
@@ -196,8 +196,60 @@ T08 now owns that file."* `E15-T09` touches neither.
   real `RenderFlex` overflow the orchestrator found during
   self-verification before the PR opened (same shape as
   `security_center_view.dart`'s existing fix).
+- 2026-09-10 · E15-T08 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · round 1 CHANGES-REQUESTED (two "no control is rendered" tests
+  defeated by a raw `Listener` — this codebase's own documented
+  `L-frontend-001` gaming pattern; "Not measured"/"Unknown" text never
+  asserted against rendered UI, only controller state; `EARS-PLAT-15`'s
+  test proved only the synchronous loading-state initializer, not a
+  genuine unreported-vs-off distinction `PowerState`'s plain-bool shape
+  cannot make; bookkeeping never filled in) → round 2 APPROVE, every
+  finding independently re-falsified, including the mid-fix correction
+  that a naive "count every gesture widget, expect 1" invariant was
+  itself unstable (`InkWell` fans out into multiple internal
+  `Semantics`/`GestureDetector`/`Listener` entries) — replaced with a
+  card-scoped zero-count. design gates 100% both (settings-battery
+  18/18, settings-network 14/14). Merged `ade6133`. See §Carried-forward
+  for one residual observation (the gesture scan excludes controls
+  rendered outside a `SettingsSectionCard` — owner: E15-T11).
+- 2026-09-10 · E15-T10 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · round 1 CHANGES-REQUESTED (the FR-DIAG-002 falsification test
+  could not fail even against a real, injected stack-trace leak — the
+  marker was written to a sink structurally disconnected from the widget
+  tree; the "no cause field" model test guarded a denylist of banned
+  words rather than the model's actual field shape; two "renders X"
+  tests never built a widget and asserted controller state only; the "no
+  release notes/update button" test missed non-Material gesture
+  wrappers; "Last checked" rendered a raw, unreadable epoch-millis
+  integer) → round 2 APPROVE, all six independently re-falsified,
+  including confirming a SECOND real `RenderFlex` overflow the fix round
+  itself introduced (the longer formatted timestamp needed a `Flexible`
+  wrap) was genuinely load-bearing. design gate 100% (22/22). Merged
+  `2b20986`. See §Carried-forward for one residual observation
+  (EARS-UI-9's "state the absence" half is untested — planner item,
+  gated behind OQ-E15-T10-1/GAP-038's release-notes fork).
 
 ## Carried-forward observations (not yet a task)
+- **E15-T10's `no_release_notes_and_no_update_button` test proves only
+  half of `EARS-UI-9` (S4).** The criterion reads "the sub-screen SHALL
+  state the absence AND SHALL NOT present a control" — the shipped test
+  proves only the second half; nothing asserts the screen states the
+  absence of release notes. Not an implementer defect: §4 binds this
+  task to NOT add release notes at all, and the actual resolution is
+  gated behind **`OQ-E15-T10-1`** (🟡 open, `GAP-038` carries the
+  release-notes fork with no proposal yet, resolved at the
+  `design_contract_approval` gate). **Owner: planner**, once
+  `OQ-E15-T10-1` resolves — not a re-dispatch of `E15-T10`.
+- **E15-T08's `no_control_is_rendered` tests (battery + network) scope
+  their gesture-surface scan to descendants of each screen's own
+  `SettingsSectionCard`s, not the whole screen (S3).** A control rendered
+  *between* cards or elsewhere on the screen would currently escape
+  detection — proven by the round-2 reviewer inserting a fully-functional
+  `GestureDetector` between the two cards and finding both tests still
+  green. No such control exists in the shipped screen today. **Owner:
+  whichever future task touches these screens' routing/controls** — most
+  likely `E15-T11` if `OQ-E15-T08-2` ever resolves toward adding a
+  screen-level control (e.g. an OS-settings deep link for Battery Saver).
 - **E15-T07's DoD ticked "every §8 criterion passes via a test named by
   its EARS id" with no `test_EARS_UI_10_*` test in existence (S4).**
   `EARS-UI-10` (back affordance returns to the Settings hub) has no
