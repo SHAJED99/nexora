@@ -186,12 +186,12 @@ T08 now owns that file."* `E15-T09` touches neither.
   either.** **RESOLVED 2026-09-10: sharded as `E15-T12`**, same task as F1
   (same production construction site in `settings_binding.dart`, same
   dependency on `E15-T11` landing first).
-- **F3 (S4) — `LocalDataWipeService.wipe()` is not re-entrant.** Two
-  concurrent calls leave correct final state but the losing call throws
-  `AppFailure` despite the wipe succeeding — an unguarded double-tap on
-  `E15-T07`'s confirm button would show a spurious "erase failed" after a
-  successful sign-out. **Owner: `E15-T07`'s confirm button must disable
-  itself after the first tap.**
+- **F3 (S4) — `LocalDataWipeService.wipe()` is not re-entrant.** **RESOLVED
+  2026-09-10: confirmed genuinely fixed in `E15-T07`'s round-1 review** —
+  `sign_out_confirm_controller.dart`'s `confirm()` refuses a second call
+  while `inProgress` is true, with a real falsifying test
+  (`test_F3_a_concurrent_second_confirm_call_is_refused_not_run`) proven to
+  fail when the guard is removed.
 - **E15-T06 review round 4, finding #1 (S4) — `test_EARS_DIAG_5_no_action_
   affordance_is_rendered` (Security Center) does not scan `Listener` or
   low-level `GestureDetector` pointer callbacks** (`onTapDown`,
@@ -206,6 +206,34 @@ T08 now owns that file."* `E15-T09` touches neither.
   any `Listener`/low-level pointer widget, extend this test's scan set
   first (`find.byType(Listener)` alongside the existing three) rather than
   assume the existing test still covers new affordances.
+- **E15-T10's `OQ-E15-T10-2` (S3) — no local diagnostic log store exists;
+  the About screen's Diagnostics card will always render empty in
+  production.** `ObservabilityService` only ever sends events to Sentry
+  (`init()`/`log()`/`logError()`) — no read method, no local table, no
+  in-memory buffer. FR-VER-012 says the About screen presents "the local
+  diagnostic log"; nothing in the shipped codebase can supply one.
+  **Resolved 2026-09-10 (orchestrator, rule 3's 2026-09-06 extended
+  standing grant): accepted as this epic's v1 scope**, not sharded as a
+  follow-up task — the Diagnostics card already renders its contract's own
+  explicitly-"ordinary" empty state (AB17), so there is no broken or
+  misleading UI, just an honest empty card. A real local diagnostic log
+  store is its own foundational-adjacent scope (a new Drift table, a 🧍
+  `db_schema_migration` gate) that needs its own design pass before it can
+  be sharded — **not a task for this epic's tail.** Backlog item for a
+  future epic: "local diagnostic log store + About screen wiring."
+- **Recurring defect class, now confirmed 3× independently (E15-T06 round
+  4, E15-T08 review, E15-T09 review) — "no control/affordance is rendered"
+  tests built as a widget-TYPE denylist (`Switch`/`InkWell`-count/specific
+  icons) are reliably defeated by whatever gesture idiom the reviewer
+  reaches for**, including, in T09's case, the *exact* `InkWell` idiom the
+  same screen already uses two lines away for a legitimate row. This has
+  now recurred enough times (`L-frontend-001` was already a first
+  instance) that `skills/retro` should consider promoting it past a lesson
+  — e.g. a shared test helper (`expectNoInteractiveAffordanceOutsideShell`)
+  that walks the real gesture surface (any `GestureDetector`/
+  `InkResponse`/`Listener` with a pointer callback/`Semantics` with
+  `onTap`/`onLongPress`) rather than every task re-deriving its own
+  (defeatable) denylist. Flag for the next epic retro.
 - **E15-T06's `OQ-E15-T06-2` (S3) — `signal_trusted_identities` has no
   first-seen-timestamp column, so the Security Center's "Trusted
   identities" row cannot show when an identity was first seen (design
