@@ -1,6 +1,6 @@
 # E15 · Session Lifecycle & Settings Sub-Screens · Progress
 
-**Status:** todo · **Started:** — · **Completed:** — · **Progress:** 0/11
+**Status:** in-progress · **Started:** 2026-09-08 · **Completed:** — · **Progress:** 6/12
 
 > Only the ORCHESTRATOR edits this file.
 > todo → in-progress → review-requested → (changes-requested →) done → verified
@@ -28,16 +28,17 @@ sub-screens).
 
 ## Tasks
 - [x] E15-T01 · Sign-out: local data wipe service and sign-out use case · done · PR #189, APPROVE (opus, escalations F1/F2 below) — merged `7ed8001`
-- [ ] E15-T02 · Session-aware launch routing, after the mandatory-update gate · todo · —
+- [x] E15-T02 · Session-aware launch routing, after the mandatory-update gate · done · PR #194 — merged
 - [x] E15-T03 · Settings sub-screen shell widget and design-gate registration · done · PR #188, APPROVE (opus) — merged `62a8514`
-- [ ] E15-T04 · Notifications settings screen · todo · —
+- [x] E15-T04 · Notifications settings screen · done · PR #195 — merged
 - [x] E15-T05 · Privacy & Security settings screen · done · PR #197, APPROVE (opus, round 3) — merged `00193ce`
 - [x] E15-T06 · Security Center screen · done · PR #196, APPROVE (opus, round 5) — merged `cdbe253`
-- [ ] E15-T07 · Account screen and sign-out confirmation · todo · —
-- [ ] E15-T08 · Network and Battery settings screens · todo · —
-- [ ] E15-T09 · Storage settings screen (E08 carry-forward) · todo · —
-- [ ] E15-T10 · About / Updates screen · todo · —
-- [ ] E15-T11 · Settings hub wiring: eight routes, eight rows, probe consolidation · todo · —
+- [ ] E15-T07 · Account screen and sign-out confirmation · changes-requested · PR #199 open, round 1 CHANGES-REQUESTED (opus) — fix in progress
+- [ ] E15-T08 · Network and Battery settings screens · review-requested · PR #200 open, review in progress (opus)
+- [ ] E15-T09 · Storage settings screen (E08 carry-forward) · in-progress · a real `RenderFlex` overflow found in the default state during self-verification, being fixed before PR
+- [ ] E15-T10 · About / Updates screen · in-progress · implemented, self-verification (analyze/tests/design-verify) in progress
+- [ ] E15-T11 · Settings hub wiring: eight routes, eight rows, probe consolidation · todo · — (blocked on T07-T10 landing)
+- [ ] E15-T12 · Wire SignOutUseCase's production teardown and remote-revoke closures · todo · — (new, 2026-09-10: shards the tracker's own F1/F2 resolution note below; depends on E15-T11)
 - [x] E15-B01 · GetX lazyPut without fenix crashes on a second welcome/login/home visit · done · PR #191, APPROVE (opus) — merged `967fe84`
 - [x] E15-B02 · Chat composer writes to a disposed TextEditingController mid-send · done · PR #191, APPROVE (opus) — merged `967fe84`
 
@@ -68,11 +69,16 @@ graph LR
   T08 --> T11
   T09 --> T11
   T10 --> T11
+  T01 --> T12[T12 revoke + teardown wiring]
+  T07 --> T12
+  T11 --> T12
 ```
 
 **Two independent roots.** `T01` (session) and `T03` (shell) start in parallel
 — they share no file and no concept. `T03` then unblocks a **seven-wide fan**,
-and `T11` is the single join.
+and `T11` is the single join. `T12` is a small tail task after `T11` — it
+needs `T11`'s `settings_binding.dart` wiring to exist before it can construct
+a production `SignOutUseCase` there.
 
 ## Dispatch order and WIP
 
@@ -165,28 +171,21 @@ T08 now owns that file."* `E15-T09` touches neither.
 
 ## Carried-forward observations (not yet a task)
 - **F1 (S2) — the human's answered `Q-SEC-009`(b) (revoke the remote
-  device-registry row) has no owner.** `E15-T01`'s own contract forbids
-  remote calls (§5 Remote still reads "🟡 UNRESOLVED... do not implement
-  any remote behaviour until the answer is recorded") — the planner's
-  `fed_into` promise to amend `FR-AUTH-006` with a remote clause was never
-  executed after the answer landed. `E15-T07` doesn't claim it either
-  (`files: update: []`, no `device_revocation_service.dart`, §5 Functions
-  names no such call). Left unfixed, `Q-SEC-009`(b) silently degrades to
-  (a) — the outcome the human explicitly rejected — and reopens
-  `Q-FUNC-010`'s enrollment-gate dead end (`Q-FUNC-010` was answered "(a)
-  falls out of `Q-SEC-009`(b) for free", which requires the row actually
-  gone). **Owner: whichever task wires `SignOutUseCase` for real (`E15-T07`
-  has `uid`/`deviceId` on hand) — amend its `files:`/§5 to call
-  `DeviceRevocationService.revoke(uid, deviceId)`, or shard a small
-  follow-up. Must be read before `E15-T07` dispatches (`L-process-008`).**
+  device-registry row) has no owner.** ~~Owner: whichever task wires
+  `SignOutUseCase` for real…~~ **RESOLVED 2026-09-10: sharded as
+  `E15-T12`.** `E15-T07`'s own review (round 1, opus) confirmed the punt
+  was correct per rule 6 — `E15-T07`'s contract names only
+  `SignOutUseCase.call()` + `Get.offAllNamed`, and no code anywhere yet
+  constructs a *production* `SignOutUseCase` (that only happens once
+  `E15-T11` registers `SignOutConfirmController` for real). `E15-T12`
+  depends on `E15-T01`/`E15-T07`/`E15-T11` and adds the `revoke` seam +
+  wires it in `settings_binding.dart`. Left unfixed, `Q-SEC-009`(b) would
+  have silently degraded to (a) — the outcome the human explicitly
+  rejected — and reopened `Q-FUNC-010`'s enrollment-gate dead end.
 - **F2 (S2) — the singleton teardown (`_teardown` closure) has no owner
-  either.** `sign_out_use_case.dart:44` defaults it to a no-op; production
-  wiring (closing/unregistering the live `AppDatabase` before its file is
-  deleted) is out of `E15-T01`'s own fence (`bindings.dart`) and `E15-T07`
-  currently states its own SO6 "calls `SignOutUseCase.call()` and nothing
-  else." Same shape as F1 — an obligation the epic needs, claimed by
-  nobody. **Owner: whoever wires production `SignOutUseCase` (`E15-T07`)
-  must state the real GetX teardown closure in its own contract.**
+  either.** **RESOLVED 2026-09-10: sharded as `E15-T12`**, same task as F1
+  (same production construction site in `settings_binding.dart`, same
+  dependency on `E15-T11` landing first).
 - **F3 (S4) — `LocalDataWipeService.wipe()` is not re-entrant.** Two
   concurrent calls leave correct final state but the losing call throws
   `AppFailure` despite the wipe succeeding — an unguarded double-tap on
