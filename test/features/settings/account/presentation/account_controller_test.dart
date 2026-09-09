@@ -150,12 +150,21 @@ void main() {
       final id = await db.createDeviceIdentity('device-local');
       await db.markSignedIn(id, accountUid: 'uid-123');
 
-      // `readOwnDeviceIds` is documented never to throw (best-effort,
-      // collapses failure to an empty set) -- this double honours that
-      // contract exactly, proving the screen still reaches a loaded,
-      // empty state rather than hanging.
+      // Review finding F2: the previous version of this test used
+      // `_EmptyFirebaseMetadataService`, which returns `const {}`
+      // successfully and never actually throws -- vacuous, proven by
+      // deleting the whole try/catch/finally from
+      // `AccountController._loadLinkedDevices` and watching the suite still
+      // pass. `_ThrowingFirebaseMetadataService` genuinely throws, so this
+      // test actually exercises the catch/finally that isolates the
+      // linked-devices read's own failure from the rest of the screen.
+      // Falsified: removing `_loadLinkedDevices`'s try/catch/finally (so a
+      // thrown error is never caught and `linkedDevicesLoaded` is never
+      // set) leaves `linkedDevicesLoaded.value` stuck at `false`, failing
+      // the first assertion below -- confirmed during implementation, catch
+      // block restored verbatim afterward.
       final controller = buildController(
-        firebaseMetadataService: _EmptyFirebaseMetadataService(),
+        firebaseMetadataService: _ThrowingFirebaseMetadataService(),
       );
       controller.onInit();
       await pumpEventQueue();
@@ -164,7 +173,9 @@ void main() {
       expect(controller.linkedDevices, isEmpty);
       // The two other sections are entirely unaffected.
       expect(controller.accountUid.value, 'uid-123');
+      expect(controller.accountError.value, isFalse);
       expect(controller.deviceFingerprint.value, isNotNull);
+      expect(controller.deviceError.value, isFalse);
     },
   );
 
@@ -223,6 +234,44 @@ void main() {
         expect(calls, 0);
       },
     );
+
+    testWidgets(
+      'test_EARS_UI_11_linked_device_read_failure_leaves_the_sign_out_row_present',
+      (tester) async {
+        // AC17's own note, `settings-account.md` §States `error`: "the
+        // sign-out row is never hidden by a failed read" -- a user must
+        // always be able to reach the confirmation screen, especially
+        // when something is wrong. Falsified: wrapping `_SignOutRow` in
+        // `if (!controller.accountError.value) ...` during implementation
+        // made this assertion fail with `findsNothing`, confirming the
+        // test actually depends on the row's unconditional placement.
+        final controller = AccountController(
+          deviceIdentityRepository: _ThrowingDeviceIdentityRepository(db),
+          readIdentityKeyPair: () async =>
+              throw StateError('simulated read failure'),
+          firebaseMetadataService: _EmptyFirebaseMetadataService(),
+        );
+        Get.put<AccountController>(controller);
+
+        await tester.pumpWidget(
+          const GetMaterialApp(home: AccountView()),
+        );
+        await tester.pumpAndSettle();
+
+        // Both cards show AC17's failure line -- confirming the failure
+        // actually happened, not that this screen renders nothing.
+        expect(
+          find.text('Account details could not be read.'),
+          findsNWidgets(2),
+        );
+        // The sign-out row and its caption are still there, unconditionally.
+        expect(find.text('Sign out'), findsOneWidget);
+        expect(
+          find.text('Erases everything on this device.'),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }
 
@@ -257,4 +306,16 @@ class _RespondingFirebaseMetadataService extends FirebaseMetadataService {
 class _EmptyFirebaseMetadataService extends FirebaseMetadataService {
   @override
   Future<Set<String>> readOwnDeviceIds(String uid) async => const {};
+}
+
+/// A `FirebaseMetadataService` double that genuinely throws, violating
+/// `readOwnDeviceIds`'s own documented best-effort contract on purpose --
+/// review finding F2. Proves `AccountController._loadLinkedDevices`'s own
+/// try/catch/finally, not just the (already-honoured) contract of the real
+/// service.
+class _ThrowingFirebaseMetadataService extends FirebaseMetadataService {
+  @override
+  Future<Set<String>> readOwnDeviceIds(String uid) {
+    throw StateError('simulated network failure');
+  }
 }

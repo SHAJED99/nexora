@@ -38,8 +38,11 @@
 // `SignOutUseCase.call()`, then `Get.offAllNamed(Routes.welcome)`" and
 // nothing else, and §4 explicitly forbids an `AppDatabase` handle in this
 // task's own code. Per rule 6 (the task file is the contract), this is not
-// this task's own API surface to invent -- logged as `OQ-E15-T07-3`/
-// `OQ-E15-T07-4` in this task's Open Questions instead of guessed at here.
+// this task's own API surface to invent -- it is the epic tracker's own
+// carried-forward F1/F2 (remote-revoke-and-teardown ownership), still
+// unresolved and being decided separately by planning rather than guessed
+// at here. Not restated as a new Open Question in THIS task file: doing so
+// would pre-empt that separate routing rather than defer to it.
 import 'package:get/get.dart';
 import 'package:nexora/app/routes.dart';
 import 'package:nexora/core/observability/observability_service.dart';

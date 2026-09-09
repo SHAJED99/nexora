@@ -93,7 +93,11 @@ class AccountView extends GetView<AccountController> {
           // AC14/AC15 -- the sign-out row. Never gated by AC17/AC16 above
           // (settings-account.md §States, `error`: "the sign-out row is
           // never hidden by a failed read"), and rendered unconditionally
-          // regardless of the two cards' own load state.
+          // regardless of the two cards' own load state. Proven by
+          // `test_EARS_UI_11_linked_device_read_failure_leaves_the_sign_out_row_present`
+          // (account_controller_test.dart) -- falsified during review by
+          // gating this on `accountError`, which made that test fail with
+          // `findsNothing`.
           _SignOutRow(
             onTap: () => Get.toNamed('/settings/sign-out-confirm'),
           ),

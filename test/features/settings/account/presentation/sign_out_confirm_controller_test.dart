@@ -11,6 +11,7 @@ import 'package:nexora/app/routes.dart';
 import 'package:nexora/core/auth/google_auth_service.dart' show AppFailure;
 import 'package:nexora/features/settings/account/domain/sign_out_use_case.dart';
 import 'package:nexora/features/settings/account/presentation/sign_out_confirm_controller.dart';
+import 'package:nexora/features/settings/account/presentation/sign_out_confirm_view.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -33,6 +34,76 @@ void main() {
       ),
     );
   }
+
+  testWidgets(
+    'test_EARS_AUTH_7_confirm_screen_lists_every_loss_category',
+    (tester) async {
+      // The whole reason `sign-out-confirm.md` exists: every loss category,
+      // the unrecoverable line, and the "brand-new identity" line must all
+      // be readable BEFORE any destructive action is possible (task §8,
+      // `FR-AUTH-007`/`FR-RECOVER-002`). Falsified: dropping any one of the
+      // seven `find.text(...)` lines below from `_LossList`/
+      // `SignOutConfirmView` (verified during implementation by literally
+      // deleting the "Every group this device belongs to" line and
+      // re-running) leaves that specific expectation failing with
+      // `findsNothing`, not a false pass.
+      Get.put<SignOutConfirmController>(
+        SignOutConfirmController(signOutUseCase: _CountingSignOutUseCase()),
+      );
+      await tester.pumpWidget(
+        const GetMaterialApp(home: SignOutConfirmView()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Sign out and erase this device?'),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Signing out permanently deletes everything this app keeps '
+          'on this device:',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Your device identity and all of its encryption keys'),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Every message, voice message and call recording, and all '
+          'history',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Every trusted device and every block you have set'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Every group this device belongs to'),
+        findsOneWidget,
+      );
+      expect(find.text('All of your settings'), findsOneWidget);
+      expect(
+        find.text(
+          'This cannot be undone. Anything encrypted with these keys '
+          'can never be read again, on this device or any other.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Signing back in creates a brand-new identity, as if the app '
+          'had just been installed.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Sign out and erase'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'test_EARS_AUTH_7_confirm_invokes_the_use_case_exactly_once',

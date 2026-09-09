@@ -13,6 +13,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
+import 'package:nexora/core/crypto/identity_key_hex.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/services/firebase_metadata_service.dart';
 import 'package:nexora/features/login/data/device_identity_repository.dart';
@@ -20,6 +21,22 @@ import 'package:nexora/features/settings/account/presentation/account_controller
 import 'package:nexora/features/settings/account/presentation/account_view.dart';
 
 import 'flutter_probe_dumper.dart';
+
+/// A FIXED identity keypair's serialized bytes, hex-encoded -- generated
+/// once (`generateIdentityKeyPair().serialize()`) and frozen here, never
+/// re-generated. Review finding F1: `generateIdentityKeyPair()` produces a
+/// fresh random keypair on every single test run, so the fingerprint AC10
+/// renders (and the copy the golden froze) changed on every re-run of
+/// `design-verify`, making the gate non-deterministic by construction. A
+/// probe golden can only ever match a build whose inputs are themselves
+/// deterministic.
+const _fixedIdentityKeyPairHex =
+    '0a21057070164f491bff2eca7be615843b0a529890157757216fe5a5dabcc6808f52'
+    '741220389e9a1c1f7ef0868234225e4bbeaa1d678960ca49e7666f1c9954a6150c5b'
+    '57';
+
+IdentityKeyPair _fixedIdentityKeyPair() =>
+    IdentityKeyPair.fromSerialized(hexDecodeBytes(_fixedIdentityKeyPairHex));
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -43,7 +60,7 @@ void main() {
 
       controller = AccountController(
         deviceIdentityRepository: repository,
-        readIdentityKeyPair: () async => generateIdentityKeyPair(),
+        readIdentityKeyPair: () async => _fixedIdentityKeyPair(),
         firebaseMetadataService: _RespondingFirebaseMetadataService({
           'probe-device-local',
           'probe-device-linked',
