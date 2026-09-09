@@ -17,14 +17,28 @@
 //      `make design-verify` runs, not a reimplementation of it.
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:drift/drift.dart' hide isNull, Column;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get/get.dart';
+import 'package:get/get.dart' hide Value;
+import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
+import 'package:nexora/core/background/background_stub.dart';
+import 'package:nexora/core/background/power_state.dart';
+import 'package:nexora/core/crypto/identity_key_hex.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
+import 'package:nexora/core/notifications/notification_settings_repository.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/persistence/notification_tables.dart'
+    show NotificationPrivacyLevel;
+import 'package:nexora/core/routing_engine/route_cost_calculator.dart'
+    show TrafficProfile;
+import 'package:nexora/core/routing_engine/routing_engine.dart';
+import 'package:nexora/core/services/version_policy_service.dart';
+import 'package:nexora/core/transport/generated/transport_api.g.dart'
+    show TransportEventsApi;
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/chat/presentation/chat_controller.dart';
 import 'package:nexora/features/chat/presentation/chat_view.dart';
@@ -44,10 +58,34 @@ import 'package:nexora/core/services/firebase_metadata_service.dart';
 import 'package:nexora/features/devices/presentation/devices_binding.dart';
 import 'package:nexora/features/devices/presentation/devices_controller.dart';
 import 'package:nexora/features/devices/presentation/devices_view.dart';
+import 'package:nexora/features/location/data/location_settings_repository.dart';
+import 'package:nexora/features/login/data/device_identity_repository.dart';
 import 'package:nexora/features/messaging/data/conversation_repository.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
 import 'package:nexora/features/recovery/presentation/device_enrollment_controller.dart';
 import 'package:nexora/features/recovery/presentation/device_enrollment_view.dart';
+import 'package:nexora/features/settings/about/presentation/about_settings_controller.dart';
+import 'package:nexora/features/settings/about/presentation/about_settings_view.dart';
+import 'package:nexora/features/settings/account/domain/sign_out_use_case.dart';
+import 'package:nexora/features/settings/account/presentation/account_controller.dart';
+import 'package:nexora/features/settings/account/presentation/account_view.dart';
+import 'package:nexora/features/settings/account/presentation/sign_out_confirm_controller.dart';
+import 'package:nexora/features/settings/account/presentation/sign_out_confirm_view.dart';
+import 'package:nexora/features/settings/battery/presentation/battery_settings_controller.dart';
+import 'package:nexora/features/settings/battery/presentation/battery_settings_view.dart';
+import 'package:nexora/features/settings/network/presentation/network_settings_controller.dart';
+import 'package:nexora/features/settings/network/presentation/network_settings_view.dart';
+import 'package:nexora/features/settings/notifications/presentation/notification_settings_controller.dart';
+import 'package:nexora/features/settings/notifications/presentation/notification_settings_view.dart';
+import 'package:nexora/features/settings/presentation/settings_binding.dart';
+import 'package:nexora/features/settings/presentation/settings_view.dart';
+import 'package:nexora/features/settings/privacy/presentation/privacy_settings_controller.dart';
+import 'package:nexora/features/settings/privacy/presentation/privacy_settings_view.dart';
+import 'package:nexora/features/settings/security_center/data/security_records_repository.dart';
+import 'package:nexora/features/settings/security_center/presentation/security_center_controller.dart';
+import 'package:nexora/features/settings/security_center/presentation/security_center_view.dart';
+import 'package:nexora/features/settings/storage/presentation/storage_settings_controller.dart';
+import 'package:nexora/features/settings/storage/presentation/storage_settings_view.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
 import 'package:nexora/features/trust/domain/block_use_case.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
@@ -123,7 +161,69 @@ class _NeverGrantsFirebaseMetadataService extends FirebaseMetadataService {
   Future<Object?> readDeviceMetadata(String uid, String deviceId) async => null;
 }
 
+/// `settings-account`'s own FIXED identity keypair, hex-encoded — see
+/// `probe_settings_account_test.dart`'s own header (E15-T07 review finding
+/// F1): `generateIdentityKeyPair()` mints a fresh random keypair on every
+/// run, which would make AC10's fingerprint (and the golden that froze its
+/// copy) non-deterministic. Copied verbatim from that file, not
+/// re-derived — a fixture that seeds different data than the screen task
+/// used produces a red gate that looks like a regression and is not
+/// (`L-design-002`'s exact shape, this task's own §6 risk note).
+const _fixedIdentityKeyPairHex =
+    '0a21057070164f491bff2eca7be615843b0a529890157757216fe5a5dabcc6808f52'
+    '741220389e9a1c1f7ef0868234225e4bbeaa1d678960ca49e7666f1c9954a6150c5b'
+    '57';
+
+IdentityKeyPair _fixedIdentityKeyPair() =>
+    IdentityKeyPair.fromSerialized(hexDecodeBytes(_fixedIdentityKeyPairHex));
+
+/// `settings-account`'s own `FirebaseMetadataService` test double — copied
+/// verbatim from `probe_settings_account_test.dart` (private to that file,
+/// reimplemented here under the same name for the same reason
+/// `_NeverGrantsFirebaseMetadataService` above already is).
+class _RespondingFirebaseMetadataService extends FirebaseMetadataService {
+  _RespondingFirebaseMetadataService(this._ids);
+
+  final Set<String> _ids;
+
+  @override
+  Future<Set<String>> readOwnDeviceIds(String uid) async => _ids;
+}
+
 void main() {
+  // ── E15-T11: `settings` (the hub) ────────────────────────────────────────
+  // E02-T03 built and gated this screen, but no probe block for it was ever
+  // added to this file (E06-T01 wired `devices` as the proving screen and
+  // every later screen added its own; `settings` itself was never one of
+  // them) -- `make design-probe`/`make design-verify SCREEN=settings` were
+  // consequently never runnable for the hub through this mechanism at all.
+  // This task's own contract requires exactly that re-run (task §5: "this
+  // task changes its behaviour, not its appearance; the gate must be re-run
+  // to prove exactly that"), so it is added here, alongside the nine new
+  // sub-screen blocks this task also owns.
+  group('screen probes — settings (make design-probe)', () {
+    setUp(() {
+      Get.testMode = true;
+      SettingsBinding().dependencies();
+    });
+
+    tearDown(() => Get.reset());
+
+    testWidgets('settings', (tester) async {
+      await dumpScreenProbe(
+        tester,
+        screenId: 'settings',
+        screen: const GetMaterialApp(home: SettingsView()),
+      );
+
+      final raw = await tester.runAsync(
+        () => File('build/design-probe/settings.json').readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
+    });
+  });
+
   // ── 1. Screens dumped for `make design-probe` ───────────────────────────
   group('screen probes (make design-probe)', () {
     late AppDatabase db;
@@ -590,6 +690,479 @@ void main() {
         screenId: 'device-enrollment-approval',
         screen: GetMaterialApp(home: const DevicesView()),
       );
+    });
+  });
+
+  // ── E15-T07: `settings-account` ──────────────────────────────────────────
+  // Fixture seeding copied verbatim from `probe_settings_account_test.dart`
+  // (E15-T11 §3 — reuse, never re-derive, `L-design-002`).
+  group('screen probes — settings-account (make design-probe)', () {
+    late AppDatabase db;
+    late DeviceIdentityRepository repository;
+    late AccountController controller;
+
+    setUp(() async {
+      Get.testMode = true;
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      repository = DeviceIdentityRepository(db);
+      final id = await db.createDeviceIdentity('probe-device-local');
+      await db.markSignedIn(id, accountUid: 'probe-account-uid');
+
+      controller = AccountController(
+        deviceIdentityRepository: repository,
+        readIdentityKeyPair: () async => _fixedIdentityKeyPair(),
+        firebaseMetadataService: _RespondingFirebaseMetadataService({
+          'probe-device-local',
+          'probe-device-linked',
+        }),
+      );
+      Get.put<AccountController>(controller);
+    });
+
+    tearDown(() {
+      Get.reset();
+      return db.close();
+    });
+
+    testWidgets('settings-account', (tester) async {
+      await tester.runAsync(() async {
+        while (controller.accountUid.value == null ||
+            controller.deviceFingerprint.value == null ||
+            !controller.linkedDevicesLoaded.value) {
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+        }
+      });
+
+      await dumpScreenProbe(
+        tester,
+        screenId: 'settings-account',
+        screen: const GetMaterialApp(home: AccountView()),
+      );
+
+      final raw = await tester.runAsync(
+        () => File(
+          'build/design-probe/settings-account.json',
+        ).readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
+    });
+  });
+
+  // ── E15-T07: `sign-out-confirm` ──────────────────────────────────────────
+  // Fixture seeding copied verbatim from `probe_sign_out_confirm_test.dart`.
+  group('screen probes — sign-out-confirm (make design-probe)', () {
+    setUp(() {
+      Get.testMode = true;
+      Get.put<SignOutConfirmController>(
+        SignOutConfirmController(signOutUseCase: SignOutUseCase()),
+      );
+    });
+
+    tearDown(() => Get.reset());
+
+    testWidgets('sign-out-confirm', (tester) async {
+      await dumpScreenProbe(
+        tester,
+        screenId: 'sign-out-confirm',
+        screen: const GetMaterialApp(home: SignOutConfirmView()),
+      );
+
+      final raw = await tester.runAsync(
+        () => File(
+          'build/design-probe/sign-out-confirm.json',
+        ).readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
+    });
+  });
+
+  // ── E15-T05: `settings-privacy` ───────────────────────────────────────────
+  // Fixture seeding copied verbatim from `probe_settings_privacy_test.dart`.
+  group('screen probes — settings-privacy (make design-probe)', () {
+    late AppDatabase db;
+    late LocationSettingsRepository locationRepository;
+    late NotificationSettingsRepository notificationRepository;
+    late PrivacySettingsController controller;
+
+    setUp(() async {
+      Get.testMode = true;
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      locationRepository = LocationSettingsRepository(db: db);
+      notificationRepository = NotificationSettingsRepository(db: db);
+      await locationRepository.writeGlobalEnabled(true);
+      await locationRepository.writePeerEnabled('peer-nexora-1', true);
+      await notificationRepository.setPrivacyLevel(
+        NotificationPrivacyLevel.senderOnly,
+      );
+      controller = PrivacySettingsController(
+        locationRepository: locationRepository,
+        notificationRepository: notificationRepository,
+      );
+      Get.put<PrivacySettingsController>(controller);
+      await pumpEventQueue();
+    });
+
+    tearDown(() {
+      controller.onClose();
+      Get.reset();
+      return db.close();
+    });
+
+    testWidgets('settings-privacy', (tester) async {
+      await dumpScreenProbe(
+        tester,
+        screenId: 'settings-privacy',
+        screen: const GetMaterialApp(home: PrivacySettingsView()),
+      );
+
+      final raw = await tester.runAsync(
+        () => File(
+          'build/design-probe/settings-privacy.json',
+        ).readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
+    });
+  });
+
+  // ── E15-T06: `settings-security-center` ──────────────────────────────────
+  // Fixture seeding copied verbatim from
+  // `probe_settings_security_center_test.dart`.
+  group('screen probes — settings-security-center (make design-probe)', () {
+    late AppDatabase db;
+    late SecurityRecordsRepository repository;
+    late SecurityCenterController controller;
+
+    setUp(() async {
+      Get.testMode = true;
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      await db
+          .into(db.deviceRevocations)
+          .insert(
+            DeviceRevocationsCompanion.insert(
+              deviceId: 'probe-device',
+              revokedAt: DateTime.now().subtract(const Duration(hours: 2)),
+              source: 'local',
+            ),
+          );
+      await db
+          .into(db.signalTrustedIdentities)
+          .insert(
+            SignalTrustedIdentitiesCompanion.insert(
+              addressName: 'probe-trusted-device',
+              addressDeviceId: 1,
+              identityKey: Uint8List.fromList(const [1, 2, 3]),
+            ),
+          );
+      await db
+          .into(db.relationships)
+          .insert(
+            RelationshipsCompanion.insert(
+              deviceId: 'probe-blocked-device',
+              state: RelationshipState.blocked.name,
+              updatedAt: DateTime.now(),
+            ),
+          );
+      await db
+          .into(db.rateLimitCounters)
+          .insert(
+            RateLimitCountersCompanion.insert(
+              bucketKey: 'relay:probe-rate-limited-device',
+              windowStartMs: 0,
+              count: 3,
+            ),
+          );
+      repository = SecurityRecordsRepository(db: db);
+      controller = SecurityCenterController(repository: repository);
+      Get.put<SecurityCenterController>(controller);
+    });
+
+    tearDown(() {
+      Get.reset();
+      return db.close();
+    });
+
+    testWidgets('settings-security-center', (tester) async {
+      await tester.runAsync(() async {
+        while (controller.revocations.value == null ||
+            controller.trustedIdentities.value == null ||
+            controller.blockedPeers.value == null ||
+            controller.rateLimitDenials.value == null) {
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+        }
+      });
+
+      await dumpScreenProbe(
+        tester,
+        screenId: 'settings-security-center',
+        screen: const GetMaterialApp(home: SecurityCenterView()),
+      );
+
+      final raw = await tester.runAsync(
+        () => File(
+          'build/design-probe/settings-security-center.json',
+        ).readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
+    });
+  });
+
+  // ── E15-T08: `settings-network` ───────────────────────────────────────────
+  // Fixture seeding copied verbatim from `probe_settings_network_test.dart`.
+  group('screen probes — settings-network (make design-probe)', () {
+    final networkMessenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    late TransportService transport;
+    late RoutingEngine routing;
+    late NetworkSettingsController controller;
+
+    setUp(() async {
+      Get.testMode = true;
+      transport = TransportService(
+        binaryMessenger: networkMessenger,
+        messageChannelSuffix: 'settings-network-probe',
+      );
+      routing = RoutingEngine(selfId: 'self-device');
+      controller = NetworkSettingsController(transport: transport, routing: routing);
+      Get.put<NetworkSettingsController>(controller);
+
+      final device = TransportDevice(
+        id: 'neighbor-1',
+        displayName: 'neighbor-1',
+        type: TransportType.bluetooth,
+      );
+      networkMessenger.handlePlatformMessage(
+        'dev.flutter.pigeon.nexora.TransportEventsApi.onDeviceDiscovered.'
+        'settings-network-probe',
+        TransportEventsApi.pigeonChannelCodec.encodeMessage(<Object?>[device])!,
+        (ByteData? _) {},
+      );
+      routing.recordLinkMeasurement(
+        'neighbor-1',
+        latencyMs: 38,
+        lossRate: 0.02,
+        batteryDrain: 0.0,
+      );
+      final route =
+          routing.computeRoute('neighbor-1', TrafficProfile.interactive)!;
+      routing.setActiveRoute(route);
+      networkMessenger.handlePlatformMessage(
+        'dev.flutter.pigeon.nexora.TransportEventsApi.onLinkQuality.'
+        'settings-network-probe',
+        TransportEventsApi.pigeonChannelCodec.encodeMessage(
+          <Object?>['neighbor-1', 38, 0.02],
+        )!,
+        (ByteData? _) {},
+      );
+      await pumpEventQueue();
+    });
+
+    tearDown(() {
+      controller.onClose();
+      Get.reset();
+    });
+
+    testWidgets('settings-network', (tester) async {
+      await dumpScreenProbe(
+        tester,
+        screenId: 'settings-network',
+        screen: const GetMaterialApp(home: NetworkSettingsView()),
+      );
+
+      final raw = await tester.runAsync(
+        () => File('build/design-probe/settings-network.json').readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
+    });
+  });
+
+  // ── E15-T08: `settings-battery` ───────────────────────────────────────────
+  // Fixture seeding copied verbatim from `probe_settings_battery_test.dart`.
+  group('screen probes — settings-battery (make design-probe)', () {
+    late BackgroundStub service;
+    late BatterySettingsController controller;
+
+    setUp(() async {
+      Get.testMode = true;
+      service = BackgroundStub();
+      await service.start();
+      service.emitPowerState(
+        PowerState(
+          deviceIdle: true,
+          powerSaveMode: false,
+          backgroundRestricted: false,
+          ignoringBatteryOptimizations: true,
+          screenLocked: false,
+        ),
+      );
+      controller = BatterySettingsController(service: service);
+      Get.put<BatterySettingsController>(controller);
+      await pumpEventQueue();
+    });
+
+    tearDown(() {
+      controller.onClose();
+      Get.reset();
+    });
+
+    testWidgets('settings-battery', (tester) async {
+      await dumpScreenProbe(
+        tester,
+        screenId: 'settings-battery',
+        screen: const GetMaterialApp(home: BatterySettingsView()),
+      );
+
+      final raw = await tester.runAsync(
+        () => File('build/design-probe/settings-battery.json').readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
+    });
+  });
+
+  // ── E15-T09: `settings-storage` ───────────────────────────────────────────
+  // Fixture seeding copied verbatim from `probe_settings_storage_test.dart`.
+  group('screen probes — settings-storage (make design-probe)', () {
+    late AppDatabase db;
+    late StorageSettingsController controller;
+
+    setUp(() {
+      Get.testMode = true;
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      controller = StorageSettingsController(
+        settings: StorageSettingsRepository(db: db),
+        log: StorageDecisionLog(db: db),
+        inventory: StorageInventory(db: db, databaseFileBytes: () async => 0),
+      );
+      Get.put<StorageSettingsController>(controller);
+    });
+
+    tearDown(() {
+      controller.onClose();
+      Get.reset();
+      return db.close();
+    });
+
+    testWidgets('settings-storage', (tester) async {
+      await dumpScreenProbe(
+        tester,
+        screenId: 'settings-storage',
+        screen: const GetMaterialApp(home: StorageSettingsView()),
+      );
+
+      final raw = await tester.runAsync(
+        () => File('build/design-probe/settings-storage.json').readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
+    });
+  });
+
+  // ── E15-T04: `settings-notifications` ────────────────────────────────────
+  // Fixture seeding copied verbatim from
+  // `probe_settings_notifications_test.dart`.
+  group('screen probes — settings-notifications (make design-probe)', () {
+    late AppDatabase db;
+    late NotificationSettingsRepository repository;
+    late NotificationSettingsController controller;
+
+    setUp(() {
+      Get.testMode = true;
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      repository = NotificationSettingsRepository(db: db);
+      controller = NotificationSettingsController(repository: repository);
+      Get.put<NotificationSettingsController>(controller);
+    });
+
+    tearDown(() {
+      controller.onClose();
+      Get.reset();
+      return db.close();
+    });
+
+    testWidgets('settings-notifications', (tester) async {
+      await dumpScreenProbe(
+        tester,
+        screenId: 'settings-notifications',
+        screen: const GetMaterialApp(home: NotificationSettingsView()),
+      );
+
+      final raw = await tester.runAsync(
+        () => File(
+          'build/design-probe/settings-notifications.json',
+        ).readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
+    });
+  });
+
+  // ── E15-T10: `settings-about` ─────────────────────────────────────────────
+  // Fixture seeding copied verbatim from `probe_settings_about_test.dart`.
+  group('screen probes — settings-about (make design-probe)', () {
+    late AppDatabase db;
+    late VersionPolicyService policyService;
+    late AboutSettingsController controller;
+
+    setUp(() async {
+      Get.testMode = true;
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      policyService = VersionPolicyService(database: db);
+      await db
+          .into(db.versionPolicyCache)
+          .insertOnConflictUpdate(
+            VersionPolicyCacheCompanion.insert(
+              id: const Value(1),
+              minimumSupportedBuild: 100,
+              currentBuild: 250,
+              updateAvailableBuild: 200,
+              signature: 'probe-signature',
+              updatedAt: 1700000000000,
+            ),
+          );
+      controller = AboutSettingsController(
+        versionPolicyService: policyService,
+        versionProvider: () async => '9.9.9',
+        buildNumberProvider: () async => 250,
+        logEntriesProvider: () async => [
+          DiagnosticEntry(
+            code: 'version.installed_build_read_failed',
+            timestamp: DateTime.utc(2026, 1, 1),
+          ),
+        ],
+      );
+      Get.put<AboutSettingsController>(controller);
+    });
+
+    tearDown(() {
+      Get.reset();
+      return db.close();
+    });
+
+    testWidgets('settings-about', (tester) async {
+      await tester.runAsync(() async {
+        while (controller.version.value == null ||
+            !controller.policyLoaded.value ||
+            !controller.logEntriesLoaded.value) {
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+        }
+      });
+
+      await dumpScreenProbe(
+        tester,
+        screenId: 'settings-about',
+        screen: const GetMaterialApp(home: AboutSettingsView()),
+      );
+
+      final raw = await tester.runAsync(
+        () => File('build/design-probe/settings-about.json').readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
     });
   });
 

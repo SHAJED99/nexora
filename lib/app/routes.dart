@@ -15,8 +15,17 @@ import 'package:nexora/features/home/presentation/home_view.dart';
 import 'package:nexora/features/login/presentation/login_view.dart';
 import 'package:nexora/features/recovery/presentation/device_enrollment_controller.dart';
 import 'package:nexora/features/recovery/presentation/device_enrollment_view.dart';
+import 'package:nexora/features/settings/about/presentation/about_settings_view.dart';
+import 'package:nexora/features/settings/account/presentation/account_view.dart';
+import 'package:nexora/features/settings/account/presentation/sign_out_confirm_view.dart';
+import 'package:nexora/features/settings/battery/presentation/battery_settings_view.dart';
+import 'package:nexora/features/settings/network/presentation/network_settings_view.dart';
+import 'package:nexora/features/settings/notifications/presentation/notification_settings_view.dart';
 import 'package:nexora/features/settings/presentation/settings_binding.dart';
 import 'package:nexora/features/settings/presentation/settings_view.dart';
+import 'package:nexora/features/settings/privacy/presentation/privacy_settings_view.dart';
+import 'package:nexora/features/settings/security_center/presentation/security_center_view.dart';
+import 'package:nexora/features/settings/storage/presentation/storage_settings_view.dart';
 import 'package:nexora/features/version/presentation/version_update_controller.dart';
 import 'package:nexora/features/version/presentation/version_update_view.dart';
 import 'package:nexora/features/welcome/presentation/welcome_view.dart';
@@ -40,6 +49,34 @@ abstract final class Routes {
 
   /// design/screens/settings.md (E02-T03).
   static const settings = '/settings';
+
+  /// design/screens/settings-account.md (E15-T07, GAP-035).
+  static const settingsAccount = '/settings/account';
+
+  /// design/screens/sign-out-confirm.md (E15-T07, GAP-039). Reached from
+  /// `/settings/account`'s own sign-out row, not from a hub row (E15-T11 §3).
+  static const settingsSignOutConfirm = '/settings/sign-out-confirm';
+
+  /// design/screens/settings-privacy.md (E15-T05, GAP-033 + GAP-040).
+  static const settingsPrivacy = '/settings/privacy';
+
+  /// design/screens/settings-security-center.md (E15-T06, GAP-034).
+  static const settingsSecurityCenter = '/settings/security-center';
+
+  /// design/screens/settings-network.md (E15-T08, GAP-036).
+  static const settingsNetwork = '/settings/network';
+
+  /// design/screens/settings-storage.md (E15-T09, GAP-024).
+  static const settingsStorage = '/settings/storage';
+
+  /// design/screens/settings-battery.md (E15-T08, GAP-037).
+  static const settingsBattery = '/settings/battery';
+
+  /// design/screens/settings-notifications.md (E15-T04, GAP-032).
+  static const settingsNotifications = '/settings/notifications';
+
+  /// design/screens/settings-about.md (E15-T10, GAP-038).
+  static const settingsAbout = '/settings/about';
 
   /// design/screens/conversations.md (E06-T10).
   static const conversations = '/conversations';
@@ -111,6 +148,56 @@ final appPages = <GetPage<dynamic>>[
   GetPage<dynamic>(
     name: Routes.settings,
     page: () => const SettingsView(),
+    binding: SettingsBinding(),
+  ),
+  // The eight sub-screens (E15-T04..T10) + the sign-out confirmation
+  // (E15-T07) all share `SettingsBinding` (E15-T11 §3): it lazily registers
+  // every one of the nine controllers below, so whichever of these routes is
+  // visited first resolves every dependency the same way — never a
+  // per-sub-route binding class per screen.
+  GetPage<dynamic>(
+    name: Routes.settingsAccount,
+    page: () => const AccountView(),
+    binding: SettingsBinding(),
+  ),
+  GetPage<dynamic>(
+    name: Routes.settingsSignOutConfirm,
+    page: () => const SignOutConfirmView(),
+    binding: SettingsBinding(),
+  ),
+  GetPage<dynamic>(
+    name: Routes.settingsPrivacy,
+    page: () => const PrivacySettingsView(),
+    binding: SettingsBinding(),
+  ),
+  GetPage<dynamic>(
+    name: Routes.settingsSecurityCenter,
+    page: () => const SecurityCenterView(),
+    binding: SettingsBinding(),
+  ),
+  GetPage<dynamic>(
+    name: Routes.settingsNetwork,
+    page: () => const NetworkSettingsView(),
+    binding: SettingsBinding(),
+  ),
+  GetPage<dynamic>(
+    name: Routes.settingsStorage,
+    page: () => const StorageSettingsView(),
+    binding: SettingsBinding(),
+  ),
+  GetPage<dynamic>(
+    name: Routes.settingsBattery,
+    page: () => const BatterySettingsView(),
+    binding: SettingsBinding(),
+  ),
+  GetPage<dynamic>(
+    name: Routes.settingsNotifications,
+    page: () => const NotificationSettingsView(),
+    binding: SettingsBinding(),
+  ),
+  GetPage<dynamic>(
+    name: Routes.settingsAbout,
+    page: () => const AboutSettingsView(),
     binding: SettingsBinding(),
   ),
   GetPage<dynamic>(

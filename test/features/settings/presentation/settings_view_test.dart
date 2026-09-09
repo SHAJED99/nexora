@@ -1,7 +1,9 @@
 // features/settings/presentation — SettingsView vs design/screens/settings.md
-// (E02-T03). Verifies the eight menu rows render exactly per the design
-// contract's elements table, and that tapping a row (no sub-screen built
-// yet, per §4) only acknowledges the tap rather than navigating anywhere.
+// (E02-T03, rewired E15-T11). Verifies the eight menu rows render exactly
+// per the design contract's elements table, and — since E15-T11 replaced
+// E02-T03's "Coming soon" acknowledgement with real navigation
+// (`FR-UI-006`/`EARS-UI-8`) — that tapping a row navigates rather than
+// showing one.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -86,27 +88,41 @@ void main() {
   });
 
   testWidgets(
-    'test_EARS_SET_2_tap_shows_coming_soon_not_fake_navigation',
+    'test_EARS_UI_8_tap_navigates_not_coming_soon',
     (tester) async {
-      await tester.pumpWidget(GetMaterialApp(home: const SettingsView()));
+      // E15-T11 superseded E02-T03's "Coming soon" acknowledgement with
+      // real navigation once all eight sub-screens existed — this screen's
+      // own test updates alongside its production file (`settings_view.dart`,
+      // this task's `files:` fence) rather than staying asserted against
+      // behaviour the task explicitly requires gone. The exhaustive,
+      // real-route version of this proof (all eight rows, the real
+      // `appPages` table, `Get.isSnackbarOpen` as the falsifiable "no
+      // snackbar" signal) lives in
+      // `test/features/settings/presentation/settings_controller_test.dart`;
+      // this one just proves `SettingsView` itself no longer shows one, with
+      // a minimal stub destination standing in for the real sub-screen.
+      await tester.pumpWidget(
+        GetMaterialApp(
+          initialRoute: '/settings',
+          getPages: [
+            GetPage(name: '/settings', page: () => const SettingsView()),
+            GetPage(
+              name: '/settings/account',
+              page: () => const Text('ACCOUNT STUB'),
+            ),
+          ],
+        ),
+      );
       await tester.pumpAndSettle();
 
-      final currentRoute = Get.currentRoute;
-
       await tester.tap(find.text('Account'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300)); // let the GetX snackbar overlay animate in.
+      await tester.pumpAndSettle();
 
-      // No navigation happened — still on the same (settings) screen.
-      expect(Get.currentRoute, currentRoute);
-      expect(find.byType(SettingsView), findsOneWidget);
-
-      // A snackbar acknowledges the tap instead of navigating anywhere.
-      expect(find.text('Coming soon'), findsOneWidget);
-
-      // Let the snackbar's own auto-dismiss timer finish before the test
-      // ends, so no pending timer trips the framework's teardown check.
-      await tester.pumpAndSettle(const Duration(seconds: 4));
+      // Real navigation happened — not the old acknowledgement.
+      expect(find.text('ACCOUNT STUB'), findsOneWidget);
+      expect(find.byType(SettingsView), findsNothing);
+      expect(find.text('Coming soon'), findsNothing);
+      expect(Get.isSnackbarOpen, isFalse);
     },
   );
 
