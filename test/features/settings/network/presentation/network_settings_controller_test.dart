@@ -24,6 +24,8 @@ import 'package:nexora/core/transport/generated/transport_api.g.dart'
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/settings/network/presentation/network_settings_controller.dart';
 import 'package:nexora/features/settings/network/presentation/network_settings_view.dart';
+import 'package:nexora/features/settings/presentation/widgets/settings_sub_screen_scaffold.dart'
+    show SettingsSectionCard;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -279,6 +281,54 @@ void main() {
     },
   );
 
+  testWidgets('test_EARS_ROUTE_13_not_measured_renders_as_text_not_zero', (tester) async {
+    Get.testMode = true;
+    final viewController =
+        NetworkSettingsController(transport: transport, routing: routing);
+    Get.put<NetworkSettingsController>(viewController);
+    
+    routing.recordLinkMeasurement(
+      'relay-1',
+      latencyMs: 5,
+      lossRate: 0.0,
+      batteryDrain: 0.0,
+    );
+    routing.recordLinkMeasurement(
+      'dest-1',
+      latencyMs: 5,
+      lossRate: 0.0,
+      batteryDrain: 0.0,
+      from: 'relay-1',
+    );
+    final route = routing.computeRoute('dest-1', TrafficProfile.interactive)!;
+    routing.setActiveRoute(route);
+    pushLinkQuality('dest-1', 999, 0.0);
+
+    await tester.pumpWidget(const GetMaterialApp(home: NetworkSettingsView()));
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      const Duration(seconds: 5),
+    );
+
+    expect(find.text('Not measured'), findsOneWidget);
+    expect(find.textContaining('0 ms'), findsNothing);
+
+    // FALSIFICATION PROCEDURE:
+    // Temporarily revert network_settings_view.dart's NotMeasuredLink branch
+    // in _measurementLabel to return '0 ms . 0% loss' instead of 'Not measured'.
+    // Run this test and observe RED (fails because 'Not measured' is 0,
+    // '0 ms' is 1). Revert the view file change and confirm the test passes GREEN.
+
+    viewController.onClose();
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      const Duration(seconds: 2),
+    );
+    Get.reset();
+  });
+
   testWidgets('test_EARS_ROUTE_14_no_control_is_rendered', (tester) async {
     Get.testMode = true;
     final viewController =
@@ -297,16 +347,30 @@ void main() {
 
     expect(find.text('Network'), findsOneWidget);
     // EARS-ROUTE-14: no button, switch or tappable row anywhere on either
-    // card. `SettingsSubScreenScaffold`'s own back affordance is the one
-    // `InkWell` this screen composes but does not own (task §3's shared
-    // shell) -- excluded here the same way the Battery screen's own
-    // equivalent test excludes it.
-    expect(find.byType(Switch), findsNothing);
-    expect(find.byType(Checkbox), findsNothing);
-    expect(find.byType(ElevatedButton), findsNothing);
-    expect(find.byType(TextButton), findsNothing);
-    expect(find.byType(IconButton), findsNothing);
-    expect(find.byType(InkWell), findsOneWidget); // the shell's own back affordance, only
+    // card. We walk the actual rendered element tree and count every
+    // hit-testable gesture surface (`GestureDetector`, `InkWell`/
+    // `InkResponse`, a raw `Listener` with a pointer callback, or a
+    // `Semantics` node with `onTap`/`onLongPress` set) -- scoped to
+    // descendants of this screen's own `SettingsSectionCard`s only, never
+    // the whole tree. Scoping this way sidesteps having to reason about how
+    // many widget-tree entries the shared shell's OWN legitimate back
+    // affordance (`_BackRow`'s single `InkWell`, which lives OUTSIDE every
+    // `SettingsSectionCard`) fans out into internally -- Flutter's real
+    // `InkWell` implementation is not one widget but several nested ones
+    // (`Semantics` + `GestureDetector` + `Listener`), so counting the whole
+    // tree and asserting "exactly 1" is unreliable; asserting ZERO inside
+    // the screen's own cards is not. A widget-TYPE denylist
+    // (`Switch`/`Checkbox`/etc, the prior version of this test) is
+    // defeatable by wrapping a row in a raw `Listener(onPointerDown: ...)`
+    // -- L-frontend-001, the exact gaming shape this rewrite defends
+    // against.
+    //
+    // FALSIFICATION PROCEDURE (confirmed manually before this fix landed):
+    // temporarily wrap one `_RouteRow` in `network_settings_view.dart` with
+    // `Listener(onPointerDown: (_) {}, child: ...)`, run this test, and
+    // observe it go RED (count becomes >0 instead of 0) -- then revert the
+    // view file change and confirm it is GREEN again.
+    expect(_countGestureSurfacesInside(find.byType(SettingsSectionCard)), 0);
 
     viewController.onClose();
     await tester.pumpAndSettle(
@@ -357,4 +421,54 @@ class _CountingRoutingEngine extends RoutingEngine {
     activeRouteForCalls++;
     return super.activeRouteFor(destinationId);
   }
+}
+
+/// Counts every hit-testable gesture surface living inside [scope]'s
+/// matches (and their descendants) -- see the comment at this file's own
+/// `test_EARS_ROUTE_14_no_control_is_rendered` for why this is scoped
+/// rather than counted over the whole tree.
+int _countGestureSurfacesInside(Finder scope) {
+  bool isActiveGestureDetector(Widget w) =>
+      w is GestureDetector &&
+      (w.onTap != null ||
+          w.onDoubleTap != null ||
+          w.onLongPress != null ||
+          w.onTapDown != null);
+  bool isActiveInkResponse(Widget w) =>
+      w is InkResponse &&
+      (w.onTap != null || w.onDoubleTap != null || w.onLongPress != null);
+  bool isActiveListener(Widget w) =>
+      w is Listener && (w.onPointerDown != null || w.onPointerUp != null);
+  bool isActiveSemantics(Widget w) =>
+      w is Semantics &&
+      (w.properties.onTap != null || w.properties.onLongPress != null);
+
+  return find
+          .descendant(
+            of: scope,
+            matching: find.byWidgetPredicate(isActiveGestureDetector),
+          )
+          .evaluate()
+          .length +
+      find
+          .descendant(
+            of: scope,
+            matching: find.byWidgetPredicate(isActiveInkResponse),
+          )
+          .evaluate()
+          .length +
+      find
+          .descendant(
+            of: scope,
+            matching: find.byWidgetPredicate(isActiveListener),
+          )
+          .evaluate()
+          .length +
+      find
+          .descendant(
+            of: scope,
+            matching: find.byWidgetPredicate(isActiveSemantics),
+          )
+          .evaluate()
+          .length;
 }

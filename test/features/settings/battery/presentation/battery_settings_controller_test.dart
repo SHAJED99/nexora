@@ -17,6 +17,8 @@ import 'package:nexora/core/background/background_stub.dart';
 import 'package:nexora/core/background/power_state.dart';
 import 'package:nexora/features/settings/battery/presentation/battery_settings_controller.dart';
 import 'package:nexora/features/settings/battery/presentation/battery_settings_view.dart';
+import 'package:nexora/features/settings/presentation/widgets/settings_sub_screen_scaffold.dart'
+    show SettingsSectionCard;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -34,11 +36,16 @@ void main() {
   });
 
   test(
-    'test_EARS_PLAT_15_unreported_restriction_renders_unknown',
+    'test_EARS_PLAT_15_initial_loading_state_renders_unknown_before_first_read',
     () {
       // The falsification test for this task: BEFORE the first real
       // `PowerState` read has resolved, all three rows must already read
-      // `unknown` -- "unreported" (task §3 contract), not defaulted `off`.
+      // `unknown`. It proves the synchronous loading-state initial value is
+      // unknown, NOT that a genuinely-unreported-by-the-platform restriction
+      // (as opposed to a reported-off one) can be distinguished after a
+      // PowerState read completes - because PowerState's fields are plain bool
+      // and cannot currently carry that distinction (see controller header
+      // comment lines 22-33).
       controller.onInit();
 
       expect(controller.restrictions.length, 3);
@@ -161,6 +168,54 @@ void main() {
   );
 
   testWidgets(
+    'test_EARS_PLAT_15_unknown_renders_as_text_not_off',
+    (tester) async {
+      // `BackgroundStub.powerState()`'s own default resolves immediately
+      // (to `allClearPowerState()`), so a plain `BackgroundStub` turns every
+      // restriction to a definite `off` within the same pumped frame that
+      // mounts the view -- there is no window left in which to observe
+      // `Unknown` actually rendered. `_NeverRespondingPowerStateStub` holds
+      // that read open indefinitely (a `Completer` that is never
+      // completed), keeping the controller in the genuine, real
+      // pre-first-read loading state for as long as the test needs it --
+      // exactly the state `EARS-PLAT-15`'s `Unknown` value is contractually
+      // required to render as (task §3), and exactly the state Finding 3's
+      // renamed test (`test_EARS_PLAT_15_initial_loading_state_renders_unknown_before_first_read`,
+      // above) proves at the controller level. This test proves the SAME
+      // thing at the rendered-widget level instead.
+      Get.testMode = true;
+      final neverRespondingService = _NeverRespondingPowerStateStub();
+      final viewController =
+          BatterySettingsController(service: neverRespondingService);
+      Get.put<BatterySettingsController>(viewController);
+
+      await tester.pumpWidget(const GetMaterialApp(home: BatterySettingsView()));
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 5),
+      );
+
+      expect(find.text('Unknown'), findsNWidgets(3));
+      expect(find.text('Off'), findsNothing);
+
+      // FALSIFICATION PROCEDURE:
+      // Temporarily revert battery_settings_view.dart's RestrictionValue.unknown
+      // branch in _valueLabel to return 'Off' instead of 'Unknown'. Run this test
+      // and observe RED (fails because 'Unknown' is 0, 'Off' is 3). Revert the
+      // view file change and confirm the test passes GREEN again.
+
+      viewController.onClose();
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 2),
+      );
+      Get.reset();
+    },
+  );
+
+  testWidgets(
     'test_EARS_PLAT_16_no_control_is_rendered',
     (tester) async {
       Get.testMode = true;
@@ -186,17 +241,31 @@ void main() {
 
       expect(find.text('Battery'), findsOneWidget);
       // EARS-PLAT-16: no button, switch or tappable ROW anywhere on either
-      // card. `SettingsSubScreenScaffold`'s own back affordance (SH1/SH2)
-      // is an `InkWell` too (task §3's shared shell, not this screen's own
-      // content) -- excluded here deliberately, the same way
-      // `settings-battery.md`'s own §Prohibition scopes "no control" to
-      // this screen's two cards, not the shell it composes.
-      expect(find.byType(Switch), findsNothing);
-      expect(find.byType(Checkbox), findsNothing);
-      expect(find.byType(ElevatedButton), findsNothing);
-      expect(find.byType(TextButton), findsNothing);
-      expect(find.byType(IconButton), findsNothing);
-      expect(find.byType(InkWell), findsOneWidget); // the shell's own back affordance, only
+      // card. We walk the actual rendered element tree and count every
+      // hit-testable gesture surface (`GestureDetector`, `InkWell`/
+      // `InkResponse`, a raw `Listener` with a pointer callback, or a
+      // `Semantics` node with `onTap`/`onLongPress` set) -- scoped to
+      // descendants of this screen's own `SettingsSectionCard`s only, never
+      // the whole tree. Scoping this way sidesteps having to reason about
+      // how many widget-tree entries the shared shell's OWN legitimate back
+      // affordance (`_BackRow`'s single `InkWell`, which lives OUTSIDE every
+      // `SettingsSectionCard`) fans out into internally -- Flutter's real
+      // `InkWell` implementation is not one widget but several nested ones
+      // (`Semantics` + `GestureDetector` + `Listener`), so counting the
+      // whole tree and asserting "exactly 1" is unreliable; asserting ZERO
+      // inside the screen's own cards is not. A widget-TYPE denylist
+      // (`Switch`/`Checkbox`/etc, the prior version of this test) is
+      // defeatable by wrapping a row in a raw `Listener(onPointerDown: ...)`
+      // -- L-frontend-001, the exact gaming shape this rewrite defends
+      // against.
+      //
+      // FALSIFICATION PROCEDURE (confirmed manually before this fix landed):
+      // temporarily wrap one `_RestrictionRow` (or the `_BackgroundOperationBody`
+      // state label) in `battery_settings_view.dart` with
+      // `Listener(onPointerDown: (_) {}, child: ...)`, run this test, and
+      // observe it go RED (count becomes >0 instead of 0) -- then revert the
+      // view file change and confirm it is GREEN again.
+      expect(_countGestureSurfacesInside(find.byType(SettingsSectionCard)), 0);
 
       viewController.onClose();
       await tester.pumpAndSettle(
@@ -223,6 +292,18 @@ class _ErroringPowerStateStub extends BackgroundStub {
       Stream<PowerState>.error(StateError('simulated read failure'));
 }
 
+/// `powerState()`'s one-shot read never resolves (a `Completer` that is
+/// never completed) -- unlike the real `BackgroundStub`, whose default
+/// resolves immediately, this keeps the controller in a genuine,
+/// indefinitely-held pre-first-read loading state, the only state this
+/// build can ever render `Unknown` in (Finding 3's own documented limit,
+/// header comment lines 22-33). `powerStates`'s stream stays real/unused
+/// -- nothing calls `emitPowerState` in this test, so it never fires.
+class _NeverRespondingPowerStateStub extends BackgroundStub {
+  @override
+  Future<PowerState> powerState() => Completer<PowerState>().future;
+}
+
 /// The symmetric seam: `state`/`isRunning()` always fail, `powerStates`
 /// stays real.
 class _ErroringServiceStateStub extends BackgroundStub {
@@ -234,4 +315,54 @@ class _ErroringServiceStateStub extends BackgroundStub {
   @override
   Stream<ServiceState> get state =>
       Stream<ServiceState>.error(StateError('simulated read failure'));
+}
+
+/// Counts every hit-testable gesture surface living inside [scope]'s
+/// matches (and their descendants) -- see the comment at this file's own
+/// `test_EARS_PLAT_16_no_control_is_rendered` for why this is scoped rather
+/// than counted over the whole tree.
+int _countGestureSurfacesInside(Finder scope) {
+  bool isActiveGestureDetector(Widget w) =>
+      w is GestureDetector &&
+      (w.onTap != null ||
+          w.onDoubleTap != null ||
+          w.onLongPress != null ||
+          w.onTapDown != null);
+  bool isActiveInkResponse(Widget w) =>
+      w is InkResponse &&
+      (w.onTap != null || w.onDoubleTap != null || w.onLongPress != null);
+  bool isActiveListener(Widget w) =>
+      w is Listener && (w.onPointerDown != null || w.onPointerUp != null);
+  bool isActiveSemantics(Widget w) =>
+      w is Semantics &&
+      (w.properties.onTap != null || w.properties.onLongPress != null);
+
+  return find
+          .descendant(
+            of: scope,
+            matching: find.byWidgetPredicate(isActiveGestureDetector),
+          )
+          .evaluate()
+          .length +
+      find
+          .descendant(
+            of: scope,
+            matching: find.byWidgetPredicate(isActiveInkResponse),
+          )
+          .evaluate()
+          .length +
+      find
+          .descendant(
+            of: scope,
+            matching: find.byWidgetPredicate(isActiveListener),
+          )
+          .evaluate()
+          .length +
+      find
+          .descendant(
+            of: scope,
+            matching: find.byWidgetPredicate(isActiveSemantics),
+          )
+          .evaluate()
+          .length;
 }
