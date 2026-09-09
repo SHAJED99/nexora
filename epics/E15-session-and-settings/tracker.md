@@ -31,8 +31,8 @@ sub-screens).
 - [ ] E15-T02 · Session-aware launch routing, after the mandatory-update gate · todo · —
 - [x] E15-T03 · Settings sub-screen shell widget and design-gate registration · done · PR #188, APPROVE (opus) — merged `62a8514`
 - [ ] E15-T04 · Notifications settings screen · todo · —
-- [ ] E15-T05 · Privacy & Security settings screen · todo · —
-- [ ] E15-T06 · Security Center screen · todo · —
+- [x] E15-T05 · Privacy & Security settings screen · done · PR #197, APPROVE (opus, round 3) — merged `00193ce`
+- [x] E15-T06 · Security Center screen · done · PR #196, APPROVE (opus, round 5) — merged `cdbe253`
 - [ ] E15-T07 · Account screen and sign-out confirmation · todo · —
 - [ ] E15-T08 · Network and Battery settings screens · todo · —
 - [ ] E15-T09 · Storage settings screen (E08 carry-forward) · todo · —
@@ -127,6 +127,41 @@ T08 now owns that file."* `E15-T09` touches neither.
 - 2026-09-08 · E15-T01 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
   rule 5) · APPROVE, with two mandatory planner escalations (F1, F2 below)
   · design gate n/a (backend). 1363/1363. Merged `7ed8001`.
+- 2026-09-09 · E15-T02 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · round 1 CHANGES-REQUESTED (F1: unguarded pending-wipe-completion
+  crash loop; F2: duplicated version-gate predicate, not genuine
+  delegation) → round 2 APPROVE. design gate n/a. 1379/1379. Merged
+  `2cdbfaf`.
+- 2026-09-09 · E15-T04 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · round 1 CHANGES-REQUESTED (F1: loading-window toggle guessed a
+  default instead of no-op'ing) → round 2 APPROVE. design gate 100%
+  (24/24). 1388/1388. Merged `40217b8`.
+- 2026-09-09 · E15-T06 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · **5 rounds.** Round 1 CHANGES-REQUESTED (F1-F5: vacuous
+  key-leak/back-affordance falsifications, stale wall-clock golden, no-op
+  no-write test). Round 2 CHANGES-REQUESTED (F6: same vacuous-test shape
+  for long-press affordances, found by hunting for it deliberately).
+  Round 3 fixed F6 + 2 observations + OQ bookkeeping. Round 4
+  CHANGES-REQUESTED (F7: OQ-E15-T06-1's provenance misattributed to the
+  human when `design/gaps.md` explicitly delegated it to this task under
+  rule 3 — doc-only). Round 5 APPROVE. design gate 100% (22/22).
+  1404/1404. Merged `cdbe253`. **Every round's finding was a genuine
+  defect, independently reproduced by the reviewer via its own
+  falsification each time** — see §Carried-forward for the two residual
+  observations (O1: Listener/pointer-callback gap; O2: OQ-E15-T06-2
+  discoverability).
+- 2026-09-09 · E15-T05 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · **3 rounds.** Round 1 CHANGES-REQUESTED (F1: vacuous `isNotNull`
+  absence tests; F2: public repository field bypassing the read-only
+  claim). Round 2 CHANGES-REQUESTED (F3: the F1 fix's denylist missed
+  realistic vocabulary evasions like "passcode"; F5: a genuine spec-vs-
+  design conflict on EARS-UI-9's "state the absence" clause, escalated
+  and resolved by direct human decision — see GAP-040). Round 3 APPROVE.
+  design gate 100% (23/23). 1416/1416. Merged `00193ce`. See
+  §Carried-forward for two residual observations (O1: an icon-only,
+  unlabeled control evades both the test and the design gate — a
+  harness/probe limitation, not a task defect; O2: a one-line denylist
+  tidy).
 
 ## Carried-forward observations (not yet a task)
 - **F1 (S2) — the human's answered `Q-SEC-009`(b) (revoke the remote
@@ -184,6 +219,31 @@ T08 now owns that file."* `E15-T09` touches neither.
   `spec/`, not closed task files. **Owner: whichever epic/task next touches
   `signal_trusted_identities`'s schema** — read `E15-T06.md`'s
   `OQ-E15-T06-2` in full before scoping that migration.
+- **E15-T05 review round 3, observation O1 (S4, harness/probe limitation,
+  not a task defect) — an icon-only, unlabeled control (no `Text`, no
+  `Semantics` label) evades BOTH the new EARS-UI-9 allowlist test AND the
+  `design-verify` gate itself.** Proven by the reviewer: a fully working
+  app-lock switch built with no text, no semantics label, and an evasive
+  identifier passed the full suite AND scored the golden 100% (23/23) —
+  the probe dumper's `_isInteractive` family simply never observes an
+  unlabeled interactive widget, the same shape as `L-frontend-001`. The
+  gate did emit one `⚠️ layout delta` on the evasion run, so it isn't
+  fully blind, but nothing failed it. **Owner: whichever task next touches
+  the probe dumper/design-fidelity tooling** — not a fix for E15-T05
+  itself; three simultaneous deliberate obfuscations are needed to trigger
+  it, which is a harness-coverage gap, not a natural implementation
+  mistake (contrast the round-2 vocabulary-evasion finding on the SAME
+  screen, which a normal implementation would hit by accident).
+- **E15-T05 review round 3, observation O2 (S5, one-line tidy, not
+  blocking).** The source-inspection half of EARS-UI-9's test excludes
+  PV22's own necessary "app lock"/"permissions" prose via a loose
+  substring match (`!line.contains('not available in this')`) that a real
+  forbidden field could dodge with a differently-worded trailing comment.
+  Low severity — this is only the SECONDARY check; the allowlist render
+  test is the one that actually closes the vocabulary-evasion class and
+  isn't affected. **Owner: whoever next touches
+  `privacy_settings_controller_test.dart`** — tighten the exclusion to
+  match the full PV22 fragment instead of a generic phrase.
 
 ## Blocked / Frozen
 - **E15-T02** — 🟡 blocked transitively via `depends_on: [E15-T01]`. `T01`
