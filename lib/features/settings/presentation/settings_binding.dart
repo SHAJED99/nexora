@@ -69,35 +69,29 @@ class SettingsBinding extends Bindings {
     //
     // `deviceId`/`identityFuture` are captured HERE, at controller
     // -construction time (the first time this screen is visited — well
-    // before sign-out is ever confirmed), because `sign_out_use_case.dart`'s
-    // own contract (task §5) places `revoke` strictly AFTER `teardown` has
-    // already closed `AppDatabase`. Reading `db.latestDeviceIdentity()`
-    // lazily inside the `revoke` closure itself would resolve against an
-    // already-closed connection; starting the read now (while `db` is
-    // definitely still open) and awaiting the already-in-flight `Future`
-    // inside `revoke` avoids that for the VALUES — see the disclosed
-    // limitation below for what this does not fix.
+    // before sign-out is ever confirmed), so both are ready the instant
+    // `SignOutUseCase.call()` invokes the `revoke` closure below — no
+    // lazy `Get.find`/`db` read happens inside the closure itself.
     //
-    // **Disclosed limitation, not silently worked around** (task §9
-    // Deviations mirrors this): `revoke`'s own contract fixes it strictly
-    // after `wipeService.wipe()`, and this file's own `teardown` closure
-    // (below) closes the shared `AppDatabase` before the wipe runs.
+    // **Ordering fix (E15-T12, corrected during implementation — see
+    // `sign_out_use_case.dart`'s own header and this task's §9 Deviations
+    // for the full history):** `sign_out_use_case.dart`'s `call()` now runs
+    // `revoke` BEFORE `teardown`, not after. The original contract placed
+    // `revoke` strictly after `wipeService.wipe()`, but
     // `DeviceRevocationService.revoke()`
     // (`lib/core/services/device_revocation_service.dart`, outside this
     // task's `files:` fence — §4: "does NOT change `DeviceRevocationService`'s
     // own API") writes a LOCAL `device_revocations` row FIRST, before its
-    // remote Firebase push — against a database that, by the time `revoke`
-    // actually runs here, has already been closed by `teardown`. That local
-    // write throws; the throw is caught by `SignOutUseCase.call()`'s own
-    // best-effort wrapper around `revoke` (never propagates, never blocks
-    // sign-out, exactly as specified), but it also means the remote
-    // Firebase push this task exists to add will not reliably complete in
-    // production today. Not fixable inside this task's fence: a real fix
-    // needs either `DeviceRevocationService`'s local write to become
-    // independently best-effort (a change to a file this task may not
-    // touch) or the `revoke`-after-`wipe` ordering to change (a change to
-    // `call()`'s ordering §4 forbids). Flagged as a follow-up rather than
-    // resolved here — see this task's Run log.
+    // remote Firebase push — and that write needs the SAME shared `db`
+    // handle this closure captured above, which the `teardown` closure
+    // below closes. With the old ordering that local write threw on every
+    // single sign-out (deterministically, since `teardown` always runs
+    // first), so the call never reached the Firebase push at all. Now that
+    // `call()` runs `revoke` first, this closure's captured `db` is still
+    // live when `DeviceRevocationService.revoke()` runs — its local write
+    // succeeds, and (being irrelevant here anyway, since the whole database
+    // is wiped moments later) its "survives next launch" property is simply
+    // not needed in this call path.
     Get.lazyPut(() {
       final db = Get.find<AppDatabase>();
       final messagingStack = Get.find<MessagingStack>();

@@ -1,6 +1,8 @@
-// E15-T01 -- SignOutUseCase: the ordering contract (teardown -> wipe ->
-// auth clear) and each half's failure isolation. `LocalDataWipeService`'s
-// own file-level erase is proven independently in
+// E15-T01/E15-T12 -- SignOutUseCase: the ordering contract (best-effort
+// revoke -> teardown -> wipe -> best-effort auth clear, corrected during
+// E15-T12's own implementation -- see sign_out_use_case.dart's header and
+// this task's §9 Deviations) and each half's failure isolation.
+// `LocalDataWipeService`'s own file-level erase is proven independently in
 // test/core/session/local_data_wipe_service_test.dart; this file seams both
 // collaborators via call-counters/recorded order (never `fail()` inside a
 // broad catch -- swallowed and proves nothing, `L-testing`), never real
@@ -135,10 +137,24 @@ void main() {
     },
   );
 
-  // E15-T12, Q-SEC-009(b): `revoke` is called exactly once, after the wipe,
-  // before the auth clear.
+  // E15-T12, Q-SEC-009(b): `revoke` is called exactly once, before teardown
+  // and the wipe, and before the auth clear.
+  //
+  // Ordering corrected during E15-T12's own implementation (see
+  // sign_out_use_case.dart's header and this task's §9 Deviations): the
+  // original contract placed `revoke` after the wipe, but
+  // `DeviceRevocationService.revoke()`'s production implementation performs
+  // an unconditional local database write as its first statement, and
+  // needs a LIVE `AppDatabase` connection for that write -- which
+  // `_teardown()` (called before the wipe) closes. Running `revoke` after
+  // `teardown` made that local write throw deterministically on every
+  // sign-out in production, so the call never reached the remote Firebase
+  // push at all. This test (and the call-order test directly below it)
+  // is the regression coverage for that bug: falsified by reverting to the
+  // old order (`_teardown()` -> `_wipeService.wipe()` -> `_revoke()`) and
+  // confirming it fails -- see this task's Run log for the failure output.
   test(
-    'test_Q_SEC_009_revoke_is_called_exactly_once_after_the_wipe',
+    'test_Q_SEC_009_revoke_is_called_exactly_once_before_the_wipe',
     () async {
       final calls = <String>[];
       var revokeCalls = 0;
@@ -156,7 +172,38 @@ void main() {
       await useCase.call();
 
       expect(revokeCalls, 1);
-      expect(calls, ['wipe', 'revoke', 'authClear']);
+      expect(calls, ['revoke', 'wipe', 'authClear']);
+    },
+  );
+
+  // E15-T12 regression: `revoke` must run BEFORE `teardown`, not after --
+  // `DeviceRevocationService.revoke()`'s production implementation needs a
+  // live database connection, which `teardown` closes. A call-order spy
+  // recording both closures is the most direct proof of the fix; it would
+  // have failed under the original ordering (`_teardown()` before
+  // `_revoke()`) -- confirmed by temporarily restoring that order, seeing
+  // this test fail with `['teardown', 'revoke']`, then reverting (see this
+  // task's Run log).
+  test(
+    'test_Q_SEC_009_revoke_runs_before_teardown_closes_the_database',
+    () async {
+      final order = <String>[];
+      final wipeService = _RecordingWipeService(<String>[]);
+      final authService = _RecordingAuthService(<String>[]);
+      final useCase = SignOutUseCase(
+        wipeService: wipeService,
+        authService: authService,
+        teardown: () async {
+          order.add('teardown');
+        },
+        revoke: () async {
+          order.add('revoke');
+        },
+      );
+
+      await useCase.call();
+
+      expect(order, ['revoke', 'teardown']);
     },
   );
 
