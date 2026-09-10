@@ -26,6 +26,7 @@ import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/notifications/notification_settings_repository.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/routing_engine/routing_engine.dart';
+import 'package:nexora/core/services/device_revocation_service.dart';
 import 'package:nexora/core/services/version_policy_service.dart';
 import 'package:nexora/core/storage/storage_manager.dart';
 import 'package:nexora/core/transport/transport_service.dart';
@@ -62,15 +63,78 @@ class SettingsBinding extends Bindings {
       ),
     );
 
-    // SignOutConfirmController (E15-T07). `SignOutUseCase()`'s own default
-    // constructor is exactly right here — its `teardown` parameter (closing
-    // GetX-registered singletons before the wipe deletes the database file)
-    // is explicitly out of this task's scope (epic tracker's carried-forward
-    // F2, `sign_out_use_case.dart`'s own header) and stays the default
-    // no-op until a separate task wires it.
-    Get.lazyPut(
-      () => SignOutConfirmController(signOutUseCase: SignOutUseCase()),
-    );
+    // SignOutConfirmController (E15-T07), production `teardown`/`revoke`
+    // wiring (E15-T12, epic tracker carried-forward F1/F2; `Q-SEC-009`(b)/
+    // `Q-FUNC-010`).
+    //
+    // `deviceId`/`identityFuture` are captured HERE, at controller
+    // -construction time (the first time this screen is visited — well
+    // before sign-out is ever confirmed), so both are ready the instant
+    // `SignOutUseCase.call()` invokes the `revoke` closure below — no
+    // lazy `Get.find`/`db` read happens inside the closure itself.
+    //
+    // **Ordering fix (E15-T12, corrected during implementation — see
+    // `sign_out_use_case.dart`'s own header and this task's §9 Deviations
+    // for the full history):** `sign_out_use_case.dart`'s `call()` now runs
+    // `revoke` BEFORE `teardown`, not after. The original contract placed
+    // `revoke` strictly after `wipeService.wipe()`, but
+    // `DeviceRevocationService.revoke()`
+    // (`lib/core/services/device_revocation_service.dart`, outside this
+    // task's `files:` fence — §4: "does NOT change `DeviceRevocationService`'s
+    // own API") writes a LOCAL `device_revocations` row FIRST, before its
+    // remote Firebase push — and that write needs the SAME shared `db`
+    // handle this closure captured above, which the `teardown` closure
+    // below closes. With the old ordering that local write threw on every
+    // single sign-out (deterministically, since `teardown` always runs
+    // first), so the call never reached the Firebase push at all. Now that
+    // `call()` runs `revoke` first, this closure's captured `db` is still
+    // live when `DeviceRevocationService.revoke()` runs — its local write
+    // succeeds, and (being irrelevant here anyway, since the whole database
+    // is wiped moments later) its "survives next launch" property is simply
+    // not needed in this call path.
+    Get.lazyPut(() {
+      final db = Get.find<AppDatabase>();
+      final messagingStack = Get.find<MessagingStack>();
+      final deviceId = messagingStack.selfDeviceId;
+      final identityFuture = db.latestDeviceIdentity();
+
+      return SignOutConfirmController(
+        signOutUseCase: SignOutUseCase(
+          teardown: () async {
+            // Order matters (task §6 Risks): `MessagingStack.dispose()`
+            // already closes `db` internally, fully awaited
+            // (`messaging_stack.dart`'s own `dispose()`: `coordinator.stop()`
+            // -> `transport.dispose()` -> `db.close()`) — `messagingStack`
+            // and `db` share the SAME `AppDatabase` instance
+            // (`bindings.dart`'s own header: "one AppDatabase instance
+            // shared by every repository"), so `db.close()` is never called
+            // again separately here — a double close is not this file's to
+            // risk. Every other permanent singleton `AppBinding` registers
+            // (`DeviceIdentityRepository`, `RelationshipRepository`,
+            // `StorageManager`, etc.) holds a reference to this SAME `db`
+            // rather than a second connection of its own, so closing this
+            // one connection is sufficient — there is no second database
+            // handle anywhere in this app left to close.
+            if (Get.isRegistered<MessagingStack>()) {
+              await Get.find<MessagingStack>().dispose();
+              Get.delete<MessagingStack>(force: true);
+            }
+            if (Get.isRegistered<AppDatabase>()) {
+              Get.delete<AppDatabase>(force: true);
+            }
+          },
+          revoke: () async {
+            final identity = await identityFuture;
+            final uid = identity?.accountUid;
+            if (uid == null || uid.isEmpty || deviceId.isEmpty) return;
+            await DeviceRevocationService(
+              localDeviceId: deviceId,
+              database: db,
+            ).revoke(uid, deviceId);
+          },
+        ),
+      );
+    });
 
     // PrivacySettingsController (E15-T05). Fresh repositories over the
     // shared `db` — the same "construct a lightweight repository per call
