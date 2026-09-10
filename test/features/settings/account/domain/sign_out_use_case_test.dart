@@ -134,4 +134,76 @@ void main() {
       expect(calls, ['teardown', 'wipe', 'authClear']);
     },
   );
+
+  // E15-T12, Q-SEC-009(b): `revoke` is called exactly once, after the wipe,
+  // before the auth clear.
+  test(
+    'test_Q_SEC_009_revoke_is_called_exactly_once_after_the_wipe',
+    () async {
+      final calls = <String>[];
+      var revokeCalls = 0;
+      final wipeService = _RecordingWipeService(calls);
+      final authService = _RecordingAuthService(calls);
+      final useCase = SignOutUseCase(
+        wipeService: wipeService,
+        authService: authService,
+        revoke: () async {
+          revokeCalls++;
+          calls.add('revoke');
+        },
+      );
+
+      await useCase.call();
+
+      expect(revokeCalls, 1);
+      expect(calls, ['wipe', 'revoke', 'authClear']);
+    },
+  );
+
+  // A throwing `revoke` must not propagate and must not prevent `call()`
+  // from completing (or from still running the auth clear) -- the same
+  // best-effort contract the existing auth-clear catch already proves
+  // above.
+  test(
+    'test_Q_SEC_009_a_throwing_revoke_does_not_propagate_or_block_call',
+    () async {
+      final calls = <String>[];
+      final wipeService = _RecordingWipeService(calls);
+      final authService = _RecordingAuthService(calls);
+      final useCase = SignOutUseCase(
+        wipeService: wipeService,
+        authService: authService,
+        revoke: () async {
+          throw StateError('revoke boom');
+        },
+      );
+
+      // Must not throw.
+      await useCase.call();
+
+      expect(wipeService.wipeCallCount, 1);
+      expect(authService.signOutCallCount, 1);
+    },
+  );
+
+  // The default (no `revoke` closure given) behaves exactly as today: a
+  // no-op, `call()` succeeds identically.
+  test(
+    'test_Q_SEC_009_default_no_revoke_closure_behaves_as_a_noop',
+    () async {
+      final calls = <String>[];
+      final wipeService = _RecordingWipeService(calls);
+      final authService = _RecordingAuthService(calls);
+      final useCase = SignOutUseCase(
+        wipeService: wipeService,
+        authService: authService,
+      );
+
+      await useCase.call();
+
+      expect(calls, ['wipe', 'authClear']);
+      expect(wipeService.wipeCallCount, 1);
+      expect(authService.signOutCallCount, 1);
+    },
+  );
 }
