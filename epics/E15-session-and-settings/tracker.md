@@ -1,6 +1,6 @@
 # E15 · Session Lifecycle & Settings Sub-Screens · Progress
 
-**Status:** in-progress · **Started:** 2026-09-08 · **Completed:** — · **Progress:** 11/14
+**Status:** in-progress · **Started:** 2026-09-08 · **Completed:** — · **Progress:** 12/14 (all dispatchable tasks done; E15-B03/E15-T13 parked pending 🧍 human `bug_priorities` gate)
 
 > Only the ORCHESTRATOR edits this file.
 > todo → in-progress → review-requested → (changes-requested →) done → verified
@@ -38,7 +38,7 @@ sub-screens).
 - [x] E15-T09 · Storage settings screen (E08 carry-forward) · done · PR #203, round 1 CHANGES-REQUESTED (S1 blocker: "no clean-now affordance" test defeated by the screen's own legitimate `InkWell` idiom; S2×2: invalid-parameter write-proof gap, untested zero-candidate sentinel filter; S3: unstamped OQ) → round 2 APPROVE (opus), every finding independently re-falsified. Fixed a real `RenderFlex` overflow found during orchestrator self-verification before the PR even opened. design gate 100% (10/10). Merged `3eda7d9`
 - [x] E15-T10 · About / Updates screen · done · PR #202, round 1 CHANGES-REQUESTED (FR-DIAG-002 falsification test couldn't fail against a real stack-trace leak; model-shape test guarded a denylist not the shape; two tests never built a widget/asserted controller state only; "no control" test missed non-Material gesture wrappers; "Last checked" rendered a raw epoch-millis integer) → round 2 APPROVE (opus), all six independently re-falsified. Fixed a second real `RenderFlex` overflow found while formatting the timestamp fix. design gate 100% (22/22). Merged `2b20986`. OQ-E15-T10-2 (no local diagnostic log store) resolved by the orchestrator, see §Carried-forward.
 - [x] E15-T11 · Settings hub wiring: eight routes, eight rows, probe consolidation · done · PR #208, round 1 CHANGES-REQUESTED (S2 blocker: a second `BackgroundService()` in `settings_binding.dart` silently hijacks `BackgroundLifecycleObserver`'s native event registration, and a source comment falsely claimed it was already disclosed) → round 2 APPROVE (opus), docs-only fix verified as touching zero product code. design gates 100% on all nine sub-screens through the new consolidated fixture; the hub's own gate (`settings`) is honestly red (33.8%, pre-existing HTML-vs-Flutter golden mismatch, not a regression — see E15-T13). Merged `1facb7f`. Filed `E15-B03` (S2, the BackgroundService fix) and `E15-T13` (the hub design-gate reconciliation) as real follow-up tasks rather than fixed/guessed at here.
-- [ ] E15-T12 · Wire SignOutUseCase's production teardown and remote-revoke closures · todo · — depends on E15-T11 (now merged) — ready to dispatch
+- [x] E15-T12 · Wire SignOutUseCase's production teardown and remote-revoke closures · done · PR #210, round 1 APPROVE (opus) with 4 required docs-only corrections (stale pre-fix ordering/test-name references) before merge — but the real finding was caught by the orchestrator BEFORE review even started: the task's own original contract (which the orchestrator wrote when sharding this task) mandated `teardown -> wipe -> revoke`, but `DeviceRevocationService.revoke()` does an unconditional, unwrapped local-database write as its first statement — with the database already closed by `teardown`, this would have thrown on every single sign-out, deterministically, silently skipping the Firebase push entirely (`Q-SEC-009`(b) would have shipped as dead code behind a green suite). Reordered to `revoke -> teardown -> wipe -> auth-clear` before the PR was even opened for review; the reviewer independently reproduced the production consequence end-to-end (a real file-backed database, confirming zero Firebase pushes under the old order vs. one under the new) and falsified both new regression tests by reverting the order. Merged `4cb92bd`.
 - [ ] E15-B03 · A second `BackgroundService()` hijacks `BackgroundLifecycleObserver`'s native event registration · todo · S2, found by E15-T11's review — needs 🧍 `bug_priorities` gate (p: unset) before dispatch
 - [ ] E15-T13 · Reconcile `settings.md`'s HTML-sourced golden against a real Flutter build · todo · S3, found during E15-T11 — needs a planner/human choice between two fix directions before dispatch; needs 🧍 `bug_priorities` gate (p: unset)
 - [x] E15-B01 · GetX lazyPut without fenix crashes on a second welcome/login/home visit · done · PR #191, APPROVE (opus) — merged `967fe84`
@@ -253,6 +253,28 @@ T08 now owns that file."* `E15-T09` touches neither.
   (33.8%, tracked as E15-T13, not a regression — reviewer independently
   reproduced the identical score with this task's own routing changes
   reverted). 1493/1493. Merged `1facb7f`.
+- 2026-09-10 · E15-T12 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · APPROVE round 1, with 4 required docs-only text corrections
+  (stale references to the pre-fix call order and a renamed test) before
+  merge — no code re-review needed. **The substantive finding here was
+  caught and fixed by the orchestrator before this PR was ever opened for
+  review**: this task's own original contract (§5, written by the
+  orchestrator when sharding `E15-T12`) mandated
+  `teardown -> wipe -> best-effort revoke`, but
+  `DeviceRevocationService.revoke()`'s first statement is an unconditional,
+  unwrapped local-database write — with `teardown` having already closed
+  that database, this would have thrown on every single sign-out,
+  deterministically, before ever reaching the Firebase push `Q-SEC-009`(b)
+  exists to make. The implementer's own honest self-review caught this
+  during implementation and disclosed it; the orchestrator traced it to
+  its own sharding mistake and dispatched a fix reordering to
+  `revoke -> teardown -> wipe -> auth-clear` before dispatching review.
+  The reviewer independently reproduced the production consequence
+  end-to-end (a real file-backed database: zero Firebase pushes under the
+  old order, one under the new) and falsified both new regression tests
+  by reverting the order. 1497/1497. Merged `4cb92bd`. **This closes
+  `E15-T12`, the last dispatchable E15 task** — only `E15-B03`/`E15-T13`
+  remain, both parked pending the human `bug_priorities` gate.
 
 ## Carried-forward observations (not yet a task)
 - **E15-T10's `no_release_notes_and_no_update_button` test proves only
