@@ -1,16 +1,20 @@
 # E04 · Mesh Discovery, Relay & Dynamic Routing · Progress
 
-**Status:** all tasks + bug fixes done, P1/P2 = 0. On-device Bluetooth
-verification (E04-B04/B05/B06/B07) found and fixed four real S1 defects
-that zero unit test could have caught — the fix stack for real Bluetooth
-mesh delivery (connect() wired in, an accept loop added, and known-peer
-connection subscriptions seeded independent of live discovery) is now
-believed complete. Real-hardware two-device retest still deferred
-(`OQ-E04-B06-1`) — a second physical device has not been available since
-mid-session; an Android emulator cannot substitute (no real Bluetooth
-Classic radio).
+**Status:** all tasks done, P1/P2 = 0. On-device Bluetooth verification
+(E04-B04/B05/B06/B07/B08) found and fixed five real defects that zero
+unit test could have caught — the fix stack for real Bluetooth mesh
+delivery (connect() wired in, an accept loop added, known-peer
+connection subscriptions seeded independent of live discovery, and a
+real MIUI/Xiaomi address-randomization workaround) is believed complete
+for two ALREADY-BONDED devices. `OQ-E04-B06-1`'s deferred real-hardware
+retest was resolved 2026-09-11/12 — both physical devices (Redmi 10
+2022, Pixel 8 Pro) became available again and were used directly for
+E04-B08's diagnosis, fix, and independent re-verification. **One bug
+remains open, not blocking:** `E04-B09` (discoverability + app-initiated
+bonding for two devices that have NEVER been paired by any means) —
+scoped, both human decisions recorded, ready to dispatch.
 **Started:** 2026-08-27 · **Completed:** — · **Progress:** 10/10 tasks,
-14/14 tasks+bugs
+15/16 tasks+bugs
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -29,15 +33,31 @@ Classic radio).
 - [x] E04-B05 · `TransportService.connect()` had zero production callers — `RelayEngine`'s send path could never succeed against a real device (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x3
 - [x] E04-B06 · `BluetoothTransport` had no server-side accept loop — `connect()` was client-only, so two real devices could never connect to each other (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x3
 - [x] E04-B07 · `InboundPipeline`/`MessagingCoordinator` only subscribe to a device's connection state after discovering it THIS process run — an accepted connection from an already-known peer is silently dropped (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x2
-- [ ] E04-B08 · Two real, never-manually-paired devices still cannot complete a Bluetooth Classic connection — discoverability, bonding, and (newly confirmed 2026-09-08) a peer-identity/real-MAC mismatch, all unowned (S2, priority unset) · **blocked** · 🧍 needs human `bug_priorities` scope call before any fix is attempted
+- [x] E04-B08 · `BluetoothTransport.connect()` must prefer a bonded device's real address over a randomized discovery-scan address (MIUI/Xiaomi address-randomization workaround) · done · orchestrator (sonnet) → reviewer (opus) · priority P2 (human-set 2026-09-11) · PR #219, APPROVE, on-device diagnostic confirmed the root cause live (MIUI randomizes Classic discovery addresses per-scan, even for an already-bonded peer) and the fix's `resolveDeviceId` logic independently re-validated on real hardware (bonded-list read + name-comparison confirmed correct via temporary, since-reverted diagnostic logging). Merged `98eb55a`.
+- [ ] E04-B09 · Add discoverability (time-boxed `ACTION_REQUEST_DISCOVERABLE`) and an app-initiated `createBond()` pairing flow · todo · depends on E04-B08 (done) — ready to dispatch. Both human decisions already recorded in the task file (2026-09-11).
 
-**B08 note:** this is the third time this exact gap has surfaced —
-`E04-B04.md` §Carried-forward #2 and `E04-B06.md`'s equivalent both flagged
-"the app never makes itself discoverable" with no owner; live 2026-09-08
-hardware testing (Redmi 10 2022 + Pixel 8 Pro) rediscovered it and added a
-third, more specific finding (peer identity ≠ real Bluetooth MAC). Filed as
-its own bug per `skills/bug-sweep`'s L-process-008 rather than left as a
-third unread carried-forward note.
+**B08/B09 note:** E04-B08 was re-scoped on 2026-09-11 (after two human
+decisions cleared its `bug_priorities` gate) to the identity-mapping fix
+alone — the smallest, most clearly-bounded piece, independently testable
+since the two diagnostic devices were already manually OS-bonded.
+Discoverability + the bonding-flow UI were split off into E04-B09, a
+larger, feature-shaped task (new Pigeon API, `MainActivity`
+activity-result wiring, likely a design-contract touch on
+`devices.md`). This is the fourth and final surfacing of the gap first
+flagged (unowned) in `E04-B04.md` §Carried-forward #2 and `E04-B06.md`'s
+equivalent — now split across two owned, dispatchable tasks rather than
+carried forward again.
+
+**Carried-forward observation (E04-B08's review, 2026-09-12, S4, not
+blocking):** a non-bonded nearby device broadcasting a Bluetooth-visible
+name equal to an already-bonded peer's name would now be emitted under
+that bonded peer's real address by `resolveDeviceId` — not an
+identity-trust hole (the id emitted is still the genuine bonded address,
+so a `connect()` still pages the real peer, and app-level trust stays
+gated by the existing Verify flow), but it could make a bonded peer
+falsely appear "present" ("Last seen: Just now") when it isn't nearby.
+**Owner: `E04-B09`**, whose own bonding-flow work already touches this
+exact bonded/unbonded distinction directly.
 
 ## Dependency graph
 ```mermaid
