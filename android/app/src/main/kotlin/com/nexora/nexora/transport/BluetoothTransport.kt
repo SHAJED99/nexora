@@ -140,6 +140,16 @@ class BluetoothTransport(
      * decision, 2026-09-11): reverts automatically, no background battery
      * cost once elapsed. */
     private const val DISCOVERABLE_DURATION_SECONDS = 120
+
+    /** F2 (E04-B09 review fix): `BOND_BONDED` only means the OS-level bond
+     * exists, not that the peer's SDP service record is retrievable yet --
+     * an RFCOMM connect issued immediately after bonding commonly fails on
+     * its first attempt in practice (a well-known Android BT quirk). A
+     * short settle delay before each post-bond connect attempt, plus one
+     * bounded retry on failure, covers this without touching [doConnect]'s
+     * own single-attempt contract for the already-bonded case. */
+    private const val POST_BOND_CONNECT_DELAY_MS = 400L
+    private const val POST_BOND_CONNECT_MAX_ATTEMPTS = 2
   }
 
   private val bluetoothManager =
@@ -410,8 +420,12 @@ class BluetoothTransport(
           emitFailure(deviceId)
           return
         }
+    // Discovery and an active bond attempt compete for the radio, same as
+    // discovery vs. connect in doConnect below; Android's own docs recommend
+    // cancelling discovery before createBond() for the same reason.
+    if (bt.isDiscovering) bt.cancelDiscovery()
     registerBondReceiverIfNeeded()
-    pendingBondConnections[deviceId] = { doConnect(bt, deviceId) }
+    pendingBondConnections[deviceId] = { doConnectAfterBond(bt, deviceId) }
     eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTING) }
     val started =
         try {
@@ -492,6 +506,51 @@ class BluetoothTransport(
         // getRemoteDevice() throws this for a malformed MAC address.
         emitFailure(deviceId)
       }
+    }, "nexora-bt-connect-$deviceId").start()
+  }
+
+  /**
+   * F2 (E04-B09 review fix): connects to [deviceId] right after its bond
+   * just completed (`BOND_BONDED`). Unlike [doConnect] -- the proven,
+   * already-bonded single-attempt path, left untouched -- this waits
+   * [POST_BOND_CONNECT_DELAY_MS] before each attempt (the peer's SDP
+   * record may not be resolvable the instant the bond forms) and retries
+   * up to [POST_BOND_CONNECT_MAX_ATTEMPTS] times on `IOException` (the
+   * transient failure this quirk actually produces). A malformed address
+   * or a permission failure is not retried -- those won't resolve by
+   * waiting, and existing behavior for [doConnect] already treats them
+   * as immediately terminal.
+   */
+  private fun doConnectAfterBond(bt: BluetoothAdapter, deviceId: String) {
+    eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTING) }
+
+    Thread({
+      var connected = false
+      var attempt = 0
+      while (!connected && attempt < POST_BOND_CONNECT_MAX_ATTEMPTS) {
+        attempt++
+        try {
+          Thread.sleep(POST_BOND_CONNECT_DELAY_MS)
+          val device = bt.getRemoteDevice(deviceId)
+          val socket = device.createRfcommSocketToServiceRecord(NEXORA_SPP_UUID)
+          if (bt.isDiscovering) bt.cancelDiscovery()
+          socket.connect() // BLOCKING -- this background thread only.
+          openSockets[deviceId] = socket
+          startReadLoop(deviceId, socket)
+          eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTED) }
+          connected = true
+        } catch (e: IOException) {
+          // Transient post-bond quirk (SDP record not yet resolvable) --
+          // retry once more if attempts remain, per POST_BOND_CONNECT_MAX_ATTEMPTS.
+        } catch (e: SecurityException) {
+          break // permission failure -- retrying won't help.
+        } catch (e: IllegalArgumentException) {
+          break // getRemoteDevice() malformed MAC -- retrying won't help.
+        } catch (e: InterruptedException) {
+          break
+        }
+      }
+      if (!connected) emitFailure(deviceId)
     }, "nexora-bt-connect-$deviceId").start()
   }
 
