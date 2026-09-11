@@ -103,6 +103,14 @@ class TransportService {
 
   Future<void> stopDiscovery() => _api.stopDiscovery();
 
+  /// Requests this device become discoverable to nearby peers for a fixed,
+  /// time-boxed window via Android's own `ACTION_REQUEST_DISCOVERABLE`
+  /// system dialog (E04-B09, `FR-DISC-001`) — the human-decided
+  /// discoverability mechanism. Fire-and-forget: there is no settled-state
+  /// event to await, the OS dialog handles user confirmation and
+  /// discoverability reverts automatically after the native-side duration.
+  Future<void> requestDiscoverable() => _api.requestDiscoverable();
+
   /// Requests a connection and awaits the eventual `onConnectionStateChanged`
   /// event for [deviceId] settling into `connected` or `failed` — never
   /// assumes `TransportApi.connect()`'s synchronous return means the

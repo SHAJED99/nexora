@@ -77,6 +77,15 @@ abstract class TransportApi {
   void disconnect(String deviceId);
 
   bool send(String deviceId, Uint8List bytes);
+
+  /// Requests this device become discoverable to nearby peers for a fixed,
+  /// time-boxed window (120s), via Android's own
+  /// `ACTION_REQUEST_DISCOVERABLE` system dialog (E04-B09,
+  /// `FR-DISC-001`) — the human-decided discoverability mechanism (not a
+  /// continuous listen-only scan mode). Fire-and-forget from the Dart side:
+  /// the OS system dialog handles user confirmation, and there is no
+  /// return value or settled-state event to await.
+  void requestDiscoverable();
 }
 
 /// Flutter-side API: native Kotlin calls into Dart.

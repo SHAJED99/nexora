@@ -47,6 +47,13 @@ class TransportApiHost(binaryMessenger: BinaryMessenger, activity: Activity) : T
     bluetooth.onRequestPermissionsResult(requestCode, grantResults)
   }
 
+  /** Forwarded by `MainActivity.onActivityResult` (E04-B09) — mirrors
+   * [onRequestPermissionsResult]'s own forwarding shape, for
+   * `ACTION_REQUEST_DISCOVERABLE`'s `startActivityForResult` callback. */
+  fun onActivityResult(requestCode: Int, resultCode: Int) {
+    bluetooth.onActivityResult(requestCode, resultCode)
+  }
+
   override fun startDiscovery() = bluetooth.startDiscovery()
 
   override fun stopDiscovery() = bluetooth.stopDiscovery()
@@ -57,4 +64,6 @@ class TransportApiHost(binaryMessenger: BinaryMessenger, activity: Activity) : T
 
   override fun send(deviceId: String, bytes: ByteArray): Boolean =
       bluetooth.send(deviceId, bytes)
+
+  override fun requestDiscoverable() = bluetooth.requestDiscoverable()
 }

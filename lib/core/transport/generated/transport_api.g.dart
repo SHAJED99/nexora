@@ -338,6 +338,31 @@ class TransportApi {
     ;
     return pigeonVar_replyValue! as bool;
   }
+
+  /// Requests this device become discoverable to nearby peers for a fixed,
+  /// time-boxed window (120s), via Android's own
+  /// `ACTION_REQUEST_DISCOVERABLE` system dialog (E04-B09,
+  /// `FR-DISC-001`) — the human-decided discoverability mechanism (not a
+  /// continuous listen-only scan mode). Fire-and-forget from the Dart side:
+  /// the OS system dialog handles user confirmation, and there is no
+  /// return value or settled-state event to await.
+  Future<void> requestDiscoverable() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.nexora.TransportApi.requestDiscoverable$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
 }
 
 /// Flutter-side API: native Kotlin calls into Dart.

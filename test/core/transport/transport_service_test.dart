@@ -259,4 +259,34 @@ void main() {
     final LinkQuality quality = await received;
     expect(quality.rssi, -62);
   });
+
+  // E04-B09: requestDiscoverable() is a thin, fire-and-forget wrapper over
+  // the generated TransportApi.requestDiscoverable host call — proves the
+  // Dart facade actually invokes the native method, over the real
+  // generated codec, same pattern as every other TransportApi wrapper
+  // above. The native side's own duration/intent behavior is Kotlin-only
+  // and is proven by on-device manual verification (task §7/§8), same
+  // constraint transport_service_test.dart's own header documents for
+  // LoopbackTransport.
+  test('test_request_discoverable_invokes_native_host_call', () async {
+    const String suffix = 'requestdiscoverable';
+    final TransportService service = TransportService(
+      binaryMessenger: messenger,
+      messageChannelSuffix: suffix,
+    );
+    addTearDown(service.dispose);
+
+    bool called = false;
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.requestDiscoverable.$suffix',
+      (ByteData? message) async {
+        called = true;
+        return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[null]);
+      },
+    );
+
+    await service.requestDiscoverable();
+
+    expect(called, isTrue);
+  });
 }

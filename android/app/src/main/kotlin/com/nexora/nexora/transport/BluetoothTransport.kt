@@ -126,6 +126,30 @@ class BluetoothTransport(
      * below so a later reconnect under the same device id starts with a
      * clean window rather than stale history). */
     private const val LINK_QUALITY_WINDOW_SIZE = 20
+
+    /** Request code passed to `activity.startActivityForResult` for
+     * `ACTION_REQUEST_DISCOVERABLE` (E04-B09). Distinct from
+     * [BluetoothPermissions.REQUEST_CODE] (4200, a runtime-permission
+     * request code, not an activity-result one) and
+     * `NotificationApiHost.REQUEST_CODE` (4300) — this is `MainActivity`'s
+     * own `onActivityResult` forwarding, not `onRequestPermissionsResult`. */
+    const val REQUEST_DISCOVERABLE_CODE = 4400
+
+    /** `EXTRA_DISCOVERABLE_DURATION`, in seconds — the human-decided,
+     * time-boxed discoverability window (E04-B09's "Discoverability" human
+     * decision, 2026-09-11): reverts automatically, no background battery
+     * cost once elapsed. */
+    private const val DISCOVERABLE_DURATION_SECONDS = 120
+
+    /** F2 (E04-B09 review fix): `BOND_BONDED` only means the OS-level bond
+     * exists, not that the peer's SDP service record is retrievable yet --
+     * an RFCOMM connect issued immediately after bonding commonly fails on
+     * its first attempt in practice (a well-known Android BT quirk). A
+     * short settle delay before each post-bond connect attempt, plus one
+     * bounded retry on failure, covers this without touching [doConnect]'s
+     * own single-attempt contract for the already-bonded case. */
+    private const val POST_BOND_CONNECT_DELAY_MS = 400L
+    private const val POST_BOND_CONNECT_MAX_ATTEMPTS = 2
   }
 
   private val bluetoothManager =
@@ -151,6 +175,23 @@ class BluetoothTransport(
   private val sendOutcomes = ConcurrentHashMap<String, ArrayDeque<Boolean>>()
 
   private var discoveryReceiver: BroadcastReceiver? = null
+
+  /** `ACTION_BOND_STATE_CHANGED` receiver (E04-B09), registered lazily the
+   * first time [connect] needs to bond an unbonded peer — mirrors
+   * [registerReceiverIfNeeded]'s own lazy-registration shape for the
+   * `ACTION_FOUND`/`ACTION_DISCOVERY_FINISHED` receiver. */
+  private var bondStateReceiver: BroadcastReceiver? = null
+
+  /** Device addresses [connect] is currently waiting on a bond outcome for,
+   * mapped to the `connect()` continuation to run once `BOND_BONDED` fires
+   * for that address. An address present here is also the signal that a
+   * `BOND_NONE` for it means "bonding just failed/was rejected" rather than
+   * "this address was never bonding in the first place" — Android also
+   * broadcasts `BOND_NONE` for plenty of addresses this device was never
+   * trying to bond with (e.g. a completely unrelated device the user
+   * un-pairs from OS Settings), and those must not spuriously fail a
+   * `connect()` call that never asked for them. */
+  private val pendingBondConnections = ConcurrentHashMap<String, () -> Unit>()
 
   /**
    * E04-B06: this device's own listening socket, so a REMOTE device's
@@ -327,6 +368,123 @@ class BluetoothTransport(
     }
     ensureListening() // E04-B06 -- see that method's own doc comment.
 
+    // E04-B09: an unbonded peer's RFCOMM connect fails outright -- both of
+    // this app's own secure socket variants require an OS-level bond. Same
+    // `bondedDevices` check E04-B08's `resolveDeviceId` already introduced.
+    // Reusing `isBonded` here (rather than re-deriving it) keeps the two
+    // call sites' notion of "already bonded" identical.
+    if (!isBonded(deviceId)) {
+      startBondAndConnect(bt, deviceId)
+      return true
+    }
+
+    doConnect(bt, deviceId)
+    return true
+  }
+
+  /** `true` when [deviceId] (a raw Bluetooth MAC address) is already in
+   * `adapter.bondedDevices` — the same check `resolveDeviceId` (E04-B08)
+   * uses to prefer a bonded device's real address. A `SecurityException`
+   * (permission revoked between [connect]'s own `hasAll` check and this
+   * call — a narrow but real race) reads as "not bonded", the safe
+   * direction: it routes into [startBondAndConnect], which re-checks
+   * permissions via `createBond()`'s own runtime behaviour, rather than
+   * silently skipping straight to an RFCOMM connect that would fail anyway.
+   */
+  private fun isBonded(deviceId: String): Boolean {
+    val bondedDevices =
+        try {
+          adapter?.bondedDevices
+        } catch (e: SecurityException) {
+          null
+        } ?: return false
+    return bondedDevices.any { it.address == deviceId }
+  }
+
+  /**
+   * E04-B09: bonds [deviceId] via `BluetoothDevice.createBond()` (which
+   * shows Android's own system pairing-confirmation UI — no custom dialog
+   * built here, per the human's 2026-09-11 bonding decision) and defers
+   * [doConnect] behind the eventual `BOND_BONDED` outcome for this address,
+   * observed through [bondStateReceiver]. A `BOND_NONE` after a
+   * `BOND_BONDING` transition (pairing rejected/failed) emits `FAILED`
+   * instead of hanging (§ risk in the task file).
+   */
+  private fun startBondAndConnect(bt: BluetoothAdapter, deviceId: String) {
+    val device =
+        try {
+          bt.getRemoteDevice(deviceId)
+        } catch (e: IllegalArgumentException) {
+          // Malformed MAC address -- same failure BluetoothAdapter would
+          // eventually surface from a direct connect attempt.
+          emitFailure(deviceId)
+          return
+        }
+    // Discovery and an active bond attempt compete for the radio, same as
+    // discovery vs. connect in doConnect below; Android's own docs recommend
+    // cancelling discovery before createBond() for the same reason.
+    if (bt.isDiscovering) bt.cancelDiscovery()
+    registerBondReceiverIfNeeded()
+    pendingBondConnections[deviceId] = { doConnectAfterBond(bt, deviceId) }
+    eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTING) }
+    val started =
+        try {
+          device.createBond()
+        } catch (e: SecurityException) {
+          false
+        }
+    if (!started) {
+      pendingBondConnections.remove(deviceId)
+      emitFailure(deviceId)
+    }
+  }
+
+  /**
+   * Registers [bondStateReceiver] for `ACTION_BOND_STATE_CHANGED`, once —
+   * mirrors [registerReceiverIfNeeded]'s lazy-registration shape and its
+   * `RECEIVER_EXPORTED` reasoning: `ACTION_BOND_STATE_CHANGED` is likewise
+   * sent by `com.android.bluetooth` (a different app/uid), as an explicit
+   * broadcast, and is itself a protected system broadcast no third-party
+   * app can forge.
+   */
+  private fun registerBondReceiverIfNeeded() {
+    if (bondStateReceiver != null) return
+    val receiver =
+        object : BroadcastReceiver() {
+          override fun onReceive(context: Context?, intent: Intent?) {
+            intent ?: return
+            if (intent.action == BluetoothDevice.ACTION_BOND_STATE_CHANGED) {
+              handleBondStateChanged(intent)
+            }
+          }
+        }
+    val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+    ContextCompat.registerReceiver(activity, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+    bondStateReceiver = receiver
+  }
+
+  private fun handleBondStateChanged(intent: Intent) {
+    val device = deviceFromIntent(intent) ?: return
+    val address = device.address ?: return
+    val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)
+    val continuation = pendingBondConnections[address] ?: return // not something we're waiting on
+    when (bondState) {
+      BluetoothDevice.BOND_BONDED -> {
+        pendingBondConnections.remove(address)
+        continuation()
+      }
+      BluetoothDevice.BOND_NONE -> {
+        // Reached BOND_NONE while we were waiting on this exact address --
+        // pairing failed or the user rejected/cancelled the system dialog.
+        // A clean FAILED, never a hang (§ risk in the task file).
+        pendingBondConnections.remove(address)
+        emitFailure(address)
+      }
+      // BOND_BONDING: still in progress, nothing to do yet.
+    }
+  }
+
+  private fun doConnect(bt: BluetoothAdapter, deviceId: String) {
     eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTING) }
 
     Thread({
@@ -349,8 +507,96 @@ class BluetoothTransport(
         emitFailure(deviceId)
       }
     }, "nexora-bt-connect-$deviceId").start()
+  }
 
-    return true
+  /**
+   * F2 (E04-B09 review fix): connects to [deviceId] right after its bond
+   * just completed (`BOND_BONDED`). Unlike [doConnect] -- the proven,
+   * already-bonded single-attempt path, left untouched -- this waits
+   * [POST_BOND_CONNECT_DELAY_MS] before each attempt (the peer's SDP
+   * record may not be resolvable the instant the bond forms) and retries
+   * up to [POST_BOND_CONNECT_MAX_ATTEMPTS] times on `IOException` (the
+   * transient failure this quirk actually produces). A malformed address
+   * or a permission failure is not retried -- those won't resolve by
+   * waiting, and existing behavior for [doConnect] already treats them
+   * as immediately terminal.
+   */
+  private fun doConnectAfterBond(bt: BluetoothAdapter, deviceId: String) {
+    eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTING) }
+
+    Thread({
+      var connected = false
+      var attempt = 0
+      while (!connected && attempt < POST_BOND_CONNECT_MAX_ATTEMPTS) {
+        attempt++
+        try {
+          Thread.sleep(POST_BOND_CONNECT_DELAY_MS)
+          val device = bt.getRemoteDevice(deviceId)
+          val socket = device.createRfcommSocketToServiceRecord(NEXORA_SPP_UUID)
+          if (bt.isDiscovering) bt.cancelDiscovery()
+          socket.connect() // BLOCKING -- this background thread only.
+          openSockets[deviceId] = socket
+          startReadLoop(deviceId, socket)
+          eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTED) }
+          connected = true
+        } catch (e: IOException) {
+          // Transient post-bond quirk (SDP record not yet resolvable) --
+          // retry once more if attempts remain, per POST_BOND_CONNECT_MAX_ATTEMPTS.
+        } catch (e: SecurityException) {
+          break // permission failure -- retrying won't help.
+        } catch (e: IllegalArgumentException) {
+          break // getRemoteDevice() malformed MAC -- retrying won't help.
+        } catch (e: InterruptedException) {
+          break
+        }
+      }
+      if (!connected) emitFailure(deviceId)
+    }, "nexora-bt-connect-$deviceId").start()
+  }
+
+  /**
+   * E04-B09: fires `ACTION_REQUEST_DISCOVERABLE` (the human-decided,
+   * time-boxed discoverability mechanism, 2026-09-11) via
+   * `activity.startActivityForResult` — needs a real `Activity` (confirmed
+   * held by this class's own constructor, per the task's own top-named
+   * risk), not just a `Context`. Fire-and-forget from Dart's perspective:
+   * the OS dialog handles user confirmation and there is no settled-state
+   * event Pigeon expects back for this call. The eventual
+   * `onActivityResult` callback (forwarded by `MainActivity`, mirroring how
+   * `onRequestPermissionsResult` is already forwarded) has nothing further
+   * to do here — Android reverts discoverability automatically after
+   * [DISCOVERABLE_DURATION_SECONDS], with no separate app-level state to
+   * track.
+   */
+  fun requestDiscoverable() {
+    val intent =
+        Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+          putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, DISCOVERABLE_DURATION_SECONDS)
+        }
+    try {
+      activity.startActivityForResult(intent, REQUEST_DISCOVERABLE_CODE)
+    } catch (e: SecurityException) {
+      // No BLUETOOTH_ADVERTISE (API 31+) or the adapter is otherwise
+      // unavailable -- nothing further this call can do; there is no
+      // dedicated failure event for this one-way request (mirrors this
+      // method's own doc comment: fire-and-forget).
+    }
+  }
+
+  /** Forwarded by `TransportApiHost` from
+   * `MainActivity.onActivityResult` (E04-B09) — mirrors
+   * [onRequestPermissionsResult]'s existing forwarding shape. The
+   * discoverable-request result carries no useful payload beyond "the
+   * dialog was dismissed" (accept/deny both just mean the system window
+   * closed); nothing further needs to run here, since Android alone owns
+   * reverting discoverability after the fixed duration.
+   */
+  fun onActivityResult(requestCode: Int, resultCode: Int) {
+    // Currently only REQUEST_DISCOVERABLE_CODE is ever passed through this
+    // path -- the `if` exists so a future second activity-result use added
+    // to this class doesn't silently get treated as a discoverable-request
+    // callback.
+    if (requestCode != REQUEST_DISCOVERABLE_CODE) return
   }
 
   fun disconnect(deviceId: String) {
@@ -562,6 +808,15 @@ class BluetoothTransport(
       }
     }
     discoveryReceiver = null
+    bondStateReceiver?.let {
+      try {
+        activity.unregisterReceiver(it)
+      } catch (e: IllegalArgumentException) {
+        // Not registered — nothing to clean up.
+      }
+    }
+    bondStateReceiver = null
+    pendingBondConnections.clear()
     readThreads.values.forEach { it.interrupt() }
     readThreads.clear()
     openSockets.values.forEach {
