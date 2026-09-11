@@ -91,7 +91,36 @@ class ChatView extends GetView<ChatController> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      // E06-B06 (Redmi 10 2022 / MIUI composer-dead-to-touch fix): on-device
+      // diagnostics (RenderBox global position + raw `FlutterView` metrics,
+      // logged live via `flutter run -d <redmi-serial>` and cross-checked
+      // against `dumpsys window`/`uiautomator dump`) showed the Composer's
+      // own row landing with its bottom edge EXACTLY flush against this
+      // device's reported physical canvas height, and MIUI's own
+      // accessibility bridge (`uiautomator dump`) independently reporting
+      // the composer's three controls as only 23-32 *physical* px tall —
+      // a sliver, not their real 46-48px design height — because on this
+      // device `MediaQuery.padding.bottom` (what plain `SafeArea` consumes)
+      // is reported as exactly zero: the OS's own nav-bar reservation is
+      // already excluded from the canvas Flutter is handed, so `SafeArea`
+      // alone sees nothing further to guard against. That leaves the
+      // composer's interactive controls with ZERO cushion from the
+      // device's absolute bottom edge — where MIUI's own edge/gesture
+      // input handling (confirmed present on this ROM via
+      // `horizontal_edge_suppression_size`/`vertical_edge_suppression_size`
+      // system settings, and this device's own three-button nav bar
+      // sitting immediately beneath) is demonstrably more aggressive about
+      // reclaiming edge-adjacent touches than stock Android/the Pixel this
+      // was cross-checked against. `minimum:` forces a floor under
+      // whatever `SafeArea` would otherwise compute (zero, here), pushing
+      // every composer control a fixed, small distance off the true edge
+      // on every device — a no-op in practice on any device that already
+      // reports a real inset (e.g. the Pixel), and the guard this device
+      // was missing entirely. See task file §"Root cause" / Run log for
+      // the full on-device measurement trail; `OQ-E06-B06-2` covers what
+      // this session's own ADB-injected taps could and couldn't prove.
       body: SafeArea(
+        minimum: const EdgeInsets.only(bottom: 16),
         child: Column(
           children: [
             _Header(controller: controller),
