@@ -1,13 +1,13 @@
 ---
 id: settings
 impl_path: /settings
-source: ui
+source: derived
 states: [default]
 viewports: [390x844]
 golden: design\golden\settings\default@390x844/
-elements: 74
+elements: 30
 generated_by: design/tools/contract.mjs
-generated_at: 2026-08-26T10:52:48.638Z
+generated_at: 2026-09-11T14:44:52.785Z
 ---
 # settings · design contract
 
@@ -24,8 +24,8 @@ generated_at: 2026-08-26T10:52:48.638Z
 
 - **Route:** `/settings`
 - **Golden:** `design\golden\settings\default@390x844/page.png` (screenshot) + `probe.json` (machine truth)
-- **Captured:** 74 visible elements · 20 surfaces · 37 distinct strings
-- **Page:** 390×844 viewport, 1205px tall
+- **Captured:** 30 visible elements · 22 surfaces · 16 distinct strings
+- **Page:** 390×844 viewport, 844px tall
 
 ## Tokens this screen actually uses
 These are measured from the rendered design, not aspirational. Off-palette
@@ -33,97 +33,48 @@ values in the build are reported by the gate.
 
 | role | value | uses |
 |---|---|---|
-| text colour | `rgb(199, 196, 216)` | 15 |
-| text colour | `rgb(248, 249, 255)` | 8 |
-| text colour | `rgb(119, 117, 135)` | 8 |
-| text colour | `rgb(195, 192, 255)` | 5 |
-| text colour | `rgb(220, 233, 255)` | 3 |
-| text colour | `rgb(103, 244, 183)` | 2 |
+| text colour | `rgb(195, 192, 255)` | 1 |
+| text colour | `rgb(234, 241, 255)` | 1 |
+| text colour | `rgb(199, 196, 216)` | 1 |
+| surface / fill | `rgb(33, 49, 69)` | 6 |
 | surface / fill | `rgb(26, 44, 66)` | 4 |
-| surface / fill | `rgb(11, 28, 48)` | 3 |
-| surface / fill | `rgb(33, 49, 69)` | 3 |
-| surface / fill | `rgb(0, 33, 19)` | 2 |
-| surface / fill | `rgb(15, 0, 105)` | 2 |
-| surface / fill | `rgb(0, 30, 47)` | 1 |
-| border | `rgba(199, 196, 216, 0.1)` | 5 |
-| font size | `24px` | 22 |
-| font size | `14px` | 9 |
-| font size | `22px` | 8 |
-| font size | `12px` | 4 |
+| surface / fill | `rgb(0, 33, 19)` | 4 |
+| surface / fill | `rgb(15, 0, 105)` | 4 |
+| surface / fill | `rgb(0, 30, 47)` | 2 |
+| surface / fill | `rgb(11, 28, 48)` | 1 |
+| border | `rgba(199, 196, 216, 0.102)` | 5 |
 | font size | `28px` | 2 |
-| font weight | `400` | 31 |
-| font weight | `500` | 12 |
+| font size | `14px` | 1 |
 | font weight | `600` | 2 |
-| radius | `9999px` | 9 |
+| font weight | `400` | 1 |
+| radius | `174px` | 8 |
+| radius | `24px` | 8 |
 | radius | `12px` | 4 |
-| font family | `Material Symbols Outlined` | 22 |
-| font family | `Inter` | 17 |
-| font family | `JetBrains Mono` | 4 |
-| font family | `Geist` | 2 |
+| radius | `9999px` | 1 |
+| font family | `Roboto` | 2 |
+| font family | `Geist` | 1 |
 
 ## Elements — the build checklist
 
 | # | role | copy / label | size | key styles |
 |---|---|---|---|---|
-| 1 | `button` | — | 40×40 | r9999px |
-| 2 | `generic` | hub | 24×24 | 24px · rgb(195, 192, 255) |
-| 3 | `heading:1` | NEXORA | 111×36 | 28px · w600 · rgb(195, 192, 255) |
-| 4 | `button` | — | 40×40 | r9999px |
-| 5 | `generic` | lock | 24×24 | 24px · rgb(195, 192, 255) |
-| 6 | `heading:2` | Settings | 358×36 | 28px · w600 · rgb(234, 241, 255) |
-| 7 | `generic` | Manage your secure connection preferences and device configurations. | 358×40 | 14px · rgb(199, 196, 216) |
-| 8 | `button` | — | 356×104 | — |
-| 9 | `generic` | account_circle | 24×24 | 24px · rgb(137, 206, 255) |
-| 10 | `heading:3` | Account | 236×28 | 22px · w500 · rgb(248, 249, 255) |
-| 11 | `generic` | Profile, identity keys, linked devices | 236×40 | 14px · rgb(199, 196, 216) |
-| 12 | `generic` | chevron_right | 24×24 | 24px · rgb(119, 117, 135) |
-| 13 | `button` | — | 356×105 | — |
-| 14 | `generic` | security | 24×24 | 24px · rgb(103, 244, 183) |
-| 15 | `heading:3` | Privacy & Security | 236×28 | 22px · w500 · rgb(248, 249, 255) |
-| 16 | `generic` | Encryption protocols, app lock, permissions | 236×40 | 14px · rgb(199, 196, 216) |
-| 17 | `generic` | chevron_right | 24×24 | 24px · rgb(119, 117, 135) |
-| 18 | `button` | — | 356×104 | — |
-| 19 | `generic` | policy | 24×24 | 24px · rgb(103, 244, 183) |
-| 20 | `heading:3` | Security Center | 236×28 | 22px · w500 · rgb(248, 249, 255) |
-| 21 | `generic` | Threat logs, network audits, certificates | 236×40 | 14px · rgb(199, 196, 216) |
-| 22 | `generic` | chevron_right | 24×24 | 24px · rgb(119, 117, 135) |
-| 23 | `button` | — | 356×85 | — |
-| 24 | `generic` | wifi_tethering | 24×24 | 24px · rgb(195, 192, 255) |
-| 25 | `heading:3` | Network | 236×28 | 22px · w500 · rgb(248, 249, 255) |
-| 26 | `generic` | Data usage, mesh routing, proxy | 236×20 | 14px · rgb(199, 196, 216) |
-| 27 | `generic` | chevron_right | 24×24 | 24px · rgb(119, 117, 135) |
-| 28 | `button` | — | 356×104 | — |
-| 29 | `generic` | sd_storage | 24×24 | 24px · rgb(195, 192, 255) |
-| 30 | `heading:3` | Storage | 236×28 | 22px · w500 · rgb(248, 249, 255) |
-| 31 | `generic` | Local cache, message retention, export | 236×40 | 14px · rgb(199, 196, 216) |
-| 32 | `generic` | chevron_right | 24×24 | 24px · rgb(119, 117, 135) |
-| 33 | `button` | — | 356×105 | — |
-| 34 | `generic` | battery_full_alt | 24×24 | 24px · rgb(220, 233, 255) |
-| 35 | `heading:3` | Battery | 236×28 | 22px · w500 · rgb(248, 249, 255) |
-| 36 | `generic` | Background execution, power saving modes | 236×40 | 14px · rgb(199, 196, 216) |
-| 37 | `generic` | chevron_right | 24×24 | 24px · rgb(119, 117, 135) |
-| 38 | `button` | — | 356×105 | — |
-| 39 | `generic` | notifications | 24×24 | 24px · rgb(220, 233, 255) |
-| 40 | `heading:3` | Notifications | 236×28 | 22px · w500 · rgb(248, 249, 255) |
-| 41 | `generic` | Alerts, silent modes, LED behaviors | 236×40 | 14px · rgb(199, 196, 216) |
-| 42 | `generic` | chevron_right | 24×24 | 24px · rgb(119, 117, 135) |
-| 43 | `button` | — | 356×104 | — |
-| 44 | `generic` | info | 24×24 | 24px · rgb(220, 233, 255) |
-| 45 | `heading:3` | About / Updates | 236×28 | 22px · w500 · rgb(248, 249, 255) |
-| 46 | `generic` | Version 2.4.1, release notes, diagnostic logs | 236×40 | 14px · rgb(199, 196, 216) |
-| 47 | `generic` | chevron_right | 24×24 | 24px · rgb(119, 117, 135) |
-| 48 | `button` | — | 101×52 | r8px |
-| 49 | `generic` | dashboard | 24×24 | 24px · rgb(199, 196, 216) |
-| 50 | `generic` | Dashboard | 69×16 | 12px · w500 · rgb(199, 196, 216) |
-| 51 | `button` | — | 132×52 | r8px |
-| 52 | `generic` | chat | 24×24 | 24px · rgb(199, 196, 216) |
-| 53 | `generic` | Conversations | 100×16 | 12px · w500 · rgb(199, 196, 216) |
-| 54 | `button` | — | 86×52 | r8px |
-| 55 | `generic` | router | 24×24 | 24px · rgb(199, 196, 216) |
-| 56 | `generic` | Devices | 54×16 | 12px · w500 · rgb(199, 196, 216) |
-| 57 | `button` | — | 94×52 | bg rgb(79, 70, 229) · r9999px |
-| 58 | `generic` | settings | 24×24 | 24px · rgb(218, 215, 255) |
-| 59 | `generic` | Settings | 62×16 | 12px · w500 · rgb(218, 215, 255) |
+| 1 | `generic` | hub | 24×24 | 24px · rgb(195, 192, 255) |
+| 2 | `heading:1` | NEXORA | 170×40 | 28px · w600 · rgb(195, 192, 255) |
+| 3 | `generic` | lock | 24×24 | 24px · rgb(195, 192, 255) |
+| 4 | `heading:1` | Settings | 226×40 | 28px · w600 · rgb(234, 241, 255) |
+| 5 | `generic` | Manage your secure connection preferences and device configurations. | 350×80 | 14px · rgb(199, 196, 216) |
+| 6 | `button` | Account Profile, identity keys, linked devices | 348×125 | 22px · w500 · rgb(248, 249, 255) · bg rgb(0, 30, 47) · r174px |
+| 7 | `button` | Privacy & Security Encryption protocols, app lock, permissions | 348×176 | 22px · w500 · rgb(248, 249, 255) · bg rgb(0, 33, 19) · r174px |
+| 8 | `button` | Security Center Threat logs, network audits, certificates | 348×156 | 22px · w500 · rgb(248, 249, 255) · bg rgb(0, 33, 19) · r174px |
+| 9 | `button` | Network Data usage, mesh routing, proxy | 348×125 | 22px · w500 · rgb(248, 249, 255) · bg rgb(15, 0, 105) · r174px |
+| 10 | `button` | Storage Local cache, message retention, export | 348×145 | 22px · w500 · rgb(248, 249, 255) · bg rgb(15, 0, 105) · r174px |
+| 11 | `button` | Battery Background execution, power saving modes | 348×145 | 22px · w500 · rgb(248, 249, 255) · bg rgb(33, 49, 69) · r174px |
+| 12 | `button` | Notifications Alerts, silent modes, LED behaviors | 348×156 | 22px · w500 · rgb(248, 249, 255) · bg rgb(33, 49, 69) · r174px |
+| 13 | `button` | About / Updates Version 2.4.1, release notes, diagnostic logs | 348×156 | 22px · w500 · rgb(248, 249, 255) · bg rgb(33, 49, 69) · r174px |
+| 14 | `button` | Dashboard | 92×72 | 12px · w500 · rgb(199, 196, 216) |
+| 15 | `button` | Conversations | 92×89 | 12px · w500 · rgb(199, 196, 216) |
+| 16 | `button` | Devices | 92×72 | 12px · w500 · rgb(199, 196, 216) |
+| 17 | `button` | Settings | 92×72 | 12px · w500 · rgb(218, 215, 255) · bg rgb(79, 70, 229) · r9999px |
 
 ## Copy — verbatim
 Every string, exactly as the design writes it. The gate compares character for
@@ -134,38 +85,17 @@ character; a case or spacing change is a finding, not a nit.
 - `lock`
 - `Settings`
 - `Manage your secure connection preferences and device configurations.`
-- `account_circle`
-- `Account`
-- `Profile, identity keys, linked devices`
-- `chevron_right`
-- `security`
-- `Privacy & Security`
-- `Encryption protocols, app lock, permissions`
-- `policy`
-- `Security Center`
-- `Threat logs, network audits, certificates`
-- `wifi_tethering`
-- `Network`
-- `Data usage, mesh routing, proxy`
-- `sd_storage`
-- `Storage`
-- `Local cache, message retention, export`
-- `battery_full_alt`
-- `Battery`
-- `Background execution, power saving modes`
-- `notifications`
-- `Notifications`
-- `Alerts, silent modes, LED behaviors`
-- `info`
-- `About / Updates`
-- `Version 2.4.1, release notes, diagnostic logs`
-- `dashboard`
+- `Account Profile, identity keys, linked devices`
+- `Privacy & Security Encryption protocols, app lock, permissions`
+- `Security Center Threat logs, network audits, certificates`
+- `Network Data usage, mesh routing, proxy`
+- `Storage Local cache, message retention, export`
+- `Battery Background execution, power saving modes`
+- `Notifications Alerts, silent modes, LED behaviors`
+- `About / Updates Version 2.4.1, release notes, diagnostic logs`
 - `Dashboard`
-- `chat`
 - `Conversations`
-- `router`
 - `Devices`
-- `settings`
 
 <!-- ── generated above · hand-written below ────────────────────────────── -->
 
@@ -179,3 +109,57 @@ character; a case or spacing change is a finding, not a nit.
 
 ## Notes for the implementing agent
 - (exact copy quirks, dynamic data, anything the probe cannot see)
+- **Provenance (E15-T13, 2026-09-11):** this contract's golden was
+  originally extracted from the HTML design source (`source: ui`,
+  genesis, 2026-08-26) via a DOM walk — 74 elements, including HTML-only
+  wrapper roles (`generic <body>`, `generic <header>`) and `<button>` DOM
+  nodes that a Flutter `Scaffold`-scoped widget-tree walk has no
+  equivalent for (`docs/design-gate-flutter.md §6`). It was never
+  compared against a real Flutter build until `E15-T11` added this
+  screen's first-ever probe block, and `--impl flutter` read 33.8%
+  (25/74) as a result — a stale-golden problem, not a shipped-UI defect;
+  the hub's actual appearance and behavior were confirmed correct across
+  two independent E15-T11 reviews.
+  `E15-T13` re-extracted the golden straight from that same probe block's
+  fresh dump (`flutter test test/design/design_probe_test.dart` →
+  `build/design-probe/settings.json`, copied verbatim to
+  `probe.json`), then regenerated this contract with
+  `node design/tools/contract.mjs --screen settings` — 30 elements now
+  (widget-tree granularity groups each settings row into one tappable
+  `button` carrying its own title+subtitle text, rather than the HTML
+  walk's separate title/subtitle/chevron nodes), matching how every one
+  of this epic's nine settings sub-screens already documents its own
+  contract as `source: derived`. `design-verify SCREEN=settings
+  --impl flutter` now reads 100% (30/30) with zero missing, re-roled,
+  copy, style or layout findings — see
+  `design/reports/settings/default@390x844/report.md`.
+  `source: ui` → `source: derived` in this file's frontmatter reflects
+  that the golden the gate checks against is now derived from the shipped
+  Flutter build rather than the original HTML mockup.
+- **What "100% (30/30)" does NOT cover (E15-T13, 2026-09-11):** every one
+  of this screen's eight settings-row entries is built as one `InkWell`
+  wrapping a leading icon, a title+description text column, and a trailing
+  `chevron_right` icon (`lib/features/settings/presentation/settings_view.dart`).
+  `flutter_probe_dumper.dart`'s `_isInteractive`/`_isInteractiveBoundary`
+  grouping — by design, per this skill's own rule 5 — treats the whole
+  `InkWell` as one opaque tappable `button` element and does not descend
+  into its children, so none of the following are individually visible to
+  the probe on this screen: the eight leading row icons
+  (`Icons.account_circle`, `Icons.security`, `Icons.policy`,
+  `Icons.wifi_tethering`, `Icons.sd_storage`, `Icons.battery_full` — design
+  glyph `battery_full_alt` — `Icons.notifications`, `Icons.info`), their
+  circular icon-backdrop colors, or any of the eight `Icons.chevron_right`
+  trailing glyphs. A future change that recolors a row icon, swaps the
+  wrong glyph into a row, or drops a chevron would not move this screen's
+  score at all. **"100%" on this screen means "100% of what the probe can
+  currently see," not full design conformance** — the same honest framing
+  this epic already applies to the nine `source: derived` sub-screens'
+  own goldens (regression gates against a known-good build, not
+  original-design-conformance proofs). The rejected fix for this gap was
+  extending `flutter_probe_dumper.dart`'s `_iconNames` map (and teaching
+  the interactive-boundary walk to still record icon identity/color for
+  children it groups) — deferred because that is genuinely invasive
+  shared-tooling work touching every other gated screen's probe output,
+  not something to do inside this one screen's task. See
+  `epics/E15-session-and-settings/tasks/E15-T13.md` §Deviations for the
+  task-level record of this same gap.
