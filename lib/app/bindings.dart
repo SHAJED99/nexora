@@ -270,10 +270,27 @@ class AppBinding extends Bindings {
     // .setTickInterval` (this epic's one, pre-existing periodic driver) and
     // `messagingStack.transport.startDiscovery/stopDiscovery` (already
     // Get.put above).
+    //
+    // E15-B03: registered here, keyed on the `BackgroundControl` INTERFACE
+    // (never the `BackgroundService` concrete type -- that would bypass the
+    // `_backgroundControl` stub-injection seam above and break every test
+    // relying on `BackgroundStub`), as a findable permanent singleton --
+    // constructed exactly ONCE for the whole process. `BackgroundService`'s
+    // constructor calls `BackgroundEventsApi.setUp(...)` on the shared
+    // default platform channel, and Pigeon's generated `setUp`
+    // unconditionally replaces whatever handler was previously registered
+    // -- so a second, independently-constructed `BackgroundService()`
+    // anywhere else (as `settings_binding.dart`'s `BatterySettingsController`
+    // used to do before this fix) would silently steal this observer's own
+    // native event registration. `settings_binding.dart` now resolves this
+    // SAME instance via `Get.find<BackgroundControl>()` instead.
+    final BackgroundControl backgroundControl =
+        _backgroundControl ?? BackgroundService();
+    Get.put<BackgroundControl>(backgroundControl, permanent: true);
     final backgroundObserver = BackgroundLifecycleObserver(
       coordinator: messagingStack.coordinator,
       transport: messagingStack.transport,
-      service: _backgroundControl ?? BackgroundService(),
+      service: backgroundControl,
     );
     Get.put(backgroundObserver, permanent: true);
     // E14-B02: same construction-unconditional/start-gated split as
