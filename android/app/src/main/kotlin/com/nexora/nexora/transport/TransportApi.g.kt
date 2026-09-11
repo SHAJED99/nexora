@@ -346,6 +346,16 @@ interface TransportApi {
   fun connect(deviceId: String): Boolean
   fun disconnect(deviceId: String)
   fun send(deviceId: String, bytes: ByteArray): Boolean
+  /**
+   * Requests this device become discoverable to nearby peers for a fixed,
+   * time-boxed window (120s), via Android's own
+   * `ACTION_REQUEST_DISCOVERABLE` system dialog (E04-B09,
+   * `FR-DISC-001`) — the human-decided discoverability mechanism (not a
+   * continuous listen-only scan mode). Fire-and-forget from the Dart side:
+   * the OS system dialog handles user confirmation, and there is no
+   * return value or settled-state event to await.
+   */
+  fun requestDiscoverable()
 
   companion object {
     /** The codec used by TransportApi. */
@@ -432,6 +442,22 @@ interface TransportApi {
             val bytesArg = args[1] as ByteArray
             val wrapped: List<Any?> = try {
               listOf(api.send(deviceIdArg, bytesArg))
+            } catch (exception: Throwable) {
+              TransportApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.nexora.TransportApi.requestDiscoverable$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              api.requestDiscoverable()
+              listOf(null)
             } catch (exception: Throwable) {
               TransportApiPigeonUtils.wrapError(exception)
             }

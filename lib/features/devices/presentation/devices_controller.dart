@@ -304,7 +304,27 @@ class DevicesController extends GetxController {
   /// E02's `EvaluateConnectionRequestUseCase` (defaults to Unknown for a
   /// never-seen device, FR-UI-004) and appended to the displayed list —
   /// additive to, never replacing, what `load()` already populated.
+  ///
+  /// `E04-B09`: also requests this device become discoverable
+  /// (`TransportService.requestDiscoverable`) — scanning for others and
+  /// making this device visible to a peer's own scan are the two halves of
+  /// the same "find each other" action, and this button is the existing,
+  /// design-approved trigger for it (`design/screens/devices.md` element 6
+  /// — no new UI element added, per the task's own scope fence). Unawaited,
+  /// same fire-and-forget shape as `startDiscovery` below: there is no
+  /// settled-state event to block this call on, and a failure here (no
+  /// `BLUETOOTH_ADVERTISE`/adapter unavailable) still leaves the scan side
+  /// of `discover()` working normally.
   void discover() {
+    unawaited(
+      // Swallow a failure here the same way as the `startDiscovery` call
+      // below (§6-style degraded case): a platform/adapter error making
+      // this device discoverable must not surface as an unhandled async
+      // error, and must not block the scan side of `discover()` either.
+      // No dedicated UI affordance exists for this one-way request (same
+      // "fire-and-forget" framing this method's own doc comment gives it).
+      _transportService.requestDiscoverable().catchError((Object _) {}),
+    );
     // E12-B04: re-resolve this discovery cycle's own-device-id read rather
     // than reusing whatever settled during a previous cycle. The natural
     // enrollment order is "open Devices, tap Discover, *then* sign in the

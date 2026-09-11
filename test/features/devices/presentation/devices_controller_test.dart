@@ -153,6 +153,30 @@ void main() {
       expect(startDiscoveryCalled, isTrue);
     });
 
+    // E04-B09: the existing "Discover" button (design/screens/devices.md
+    // element 6) now also requests discoverability — proves discover()
+    // fires TransportApi.requestDiscoverable, not just startDiscovery.
+    test('test_discover_also_requests_discoverable', () async {
+      const String suffix = 'devices-discover-requestdiscoverable';
+      bool requestDiscoverableCalled = false;
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.TransportApi.requestDiscoverable.$suffix',
+        (ByteData? message) async {
+          requestDiscoverableCalled = true;
+          return TransportApi.pigeonChannelCodec.encodeMessage(<Object?>[
+            null,
+          ]);
+        },
+      );
+      final DevicesController discovering =
+          buildDiscoveringController(suffix);
+
+      discovering.discover();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(requestDiscoverableCalled, isTrue);
+    });
+
     test(
         'test_EARS_DEV_4_discovered_device_evaluated_as_unknown_by_default',
         () async {

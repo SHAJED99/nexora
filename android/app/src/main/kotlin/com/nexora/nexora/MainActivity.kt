@@ -211,4 +211,16 @@ class MainActivity : FlutterActivity() {
     transportApiHost?.onRequestPermissionsResult(requestCode, grantResults)
     notificationApiHost?.onRequestPermissionsResult(requestCode, grantResults)
   }
+
+  /**
+   * E04-B09: forwards `ACTION_REQUEST_DISCOVERABLE`'s
+   * `startActivityForResult` outcome to [transportApiHost], mirroring
+   * [onRequestPermissionsResult]'s own forwarding shape immediately above —
+   * there is no other path for a non-Fragment activity-result callback to
+   * reach `BluetoothTransport`.
+   */
+  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    super.onActivityResult(requestCode, resultCode, data)
+    transportApiHost?.onActivityResult(requestCode, resultCode)
+  }
 }
