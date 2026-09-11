@@ -1,20 +1,25 @@
 # E04 · Mesh Discovery, Relay & Dynamic Routing · Progress
 
-**Status:** all tasks done, P1/P2 = 0. On-device Bluetooth verification
-(E04-B04/B05/B06/B07/B08) found and fixed five real defects that zero
-unit test could have caught — the fix stack for real Bluetooth mesh
-delivery (connect() wired in, an accept loop added, known-peer
-connection subscriptions seeded independent of live discovery, and a
-real MIUI/Xiaomi address-randomization workaround) is believed complete
-for two ALREADY-BONDED devices. `OQ-E04-B06-1`'s deferred real-hardware
-retest was resolved 2026-09-11/12 — both physical devices (Redmi 10
-2022, Pixel 8 Pro) became available again and were used directly for
-E04-B08's diagnosis, fix, and independent re-verification. **One bug
-remains open, not blocking:** `E04-B09` (discoverability + app-initiated
-bonding for two devices that have NEVER been paired by any means) —
-scoped, both human decisions recorded, ready to dispatch.
+**Status:** all dispatchable tasks done, P1/P2 = 0. On-device Bluetooth
+verification (E04-B04/B05/B06/B07/B08) found and fixed five real defects
+that zero unit test could have caught — the fix stack for real
+Bluetooth mesh delivery (connect() wired in, an accept loop added,
+known-peer connection subscriptions seeded independent of live
+discovery, and a real MIUI/Xiaomi address-randomization workaround) is
+believed complete for two ALREADY-BONDED devices. `OQ-E04-B06-1`'s
+deferred real-hardware retest was resolved 2026-09-11/12 — both
+physical devices (Redmi 10 2022, Pixel 8 Pro) became available again and
+were used directly for E04-B08's diagnosis, fix, and independent
+re-verification. `E04-B09` (discoverability + app-initiated bonding for
+two devices that have NEVER been paired by any means) is now also
+**done** (not verified) — two review rounds, three real findings fixed,
+merged PR #221. Its own on-device bonding proof never completed (a
+reproducible ADB/MIUI chat-compose `TextField` automation blocker plus
+an RF/discovery-range issue between the two test devices this session),
+so that verification work is carried forward, owned, into a new task:
+**`E04-B10`** (todo, depends on E04-B09, inherits P2).
 **Started:** 2026-08-27 · **Completed:** — · **Progress:** 10/10 tasks,
-15/16 tasks+bugs
+16/17 tasks+bugs
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -34,7 +39,8 @@ scoped, both human decisions recorded, ready to dispatch.
 - [x] E04-B06 · `BluetoothTransport` had no server-side accept loop — `connect()` was client-only, so two real devices could never connect to each other (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x3
 - [x] E04-B07 · `InboundPipeline`/`MessagingCoordinator` only subscribe to a device's connection state after discovering it THIS process run — an accepted connection from an already-known peer is silently dropped (S1, P1) · done · orchestrator (sonnet) → reviewer (opus) x2
 - [x] E04-B08 · `BluetoothTransport.connect()` must prefer a bonded device's real address over a randomized discovery-scan address (MIUI/Xiaomi address-randomization workaround) · done · orchestrator (sonnet) → reviewer (opus) · priority P2 (human-set 2026-09-11) · PR #219, APPROVE, on-device diagnostic confirmed the root cause live (MIUI randomizes Classic discovery addresses per-scan, even for an already-bonded peer) and the fix's `resolveDeviceId` logic independently re-validated on real hardware (bonded-list read + name-comparison confirmed correct via temporary, since-reverted diagnostic logging). Merged `98eb55a`.
-- [ ] E04-B09 · Add discoverability (time-boxed `ACTION_REQUEST_DISCOVERABLE`) and an app-initiated `createBond()` pairing flow · todo · depends on E04-B08 (done) — ready to dispatch. Both human decisions already recorded in the task file (2026-09-11).
+- [x] E04-B09 · Add discoverability (time-boxed `ACTION_REQUEST_DISCOVERABLE`) and an app-initiated `createBond()` pairing flow · done · builder (sonnet) → reviewer (opus) x2 · PR #221. Round 1 CHANGES-REQUESTED (F1: missing `cancelDiscovery()` before `createBond()`; F2: no settle/retry before the first post-bond RFCOMM connect attempt; F3: zero test/on-device coverage of the ~160 new bonding-path lines, disclosed not fixed). All three addressed same session; round 2 APPROVE. Discoverability confirmed live on real hardware twice, independently; the bonding flow itself remains 100% unverified on real hardware — carried to `E04-B10`.
+- [ ] E04-B10 · Prove the E04-B09 bonding flow live on real hardware (F1/F2 confirmation + E04-B08 regression re-check on the newly-bonded peer) · todo · depends on E04-B09 (done) — blocked on either better RF conditions between the two physical test devices or a working UI-automation path (or a human) past a reproducible ADB/MIUI chat-compose `TextField` focus issue. Priority inherited P2 from B08/B09 by convention, not yet freshly human-stamped.
 
 **B08/B09 note:** E04-B08 was re-scoped on 2026-09-11 (after two human
 decisions cleared its `bug_priorities` gate) to the identity-mapping fix
@@ -339,3 +345,44 @@ chain — can start once discovery is real, in parallel with T03c/T04.
   + E04-B07 known-peer subscription seeding) is now believed complete;
   `OQ-E04-B06-1`'s real two-device retest remains the one thing only
   physical hardware can prove.
+- 2026-09-11/12 E04-B08 diagnosed, fixed, and merged (see the B08 task
+  row above for the full account) — real MIUI/Xiaomi per-scan Bluetooth
+  address randomization confirmed live, `resolveDeviceId` fix preferring
+  a bonded device's real address over the randomized scan address.
+  Squash-merged (`98eb55a`), PR #219. Split E04-B09 off as its own task
+  (discoverability + app-initiated bonding), both required human
+  decisions recorded directly in the task file.
+- 2026-09-12 E04-B09 implemented (discoverability via time-boxed
+  `ACTION_REQUEST_DISCOVERABLE`; app-initiated bonding via `createBond()`
+  deferring the RFCOMM connect behind `ACTION_BOND_STATE_CHANGED` →
+  `BOND_BONDED`) and reviewed twice, both opus, both independent. Round 1
+  CHANGES-REQUESTED: F1 (missing `cancelDiscovery()` before `createBond()`,
+  mirroring `doConnect`'s existing guard), F2 (no settle delay/retry
+  before the first post-bond connect attempt — `BOND_BONDED` doesn't
+  guarantee the peer's SDP record is resolvable yet), F3 (the ~160 new
+  bonding-path lines had zero test or on-device coverage — disclosed as
+  a stark Deviation, not silently left implicit). All three fixed same
+  session (`doConnectAfterBond` adds a 400ms settle delay + bounded
+  2-attempt retry on `IOException` only; `doConnect`'s own proven
+  already-bonded path left untouched). Round 2 independently re-verified
+  F1/F2/F3, confirmed the falsification proof (stubbing
+  `requestDiscoverable` broke exactly 2 tests, nothing else), and
+  confirmed a new follow-up task (`E04-B10`, filed by the fix round)
+  genuinely covers all three round-1-mandated on-device verification
+  items — **APPROVE**, with the explicit condition "done, not verified."
+  Discoverability itself was confirmed live, independently, twice (by
+  the implementer and by the orchestrator directly) on both physical
+  devices — a real system dialog shown and accepted. The bonding flow's
+  own live proof was blocked twice this session by two independently-
+  confirmed, disclosed issues: a reproducible ADB/MIUI chat-compose
+  `TextField` focus quirk (tapping it fires a spurious `KEYCODE_BACK` and
+  navigates back to Devices — read the widget's own code, found no
+  navigation logic that explains it, genuinely unresolved) and an
+  RF/discovery-range issue between the two physical test devices in
+  these specific sessions. Squash-merged (`d548f1e`), PR #221.
+  `E04-B10` filed (todo, depends on E04-B09) to carry the on-device
+  bonding proof, F1/F2 live confirmation, and an E04-B08 regression
+  re-check on the newly-bonded peer forward as an owned, dispatchable
+  task rather than a vague carried-forward note. **All currently
+  dispatchable E04 work is done; only E04-B10's own hardware-verification
+  blocker remains, itself explicitly scoped and tracked.**
