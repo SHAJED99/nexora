@@ -76,6 +76,18 @@ abstract class TransportApi {
 
   void disconnect(String deviceId);
 
+  /// Runs on a dedicated background `TaskQueue` (not the platform/UI thread)
+  /// — E04-B11: this method's native implementation
+  /// (`BluetoothTransport.send`) does a genuine bounded blocking wait
+  /// (`SEND_TIMEOUT_MS = 3_000L`) for the write to settle, and Pigeon
+  /// dispatches a plain `@HostApi()` method on the platform thread by
+  /// default. Without this annotation, that wait freezes the entire app's
+  /// UI for up to 3 seconds whenever a write doesn't complete instantly —
+  /// confirmed live, twice, as a genuine ANR-class `InputDispatcher` "not
+  /// responsive" warning immediately followed by a self-inflicted
+  /// disconnect. This does not change `send()`'s contract (same timeout,
+  /// same disconnect-on-timeout behavior) — only which thread blocks.
+  @TaskQueue(type: TaskQueueType.serialBackgroundThread)
   bool send(String deviceId, Uint8List bytes);
 
   /// Requests this device become discoverable to nearby peers for a fixed,
