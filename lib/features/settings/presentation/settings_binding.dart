@@ -17,9 +17,10 @@
 // `lib/core/messaging/messaging_stack.dart`) — never a second `AppDatabase`,
 // `MessagingStack`, `TransportService` or `RoutingEngine`.
 //
-// **Disclosed limitation — `BatterySettingsController`'s `BackgroundControl`
-// (see below).** Not silently worked around; see that registration's own
-// comment.
+// `BatterySettingsController`'s `BackgroundControl` is likewise resolved via
+// `Get.find` against the SAME permanent singleton `AppBinding` registers for
+// `BackgroundLifecycleObserver` (E15-B03 fix) — see that registration's own
+// comment below.
 import 'package:get/get.dart';
 import 'package:nexora/core/background/background_service.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
@@ -187,31 +188,22 @@ class SettingsBinding extends Bindings {
 
     // BatterySettingsController (E15-T08).
     //
-    // **Disclosed limitation, not silently worked around**: `AppBinding`
-    // (`lib/app/bindings.dart`, outside this task's `files:` fence)
-    // constructs its own `BackgroundService()` internally for
-    // `BackgroundLifecycleObserver` and never registers it as a findable
-    // singleton, so this binding cannot reuse that exact instance. A real
-    // `BackgroundService()` constructed here calls
-    // `BackgroundEventsApi.setUp(...)` a second time on the SAME default
+    // **E15-B03 fix**: resolves the SAME `BackgroundControl` singleton
+    // `AppBinding` (`lib/app/bindings.dart`) registers for
+    // `BackgroundLifecycleObserver`, rather than constructing a second,
+    // independent `BackgroundService()`. A second real `BackgroundService()`
+    // would call `BackgroundEventsApi.setUp(...)` again on the SAME default
     // (empty-suffix) platform channel `BackgroundService`'s own header
-    // documents (`background_service.dart`: distinct suffixes are what let
-    // multiple instances coexist without one clobbering another's registered
-    // handler) — on a real device, opening this screen would silently steal
-    // `BackgroundLifecycleObserver`'s own native event registration. Fixing
-    // this properly means `AppBinding` registering its single
-    // `BackgroundControl` as a findable permanent singleton, which is a
-    // one-line change to a file this task may not touch (task §4: "does NOT
-    // touch main.dart, bindings.dart"). Filed as `E15-B03` (S2) rather than
-    // fixed by this task — see this task's own §9 Deviations/Open Questions —
-    // constructing a fresh instance here is otherwise the same pattern every
-    // other registration in this method already uses (fresh
-    // repository/service per screen over shared state), and does not affect
-    // any test in this suite (tests use `BackgroundStub` or a mocked
-    // messenger with a distinct channel suffix, so the collision never
-    // materializes there).
+    // documents, and Pigeon's generated `setUp` unconditionally replaces
+    // whatever handler was previously registered -- silently stealing
+    // `BackgroundLifecycleObserver`'s own native event registration the
+    // instant this screen was opened. `Get.find` here (not `Get.put`) keeps
+    // this a pure consumer of `AppBinding`'s composition root, matching the
+    // "shared singleton, not a fresh instance per screen" pattern this file
+    // already uses for `TransportService`/`RoutingEngine`/`StorageManager`
+    // above.
     Get.lazyPut(
-      () => BatterySettingsController(service: BackgroundService()),
+      () => BatterySettingsController(service: Get.find<BackgroundControl>()),
     );
 
     // NotificationSettingsController (E15-T04).
