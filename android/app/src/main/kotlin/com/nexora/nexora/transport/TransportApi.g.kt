@@ -345,6 +345,19 @@ interface TransportApi {
   fun stopDiscovery()
   fun connect(deviceId: String): Boolean
   fun disconnect(deviceId: String)
+  /**
+   * Runs on a dedicated background `TaskQueue` (not the platform/UI thread)
+   * — E04-B11: this method's native implementation
+   * (`BluetoothTransport.send`) does a genuine bounded blocking wait
+   * (`SEND_TIMEOUT_MS = 3_000L`) for the write to settle, and Pigeon
+   * dispatches a plain `@HostApi()` method on the platform thread by
+   * default. Without this annotation, that wait freezes the entire app's
+   * UI for up to 3 seconds whenever a write doesn't complete instantly —
+   * confirmed live, twice, as a genuine ANR-class `InputDispatcher` "not
+   * responsive" warning immediately followed by a self-inflicted
+   * disconnect. This does not change `send()`'s contract (same timeout,
+   * same disconnect-on-timeout behavior) — only which thread blocks.
+   */
   fun send(deviceId: String, bytes: ByteArray): Boolean
   /**
    * Requests this device become discoverable to nearby peers for a fixed,
@@ -366,6 +379,7 @@ interface TransportApi {
     @JvmOverloads
     fun setUp(binaryMessenger: BinaryMessenger, api: TransportApi?, messageChannelSuffix: String = "") {
       val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
+      val taskQueue = binaryMessenger.makeBackgroundTaskQueue()
       run {
         val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.nexora.TransportApi.startDiscovery$separatedMessageChannelSuffix", codec)
         if (api != null) {
@@ -434,7 +448,7 @@ interface TransportApi {
         }
       }
       run {
-        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.nexora.TransportApi.send$separatedMessageChannelSuffix", codec)
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.nexora.TransportApi.send$separatedMessageChannelSuffix", codec, taskQueue)
         if (api != null) {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
