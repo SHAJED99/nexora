@@ -108,8 +108,8 @@ screens:
     states: [{ name: default }]
 
   - id: settings
-    source: ui
-    design_path: /settings/code.html
+    source: derived
+    design_path: n/a — derived, design/screens/settings.md
     impl_path: /settings
     viewports: [390x844]
     states: [{ name: default }]

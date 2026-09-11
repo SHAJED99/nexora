@@ -7,7 +7,7 @@ viewports: [390x844]
 golden: design\golden\settings\default@390x844/
 elements: 30
 generated_by: design/tools/contract.mjs
-generated_at: 2026-09-11T14:32:35.522Z
+generated_at: 2026-09-11T14:44:52.785Z
 ---
 # settings · design contract
 
@@ -136,3 +136,30 @@ character; a case or spacing change is a finding, not a nit.
   `source: ui` → `source: derived` in this file's frontmatter reflects
   that the golden the gate checks against is now derived from the shipped
   Flutter build rather than the original HTML mockup.
+- **What "100% (30/30)" does NOT cover (E15-T13, 2026-09-11):** every one
+  of this screen's eight settings-row entries is built as one `InkWell`
+  wrapping a leading icon, a title+description text column, and a trailing
+  `chevron_right` icon (`lib/features/settings/presentation/settings_view.dart`).
+  `flutter_probe_dumper.dart`'s `_isInteractive`/`_isInteractiveBoundary`
+  grouping — by design, per this skill's own rule 5 — treats the whole
+  `InkWell` as one opaque tappable `button` element and does not descend
+  into its children, so none of the following are individually visible to
+  the probe on this screen: the eight leading row icons
+  (`Icons.account_circle`, `Icons.security`, `Icons.policy`,
+  `Icons.wifi_tethering`, `Icons.sd_storage`, `Icons.battery_full` — design
+  glyph `battery_full_alt` — `Icons.notifications`, `Icons.info`), their
+  circular icon-backdrop colors, or any of the eight `Icons.chevron_right`
+  trailing glyphs. A future change that recolors a row icon, swaps the
+  wrong glyph into a row, or drops a chevron would not move this screen's
+  score at all. **"100%" on this screen means "100% of what the probe can
+  currently see," not full design conformance** — the same honest framing
+  this epic already applies to the nine `source: derived` sub-screens'
+  own goldens (regression gates against a known-good build, not
+  original-design-conformance proofs). The rejected fix for this gap was
+  extending `flutter_probe_dumper.dart`'s `_iconNames` map (and teaching
+  the interactive-boundary walk to still record icon identity/color for
+  children it groups) — deferred because that is genuinely invasive
+  shared-tooling work touching every other gated screen's probe output,
+  not something to do inside this one screen's task. See
+  `epics/E15-session-and-settings/tasks/E15-T13.md` §Deviations for the
+  task-level record of this same gap.
