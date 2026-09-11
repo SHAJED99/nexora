@@ -669,7 +669,7 @@ class BluetoothTransport(
    * possibly-randomized address from this `ACTION_FOUND` broadcast;
    * [rawName] is the peer's Bluetooth-visible name straight off
    * `BluetoothDevice.name` (before any address fallback). If [rawName] is
-   * non-null/non-blank and matches a currently bonded device's own name
+   * non-null/non-empty and matches a currently bonded device's own name
    * exactly, that bonded device's real address is returned instead --
    * bonded devices have a real, stable, connectable address, which the
    * scan result's own address is confirmed (on real hardware) not to be.
@@ -677,6 +677,16 @@ class BluetoothTransport(
    * match on, no bonded-devices list available (permission denied), or no
    * bonded device's name matches -- the genuinely-new, not-yet-bonded-peer
    * case, where no better address exists yet.
+   *
+   * **Known ambiguity, not resolved here:** if two bonded devices share the
+   * same Bluetooth-visible name, this returns the FIRST match found in
+   * `bondedDevices` (a `Set` -- iteration order is not contractually
+   * stable), an arbitrary pick between them rather than a correct one. The
+   * result is still a genuine bonded address (strictly better than the
+   * randomized scan address it replaces), just not necessarily the RIGHT
+   * bonded device's address. Two same-named bonded peers is expected to be
+   * rare; disambiguating them would need a stronger correlator than name
+   * (out of this fix's own scope -- flagged, not silently accepted).
    */
   private fun resolveDeviceId(scannedAddress: String, rawName: String?): String {
     if (rawName.isNullOrEmpty()) return scannedAddress
