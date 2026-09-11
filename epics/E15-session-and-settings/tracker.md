@@ -1,6 +1,6 @@
 # E15 · Session Lifecycle & Settings Sub-Screens · Progress
 
-**Status:** in-progress · **Started:** 2026-09-08 · **Completed:** — · **Progress:** 12/14 (all dispatchable tasks done; E15-B03/E15-T13 parked pending 🧍 human `bug_priorities` gate)
+**Status:** done · **Started:** 2026-09-08 · **Completed:** 2026-09-11 · **Progress:** 14/14
 
 > Only the ORCHESTRATOR edits this file.
 > todo → in-progress → review-requested → (changes-requested →) done → verified
@@ -39,8 +39,8 @@ sub-screens).
 - [x] E15-T10 · About / Updates screen · done · PR #202, round 1 CHANGES-REQUESTED (FR-DIAG-002 falsification test couldn't fail against a real stack-trace leak; model-shape test guarded a denylist not the shape; two tests never built a widget/asserted controller state only; "no control" test missed non-Material gesture wrappers; "Last checked" rendered a raw epoch-millis integer) → round 2 APPROVE (opus), all six independently re-falsified. Fixed a second real `RenderFlex` overflow found while formatting the timestamp fix. design gate 100% (22/22). Merged `2b20986`. OQ-E15-T10-2 (no local diagnostic log store) resolved by the orchestrator, see §Carried-forward.
 - [x] E15-T11 · Settings hub wiring: eight routes, eight rows, probe consolidation · done · PR #208, round 1 CHANGES-REQUESTED (S2 blocker: a second `BackgroundService()` in `settings_binding.dart` silently hijacks `BackgroundLifecycleObserver`'s native event registration, and a source comment falsely claimed it was already disclosed) → round 2 APPROVE (opus), docs-only fix verified as touching zero product code. design gates 100% on all nine sub-screens through the new consolidated fixture; the hub's own gate (`settings`) is honestly red (33.8%, pre-existing HTML-vs-Flutter golden mismatch, not a regression — see E15-T13). Merged `1facb7f`. Filed `E15-B03` (S2, the BackgroundService fix) and `E15-T13` (the hub design-gate reconciliation) as real follow-up tasks rather than fixed/guessed at here.
 - [x] E15-T12 · Wire SignOutUseCase's production teardown and remote-revoke closures · done · PR #210, round 1 APPROVE (opus) with 4 required docs-only corrections (stale pre-fix ordering/test-name references) before merge — but the real finding was caught by the orchestrator BEFORE review even started: the task's own original contract (which the orchestrator wrote when sharding this task) mandated `teardown -> wipe -> revoke`, but `DeviceRevocationService.revoke()` does an unconditional, unwrapped local-database write as its first statement — with the database already closed by `teardown`, this would have thrown on every single sign-out, deterministically, silently skipping the Firebase push entirely (`Q-SEC-009`(b) would have shipped as dead code behind a green suite). Reordered to `revoke -> teardown -> wipe -> auth-clear` before the PR was even opened for review; the reviewer independently reproduced the production consequence end-to-end (a real file-backed database, confirming zero Firebase pushes under the old order vs. one under the new) and falsified both new regression tests by reverting the order. Merged `4cb92bd`.
-- [ ] E15-B03 · A second `BackgroundService()` hijacks `BackgroundLifecycleObserver`'s native event registration · todo · S2, found by E15-T11's review — needs 🧍 `bug_priorities` gate (p: unset) before dispatch
-- [ ] E15-T13 · Reconcile `settings.md`'s HTML-sourced golden against a real Flutter build · todo · S3, found during E15-T11 — needs a planner/human choice between two fix directions before dispatch; needs 🧍 `bug_priorities` gate (p: unset)
+- [x] E15-B03 · A second `BackgroundService()` hijacks `BackgroundLifecycleObserver`'s native event registration · done · P1 (human-set 2026-09-11) · PR #214, APPROVE (opus), independently re-falsified — reverted the fix, confirmed the new regression test fails on an `identical()` mismatch, restored. Registers the shared instance in `AppBinding` keyed on the `BackgroundControl` interface (not the concrete type, preserving the existing `BackgroundStub` test seam); `BatterySettingsController` resolves it via `Get.find` instead of constructing a second instance. 1498/1498. Merged `a4dbc0e`
+- [x] E15-T13 · Reconcile `settings.md`'s HTML-sourced golden against a real Flutter build · done · P3 (human-set 2026-09-11) · PR #215, round 1 CHANGES-REQUESTED (F1: the `source: derived` fix would have silently reverted on the next `contract.mjs`/`design-extract` run, since `design/sources.yaml`'s own registry entry still said `source: ui`; F2: the 100% match concealed real, undisclosed coverage loss — all eight per-row icons and chevrons are invisible to the probe) → round 2 APPROVE (opus), both fixes independently re-verified by fresh regeneration and by falsifying the icon-blindness disclosure in both directions (a copy typo still reds the gate; an icon swap does not, exactly as now disclosed). Orchestrator decided the fix direction itself (re-extract from the shipped Flutter build, matching this epic's nine sub-screen precedent, over extending shared probe-dumper tooling). `settings` gate 100% (30/30). 1497/1497. Merged `e146509`
 - [x] E15-B01 · GetX lazyPut without fenix crashes on a second welcome/login/home visit · done · PR #191, APPROVE (opus) — merged `967fe84`
 - [x] E15-B02 · Chat composer writes to a disposed TextEditingController mid-send · done · PR #191, APPROVE (opus) — merged `967fe84`
 
@@ -274,9 +274,47 @@ T08 now owns that file."* `E15-T09` touches neither.
   old order, one under the new) and falsified both new regression tests
   by reverting the order. 1497/1497. Merged `4cb92bd`. **This closes
   `E15-T12`, the last dispatchable E15 task** — only `E15-B03`/`E15-T13`
-  remain, both parked pending the human `bug_priorities` gate.
+  remained, both parked pending the human `bug_priorities` gate.
+- 2026-09-11 · E15-B03 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · APPROVE round 1 (priority P1 set by direct human instruction,
+  clearing `bug_priorities`). Independently re-falsified: reverted
+  `settings_binding.dart`'s fix back to constructing a second
+  `BackgroundService()`, confirmed the new regression test fails on an
+  `identical()` mismatch (not a crash), restored and confirmed green.
+  Confirmed no existing test relying on `AppBinding`'s `backgroundControl`
+  stub-injection seam broke. 1498/1498. Merged `a4dbc0e`.
+- 2026-09-11 · E15-T13 · `claude-opus-5` (≠ executed_by `claude-sonnet-5`,
+  rule 5) · round 1 CHANGES-REQUESTED (priority P3 set by direct human
+  instruction, clearing `bug_priorities`; F1: the `source: derived` golden
+  fix would silently revert on the next `contract.mjs`/`design-extract`
+  run since `design/sources.yaml`'s own registry entry still said
+  `source: ui`; F2: the 100% match concealed real, undisclosed gate
+  coverage loss — every per-row icon and chevron is invisible to the
+  probe) → round 2 APPROVE, both independently re-verified: a fresh
+  `contract.mjs` regeneration proved F1's fix durable (only a timestamp
+  changed), and the F2 disclosure was falsified in both directions (a
+  copy typo still reds the gate; an icon swap does not, exactly as now
+  documented in the contract's own Provenance note). `settings` gate 100%
+  (30/30), byte-identical to a freshly regenerated dump. 1497/1497. Merged
+  `e146509`. **This closes E15 — all 14 tasks (12 features + 2 bugs) done.**
 
 ## Carried-forward observations (not yet a task)
+- **`design/sources.yaml`'s `settings` entry (now `source: derived`,
+  E15-T13) carries no `GAP-nnn` reference, unlike every other derived
+  entry in the same file (S5, observation only — correct as-is).** This
+  is a re-baselined, already-human-approved design screen (`E02-T03`),
+  not a newly-derived gap, and nothing in the tooling validates that
+  coupling either way. Noted so a future reader doesn't mistake the
+  missing reference for an omission.
+- **Reviewer lesson for future design-gate reviews: `verify.mjs`'s
+  headline `match N% (x/x)` is the element-MATCH rate only, not overall
+  pass/fail.** A copy-drift falsification during `E15-T13`'s review
+  produced `❌ FAIL ... — match 100% (30/30)` — a red gate with a 100%
+  headline, because the copy mismatch is reported separately from the
+  match percentage. A reviewer (or a future dashboard) reading only the
+  percentage would misread that as green. Worth surfacing to
+  `skills/retro` as a real near-miss in this epic's own review process,
+  not just a one-off.
 - **E15-T10's `no_release_notes_and_no_update_button` test proves only
   half of `EARS-UI-9` (S4).** The criterion reads "the sub-screen SHALL
   state the absence AND SHALL NOT present a control" — the shipped test
