@@ -624,12 +624,29 @@ class BluetoothTransport(
     val device = deviceFromIntent(intent) ?: return
     val address = device.address ?: return
     if (!discoveredAddresses.add(address)) return // already emitted this session
-    val name =
+    val rawName =
         try {
           device.name
         } catch (e: SecurityException) {
           null
-        } ?: address
+        }
+    val name = rawName ?: address
+    // E04-B08: confirmed on real hardware (MIUI/Xiaomi) that
+    // `startDiscovery()`'s `ACTION_FOUND` address is randomized on every
+    // single scan -- not merely stale -- with zero stable relationship to
+    // the peer's real, bondable BR/EDR address, even for an
+    // already-bonded peer. Emitting that randomized address as this
+    // device's `TransportDevice.id` means a later `connect()` pages an
+    // address that (per the diagnostic) may not correspond to any real,
+    // reachable radio at all. The scanned address therefore cannot even
+    // be used to recognize "this is the same bonded peer" -- the peer's
+    // Bluetooth-visible name (`rawName`, read above -- NOT the
+    // address-fallback `name` local) is the only pre-bond correlator
+    // available. `resolveDeviceId` prefers a bonded device's own real
+    // address when its name exactly matches; a genuinely new,
+    // not-yet-bonded peer (no name match) falls back to the raw scanned
+    // address, unchanged from prior behavior.
+    val resolvedId = resolveDeviceId(address, rawName)
     // E06-T04: populate rssi from the scan result's own EXTRA_RSSI — it is
     // already in this broadcast and was previously dropped on the floor
     // (task §3). Android has no separate `hasExtra` contract for this key;
@@ -641,9 +658,52 @@ class BluetoothTransport(
     val rssi = if (rssiExtra == Short.MIN_VALUE) null else rssiExtra.toLong()
     eventsScope.launch {
       eventsApi.onDeviceDiscovered(
-          TransportDevice(id = address, displayName = name, type = TransportType.BLUETOOTH, rssi = rssi),
+          TransportDevice(id = resolvedId, displayName = name, type = TransportType.BLUETOOTH, rssi = rssi),
       )
     }
+  }
+
+  /**
+   * Resolves the address to actually report as [TransportDevice.id] for a
+   * fresh discovery result (E04-B08). [scannedAddress] is the raw,
+   * possibly-randomized address from this `ACTION_FOUND` broadcast;
+   * [rawName] is the peer's Bluetooth-visible name straight off
+   * `BluetoothDevice.name` (before any address fallback). If [rawName] is
+   * non-null/non-blank and matches a currently bonded device's own name
+   * exactly, that bonded device's real address is returned instead --
+   * bonded devices have a real, stable, connectable address, which the
+   * scan result's own address is confirmed (on real hardware) not to be.
+   * Falls back to [scannedAddress] unchanged whenever there is no name to
+   * match on, no bonded-devices list available (permission denied), or no
+   * bonded device's name matches -- the genuinely-new, not-yet-bonded-peer
+   * case, where no better address exists yet.
+   */
+  private fun resolveDeviceId(scannedAddress: String, rawName: String?): String {
+    if (rawName.isNullOrEmpty()) return scannedAddress
+    val bondedDevices =
+        try {
+          adapter?.bondedDevices
+        } catch (e: SecurityException) {
+          null
+        } ?: return scannedAddress
+    for (bonded in bondedDevices) {
+      val bondedName =
+          try {
+            bonded.name
+          } catch (e: SecurityException) {
+            null
+          }
+      if (bondedName != null && bondedName == rawName) {
+        val bondedAddress =
+            try {
+              bonded.address
+            } catch (e: SecurityException) {
+              null
+            }
+        if (bondedAddress != null) return bondedAddress
+      }
+    }
+    return scannedAddress
   }
 
   private fun deviceFromIntent(intent: Intent): BluetoothDevice? =
