@@ -91,34 +91,28 @@ class ChatView extends GetView<ChatController> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      // E06-B06 (Redmi 10 2022 / MIUI composer-dead-to-touch fix): on-device
-      // diagnostics (RenderBox global position + raw `FlutterView` metrics,
-      // logged live via `flutter run -d <redmi-serial>` and cross-checked
-      // against `dumpsys window`/`uiautomator dump`) showed the Composer's
-      // own row landing with its bottom edge EXACTLY flush against this
-      // device's reported physical canvas height, and MIUI's own
-      // accessibility bridge (`uiautomator dump`) independently reporting
-      // the composer's three controls as only 23-32 *physical* px tall —
-      // a sliver, not their real 46-48px design height — because on this
-      // device `MediaQuery.padding.bottom` (what plain `SafeArea` consumes)
-      // is reported as exactly zero: the OS's own nav-bar reservation is
-      // already excluded from the canvas Flutter is handed, so `SafeArea`
-      // alone sees nothing further to guard against. That leaves the
-      // composer's interactive controls with ZERO cushion from the
-      // device's absolute bottom edge — where MIUI's own edge/gesture
-      // input handling (confirmed present on this ROM via
-      // `horizontal_edge_suppression_size`/`vertical_edge_suppression_size`
-      // system settings, and this device's own three-button nav bar
-      // sitting immediately beneath) is demonstrably more aggressive about
-      // reclaiming edge-adjacent touches than stock Android/the Pixel this
-      // was cross-checked against. `minimum:` forces a floor under
-      // whatever `SafeArea` would otherwise compute (zero, here), pushing
-      // every composer control a fixed, small distance off the true edge
-      // on every device — a no-op in practice on any device that already
-      // reports a real inset (e.g. the Pixel), and the guard this device
-      // was missing entirely. See task file §"Root cause" / Run log for
-      // the full on-device measurement trail; `OQ-E06-B06-2` covers what
-      // this session's own ADB-injected taps could and couldn't prove.
+      // E06-B06 (Redmi 10 2022 / MIUI composer-dead-to-touch report):
+      // on-device measurement (Redmi `e4813f500601`) showed
+      // `MediaQuery.padding.bottom` == 0 on this device — its nav bar is
+      // already excluded from the canvas Android hands to Flutter, so plain
+      // `SafeArea` (which only consumes reported insets) adds no bottom
+      // cushion at all here, vs. 8 logical px of container padding being
+      // the only margin the composer already had. `minimum:` forces a
+      // 16-logical-px floor under whatever `SafeArea` would otherwise
+      // compute — a no-op wherever the platform already reports >=16
+      // (confirmed unaffected on the Pixel 8 Pro), and a real net gain
+      // (8px -> 24px of bottom cushion) only on a device like this one.
+      // This is a modest, defensive hardening, NOT a confirmed fix for the
+      // reported symptom: this session could not reproduce a before-fails/
+      // after-succeeds transition via synthetic ADB taps at all (see task
+      // file §3a/§OQ-E06-B06-2) — an initial reading of this device's
+      // `uiautomator dump` bounds as the composer's true hit-tested size
+      // was itself wrong (that bridge clips its reported root to
+      // `[0,0][1080,2191]`, short by exactly this device's status-bar
+      // height, not the composer's real geometry — see task file §3a/§3b,
+      // corrected after independent review). Keep this comment scoped to
+      // what was actually measured; see the task file for the full,
+      // corrected investigation trail.
       body: SafeArea(
         minimum: const EdgeInsets.only(bottom: 16),
         child: Column(
