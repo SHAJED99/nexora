@@ -24,6 +24,27 @@ class Relationships extends Table {
   /// (they simply have not announced yet).
   TextColumn get remoteSelfDeviceId => text().nullable()();
 
+  /// E04-B17: the peer's Bluetooth-visible name at the time this
+  /// relationship was created or last reconciled — the only correlator
+  /// available to recognize "this is the same already-trusted peer,
+  /// reconnecting under a different address" when [deviceId] itself has
+  /// gone stale (confirmed live: an OS/OEM Bluetooth stack can present a
+  /// DIFFERENT real, currently-bonded address than whatever address a
+  /// relationship was originally keyed under, e.g. from an earlier
+  /// discovery scan — same root cause class `E04-B08`'s own
+  /// `resolveDeviceId` already fixed for the discovery path, found here to
+  /// also silently break inbound delivery on the accept path with no
+  /// mechanism to ever recover). `null` for a relationship created before
+  /// this column existed, or one whose peer has never been seen with a
+  /// resolvable name — reconciliation simply cannot run for those, the
+  /// same "additive, no backfill" shape `remoteSelfDeviceId` above already
+  /// established. Never used for trust decisions itself (a name is not an
+  /// authentication factor) — only to locate the CANDIDATE existing
+  /// relationship whose already-evaluated trust state should carry over to
+  /// a newly-seen address for the same peer; see
+  /// `InboundPipeline._reconcileStaleRelationship` for where this is read.
+  TextColumn get peerName => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {deviceId};
 }

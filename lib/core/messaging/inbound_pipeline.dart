@@ -586,17 +586,109 @@ class InboundPipeline {
     // Already tracking this id's connection state -- nothing to do. Real
     // Bluetooth discovery re-announces the same device across scan cycles
     // (mirrors devices_controller.dart's own dedup reasoning).
-    // ignore: avoid_print
-    print('[E04B17DIAG] _onDeviceDiscovered: ${device.id} (already tracked=${_connectionSubscriptions.containsKey(device.id)})');
     if (_connectionSubscriptions.containsKey(device.id)) return;
+    // E04-B17: the subscription below MUST be created synchronously, in
+    // this same call, before any `await` -- a native `connected`/data event
+    // for [device.id] can arrive on Dart's very next event-loop turn (this
+    // was observed live: making this method `async` and awaiting
+    // reconciliation BEFORE subscribing reintroduced the exact same
+    // "event broadcast to a deviceId nothing is listening for yet" race
+    // this whole task exists to close, just one layer up). Reconciliation
+    // itself has natural slack: it only needs to finish before
+    // `PrekeyExchange`'s own trust check runs, which is a full network
+    // round trip later, so firing it here as fire-and-forget is safe --
+    // see `_reconcileStaleRelationship`'s own doc comment.
     _connectionSubscriptions[device.id] = _stack.transport
         .connectionState(device.id)
         .listen((ConnectionState state) => _onConnectionStateChanged(device.id, state));
+    unawaited(_reconcileStaleRelationship(device.id, device.displayName));
+  }
+
+  /// E04-B17: [deviceId] might be a peer this side already trusts under a
+  /// DIFFERENT, now-stale address -- confirmed live: an OS/OEM Bluetooth
+  /// stack can present a different real, currently-bonded address than
+  /// whatever address a relationship was originally keyed under (e.g. from
+  /// an earlier discovery scan, before the peer was OS-bonded — the same
+  /// address-instability class `E04-B08`'s own `resolveDeviceId` already
+  /// found and fixed for the discovery path, but with no mechanism to ever
+  /// correct an ALREADY-stored relationship once its address goes stale).
+  /// Without this, a message to/from an already-trusted peer that
+  /// reconnects under a new address fails forever -- no relationship row
+  /// exists for the new address, so it is either never subscribed to at
+  /// all (the accept-path gap this task's own root-causing found) or
+  /// treated as a brand-new `unknown` contact requiring manual
+  /// re-verification.
+  ///
+  /// Matches purely by [peerName] -- never by address, which is exactly
+  /// the unstable value this exists to route around. A name match is NOT
+  /// itself a trust decision or an authentication factor: this method
+  /// never invents a trust state, it only copies an ALREADY-evaluated
+  /// decision (`allowed`/`trusted`/`blocked`/`unknown`) forward to the new
+  /// address, the same "this is probably the same peer, reconnecting"
+  /// judgment call `resolveDeviceId` already makes one layer down, at the
+  /// transport level, for the discovery-scan case.
+  ///
+  /// Deliberately narrow: only reconciles when [deviceId] has no
+  /// relationship row of its own yet AND exactly ONE other stored
+  /// relationship's `peerName` matches -- an ambiguous match (two
+  /// different stored peers happen to share a Bluetooth-visible name) is
+  /// left alone rather than guessed at, so [deviceId] is treated as a
+  /// genuinely new, `unknown` contact through the normal discovery/trust
+  /// flow instead (a false negative here costs a re-verification; a false
+  /// positive would silently hand a new address someone else's trust
+  /// decision).
+  Future<void> _reconcileStaleRelationship(
+    String deviceId,
+    String peerName,
+  ) async {
+    final db = _stack.db;
+    final existing = await (db.select(db.relationships)
+          ..where((t) => t.deviceId.equals(deviceId)))
+        .getSingleOrNull();
+    if (existing != null) return; // already has its own row -- nothing to do.
+
+    var candidates = await (db.select(db.relationships)
+          ..where(
+            (t) =>
+                t.peerName.equals(peerName) & t.deviceId.equals(deviceId).not(),
+          ))
+        .get();
+    if (candidates.isEmpty) {
+      // One-time migration case: a relationship created before this column
+      // existed has `peerName IS NULL` and can never match the `.equals()`
+      // check above (SQL `NULL = 'x'` is never true) -- exactly the
+      // real-world state this fix's own root-causing found (the peer that
+      // motivated this task predates `peerName` entirely). Falls back to
+      // "exactly one relationship with no name on file yet" -- still
+      // bounded to the same single-unambiguous-candidate safety property
+      // as the name-matched case above, so this is a narrower version of
+      // the same judgment call, not a weaker one. Naturally stops applying
+      // once two or more such never-reconciled rows exist (this device has
+      // more than one contact older than this fix) -- at that point every
+      // FUTURE connection populates `peerName` via this same method's own
+      // write below, so the ambiguity heals over time rather than staying
+      // permanently unresolvable.
+      candidates = await (db.select(db.relationships)
+            ..where(
+              (t) =>
+                  t.peerName.isNull() & t.deviceId.equals(deviceId).not(),
+            ))
+          .get();
+    }
+    if (candidates.length != 1) return; // none, or ambiguous -- leave as new.
+
+    final stale = candidates.single;
+    await db.into(db.relationships).insertOnConflictUpdate(
+          RelationshipsCompanion.insert(
+            deviceId: deviceId,
+            state: stale.state,
+            updatedAt: DateTime.now(),
+            peerName: Value(peerName),
+          ),
+        );
   }
 
   void _onConnectionStateChanged(String deviceId, ConnectionState state) {
-    // ignore: avoid_print
-    print('[E04B17DIAG] _onConnectionStateChanged: $deviceId => $state (dataSub already tracked=${_dataSubscriptions.containsKey(deviceId)})');
     if (state == ConnectionState.connected) {
       // Idempotent: a repeated `connected` event for an id already
       // subscribed must not open a second incomingData listener (the same
@@ -632,19 +724,13 @@ class InboundPipeline {
   }
 
   Future<void> _handleBuffer(String linkDeviceId, Uint8List bytes) async {
-    // ignore: avoid_print
-    print('[E04B17DIAG] _handleBuffer: called, link=$linkDeviceId, ${bytes.length} bytes');
     final RelayPacketFrame frame;
     try {
       frame = RelayPacketFrame.deserialize(bytes);
     } on FormatException {
-      // ignore: avoid_print
-      print('[E04B17DIAG] _handleBuffer: malformed frame from $linkDeviceId');
       counters.malformed++;
       return;
     }
-    // ignore: avoid_print
-    print('[E04B17DIAG] _handleBuffer: link=$linkDeviceId payloadType=${frame.payloadType} dest=${frame.destination} source=${frame.source} self=${_stack.selfDeviceId} ctrlByte=${frame.payload.isNotEmpty ? frame.payload[0] : -1}');
 
     final int nowMs = _clock().millisecondsSinceEpoch;
 

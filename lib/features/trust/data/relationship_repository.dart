@@ -1,7 +1,7 @@
 // features/trust/data — wraps the `relationships` Drift table (ADR-0001).
 // The one place `RelationshipState` <-> the `relationships.state` text
 // column conversion happens (E02-T01).
-import 'package:drift/drift.dart' show OrderingTerm;
+import 'package:drift/drift.dart' show OrderingTerm, Value;
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/features/trust/domain/relationship.dart'
     as domain;
@@ -12,12 +12,32 @@ class RelationshipRepository {
   RelationshipRepository(this._db);
 
   /// Inserts or updates the local relationship state for [deviceId].
-  Future<void> upsert(String deviceId, domain.RelationshipState state) {
+  ///
+  /// [peerName] (E04-B17): the peer's Bluetooth-visible name, when the
+  /// caller has one available (e.g. from the `TransportDevice` a Devices-
+  /// screen `Verify`/`Allow` action was taken against) — persisted so a
+  /// LATER connection under a different, drifted address for the same
+  /// peer can be reconciled back to this already-evaluated trust decision
+  /// (`InboundPipeline._reconcileStaleRelationship`). Optional and
+  /// additive: omitting it (the pre-existing call shape) simply leaves
+  /// `peerName` unset, exactly today's behavior.
+  Future<void> upsert(
+    String deviceId,
+    domain.RelationshipState state, {
+    String? peerName,
+  }) {
     return _db.into(_db.relationships).insertOnConflictUpdate(
           RelationshipsCompanion.insert(
             deviceId: deviceId,
             state: state.name,
             updatedAt: DateTime.now(),
+            // `Value.absent()`, not `Value(null)`, when the caller has no
+            // name to offer -- `insertOnConflictUpdate` writes every
+            // EXPLICIT `Value` on conflict, so `Value(null)` here would
+            // silently erase a `peerName` an earlier call (or
+            // `_reconcileStaleRelationship`) already recorded for this
+            // same [deviceId].
+            peerName: peerName == null ? const Value.absent() : Value(peerName),
           ),
         );
   }

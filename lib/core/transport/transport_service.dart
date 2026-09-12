@@ -224,18 +224,12 @@ class _EventsHandler extends TransportEventsApi {
   void onDeviceLost(String deviceId) => _service._handleDeviceLost(deviceId);
 
   @override
-  void onConnectionStateChanged(String deviceId, ConnectionState state) {
-    // ignore: avoid_print
-    print('[E04B17DIAG] _EventsHandler.onConnectionStateChanged: $deviceId => $state');
-    _service._handleConnectionStateChanged(deviceId, state);
-  }
+  void onConnectionStateChanged(String deviceId, ConnectionState state) =>
+      _service._handleConnectionStateChanged(deviceId, state);
 
   @override
-  void onDataReceived(String deviceId, Uint8List bytes) {
-    // ignore: avoid_print
-    print('[E04B17DIAG] _EventsHandler.onDataReceived: $deviceId, ${bytes.length} bytes');
-    _service._handleDataReceived(deviceId, bytes);
-  }
+  void onDataReceived(String deviceId, Uint8List bytes) =>
+      _service._handleDataReceived(deviceId, bytes);
 
   // E06-T04: onLinkQuality now has a real consumer — forwarded into
   // TransportService.linkQuality, which LinkQualityFeed subscribes to and

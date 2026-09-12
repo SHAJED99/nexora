@@ -302,23 +302,42 @@ class BluetoothTransport(
   private fun acceptLoop(socket: BluetoothServerSocket) {
     try {
       while (!Thread.currentThread().isInterrupted) {
-        android.util.Log.d("E04B17DIAG", "acceptLoop: calling socket.accept()")
         val accepted =
             try {
               socket.accept() // BLOCKING -- this thread only.
             } catch (e: IOException) {
-              android.util.Log.d("E04B17DIAG", "acceptLoop: accept() threw IOException, breaking: $e")
               break // socket closed (release()) or a real accept error.
             }
-        android.util.Log.d("E04B17DIAG", "acceptLoop: accept() returned a socket")
-        val remoteId =
+        val rawRemoteAddress =
             try {
               accepted.remoteDevice?.address
             } catch (e: SecurityException) {
-              android.util.Log.d("E04B17DIAG", "acceptLoop: remoteDevice.address threw SecurityException: $e")
               null
             }
-        android.util.Log.d("E04B17DIAG", "acceptLoop: remoteId=$remoteId")
+        val rawRemoteName =
+            try {
+              accepted.remoteDevice?.name
+            } catch (e: SecurityException) {
+              null
+            }
+        // E04-B17: `rawRemoteAddress` can be a masked/obfuscated value (not
+        // the peer's real, bonded BR/EDR address) on some OEM Bluetooth
+        // stacks (confirmed live: MIUI reports a fixed placeholder for an
+        // ACCEPTED connection's remote address, the same placeholder it
+        // reports for its OWN local adapter identity) -- the same class of
+        // address unreliability `E04-B08` already found and fixed for the
+        // discovery-scan (`ACTION_FOUND`) path via `resolveDeviceId`, never
+        // previously applied here. Every Dart-side stream (`connectionState`/
+        // `incomingData`) is keyed by the REAL bonded address stored in
+        // `relationships.device_id`, so a masked accept-time address here
+        // means the connected/data events are broadcast to a deviceId
+        // nothing is listening for -- silently dropped, never reaching
+        // `InboundPipeline` at all. Resolving via the SAME bonded-name-match
+        // helper used for discovery closes this for the (overwhelmingly
+        // common, in this app's design) already-bonded-peer case; an
+        // unbonded/unnamed peer falls back to the raw reported address
+        // unchanged, exactly `resolveDeviceId`'s own existing contract.
+        val remoteId = rawRemoteAddress?.let { resolveDeviceId(it, rawRemoteName) }
         if (remoteId == null) {
           try {
             accepted.close()
@@ -328,21 +347,38 @@ class BluetoothTransport(
           }
           continue
         }
-        openSockets[remoteId] = accepted
-        android.util.Log.d("E04B17DIAG", "acceptLoop: calling startReadLoop($remoteId)")
-        startReadLoop(remoteId, accepted)
-        android.util.Log.d("E04B17DIAG", "acceptLoop: launching onConnectionStateChanged($remoteId, CONNECTED)")
+        // E04-B17: emit `onDeviceDiscovered` for this accepted peer BEFORE
+        // `onConnectionStateChanged` -- `InboundPipeline._onDeviceDiscovered`
+        // is the ONLY place a `connectionState`/`incomingData` subscription
+        // ever gets created for a device id the Dart side does not already
+        // have a relationship for (`_seedKnownDevices` only seeds EXISTING
+        // trusted/allowed relationships; nothing previously routed a
+        // genuinely-new-to-Dart accepted connection through that path at
+        // all). Without this, `onConnectionStateChanged`/`onDataReceived`
+        // below still fire correctly and still reach the Dart `_EventsHandler`
+        // -- confirmed live -- but land on a broadcast stream nothing is
+        // listening for and are silently dropped, never reaching
+        // `InboundPipeline`. This also gives `_onDeviceDiscovered` the raw
+        // peer name (mirrors `handleDeviceFound`'s own `name = rawName ?:
+        // address` fallback), which is what lets it reconcile a stale
+        // relationship address (`_reconcileStaleRelationship`) for an
+        // already-bonded peer whose stored address has drifted -- the same
+        // real gap this task's own root-causing found.
         eventsScope.launch {
-          try {
-            eventsApi.onConnectionStateChanged(remoteId, ConnectionState.CONNECTED)
-            android.util.Log.d("E04B17DIAG", "acceptLoop: onConnectionStateChanged($remoteId, CONNECTED) returned normally")
-          } catch (e: Throwable) {
-            android.util.Log.d("E04B17DIAG", "acceptLoop: onConnectionStateChanged($remoteId) THREW: $e")
-          }
+          eventsApi.onDeviceDiscovered(
+              TransportDevice(
+                  id = remoteId,
+                  displayName = rawRemoteName ?: remoteId,
+                  type = TransportType.BLUETOOTH,
+                  rssi = null,
+              ),
+          )
         }
+        openSockets[remoteId] = accepted
+        startReadLoop(remoteId, accepted)
+        eventsScope.launch { eventsApi.onConnectionStateChanged(remoteId, ConnectionState.CONNECTED) }
       }
     } finally {
-      android.util.Log.d("E04B17DIAG", "acceptLoop: exiting (loop ended or interrupted)")
       // Conditional, mirroring `startReadLoop`'s own identical reasoning
       // (its `readThreads.remove(deviceId, Thread.currentThread())`,
       // two-arg for exactly this reason): an unconditional clear here
@@ -375,6 +411,28 @@ class BluetoothTransport(
    * `TransportService.connect()` depends on that shape holding here too).
    */
   fun connect(deviceId: String): Boolean {
+    // E04-B17: idempotent when a live socket for [deviceId] already exists
+    // -- confirmed live: `ConnectionEnsuringSender`'s own Dart-side
+    // "already connected" cache (`_connectedDeviceIds`) is populated ONLY
+    // by a successful OUTBOUND `connect()`, so it has no way to know about
+    // a connection this device ACCEPTED (`acceptLoop`, above). Once
+    // E04-B17's own address-reconciliation fix made an accepted
+    // connection's device id agree with the SAME id Dart later calls
+    // `directSend`/`connect` with for that peer (e.g. from
+    // `IdentityAnnounceService.sendAnnounce` firing right after accept),
+    // that mismatch turned into a real, observed race: the redundant
+    // outbound `doConnect` this method used to always attempt fires its
+    // own `CONNECTING` event, which `InboundPipeline._onConnectionStateChanged`
+    // treats as "no active link" and tears down the `incomingData`
+    // subscription the accept had JUST created -- silently killing the
+    // very connection this call was trying to reuse. Re-emitting `CONNECTED`
+    // (rather than doing nothing) keeps `TransportService.connect`'s own
+    // `await settled.future` contract intact for a caller that raced in
+    // after the connection was already accepted.
+    if (openSockets.containsKey(deviceId)) {
+      eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTED) }
+      return true
+    }
     val bt = adapter
     if (bt == null || !bt.isEnabled) {
       emitFailure(deviceId)
@@ -748,53 +806,28 @@ class BluetoothTransport(
    * [readThreads] — never left leaked, parked on a dead socket.
    */
   private fun startReadLoop(deviceId: String, socket: BluetoothSocket) {
-    android.util.Log.d("E04B17DIAG", "startReadLoop: starting thread for $deviceId")
     val thread =
         Thread(
             {
               try {
                 val input = socket.inputStream
-                android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): thread running, entering read loop")
                 while (!Thread.currentThread().isInterrupted) {
-                  val header = readFully(input, LENGTH_PREFIX_BYTES)
-                  if (header == null) {
-                    android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): readFully(header) => null (EOF), breaking")
-                    break
-                  }
+                  val header = readFully(input, LENGTH_PREFIX_BYTES) ?: break
                   val length = ByteBuffer.wrap(header).order(ByteOrder.BIG_ENDIAN).int
-                  android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): declared frame length=$length")
-                  if (length < 0 || length > MAX_FRAME_BYTES) {
-                    android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): length out of bounds, breaking")
-                    break // corrupt/hostile frame
-                  }
-                  val payload = readFully(input, length)
-                  if (payload == null) {
-                    android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): readFully(payload) => null (EOF), breaking")
-                    break
-                  }
-                  android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): got full frame, ${payload.size} bytes, launching onDataReceived")
-                  eventsScope.launch {
-                    try {
-                      eventsApi.onDataReceived(deviceId, payload)
-                      android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): onDataReceived returned normally")
-                    } catch (e: Throwable) {
-                      android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): onDataReceived THREW: $e")
-                    }
-                  }
+                  if (length < 0 || length > MAX_FRAME_BYTES) break // corrupt/hostile frame
+                  val payload = readFully(input, length) ?: break
+                  eventsScope.launch { eventsApi.onDataReceived(deviceId, payload) }
                 }
               } catch (e: IOException) {
-                android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): IOException, loop ending: $e")
                 // Socket closed (disconnect()) or a real I/O error — either
                 // way, the loop is done; nothing to report through this
                 // thread, `disconnect()` already emits DISCONNECTED.
               } catch (e: Exception) {
-                android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): unexpected Exception, loop ending: $e")
                 // Anything unexpected (a RuntimeException out of the stream or
                 // out of `eventsScope.launch`) must die with this thread, not
                 // reach the default uncaught handler — an uncaught exception on
                 // any Android thread kills the whole process.
               } finally {
-                android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): thread exiting")
                 // Two-arg remove: only de-register THIS thread. An
                 // unconditional remove() would drop a newer read thread's
                 // registration if a disconnect/reconnect for the same deviceId
