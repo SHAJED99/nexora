@@ -682,6 +682,108 @@ void main() {
     },
   );
 
+  test(
+    'test_E04_B13_encrypt_adapter_resolves_learned_remoteSelfDeviceId_for_frame_destination',
+    () async {
+      // The actual chat-message send path (`SendMessageUseCase` ->
+      // `MessagingStack`'s own `encryptAdapter`) -- E04-B12's identity
+      // announce populates `remoteSelfDeviceId`, but nothing consumed it
+      // for THIS frame construction site before E04-B13. `recipientDeviceId`
+      // ('bt-mac-bob') here deliberately differs from bob's real
+      // `selfDeviceId` ('device-b-real'), mirroring E04-B12's own live
+      // finding that a Bluetooth MAC and a real `selfDeviceId` are never the
+      // same string on real hardware.
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'device-a',
+        transport: newTransport(),
+      );
+      expect(stack.status, const MessagingStackStatus.ready());
+
+      final bob = await _RemoteParty.create();
+      addTearDown(bob.close);
+
+      const bobMac = 'bt-mac-bob';
+      const bobRealSelfDeviceId = 'device-b-real';
+      // Crypto sessions stay keyed by the app-level conversationId (the
+      // Bluetooth MAC) exactly as everywhere else in this codebase --
+      // unchanged and untouched by this task (task file §4: does NOT touch
+      // `CryptoService`/identity-key trust logic). Only the WIRE FRAME's
+      // `destination` field (asserted below) is what this task resolves.
+      const bobAddress = SignalProtocolAddress(bobMac, 1);
+      await stack.cryptoService.establishSession(bobAddress, await bob.bundle());
+
+      // Simulates E04-B12's identity-announce having already landed for
+      // this link -- the column this task actually consumes.
+      await db.into(db.relationships).insertOnConflictUpdate(
+            RelationshipsCompanion.insert(
+              deviceId: bobMac,
+              state: RelationshipState.unknown.name,
+              updatedAt: DateTime.now(),
+              remoteSelfDeviceId: const Value(bobRealSelfDeviceId),
+            ),
+          );
+
+      final message = await stack.sendMessage.call(
+        'conv-1',
+        bobMac,
+        _plaintext('hello bob'),
+      );
+      expect(message.deliveryState, DeliveryState.sent);
+
+      final frame = RelayPacketFrame.deserialize(message.ciphertext);
+      // The whole point: NOT the raw Bluetooth MAC any more -- the peer's
+      // real, learned `selfDeviceId`, which is what the RECEIVER's
+      // `isForUs` check actually compares against.
+      expect(frame.destination, bobRealSelfDeviceId);
+      expect(frame.source, 'device-a');
+
+      final ciphertextMessage = CiphertextCodec.decode(
+        frame.payloadType,
+        frame.payload,
+      );
+      final plaintext = await bob.crypto.decrypt(
+        const SignalProtocolAddress('device-a', 1),
+        ciphertextMessage,
+      );
+      expect(utf8Decode(plaintext), contains('hello bob'));
+
+      await stack.dispose();
+    },
+  );
+
+  test(
+    'test_E04_B13_encrypt_adapter_falls_back_to_mac_when_not_yet_announced',
+    () async {
+      // The pre-announce race window (task file §3 point 3): no
+      // `remoteSelfDeviceId` has been learned yet for this peer -- must
+      // regress nothing versus pre-E04-B13 behavior (the raw MAC is used
+      // exactly as before), not crash or throw.
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final stack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: 'device-a',
+        transport: newTransport(),
+      );
+
+      final bob = await _RemoteParty.create();
+      addTearDown(bob.close);
+      const bobAddress = SignalProtocolAddress('device-b', 1);
+      await stack.cryptoService.establishSession(bobAddress, await bob.bundle());
+
+      final message = await stack.sendMessage.call(
+        'conv-1',
+        'device-b',
+        _plaintext('hi'),
+      );
+      final frame = RelayPacketFrame.deserialize(message.ciphertext);
+      expect(frame.destination, 'device-b');
+
+      await stack.dispose();
+    },
+  );
+
   test('test_EARS_COMM_7_stack_degrades_when_crypto_init_fails', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     final throwingStore = _ThrowingStore(db);

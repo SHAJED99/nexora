@@ -222,6 +222,12 @@ class ConnectionRequestNotice {
 class _OutstandingRequest {
   _OutstandingRequest(this.peerDeviceId, this.completer);
 
+  /// The identity an accepted response's `frame.source` must equal
+  /// (`_takeMatchingCompleter`) — E04-B13: this is the peer's REAL, resolved
+  /// `selfDeviceId` (falling back to the Bluetooth MAC only when not yet
+  /// known), never the raw MAC [ensureSession]'s own caller addressed this
+  /// request by. See [PrekeyExchange._ensureSessionUncoalesced]'s own doc
+  /// comment for why these two are not the same string on real hardware.
   final String peerDeviceId;
   final Completer<Uint8List?> completer;
 }
@@ -481,8 +487,27 @@ class PrekeyExchange {
 
       final requestId = _nextRequestId();
       final completer = Completer<Uint8List?>();
+      // E04-B13: the provenance check in [_takeMatchingCompleter] compares
+      // this stored identity against an inbound response's `frame.source`
+      // -- and `frame.source` is ALWAYS the responder's own real
+      // `selfDeviceId` (every `_sendControlFrame` caller stamps `source:
+      // _stack.selfDeviceId`, task file §2 point 2), never the Bluetooth
+      // MAC [peerDeviceId] is. Before this task that was a latent
+      // provenance-matching bug hiding behind the SAME namespace confusion
+      // this whole chain fixes (harmless only because `peerDeviceId` and
+      // the peer's real `selfDeviceId` happened to already be identical in
+      // every test built before this one existed) -- resolving here, the
+      // SAME forward-only lookup [_sendControlFrame] itself uses to build
+      // the outbound frame, keeps the two in sync: this only ever matches
+      // when the peer's real identity was already known well enough to
+      // reach them at all (an unresolved fallback send never reaches the
+      // peer's own `PrekeyExchange` in the first place -- their own
+      // `isForUs` rejects a frame addressed by raw MAC -- so there is no
+      // reply to mismatch against in that case).
+      final expectedResponderId =
+          await resolveOutboundDestination(_stack.db, peerDeviceId);
       _outstandingRequests[requestId] =
-          _OutstandingRequest(peerDeviceId, completer);
+          _OutstandingRequest(expectedResponderId, completer);
 
       try {
         await _sendControlFrame(
@@ -625,6 +650,18 @@ class PrekeyExchange {
 
   Future<void> _sendControlFrame(String peerDeviceId, Uint8List body) async {
     final now = _clock();
+    // E04-B13: resolve the peer's real, learned `selfDeviceId` for the
+    // frame's own `destination` field -- forward-only, keyed by the SAME
+    // Bluetooth MAC (`peerDeviceId`) this method already sends to via
+    // `directSend` below (see `resolveOutboundDestination`'s doc comment in
+    // `messaging_stack.dart` for the full §1a security reasoning). Falls
+    // back to `peerDeviceId` itself when not yet known -- exactly what this
+    // line did before this task, so the narrow pre-announce race window
+    // regresses nothing.
+    final destination = await resolveOutboundDestination(
+      _stack.db,
+      peerDeviceId,
+    );
     // `OQ-E06-T08-2` retrofit: prepend the `controlKind` byte so
     // `InboundPipeline` can tell this sub-protocol's frames apart from
     // `DeliveryAckService`'s (both use `PayloadType.control`) — stripped
@@ -637,7 +674,7 @@ class PrekeyExchange {
     final frame = RelayPacketFrame(
       payloadType: PayloadType.control,
       packetId: _nextRequestId(),
-      destination: peerDeviceId,
+      destination: destination,
       source: _stack.selfDeviceId,
       priority: 0,
       createdAtMs: now.millisecondsSinceEpoch,
