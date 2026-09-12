@@ -323,14 +323,20 @@ class TransportApi {
   /// Runs on a dedicated background `TaskQueue` (not the platform/UI thread)
   /// — E04-B11: this method's native implementation
   /// (`BluetoothTransport.send`) does a genuine bounded blocking wait
-  /// (`SEND_TIMEOUT_MS = 3_000L`) for the write to settle, and Pigeon
-  /// dispatches a plain `@HostApi()` method on the platform thread by
-  /// default. Without this annotation, that wait freezes the entire app's
-  /// UI for up to 3 seconds whenever a write doesn't complete instantly —
-  /// confirmed live, twice, as a genuine ANR-class `InputDispatcher` "not
-  /// responsive" warning immediately followed by a self-inflicted
-  /// disconnect. This does not change `send()`'s contract (same timeout,
-  /// same disconnect-on-timeout behavior) — only which thread blocks.
+  /// (`SEND_TIMEOUT_MS = 3_000L`) for the write to settle, and without this
+  /// annotation Pigeon dispatches a plain `@HostApi()` method on the
+  /// platform thread by default — a designed multi-second wait there is a
+  /// real defect regardless of its exact user-visible symptom. Confirmed
+  /// live: `send()` now genuinely runs on a background worker thread
+  /// (`flutter-worker-2`, not the platform thread), and the write itself
+  /// completes near-instantly with the connection staying up afterward.
+  /// (An earlier version of this comment additionally cited a repeating
+  /// `InputDispatcher "not responsive"` warning as ANR evidence for this
+  /// bug specifically — retracted, see `E04-B11.md`'s own on-device
+  /// verification: that warning also reproduces with zero Bluetooth
+  /// activity at all, so it was never valid evidence for this claim.) This
+  /// does not change `send()`'s contract (same timeout, same
+  /// disconnect-on-timeout behavior) — only which thread blocks.
   Future<bool> send(String deviceId, Uint8List bytes) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.nexora.TransportApi.send$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
