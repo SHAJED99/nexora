@@ -1872,6 +1872,34 @@ and that is the strongest single argument for this disposition.**
   instruction to add it, not a proposal awaiting sign-off.
 - **built:** `E02-B01`, 2026-09-13.
 
+## GAP-043 — devices, this device's own Bluetooth name has no display anywhere
+
+- **status:** 🟢 built
+- **screen:** devices (`design/screens/devices.md`)
+- **spec:** `FR-DISC-001` — no FR requires this specific display; found via
+  human live-device testing (`E04-B19`), same category as `GAP-042`.
+- **design shows:** element 5 (`devices.md`'s own element table), the
+  fixed subtitle "Manage paired and nearby devices." The design has no
+  element for this device's own identity anywhere on the screen.
+- **derived from:** the existing `devicesSectionSubtitle` text token,
+  same style as element 5 immediately above it — no new visual language,
+  just an additional line rendered only once the native value resolves.
+- **proposal:** a new subtitle line, "Visible to nearby devices as:
+  &lt;name&gt;", populated from a new `TransportApi.getLocalDeviceName()`
+  Pigeon call (`BluetoothAdapter.name`). Deliberately the device's Bluetooth
+  **name**, never its address — `E04-B17`/`E04-B18`'s own live findings
+  showed a raw Bluetooth address read back from the OS can be a generic,
+  non-unique masked placeholder on some OEM builds, which would make an
+  "address" display actively misleading; the name is what a peer's own OS
+  pairing UI actually shows, so it is the only value that helps a user
+  complete a real pairing.
+- **approved by:** human request, 2026-09-13 (live device testing:
+  "add own device mac name somewhere. So user can understand what to
+  connect") — direct instruction, narrowed from the literal request (a MAC
+  address) to the device name for the reason above, disclosed rather than
+  silently substituted.
+- **built:** `E04-B19`, 2026-09-13.
+
 ## The usual suspects
 
 Checklist for the gap pass. In rough order of how often each is missed:

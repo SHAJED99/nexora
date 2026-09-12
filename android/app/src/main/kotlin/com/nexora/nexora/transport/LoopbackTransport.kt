@@ -89,6 +89,11 @@ class LoopbackTransport(
     }
   }
 
+  /** E04-B19: a fixed, documented loopback-double value -- no real adapter
+   * to query, matching every other native-only field's own pattern in this
+   * class (see [startDiscovery]'s `bonded` doc comment). */
+  fun getLocalDeviceName(): String = "Loopback (debug)"
+
   /**
    * Echoes [bytes] back on [deviceId] via `onDataReceived` after a short,
    * real delay — proving the round trip through the actual Pigeon boundary.

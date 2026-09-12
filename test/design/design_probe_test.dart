@@ -38,7 +38,7 @@ import 'package:nexora/core/routing_engine/route_cost_calculator.dart'
 import 'package:nexora/core/routing_engine/routing_engine.dart';
 import 'package:nexora/core/services/version_policy_service.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart'
-    show TransportEventsApi;
+    show TransportApi, TransportEventsApi;
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/chat/presentation/chat_controller.dart';
 import 'package:nexora/features/chat/presentation/chat_view.dart';
@@ -261,6 +261,16 @@ void main() {
       transportService = TransportService(
         binaryMessenger: messenger,
         messageChannelSuffix: 'devices-probe',
+      );
+      // E04-B19 (review round 1 finding 2): seed the new own-device-name
+      // line this task added, so this shared fixture reflects the screen's
+      // real displayed data shape rather than silently omitting it --
+      // matches `devices_view_test.dart`'s own mock handler for the same
+      // call.
+      messenger.setMockMessageHandler(
+        'dev.flutter.pigeon.nexora.TransportApi.getLocalDeviceName.devices-probe',
+        (ByteData? message) async => TransportApi.pigeonChannelCodec
+            .encodeMessage(<Object?>["Ahmed's Phone"]),
       );
       Get.put<TransportService>(transportService, permanent: true);
       DevicesBinding().dependencies();

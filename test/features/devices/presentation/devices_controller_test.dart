@@ -106,6 +106,61 @@ void main() {
     expect(controller.relationships, isEmpty);
   });
 
+  test(
+      'test_E04_B19_localDeviceName_populates_from_getLocalDeviceName_on_init',
+      () async {
+    const String suffix = 'devices-local-name';
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.getLocalDeviceName.$suffix',
+      (ByteData? message) async => TransportApi.pigeonChannelCodec
+          .encodeMessage(<Object?>["Ahmed's Phone"]),
+    );
+    final TransportService transportService = TransportService(
+      binaryMessenger: messenger,
+      messageChannelSuffix: suffix,
+    );
+    addTearDown(transportService.dispose);
+
+    final DevicesController withName = DevicesController(
+      repository,
+      blockUseCase,
+      transportService: transportService,
+    );
+    // GetxController's onInit() is a GetX lifecycle hook fired by
+    // Get.put/Get.find -- a bare constructor call (as every other test in
+    // this file does too, calling load() directly rather than relying on
+    // constructor-triggered init) never invokes it, so it's called
+    // explicitly here. The getLocalDeviceName() future inside is
+    // unawaited, so this test pumps the event queue afterward.
+    withName.onInit();
+    await pumpEventQueue();
+
+    expect(withName.localDeviceName.value, "Ahmed's Phone");
+  });
+
+  test('test_E04_B19_localDeviceName_stays_empty_when_the_native_call_fails',
+      () async {
+    // No mock handler registered for getLocalDeviceName on this suffix --
+    // the call fails (no plugin implementation found), and must be
+    // swallowed silently rather than crashing the screen.
+    const String suffix = 'devices-local-name-unmocked';
+    final TransportService transportService = TransportService(
+      binaryMessenger: messenger,
+      messageChannelSuffix: suffix,
+    );
+    addTearDown(transportService.dispose);
+
+    final DevicesController withoutName = DevicesController(
+      repository,
+      blockUseCase,
+      transportService: transportService,
+    );
+    withoutName.onInit();
+    await pumpEventQueue();
+
+    expect(withoutName.localDeviceName.value, isEmpty);
+  });
+
   group('discover()', () {
     /// Builds a `DevicesController` wired to a real `TransportService`
     /// running over `messenger` with a test-unique [suffix], and a mock
@@ -183,7 +238,7 @@ void main() {
       discovering.discover();
       // startDiscovery() is awaited on the mocked platform channel; pump
       // the microtask queue so the fire-and-forget future settles.
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       expect(startDiscoveryCalled, isTrue);
     });
@@ -207,7 +262,7 @@ void main() {
           buildDiscoveringController(suffix);
 
       discovering.discover();
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       expect(requestDiscoverableCalled, isTrue);
     });
@@ -220,7 +275,7 @@ void main() {
           buildDiscoveringController(suffix);
 
       discovering.discover();
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       pushDiscoveredDevice(
         suffix,
@@ -231,7 +286,7 @@ void main() {
         ),
       );
       // Let the discovery-stream listener's evaluate-and-append future run.
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       expect(discovering.relationships, hasLength(1));
       expect(discovering.relationships.single.deviceId, 'nearby-device-1');
@@ -247,7 +302,7 @@ void main() {
           buildDiscoveringController(suffix);
 
       discovering.discover();
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       final TransportDevice device = TransportDevice(
         id: 'repeated-device',
@@ -258,7 +313,7 @@ void main() {
       pushDiscoveredDevice(suffix, device);
       pushDiscoveredDevice(suffix, device);
       pushDiscoveredDevice(suffix, device);
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       expect(discovering.relationships, hasLength(1));
       expect(discovering.relationships.single.deviceId, 'repeated-device');
@@ -295,10 +350,10 @@ void main() {
       );
 
       discovering.discover();
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       discovering.onClose();
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       expect(stopDiscoveryCalled, isTrue);
     });
@@ -316,7 +371,7 @@ void main() {
           buildDiscoveringController(suffix);
 
       discovering.discover();
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       final TransportDevice device = TransportDevice(
         id: 'transient-device',
@@ -324,7 +379,7 @@ void main() {
         type: TransportType.bluetooth,
       );
       pushDiscoveredDevice(suffix, device);
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
       expect(discovering.relationships, hasLength(1));
 
       // block()/verify() end in load(), which re-reads only persisted rows.
@@ -333,7 +388,7 @@ void main() {
 
       // Next scan cycle re-announces the same device.
       pushDiscoveredDevice(suffix, device);
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       expect(discovering.relationships, hasLength(1));
       expect(discovering.relationships.single.deviceId, 'transient-device');
@@ -374,7 +429,7 @@ void main() {
         );
 
         discovering.discover();
-        await Future<void>.delayed(Duration.zero);
+        await pumpEventQueue();
 
         pushDiscoveredDevice(
           suffix,
@@ -384,7 +439,7 @@ void main() {
             type: TransportType.bluetooth,
           ),
         );
-        await Future<void>.delayed(Duration.zero);
+        await pumpEventQueue();
 
         expect(
           discovering.relationships,

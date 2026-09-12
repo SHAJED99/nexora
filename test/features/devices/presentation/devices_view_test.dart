@@ -4,10 +4,12 @@
 // state, and that "Verify" (element 31) appears only on the Unknown row.
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/design/tokens.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/devices/presentation/devices_binding.dart';
 import 'package:nexora/features/devices/presentation/devices_controller.dart';
@@ -24,6 +26,11 @@ void main() {
   final TestDefaultBinaryMessenger messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   var suffixCounter = 0;
+  // E04-B19: captures whichever suffix `setUp`'s own `newTransportService()`
+  // call used, so a test can register a mock handler (e.g. for
+  // `getLocalDeviceName`) against the SAME channel `DevicesBinding` already
+  // wired up, without needing its own separate TransportService/suffix.
+  late String currentSuffix;
 
   // E06-B02: `DevicesBinding` now resolves its `TransportService` via
   // `Get.find` (the same shared-instance registration `app/bindings.dart`
@@ -34,10 +41,13 @@ void main() {
   // distinct `messageChannelSuffix` per test keeps each test's platform
   // channel registration from clobbering another's, same as
   // `messaging_stack_test.dart`.
-  TransportService newTransportService() => TransportService(
-        binaryMessenger: messenger,
-        messageChannelSuffix: 'devices-view-test-${suffixCounter++}',
-      );
+  TransportService newTransportService() {
+    currentSuffix = 'devices-view-test-${suffixCounter++}';
+    return TransportService(
+      binaryMessenger: messenger,
+      messageChannelSuffix: currentSuffix,
+    );
+  }
 
   setUp(() async {
     Get.testMode = true;
@@ -176,6 +186,38 @@ void main() {
         .where((r) => r.deviceId == 'device-trusted')
         .single;
     expect(blocked.state, RelationshipState.blocked);
+  });
+
+  // E04-B19: the Devices screen shows this device's own Bluetooth name so
+  // a user pairing two phones can tell what name to look for in the OTHER
+  // phone's OS Bluetooth settings.
+  testWidgets(
+      'test_E04_B19_shows_this_devices_own_bluetooth_name_when_available',
+      (tester) async {
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.getLocalDeviceName.$currentSuffix',
+      (ByteData? message) async => TransportApi.pigeonChannelCodec
+          .encodeMessage(<Object?>["Ahmed's Phone"]),
+    );
+
+    await tester.pumpWidget(GetMaterialApp(home: const DevicesView()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Visible to nearby devices as: Ahmed\'s Phone'),
+        findsOneWidget);
+  });
+
+  testWidgets(
+      'test_E04_B19_shows_nothing_when_the_native_name_call_fails',
+      (tester) async {
+    // No mock handler registered for getLocalDeviceName -- the call fails,
+    // and the screen must render nothing for it rather than crash or show
+    // a placeholder.
+    await tester.pumpWidget(GetMaterialApp(home: const DevicesView()));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Visible to nearby devices'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   // E02-B01, review round 1 finding 1: the controller-level test proved

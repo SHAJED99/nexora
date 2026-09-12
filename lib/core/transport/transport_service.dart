@@ -111,6 +111,11 @@ class TransportService {
   /// discoverability reverts automatically after the native-side duration.
   Future<void> requestDiscoverable() => _api.requestDiscoverable();
 
+  /// E04-B19: this device's own Bluetooth name -- what a nearby device's OS
+  /// pairing UI shows for THIS phone. Deliberately never an address; see
+  /// `TransportApi.getLocalDeviceName`'s own doc comment.
+  Future<String> getLocalDeviceName() => _api.getLocalDeviceName();
+
   /// Requests a connection and awaits the eventual `onConnectionStateChanged`
   /// event for [deviceId] settling into `connected` or `failed` — never
   /// assumes `TransportApi.connect()`'s synchronous return means the

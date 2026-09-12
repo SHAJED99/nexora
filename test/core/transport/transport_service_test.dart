@@ -289,4 +289,28 @@ void main() {
 
     expect(called, isTrue);
   });
+
+  // E04-B19: getLocalDeviceName() -- proves the Dart facade round-trips a
+  // real String return value over the generated codec, same pattern as
+  // requestDiscoverable's void call above.
+  test('test_get_local_device_name_invokes_native_host_call', () async {
+    const String suffix = 'getlocaldevicename';
+    final TransportService service = TransportService(
+      binaryMessenger: messenger,
+      messageChannelSuffix: suffix,
+    );
+    addTearDown(service.dispose);
+
+    messenger.setMockMessageHandler(
+      'dev.flutter.pigeon.nexora.TransportApi.getLocalDeviceName.$suffix',
+      (ByteData? message) async {
+        return TransportApi.pigeonChannelCodec
+            .encodeMessage(<Object?>["Ahmed's Phone"]);
+      },
+    );
+
+    final String name = await service.getLocalDeviceName();
+
+    expect(name, "Ahmed's Phone");
+  });
 }

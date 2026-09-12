@@ -394,6 +394,18 @@ interface TransportApi {
    * return value or settled-state event to await.
    */
   fun requestDiscoverable()
+  /**
+   * This device's own Bluetooth name -- what a nearby device's OS-level
+   * Bluetooth pairing UI shows for THIS phone (`BluetoothAdapter.name` on
+   * the native side). Deliberately never an address: `E04-B17`/`E04-B18`
+   * found live evidence that a raw Bluetooth address read back from the OS
+   * can be a generic, non-unique masked placeholder rather than a real
+   * per-device MAC on some OEM builds -- showing that to a user as "your
+   * device's address" would be actively misleading. Never throws and never
+   * returns an empty string; the native side falls back to a clearly-
+   * labeled placeholder when no adapter/name is available.
+   */
+  fun getLocalDeviceName(): String
 
   companion object {
     /** The codec used by TransportApi. */
@@ -497,6 +509,21 @@ interface TransportApi {
             val wrapped: List<Any?> = try {
               api.requestDiscoverable()
               listOf(null)
+            } catch (exception: Throwable) {
+              TransportApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.nexora.TransportApi.getLocalDeviceName$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.getLocalDeviceName())
             } catch (exception: Throwable) {
               TransportApiPigeonUtils.wrapError(exception)
             }
