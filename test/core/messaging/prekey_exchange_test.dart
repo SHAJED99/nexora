@@ -663,6 +663,138 @@ void main() {
     );
   });
 
+  group('E04-B14: link-bound bundle-response provenance', () {
+    test(
+      'test_E04_B14_forged_bundle_response_on_wrong_link_is_rejected',
+      () async {
+        // The falsification this task's own DoD requires: right
+        // `requestId` (the real, cryptographically-random one this device
+        // actually issued), right CLAIMED `frame.source` (exactly what the
+        // pre-existing E04-B13 check alone requires) -- but delivered on a
+        // DIFFERENT physical link than the one the real request went out
+        // on. Before this task, `_takeMatchingCompleter` had no way to
+        // reject this; after it, the link mismatch alone must reject it.
+        final aSuffix = nextSuffix();
+        final bSuffix = nextSuffix();
+        final a = await newStack('device-a', aSuffix);
+        final b = await newStack('device-b-real-id', bSuffix);
+        addTearDown(a.dispose);
+        addTearDown(b.dispose);
+
+        const bMac = 'AA:BB:CC:DD:EE:07'; // the REAL link to B
+        const xMac = 'AA:BB:CC:DD:EE:08'; // a different device, also
+        // physically connected to A -- the attacker's own link.
+
+        a.inbound.start();
+        b.inbound.start();
+
+        // A already learned (E04-B12's identity-announce, simulated
+        // directly as its already-landed effect, mirroring E04-B13's own
+        // tests above) that the peer on `bMac` is really
+        // `device-b-real-id` -- so the ALREADY-EXISTING `frame.source`/
+        // `peerDeviceId` check (E04-B13) will PASS for a forged response
+        // that correctly claims this identity. This isolates the NEW
+        // link-binding check as the only thing standing between the
+        // forgery and acceptance.
+        await a.db.into(a.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: bMac,
+                state: RelationshipState.unknown.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('device-b-real-id'),
+              ),
+            );
+
+        // A's own outbound sends are captured, not forwarded anywhere --
+        // this test needs the REAL, unguessable `requestId` this task's own
+        // fix generates, and the only honest way to learn it is to observe
+        // the real wire bytes A actually transmits, exactly as a physical
+        // peer would receive them (mirrors `wireSend`'s own mock shape,
+        // minus the forwarding half).
+        String? capturedRequestId;
+        messenger.setMockMessageHandler(
+          'dev.flutter.pigeon.nexora.TransportApi.send.$aSuffix',
+          (ByteData? message) async {
+            final List<Object?> args =
+                TransportApi.pigeonChannelCodec.decodeMessage(message)!
+                    as List<Object?>;
+            final Uint8List bytes = args[1]! as Uint8List;
+            capturedRequestId ??= _tryExtractBundleRequestId(bytes);
+            return TransportApi.pigeonChannelCodec
+                .encodeMessage(<Object?>[true]);
+          },
+        );
+        messenger.setMockMessageHandler(
+          'dev.flutter.pigeon.nexora.TransportApi.connect.$aSuffix',
+          (ByteData? message) async {
+            final List<Object?> args =
+                TransportApi.pigeonChannelCodec.decodeMessage(message)!
+                    as List<Object?>;
+            final String deviceId = args[0]! as String;
+            scheduleMicrotask(() {
+              messenger.handlePlatformMessage(
+                'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$aSuffix',
+                TransportEventsApi.pigeonChannelCodec.encodeMessage(
+                  <Object?>[deviceId, ConnectionState.connected],
+                )!,
+                (ByteData? _) {},
+              );
+            });
+            return TransportApi.pigeonChannelCodec
+                .encodeMessage(<Object?>[true]);
+          },
+        );
+
+        await connectPeer(aSuffix, bMac);
+        await connectPeer(aSuffix, xMac);
+
+        final ensureFuture = a.prekeyExchange.ensureSession(
+          bMac,
+          timeout: const Duration(milliseconds: 500),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        expect(
+          capturedRequestId,
+          isNotNull,
+          reason: 'A must have sent its real bundleRequest by now',
+        );
+
+        final PreKeyBundle forgedBundle =
+            await b.identityService.getLocalPreKeyBundle();
+        final Uint8List forgedBytes = _forgedBundleResponseWireBytes(
+          from: 'device-b-real-id',
+          to: a.selfDeviceId,
+          requestId: capturedRequestId!,
+          bundle: forgedBundle,
+        );
+        messenger.handlePlatformMessage(
+          'dev.flutter.pigeon.nexora.TransportEventsApi.onDataReceived.$aSuffix',
+          TransportEventsApi.pigeonChannelCodec
+              .encodeMessage(<Object?>[xMac, forgedBytes]),
+          (ByteData? _) {},
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        // Rejected: no session established from the forged response.
+        expect(
+          await a.signalStore
+              .containsSession(const SignalProtocolAddress(bMac, 1)),
+          isFalse,
+        );
+        expect(a.prekeyExchange.counters.responsesAccepted, 0);
+        expect(
+          a.prekeyExchange.counters.responsesUnsolicited,
+          greaterThanOrEqualTo(1),
+        );
+
+        // The real outstanding request is untouched by the forgery -- it
+        // still times out honestly rather than silently "succeeding" via
+        // the forged path.
+        await expectLater(ensureFuture, throwsA(isA<TimeoutException>()));
+      },
+    );
+  });
+
   group('E10-T05: PrekeyExchange.connectionRequests', () {
     // Proves the emission side (both evaluation sites) against the real
     // control-frame path -- `connection_request_notification_source_test
@@ -793,4 +925,69 @@ RelayPacketFrame _controlResponseFrame({
     expiresAtMs: now + 60000,
     payload: body.toBytes(),
   );
+}
+
+/// E04-B14: parses a real `bundleRequest` control frame's own `requestId`
+/// back out of the exact wire bytes `PrekeyExchange._sendControlFrame`
+/// actually transmits (`prekey_exchange.dart`'s own header documents this
+/// layout) -- the only honest way for a test to learn the real,
+/// cryptographically-random `requestId` this task's own fix generates,
+/// short of reaching into `PrekeyExchange`'s private state. Returns `null`
+/// for any frame that is not a prekey-exchange `bundleRequest` (this
+/// device's own identity-announce and any other outbound control traffic
+/// sent on the same channel).
+String? _tryExtractBundleRequestId(Uint8List wireBytes) {
+  final RelayPacketFrame frame;
+  try {
+    frame = RelayPacketFrame.deserialize(wireBytes);
+  } on FormatException {
+    return null;
+  }
+  final Uint8List payload = frame.payload;
+  if (payload.length < 6) return null;
+  if (payload[0] != 1) return null; // kControlKindPrekeyExchange
+  if (payload[1] != 1) return null; // bundleRequest subType tag
+  final requestIdLen = ByteData.sublistView(payload).getUint32(2);
+  if (payload.length < 6 + requestIdLen) return null;
+  return String.fromCharCodes(payload.sublist(6, 6 + requestIdLen));
+}
+
+/// E04-B14: hand-builds a `bundleResponse` control frame's REAL wire bytes
+/// (including the `kControlKindPrekeyExchange` prefix byte
+/// `InboundPipeline._handleBuffer` strips before dispatch) -- unlike
+/// [_controlResponseFrame] above (which is delivered by calling
+/// `handleControlFrame` directly, bypassing `InboundPipeline` entirely),
+/// this is delivered through the REAL `TransportEventsApi.onDataReceived`
+/// channel so `InboundPipeline` itself observes the physical
+/// `linkDeviceId` it actually arrived on -- exactly what this task's own
+/// falsification test needs to exercise.
+Uint8List _forgedBundleResponseWireBytes({
+  required String from,
+  required String to,
+  required String requestId,
+  required PreKeyBundle bundle,
+}) {
+  final bundleBytes = PreKeyBundleCodec.serialize(bundle);
+  final requestIdBytes = Uint8List.fromList(requestId.codeUnits);
+  final body = BytesBuilder();
+  body.addByte(1); // kControlKindPrekeyExchange
+  body.addByte(2); // bundleResponse subType tag
+  final requestIdLen = ByteData(4)..setUint32(0, requestIdBytes.length);
+  body.add(requestIdLen.buffer.asUint8List());
+  body.add(requestIdBytes);
+  final bundleLen = ByteData(4)..setUint32(0, bundleBytes.length);
+  body.add(bundleLen.buffer.asUint8List());
+  body.add(bundleBytes);
+
+  final now = DateTime.now().millisecondsSinceEpoch;
+  return RelayPacketFrame(
+    payloadType: PayloadType.control,
+    packetId: 'pkt-forged-1',
+    destination: to,
+    source: from,
+    priority: 0,
+    createdAtMs: now,
+    expiresAtMs: now + 60000,
+    payload: body.toBytes(),
+  ).serialize();
 }

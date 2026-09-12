@@ -107,6 +107,28 @@
 // dropped and counted (`counters.responsesUnsolicited`), and never reaches
 // `establishSession` (task file §3/§8).
 //
+// **E04-B14: link-bound provenance, on top of the check above.** The check
+// above alone binds only to `requestId` (this file's own `_nextRequestId`,
+// now a cryptographically random 128-bit suffix, not a guessable counter)
+// plus the UNAUTHENTICATED `frame.source` — a device that can get bytes onto
+// this device's transport layer at all could claim any `frame.source` it
+// likes. `_takeMatchingCompleter` now ALSO requires the response to have
+// arrived on the SAME physical link (`linkDeviceId`,
+// `TransportService.incomingData(deviceId)`'s own key) the matching
+// outbound request was actually sent out on — mirroring
+// `IdentityAnnounceService.handleAnnounce`'s own established reasoning
+// (`identity_announce.dart`'s header) that a link is the one thing a direct,
+// point-to-point, OS-bonded connection can actually vouch for, independent
+// of anything the frame's own header claims. Root-caused before this fix
+// shipped: `CryptoService.establishSession` delegates trust entirely to
+// `DriftSignalProtocolStore.isTrustedIdentity`, which is textbook
+// trust-on-first-use — `previous == null` returns `true` unconditionally
+// (`drift_signal_store.dart`) — so a forged bundle accepted for a peer this
+// device has never before established a session with (`ensureSession`'s own
+// `containsSession` early-return means `establishSession` is ONLY ever
+// reached in exactly that case) would have been trusted outright, the same
+// shape as the confirmed S1 in `E09-B09`.
+//
 // Does NOT modify `IdentityService`, `DriftSignalProtocolStore`,
 // `CryptoService`, `SendMessageUseCase`, `InboundPipeline` or
 // `EvaluateConnectionRequestUseCase` (task file §4) — every dependency
@@ -125,6 +147,7 @@
 // ignore_for_file: prefer_initializing_formals
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
@@ -220,7 +243,7 @@ class ConnectionRequestNotice {
 /// `completer` resolves with the serialized bundle bytes on
 /// `bundleResponse`, or `null` on `bundleUnavailable`.
 class _OutstandingRequest {
-  _OutstandingRequest(this.peerDeviceId, this.completer);
+  _OutstandingRequest(this.peerDeviceId, this.linkDeviceId, this.completer);
 
   /// The identity an accepted response's `frame.source` must equal
   /// (`_takeMatchingCompleter`) — E04-B13: this is the peer's REAL, resolved
@@ -229,6 +252,16 @@ class _OutstandingRequest {
   /// request by. See [PrekeyExchange._ensureSessionUncoalesced]'s own doc
   /// comment for why these two are not the same string on real hardware.
   final String peerDeviceId;
+
+  /// E04-B14: the physical link (`TransportService.incomingData(deviceId)`'s
+  /// own key, a Bluetooth address) the matching outbound request was
+  /// actually sent out on — always the raw `peerDeviceId` param
+  /// [ensureSession]'s own caller passed in, since that is the SAME value
+  /// [PrekeyExchange._sendControlFrame] hands to `directSend` for the
+  /// physical transport call. An accepted response's `frame.source` above is
+  /// an unauthenticated CLAIM; this field is what the connection itself can
+  /// actually vouch for (see this file's header, "link-bound provenance").
+  final String linkDeviceId;
   final Completer<Uint8List?> completer;
 }
 
@@ -373,7 +406,35 @@ class PrekeyExchange {
     DateTime Function() clock = DateTime.now,
   })  : _stack = stack,
         _evaluateConnectionRequest = evaluateConnectionRequest,
-        _clock = clock;
+        _clock = clock {
+    // E04-B14: self-registered on `stack.inbound`'s OWN dedicated
+    // link-bound slot, mirroring E07-T06's own already-established
+    // reasoning (`inbound_pipeline.dart`'s header): this task's `files:`
+    // fence does not include `messaging_stack.dart`, so there is no
+    // external composition-root call site available the way every other
+    // control sub-protocol's own registration normally gets one. Safe to
+    // read `_stack.inbound` here — `MessagingStack`'s own constructor
+    // assigns `inbound` strictly BEFORE constructing `prekeyExchange`
+    // (`messaging_stack.dart`'s own field-construction order), so this is
+    // never a `LateInitializationError`.
+    try {
+      _stack.inbound.registerPrekeyExchangeHandler(_handleControlFrameOnLink);
+    } on StateError {
+      // A second `PrekeyExchange` constructed against a stack whose
+      // dedicated slot is already taken by another instance never receives
+      // inbound traffic -- exactly this file's own pre-existing invariant
+      // for the OLD external-registration mechanism (kept true, not
+      // introduced, by this task): production always constructs exactly
+      // one `PrekeyExchange` per `MessagingStack` (`messaging_stack.dart`'s
+      // own single construction site), so this only ever fires for a
+      // deliberate test double built to override behaviour without
+      // handling real inbound frames (e.g.
+      // `chat_controller_test.dart`'s own `_SlowPrekeyExchange`, whose own
+      // doc comment already documented this exact "only the ORIGINAL,
+      // registered instance ... is wired to stack.inbound" contract before
+      // this task existed).
+    }
+  }
 
   final MessagingStack _stack;
   final EvaluateConnectionRequestUseCase _evaluateConnectionRequest;
@@ -428,9 +489,27 @@ class PrekeyExchange {
 
   int _requestCounter = 0;
 
+  /// E04-B14: cryptographically secure — the pre-fix scheme
+  /// (`'${selfDeviceId}-pkx-$counter'`) was guessable by construction
+  /// (`selfDeviceId` is published in every outbound `frame.source`, and
+  /// `counter` is a small monotonic integer), a real, independent weakness
+  /// even after link-binding closes the physical-provenance gap. Never
+  /// reused across [PrekeyExchange] instances/processes as a security
+  /// property — only as a map key within THIS instance's own
+  /// [_outstandingRequests] lifetime (this file's header).
+  final Random _secureRandom = Random.secure();
+
   String _nextRequestId() {
     _requestCounter += 1;
-    return '${_stack.selfDeviceId}-pkx-$_requestCounter';
+    final randomBytes = List<int>.generate(16, (_) => _secureRandom.nextInt(256));
+    final randomHex =
+        randomBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    // `_requestCounter` is kept alongside the random suffix purely to
+    // preserve `_outstandingRequests`' own "unique per outstanding request"
+    // map semantics with certainty, not as any part of the unguessability
+    // property itself (task file §3) -- 128 bits of `Random.secure()`
+    // output alone already makes collision astronomically unlikely.
+    return '${_stack.selfDeviceId}-pkx-$_requestCounter-$randomHex';
   }
 
   /// Completes when a Signal session exists with [peerDeviceId] — the one
@@ -506,8 +585,13 @@ class PrekeyExchange {
       // reply to mismatch against in that case).
       final expectedResponderId =
           await resolveOutboundDestination(_stack.db, peerDeviceId);
+      // E04-B14: `peerDeviceId` here is the raw physical link (Bluetooth
+      // MAC) this request is about to be sent out on via `_sendControlFrame`
+      // -> `directSend` below -- the SAME value `_takeMatchingCompleter`
+      // will demand an accepted response actually arrived on (this file's
+      // header, "link-bound provenance").
       _outstandingRequests[requestId] =
-          _OutstandingRequest(expectedResponderId, completer);
+          _OutstandingRequest(expectedResponderId, peerDeviceId, completer);
 
       try {
         await _sendControlFrame(
@@ -547,7 +631,27 @@ class PrekeyExchange {
   /// this handler already guarantees a throw here cannot take the receive
   /// loop down; this method also never lets a malformed body escape as an
   /// uncaught exception itself).
-  Future<void> handleControlFrame(RelayPacketFrame frame) async {
+  ///
+  /// E04-B14: [linkDeviceId] is an ADDITIONAL, optional named parameter (not
+  /// a required positional one) so this method's own static type stays
+  /// assignable to `ControlHandler` (`Future&lt;void&gt; Function(RelayPacketFrame
+  /// frame)`, no extra parameter) — Dart's function-subtyping rules make a
+  /// function with an extra OPTIONAL parameter assignable wherever the
+  /// narrower type is expected. This keeps `messaging_stack.dart`'s own
+  /// pre-existing `inbound.registerControlHandler(kControlKindPrekeyExchange,
+  /// prekeyExchange.handleControlFrame)` call (out of this task's `files:`
+  /// fence) compiling unchanged, even though that registration is now
+  /// provably dead in production (see [_handleControlFrameOnLink]'s own doc
+  /// comment and `inbound_pipeline.dart`'s `_handleBuffer`). A caller that
+  /// omits [linkDeviceId] (this dead registration, and this file's own
+  /// pre-existing direct-call tests) gets `null`, which
+  /// [_takeMatchingCompleter] always treats as "no link to vouch for this,
+  /// reject" — fail-closed, never fail-open, for a call site with no link
+  /// information available at all.
+  Future<void> handleControlFrame(
+    RelayPacketFrame frame, {
+    String? linkDeviceId,
+  }) async {
     final _ControlBody body;
     try {
       body = _ControlBody.deserialize(frame.payload);
@@ -559,11 +663,27 @@ class PrekeyExchange {
       case _ControlSubType.bundleRequest:
         await _handleBundleRequest(frame.source, body.requestId);
       case _ControlSubType.bundleResponse:
-        _handleBundleResponse(frame.source, body.requestId, body.bundleBytes!);
+        _handleBundleResponse(
+          frame.source,
+          body.requestId,
+          body.bundleBytes!,
+          linkDeviceId,
+        );
       case _ControlSubType.bundleUnavailable:
-        _handleBundleUnavailable(frame.source, body.requestId);
+        _handleBundleUnavailable(frame.source, body.requestId, linkDeviceId);
     }
   }
+
+  /// The [PrekeyExchangeHandler] this class self-registers on
+  /// `stack.inbound` (this class's own constructor) — a thin adapter onto
+  /// [handleControlFrame] carrying the real [linkDeviceId] every genuine
+  /// inbound frame has, so [_takeMatchingCompleter] can actually enforce
+  /// link-bound provenance in production (task file §2).
+  Future<void> _handleControlFrameOnLink(
+    String linkDeviceId,
+    RelayPacketFrame frame,
+  ) =>
+      handleControlFrame(frame, linkDeviceId: linkDeviceId);
 
   Future<void> _handleBundleRequest(
     String peerDeviceId,
@@ -607,8 +727,10 @@ class PrekeyExchange {
     String peerDeviceId,
     String requestId,
     Uint8List bundleBytes,
+    String? linkDeviceId,
   ) {
-    final completer = _takeMatchingCompleter(peerDeviceId, requestId);
+    final completer =
+        _takeMatchingCompleter(peerDeviceId, requestId, linkDeviceId);
     if (completer == null) {
       counters.responsesUnsolicited++;
       return;
@@ -617,8 +739,13 @@ class PrekeyExchange {
     completer.complete(bundleBytes);
   }
 
-  void _handleBundleUnavailable(String peerDeviceId, String requestId) {
-    final completer = _takeMatchingCompleter(peerDeviceId, requestId);
+  void _handleBundleUnavailable(
+    String peerDeviceId,
+    String requestId,
+    String? linkDeviceId,
+  ) {
+    final completer =
+        _takeMatchingCompleter(peerDeviceId, requestId, linkDeviceId);
     if (completer == null) {
       counters.responsesUnsolicited++;
       return;
@@ -627,19 +754,34 @@ class PrekeyExchange {
   }
 
   /// Only a response/unavailable for a request THIS device actually made,
-  /// from the peer it was sent to, is accepted (EARS-COMM-16's sibling
-  /// risk, task file §3/§8) -- an unknown `requestId`, a `requestId` known
-  /// but from the wrong peer, or a `requestId` already resolved (a
+  /// from the peer it was sent to, AND arriving on the SAME physical link
+  /// that request was sent out on, is accepted (EARS-COMM-16's sibling risk,
+  /// task file §3/§8, E04-B14's own link-binding fix) -- an unknown
+  /// `requestId`, a `requestId` known but from the wrong claimed peer, a
+  /// `requestId` known and from the right claimed peer but arriving on the
+  /// WRONG link (E04-B14: a forged response, however well it claims
+  /// `frame.source`, is rejected here), or a `requestId` already resolved (a
   /// duplicate/late second frame for the same request, the mesh's own
   /// forwarding-duplicate hazard) is treated exactly like an unsolicited
   /// frame: dropped, counted, never touches [ensureSession]'s completer
   /// twice.
+  ///
+  /// [linkDeviceId] `null` (no link information available at all — only
+  /// [handleControlFrame]'s own dead direct-call path, this file's own
+  /// pre-existing tests, and `messaging_stack.dart`'s now-unreachable
+  /// generic registration can produce this) always fails the match:
+  /// fail-closed, never fail-open, for a call site this fix cannot vouch
+  /// for.
   Completer<Uint8List?>? _takeMatchingCompleter(
     String peerDeviceId,
     String requestId,
+    String? linkDeviceId,
   ) {
     final outstanding = _outstandingRequests[requestId];
     if (outstanding == null || outstanding.peerDeviceId != peerDeviceId) {
+      return null;
+    }
+    if (linkDeviceId == null || outstanding.linkDeviceId != linkDeviceId) {
       return null;
     }
     if (outstanding.completer.isCompleted) {
