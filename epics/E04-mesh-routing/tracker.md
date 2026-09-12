@@ -1,28 +1,34 @@
 # E04 · Mesh Discovery, Relay & Dynamic Routing · Progress
 
-**Status:** P1 not yet zero — `E04-B13` is the one remaining blocker on
-real message delivery. On-device Bluetooth verification (E04-B04-B08)
-found and fixed five real defects that zero unit test could have caught.
-`E04-B09` (bonding) merged. `E04-B10`'s on-device bonding proof
-substantially completed 2026-09-12 — real `createBond()` succeeded live,
-twice. `E04-B11` (a main-thread-blocking defect in `BluetoothTransport.
-send()`) fixed, merged. `E04-B12` — the deeper identity-namespace
-mismatch (Bluetooth MAC vs. Signal Protocol `selfDeviceId`, confirmed
-live) — was presented to the human as a foundational choice (rule 3,
-three options + an advisory recommendation); the human said "do what is
-best," delegating to the recommendation (Option A). **`E04-B12` (the
-identity-announce protocol + storage half of Option A) is now DONE**,
-independently reviewed (opus, APPROVE), merged. The reviewer flagged one
-real, non-blocking-for-B12 security finding carried forward as a hard
-precondition on `E04-B13`: the announced identity is currently
-unauthenticated (nothing yet reads the new column, so it's inert today,
-but a naive consumer in B13 would let one device claim to be another).
-**`E04-B13`** (wiring the learned identity into actual outbound message
-addressing — the part that makes a real message actually arrive) is
-filed, todo, with that security precondition built into its own contract
-before any implementation starts.
+**Status:** `E04-B11`→`E04-B12`→`E04-B13` chain (the fix for the original
+"I can not send any message" report) is code-complete and merged, but
+**NOT yet live-verified on two real devices** — do not treat the original
+bug as closed until that happens. `E04-B11` fixed a main-thread-blocking
+transport defect. `E04-B12` built an identity-announce protocol so two
+devices learn each other's real cryptographic identity instead of only a
+Bluetooth MAC (human-chosen fix approach, Option A — asked directly,
+answered "do what is best," delegating to the presented recommendation).
+`E04-B13` wired that learned identity into actual outbound message
+addressing for 1:1 chat specifically — the literal fix for the original
+report. Both B12 and B13 passed independent (opus) review, including
+adversarial security scrutiny of a deliberate, narrow addressing-check
+bypass and a resolution-direction constraint (forward-only, never an
+unauthenticated reverse lookup) — both confirmed sound by direct code
+tracing and mutation-falsification, not just described. **Two real,
+non-blocking findings surfaced during B13's own review, carried forward
+as their own tracked tasks rather than left as prose**: `E04-B14`
+(a bundle-response provenance gap — newly reachable now that addressing
+actually works, not a regression this session caused) and `E04-B15` (the
+identical raw-MAC-addressing defect probably also affects delivery acks/
+calls/groups/location, deliberately out of B13's own scope). On-hardware
+verification for B13 itself was attempted but blocked by the Pixel 8 Pro
+going offline mid-session — substituted with adversarial two-`MessagingStack`
+Dart integration tests, but a real two-device send/receive pass is still
+the one thing standing between this chain and the original bug report
+being genuinely closed.
 **Started:** 2026-08-27 · **Completed:** — · **Progress:** 10/10 tasks,
-18/20 tasks+bugs (E04-B13 todo, P1 — final blocker on real message delivery)
+20/23 tasks+bugs (E04-B10's own last DoD item, E04-B14, E04-B15 open;
+E04-B13 done-not-verified pending a live two-device pass)
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -46,7 +52,9 @@ before any implementation starts.
 - [~] E04-B10 · Prove the E04-B09 bonding flow live on real hardware (F1/F2 confirmation + E04-B08 regression re-check on the newly-bonded peer) · todo, substantially complete · depends on E04-B09 (done) — real `createBond()` succeeded live, twice, 2026-09-12 (RF/UI-automation blockers from the prior session resolved: Bluetooth toggled off/on on both devices + physically together). F1 implicitly confirmed (no discovery/bond race observed); F2 partially confirmed (bond+connect succeeded plainly, settle/retry path itself not isolated); E04-B08 regression confirmed clean. Still open: a rejected-pairing → `FAILED` check was never attempted. See task file's own updated Run log for full detail.
 - [x] E04-B11 · `BluetoothTransport.send()` blocks Pigeon's platform thread for up to 3s and self-disconnects on a fresh bond · done · orchestrator (sonnet, direct — real hardware in hand) → reviewer (opus, post-hoc — see note) · PR #227. Root cause: `send`'s Pigeon channel had no `TaskQueue`, so its genuine bounded blocking wait (`CountDownLatch.await`, 3s) ran on the platform thread by default. Fixed via `@TaskQueue(type: TaskQueueType.serialBackgroundThread)`; live-verified via thread-name/timing instrumentation (added, observed, fully reverted) that `send()` now runs on a background worker and the write completes near-instantly. **Process note, disclosed plainly, not hidden**: this PR was merged by the orchestrator without dispatching a review first — a real rule-5 gap (see `L-process-016`, `agent/memory/lessons/process.md`). A post-hoc independent review was dispatched immediately after the gap was noticed: verdict CHANGES (documentation only, two stale comments — no revert warranted, fix itself independently re-verified sound). Both comments corrected in a same-day follow-up commit; `status` reflects the corrected, reviewed state.
 - [x] E04-B12 · Identity-announce protocol: learn a peer's real `selfDeviceId` over the transport (Option A, part 1/2) · done · builder (sonnet) → reviewer (opus) · PR #236, APPROVE. Human chose Option A 2026-09-13 ("do what is best," delegating to the presented recommendation). New `kControlKindIdentityAnnounce` control-kind, a narrow (verified via mutation-falsification) `isForUs` bypass scoped ONLY to that controlKind, additive `Relationships.remoteSelfDeviceId` schema column (v20→v21, migration-tested against a hand-built v20 DB). Both real physical devices' own production databases confirmed live to have migrated correctly; a full in-app connect-and-observe pass was blocked by an ADB/MIUI synthetic-input restriction (disclosed honestly, not claimed complete) — the announce round trip is instead proven by a real two-`MessagingStack` Dart integration test. **Reviewer finding, carried forward as a hard precondition on E04-B13, not a defect here**: the announced identity string is currently unauthenticated (nothing binds it to the announcing peer) — inert today since nothing yet reads the column, but a real hijack primitive the moment a consumer does a naive reverse lookup. 1507/1507 tests, `flutter analyze` clean.
-- [ ] E04-B13 · Wire the learned `remoteSelfDeviceId` into outbound `RelayPacketFrame` addressing — the half that actually fixes real message delivery (Option A, part 2/2) · todo · depends on E04-B12 (done) · priority P1, same human decision as E04-B12 · **must address E04-B12's own reviewer-flagged authentication gap before or as part of implementation** — this is the final blocker on the original "I can not send any message" report.
+- [x] E04-B13 · Wire the learned `remoteSelfDeviceId` into outbound `RelayPacketFrame` addressing — the half that actually fixes real message delivery (Option A, part 2/2) · **done, NOT verified** · builder (sonnet) → reviewer (opus) · PR #239, APPROVE. §1a's security precondition resolved forward-only (no reverse lookup anywhere in the repo — reviewer confirmed via exhaustive grep), a dedicated spoofing-falsification test, reviewer's own adversarial mutation testing (broke the fix, confirmed it fails for the right reason). Real, disclosed `files:` fence widening: the actual 1:1-chat frame-construction site turned out to live in `messaging_stack.dart`'s `encryptAdapter`, not the originally-fenced `relay_engine.dart`/`connection_ensuring_sender.dart` (both confirmed to construct zero frames). A second latent bug found+fixed along the way: `PrekeyExchange`'s response-provenance was comparing against the raw MAC instead of resolved identity — would have silently broken real bundle-response acceptance on hardware. **On-hardware verification NOT achieved** — the Pixel 8 Pro went offline mid-session (`adb connect` failed outright); substituted with real two-`MessagingStack` integration tests. 1512/1512 tests, `flutter analyze` clean. **Two real findings from review carried forward as their own tasks**: `E04-B14` (a bundle-response provenance/forgery gap, newly reachable now that addressing works — not a regression, a pre-existing gap this fix made live) and `E04-B15` (the same raw-MAC defect likely affects delivery-acks/calls/groups/location, deliberately out of scope here). **The original bug report cannot be called closed until a real two-device send/receive pass happens.**
+- [ ] E04-B14 · `PrekeyExchange`'s bundle-response provenance binds only to an unauthenticated claimed identity + a guessable request id, not the physical link a response arrived on — a forged-response injection path newly reachable since E04-B13 · todo · depends on E04-B13 (done) · found by E04-B13's own reviewer, same risk class as the confirmed S1 in `E09-B09` (`frame.source` trust exploit) · priority P2 pending a fresh human severity read (not asserted P1 unilaterally).
+- [ ] E04-B15 · The same raw-Bluetooth-MAC-addressing defect E04-B13 fixed for 1:1 chat likely also affects delivery acks, calls, groups, and location sharing (11 of 13 total `RelayPacketFrame(` construction sites in `lib/` were left untouched, deliberately, to keep E04-B13 at `size: M`) · todo · depends on E04-B13 (done) · priority P2 pending a fresh human severity read.
 
 **B08/B09 note:** E04-B08 was re-scoped on 2026-09-11 (after two human
 decisions cleared its `bug_priorities` gate) to the identity-mapping fix
@@ -470,3 +478,4 @@ chain — can start once discovery is real, in parallel with T03c/T04.
   advisory recommendation already on record"). The two physical devices
   were released back to normal use once this confirmation was complete.
 - 2026-09-13 Asked the human directly which of E04-B12's §2a options to pick. Answer: "do what is best," delegating the foundational choice to the orchestrator's own already-presented advisory recommendation (Option A) -- this is the rule-3 human decision landing, not the extended asleep-autonomy grant being stretched to cover it. Rescoped E04-B12 from "implement Option A in full" (which would have re-keyed `Relationship.deviceId` and changed the Devices screen UI) down to just the announce/storage half -- narrower, with zero UI/design-contract impact -- and split the outbound-wiring half into a new, dependent task `E04-B13`, avoiding an oversized single task. `E04-B12` built (new one-way identity-announce control protocol, a narrow and falsification-tested `isForUs` bypass, an additive schema column), independently reviewed (opus, APPROVE) with one real finding carried forward as a hard precondition on `E04-B13` rather than blocking `E04-B12` itself: the announced identity is currently unauthenticated, harmless today (nothing reads the column yet) but a real spoofing/hijack risk the moment something does a naive reverse lookup from it. Squash-merged PR #236. `E04-B13` filed (todo, P1) with that security requirement built directly into its own contract. This is now the single remaining piece standing between the mesh's proven transport/bonding/identity-learning stack and an actual message arriving on a real device.
+- 2026-09-13 (continued) `E04-B13` built and merged -- the task that wires E04-B12's learned identity into actual outbound message addressing, closing the identity-mismatch bug for 1:1 chat specifically. Resolved its own §1a security precondition as forward-only (confirmed by the reviewer via an exhaustive repo-wide grep: no reverse lookup exists anywhere), backed by a dedicated spoofing-falsification test the reviewer independently tried to break (succeeded in breaking the FIX, not the test, confirming it fails for the right reason when reverted). Found a real, disclosed `files:` fence error along the way (the actual 1:1-chat frame-construction site lives in `messaging_stack.dart`, not the originally-fenced files, both confirmed to construct zero frames on inspection) and a second latent bug (`PrekeyExchange` comparing the raw MAC instead of resolved identity in its own response-provenance check, which would have silently broken real bundle-response acceptance). On-hardware verification was attempted but blocked -- the Pixel 8 Pro went offline mid-session and would not reconnect -- substituted with adversarial two-`MessagingStack` Dart integration tests instead. Squash-merged PR #239, 1512/1512 tests. Two real findings from review filed as their own tasks rather than left as prose: `E04-B14` (a bundle-response forgery gap the fix makes newly reachable, same risk class as the confirmed `E09-B09` S1) and `E04-B15` (the identical addressing defect probably affecting delivery-acks/calls/groups/location, 11 of 13 total frame-construction sites left untouched by design). **The B11->B12->B13 chain is code-complete and twice independently reviewed, but the original human bug report cannot be honestly called closed until a real message is observed arriving on a second physical device** -- that live pass is the next and final thing needed.
