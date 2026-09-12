@@ -466,6 +466,12 @@ void main() {
 
       // Byte-identical schema check on every pre-existing table.
       for (final tableName in _preExistingTables) {
+        // `relationships`: E04-B12 (current `schemaVersion` 21) legitimately
+        // adds one nullable column (`remote_self_device_id`) -- excluded
+        // here and asserted separately below, mirroring the identical
+        // documented exception in
+        // `test/core/persistence/database_migration_test.dart`.
+        if (tableName == 'relationships') continue;
         final rows = await db
             .customSelect(
               "SELECT sql FROM sqlite_master WHERE type='table' "
@@ -479,6 +485,23 @@ void main() {
           reason: '$tableName DDL should be byte-identical after migration',
         );
       }
+
+      final relationshipsRows = await db
+          .customSelect(
+            "SELECT sql FROM sqlite_master WHERE type='table' "
+            "AND name='relationships'",
+          )
+          .get();
+      expect(relationshipsRows, hasLength(1));
+      expect(
+        relationshipsRows.single.read<String>('sql'),
+        'CREATE TABLE relationships (\n'
+        '      device_id TEXT NOT NULL,\n'
+        '      state TEXT NOT NULL,\n'
+        '      updated_at INTEGER NOT NULL, "remote_self_device_id" TEXT NULL,\n'
+        '      PRIMARY KEY (device_id)\n'
+        '    )',
+      );
     },
   );
 

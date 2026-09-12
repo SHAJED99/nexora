@@ -448,8 +448,24 @@ class $RelationshipsTable extends Relationships
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _remoteSelfDeviceIdMeta =
+      const VerificationMeta('remoteSelfDeviceId');
   @override
-  List<GeneratedColumn> get $columns => [deviceId, state, updatedAt];
+  late final GeneratedColumn<String> remoteSelfDeviceId =
+      GeneratedColumn<String>(
+        'remote_self_device_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    deviceId,
+    state,
+    updatedAt,
+    remoteSelfDeviceId,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -486,6 +502,15 @@ class $RelationshipsTable extends Relationships
     } else if (isInserting) {
       context.missing(_updatedAtMeta);
     }
+    if (data.containsKey('remote_self_device_id')) {
+      context.handle(
+        _remoteSelfDeviceIdMeta,
+        remoteSelfDeviceId.isAcceptableOrUnknown(
+          data['remote_self_device_id']!,
+          _remoteSelfDeviceIdMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -507,6 +532,10 @@ class $RelationshipsTable extends Relationships
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
       )!,
+      remoteSelfDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_self_device_id'],
+      ),
     );
   }
 
@@ -520,10 +549,23 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
   final String deviceId;
   final String state;
   final DateTime updatedAt;
+
+  /// E04-B12 (Option A, part 1/2 — see `identity_announce.dart`): the
+  /// peer's own real `selfDeviceId`, learned once via the identity-announce
+  /// control protocol and stored keyed by [deviceId] above, which stays
+  /// exactly what it always was — the Bluetooth-address transport id this
+  /// relationship row was first created under. This column does NOT
+  /// replace [deviceId] as the row's key (task file §2a's scope-refinement
+  /// note: zero re-keying of existing relationship rows, zero Devices-
+  /// screen/UI change). `null` until a peer has announced at least once;
+  /// additive migration (schema v20 -> v21), no backfill for existing rows
+  /// (they simply have not announced yet).
+  final String? remoteSelfDeviceId;
   const RelationshipRow({
     required this.deviceId,
     required this.state,
     required this.updatedAt,
+    this.remoteSelfDeviceId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -531,6 +573,9 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
     map['device_id'] = Variable<String>(deviceId);
     map['state'] = Variable<String>(state);
     map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || remoteSelfDeviceId != null) {
+      map['remote_self_device_id'] = Variable<String>(remoteSelfDeviceId);
+    }
     return map;
   }
 
@@ -539,6 +584,9 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
       deviceId: Value(deviceId),
       state: Value(state),
       updatedAt: Value(updatedAt),
+      remoteSelfDeviceId: remoteSelfDeviceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteSelfDeviceId),
     );
   }
 
@@ -551,6 +599,9 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
       deviceId: serializer.fromJson<String>(json['deviceId']),
       state: serializer.fromJson<String>(json['state']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      remoteSelfDeviceId: serializer.fromJson<String?>(
+        json['remoteSelfDeviceId'],
+      ),
     );
   }
   @override
@@ -560,6 +611,7 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
       'deviceId': serializer.toJson<String>(deviceId),
       'state': serializer.toJson<String>(state),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'remoteSelfDeviceId': serializer.toJson<String?>(remoteSelfDeviceId),
     };
   }
 
@@ -567,16 +619,23 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
     String? deviceId,
     String? state,
     DateTime? updatedAt,
+    Value<String?> remoteSelfDeviceId = const Value.absent(),
   }) => RelationshipRow(
     deviceId: deviceId ?? this.deviceId,
     state: state ?? this.state,
     updatedAt: updatedAt ?? this.updatedAt,
+    remoteSelfDeviceId: remoteSelfDeviceId.present
+        ? remoteSelfDeviceId.value
+        : this.remoteSelfDeviceId,
   );
   RelationshipRow copyWithCompanion(RelationshipsCompanion data) {
     return RelationshipRow(
       deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
       state: data.state.present ? data.state.value : this.state,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      remoteSelfDeviceId: data.remoteSelfDeviceId.present
+          ? data.remoteSelfDeviceId.value
+          : this.remoteSelfDeviceId,
     );
   }
 
@@ -585,37 +644,43 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
     return (StringBuffer('RelationshipRow(')
           ..write('deviceId: $deviceId, ')
           ..write('state: $state, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('remoteSelfDeviceId: $remoteSelfDeviceId')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(deviceId, state, updatedAt);
+  int get hashCode =>
+      Object.hash(deviceId, state, updatedAt, remoteSelfDeviceId);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is RelationshipRow &&
           other.deviceId == this.deviceId &&
           other.state == this.state &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.remoteSelfDeviceId == this.remoteSelfDeviceId);
 }
 
 class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
   final Value<String> deviceId;
   final Value<String> state;
   final Value<DateTime> updatedAt;
+  final Value<String?> remoteSelfDeviceId;
   final Value<int> rowid;
   const RelationshipsCompanion({
     this.deviceId = const Value.absent(),
     this.state = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.remoteSelfDeviceId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   RelationshipsCompanion.insert({
     required String deviceId,
     required String state,
     required DateTime updatedAt,
+    this.remoteSelfDeviceId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : deviceId = Value(deviceId),
        state = Value(state),
@@ -624,12 +689,15 @@ class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
     Expression<String>? deviceId,
     Expression<String>? state,
     Expression<DateTime>? updatedAt,
+    Expression<String>? remoteSelfDeviceId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (deviceId != null) 'device_id': deviceId,
       if (state != null) 'state': state,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (remoteSelfDeviceId != null)
+        'remote_self_device_id': remoteSelfDeviceId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -638,12 +706,14 @@ class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
     Value<String>? deviceId,
     Value<String>? state,
     Value<DateTime>? updatedAt,
+    Value<String?>? remoteSelfDeviceId,
     Value<int>? rowid,
   }) {
     return RelationshipsCompanion(
       deviceId: deviceId ?? this.deviceId,
       state: state ?? this.state,
       updatedAt: updatedAt ?? this.updatedAt,
+      remoteSelfDeviceId: remoteSelfDeviceId ?? this.remoteSelfDeviceId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -660,6 +730,9 @@ class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
+    if (remoteSelfDeviceId.present) {
+      map['remote_self_device_id'] = Variable<String>(remoteSelfDeviceId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -672,6 +745,7 @@ class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
           ..write('deviceId: $deviceId, ')
           ..write('state: $state, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('remoteSelfDeviceId: $remoteSelfDeviceId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -10129,6 +10203,7 @@ typedef $$RelationshipsTableCreateCompanionBuilder =
       required String deviceId,
       required String state,
       required DateTime updatedAt,
+      Value<String?> remoteSelfDeviceId,
       Value<int> rowid,
     });
 typedef $$RelationshipsTableUpdateCompanionBuilder =
@@ -10136,6 +10211,7 @@ typedef $$RelationshipsTableUpdateCompanionBuilder =
       Value<String> deviceId,
       Value<String> state,
       Value<DateTime> updatedAt,
+      Value<String?> remoteSelfDeviceId,
       Value<int> rowid,
     });
 
@@ -10160,6 +10236,11 @@ class $$RelationshipsTableFilterComposer
 
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteSelfDeviceId => $composableBuilder(
+    column: $table.remoteSelfDeviceId,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -10187,6 +10268,11 @@ class $$RelationshipsTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get remoteSelfDeviceId => $composableBuilder(
+    column: $table.remoteSelfDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$RelationshipsTableAnnotationComposer
@@ -10206,6 +10292,11 @@ class $$RelationshipsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get remoteSelfDeviceId => $composableBuilder(
+    column: $table.remoteSelfDeviceId,
+    builder: (column) => column,
+  );
 }
 
 class $$RelationshipsTableTableManager
@@ -10242,11 +10333,13 @@ class $$RelationshipsTableTableManager
                 Value<String> deviceId = const Value.absent(),
                 Value<String> state = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<String?> remoteSelfDeviceId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RelationshipsCompanion(
                 deviceId: deviceId,
                 state: state,
                 updatedAt: updatedAt,
+                remoteSelfDeviceId: remoteSelfDeviceId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -10254,11 +10347,13 @@ class $$RelationshipsTableTableManager
                 required String deviceId,
                 required String state,
                 required DateTime updatedAt,
+                Value<String?> remoteSelfDeviceId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RelationshipsCompanion.insert(
                 deviceId: deviceId,
                 state: state,
                 updatedAt: updatedAt,
+                remoteSelfDeviceId: remoteSelfDeviceId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

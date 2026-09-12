@@ -261,6 +261,15 @@ void main() {
       // task's §4). Compares the actual DDL text against the pre-migration
       // snapshot taken above -- not just that a same-named table exists.
       for (final tableName in preExistingTables) {
+        // `relationships`: E04-B12 (a later schema-bumping task, current
+        // `schemaVersion` 21) legitimately adds one nullable column
+        // (`remote_self_device_id`) to this pre-existing table -- excluded
+        // from the strict byte-identical check here and asserted
+        // separately, right after this loop, mirroring the identical
+        // documented exception in
+        // `test/core/persistence/database_migration_test.dart`'s own
+        // `test_EARS_STORE_3_v13_upgrades_to_v14_additively`.
+        if (tableName == 'relationships') continue;
         final rows = await db
             .customSelect(
               "SELECT sql FROM sqlite_master WHERE type='table' "
@@ -274,6 +283,23 @@ void main() {
           reason: '$tableName DDL should be byte-identical after migration',
         );
       }
+
+      final relationshipsRows = await db
+          .customSelect(
+            "SELECT sql FROM sqlite_master WHERE type='table' "
+            "AND name='relationships'",
+          )
+          .get();
+      expect(relationshipsRows, hasLength(1));
+      expect(
+        relationshipsRows.single.read<String>('sql'),
+        'CREATE TABLE relationships (\n'
+        '      device_id TEXT NOT NULL,\n'
+        '      state TEXT NOT NULL,\n'
+        '      updated_at INTEGER NOT NULL, "remote_self_device_id" TEXT NULL,\n'
+        '      PRIMARY KEY (device_id)\n'
+        '    )',
+      );
     },
   );
 

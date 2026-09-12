@@ -167,6 +167,7 @@ import '../../features/messaging/domain/message.dart';
 import '../../features/trust/data/relationship_repository.dart';
 import '../../features/trust/domain/relationship.dart' show RelationshipState;
 import 'ciphertext_codec.dart';
+import 'identity_announce.dart' show kControlKindIdentityAnnounce;
 import 'messaging_stack.dart';
 import 'relay_packet_frame.dart';
 
@@ -182,6 +183,18 @@ import 'relay_packet_frame.dart';
 /// This typedef's signature is otherwise unchanged from E06-T05/T07: only
 /// the dispatch mechanism above it changed, not what a handler is handed.
 typedef ControlHandler = Future<void> Function(RelayPacketFrame frame);
+
+/// E04-B12: the identity-announce handler's own signature — deliberately
+/// NOT [ControlHandler], because this handler needs [linkDeviceId] (the
+/// Bluetooth address `TransportService.incomingData(deviceId)` delivered
+/// the frame on) that no other control handler needs, since this is the
+/// one controlKind whose frame bypasses the normal `isForUs`-gated
+/// dispatch entirely (see [InboundPipeline._handleBuffer] and
+/// `identity_announce.dart`'s header for the full justification).
+typedef IdentityAnnounceHandler = Future<void> Function(
+  String linkDeviceId,
+  RelayPacketFrame frame,
+);
 
 /// Per-claimed-sender relay admission limit (`FR-ABUSE-001`, E13-T03's own
 /// decision — see the task's Run log). 60 forwarded packets per claimed
@@ -357,6 +370,12 @@ class InboundPipeline {
   /// key rather than fighting over the single slot this field used to be.
   final Map<int, ControlHandler> _controlHandlers = <int, ControlHandler>{};
 
+  /// E04-B12: the ONE handler slot for [kControlKindIdentityAnnounce] — a
+  /// dedicated field, not a slot in [_controlHandlers], because this is the
+  /// one controlKind whose dispatch bypasses `isForUs` and needs the link's
+  /// own device id (see [IdentityAnnounceHandler]'s own doc comment).
+  IdentityAnnounceHandler? _identityAnnounceHandler;
+
   final InboundCounters counters = InboundCounters();
 
   final StreamController<Message> _deliveredController =
@@ -367,6 +386,21 @@ class InboundPipeline {
   /// and T11's chat screen, not a buffer that holds this pipeline open when
   /// nothing listens.
   Stream<Message> get delivered => _deliveredController.stream;
+
+  /// E04-B12: one event per Bluetooth-address device id that reaches
+  /// `ConnectionState.connected` (emitted from [_onConnectionStateChanged],
+  /// same moment an `incomingData` subscription opens for it) — the seam
+  /// `messaging_stack.dart` listens on to fire an identity-announce
+  /// automatically, mirroring exactly how [deliveryAckService] already
+  /// listens on [delivered] there. Broadcast, and — like [delivered] —
+  /// produces nothing until [start] actually runs, so merely subscribing to
+  /// it (as `messaging_stack.dart`'s constructor does) starts nothing by
+  /// itself, keeping this file's own "does NOT start anything" contract
+  /// (`messaging_stack.dart`'s header) intact.
+  Stream<String> get peerConnected => _peerConnectedController.stream;
+
+  final StreamController<String> _peerConnectedController =
+      StreamController<String>.broadcast();
 
   /// The declared extension point for `PayloadType.control` frames (task
   /// file §3/§5), keyed by [controlKind] since `OQ-E06-T08-2`'s retrofit.
@@ -386,6 +420,22 @@ class InboundPipeline {
       );
     }
     _controlHandlers[controlKind] = handler;
+  }
+
+  /// E04-B12: the ONE registration slot for [kControlKindIdentityAnnounce]
+  /// — separate from [registerControlHandler] because this handler's own
+  /// signature ([IdentityAnnounceHandler]) carries the link's device id, not
+  /// just the frame (see that typedef's own doc comment). Throws
+  /// [StateError] on a second call, mirroring [registerControlHandler]'s
+  /// own guard.
+  void registerIdentityAnnounceHandler(IdentityAnnounceHandler handler) {
+    if (_identityAnnounceHandler != null) {
+      throw StateError(
+        'InboundPipeline.registerIdentityAnnounceHandler: a handler is '
+        'already registered',
+      );
+    }
+    _identityAnnounceHandler = handler;
   }
 
   /// Begins consuming `TransportService.incomingData` for every connected
@@ -470,6 +520,7 @@ class InboundPipeline {
     _dataSubscriptions.clear();
 
     await _deliveredController.close();
+    await _peerConnectedController.close();
   }
 
   void _onDeviceDiscovered(TransportDevice device) {
@@ -486,12 +537,28 @@ class InboundPipeline {
     if (state == ConnectionState.connected) {
       // Idempotent: a repeated `connected` event for an id already
       // subscribed must not open a second incomingData listener (the same
-      // double-delivery hazard `start()`'s own idempotency guards against).
+      // double-delivery hazard `start()`'s own idempotency guards against),
+      // and must not re-emit `peerConnected` for a connection that never
+      // actually dropped. `putIfAbsent`'s callback only runs the first time
+      // a given id transitions to connected since its last disconnect
+      // (`_dataSubscriptions.remove` below removes the key on
+      // disconnect/failure), so a genuine reconnect DOES re-emit — correct,
+      // since E04-B12's identity-announce should fire again on every fresh
+      // connection.
+      if (!_dataSubscriptions.containsKey(deviceId)) {
+        // E04-B12: emitted at the same moment the incoming-data
+        // subscription opens, before this method returns — the seam
+        // `messaging_stack.dart` fires an identity-announce off (see
+        // [peerConnected]'s own doc comment).
+        if (!_peerConnectedController.isClosed) {
+          _peerConnectedController.add(deviceId);
+        }
+      }
       _dataSubscriptions.putIfAbsent(
         deviceId,
         () => _stack.transport
             .incomingData(deviceId)
-            .listen((Uint8List bytes) => _handleBuffer(bytes)),
+            .listen((Uint8List bytes) => _handleBuffer(deviceId, bytes)),
       );
     } else {
       // connecting / disconnected / failed -- no active link, no reason to
@@ -501,7 +568,7 @@ class InboundPipeline {
     }
   }
 
-  Future<void> _handleBuffer(Uint8List bytes) async {
+  Future<void> _handleBuffer(String linkDeviceId, Uint8List bytes) async {
     final RelayPacketFrame frame;
     try {
       frame = RelayPacketFrame.deserialize(bytes);
@@ -510,20 +577,65 @@ class InboundPipeline {
       return;
     }
 
-    // FR-ROUTE-003 (task file §6): the destination decision is made HERE,
-    // immediately after parsing, before `frame.payload` is read anywhere in
-    // this method. Every read of `frame.payload` below is textually inside
-    // the `isForUs` branch, after the `!isForUs` branch has already
-    // returned.
-    final bool isForUs = frame.destination == _stack.selfDeviceId;
     final int nowMs = _clock().millisecondsSinceEpoch;
 
     // FR-ROUTE-004: a past-TTL packet is dropped, not forwarded, regardless
     // of destination -- it is not worth relaying or decrypting either way.
+    // Checked before the E04-B12 bypass below too: an expired announce is
+    // no more worth processing than an expired anything else.
     if (frame.expiresAtMs <= nowMs) {
       counters.expired++;
       return;
     }
+
+    // **E04-B12: the identity-announce bypass — narrowly scoped to exactly
+    // one `controlKind`, checked BEFORE `isForUs` is even computed and
+    // BEFORE the `!isForUs` relay/forward branch below, so that branch can
+    // never see one of these frames (task file §3 point 4: "must never be
+    // relayed"). See `identity_announce.dart`'s header for the full
+    // justification of why bypassing `isForUs` is safe for this one
+    // controlKind and not a general precedent: a Bluetooth Classic RFCOMM
+    // connection is point-to-point and already OS-authenticated via
+    // bonding, so ANY frame arriving on `linkDeviceId`'s own incoming-data
+    // stream is structurally known to have come from that bonded address,
+    // independent of what `frame.destination`/`frame.source` claim. This
+    // check reads only `frame.payloadType`/`frame.payload[0]` — never
+    // `frame.destination` — so it can only ever match a frame whose FIRST
+    // control byte is literally `kControlKindIdentityAnnounce`; every other
+    // control frame (including one with a wrong/absent destination) falls
+    // through unchanged to the normal `isForUs`/relay logic below.**
+    if (frame.payloadType == PayloadType.control &&
+        frame.payload.isNotEmpty &&
+        frame.payload[0] == kControlKindIdentityAnnounce) {
+      final IdentityAnnounceHandler? handler = _identityAnnounceHandler;
+      if (handler == null) {
+        counters.unhandledControl++;
+        return;
+      }
+      final RelayPacketFrame innerFrame = RelayPacketFrame(
+        payloadType: frame.payloadType,
+        packetId: frame.packetId,
+        destination: frame.destination,
+        source: frame.source,
+        priority: frame.priority,
+        createdAtMs: frame.createdAtMs,
+        expiresAtMs: frame.expiresAtMs,
+        payload: frame.payload.sublist(1),
+      );
+      try {
+        await handler(linkDeviceId, innerFrame);
+      } catch (_) {
+        // Same "a bad packet/handler failure never kills the loop" policy
+        // as every other control handler below.
+      }
+      return;
+    }
+
+    // FR-ROUTE-003 (task file §6): the destination decision is made HERE,
+    // before `frame.payload` is read anywhere else in this method. Every
+    // other read of `frame.payload` below is textually inside the
+    // `isForUs` branch, after the `!isForUs` branch has already returned.
+    final bool isForUs = frame.destination == _stack.selfDeviceId;
 
     if (!isForUs) {
       // Forward branch (FR-ROUTE-002/FR-ROUTE-003). `bytes` -- the ORIGINAL
