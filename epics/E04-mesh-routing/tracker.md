@@ -1,30 +1,28 @@
 # E04 · Mesh Discovery, Relay & Dynamic Routing · Progress
 
-**Status:** P1/P2 not yet zero — `E04-B12` (P1) **blocked on a 🧍 human
-foundational decision**, not dispatchable as an ordinary bug fix. On-device
-Bluetooth verification (E04-B04/B05/B06/B07/B08) found and fixed five real
-defects that zero unit test could have caught. `E04-B09` (discoverability
-+ app-initiated bonding) merged, two review rounds. `E04-B10`'s own
-on-device bonding proof, blocked for a full session by RF/UI-automation
-issues, was substantially completed 2026-09-12 — a real `createBond()`
-succeeded live, twice, between the Redmi 10 2022 and Pixel 8 Pro (see
-`E04-B10`'s own updated Run log). That same live session then found the
-actual reason messages still couldn't be sent: `E04-B11`, a real
-main-thread-blocking defect in `BluetoothTransport.send()` (fixed,
-independently reviewed, merged) — and, once that was fixed, a SECOND,
-deeper defect: **`E04-B12`**, CONFIRMED LIVE (not just hypothesized —
-`selfDeviceId` values captured directly from both physical devices'
-logcat, neither resembling either device's own Bluetooth MAC) — an
-architectural mismatch between two never-reconciled device-identity
-namespaces (Bluetooth MAC vs. Signal Protocol identity) that
-deterministically stops a message from ever being recognized as addressed
-to its recipient. This is the one remaining blocker between "the mesh
-technically connects" and "two people can actually talk" — but the fix
-itself is a foundational identity-model choice (rule 3), presented as
-three options with trade-offs and an advisory recommendation in the task
-file's own §2a, awaiting a human pick before any implementation starts.
+**Status:** P1 not yet zero — `E04-B13` is the one remaining blocker on
+real message delivery. On-device Bluetooth verification (E04-B04-B08)
+found and fixed five real defects that zero unit test could have caught.
+`E04-B09` (bonding) merged. `E04-B10`'s on-device bonding proof
+substantially completed 2026-09-12 — real `createBond()` succeeded live,
+twice. `E04-B11` (a main-thread-blocking defect in `BluetoothTransport.
+send()`) fixed, merged. `E04-B12` — the deeper identity-namespace
+mismatch (Bluetooth MAC vs. Signal Protocol `selfDeviceId`, confirmed
+live) — was presented to the human as a foundational choice (rule 3,
+three options + an advisory recommendation); the human said "do what is
+best," delegating to the recommendation (Option A). **`E04-B12` (the
+identity-announce protocol + storage half of Option A) is now DONE**,
+independently reviewed (opus, APPROVE), merged. The reviewer flagged one
+real, non-blocking-for-B12 security finding carried forward as a hard
+precondition on `E04-B13`: the announced identity is currently
+unauthenticated (nothing yet reads the new column, so it's inert today,
+but a naive consumer in B13 would let one device claim to be another).
+**`E04-B13`** (wiring the learned identity into actual outbound message
+addressing — the part that makes a real message actually arrive) is
+filed, todo, with that security precondition built into its own contract
+before any implementation starts.
 **Started:** 2026-08-27 · **Completed:** — · **Progress:** 10/10 tasks,
-17/19 tasks+bugs (E04-B12 blocked, P1, human decision needed)
+18/20 tasks+bugs (E04-B13 todo, P1 — final blocker on real message delivery)
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -47,7 +45,8 @@ file's own §2a, awaiting a human pick before any implementation starts.
 - [x] E04-B09 · Add discoverability (time-boxed `ACTION_REQUEST_DISCOVERABLE`) and an app-initiated `createBond()` pairing flow · done · builder (sonnet) → reviewer (opus) x2 · PR #221. Round 1 CHANGES-REQUESTED (F1: missing `cancelDiscovery()` before `createBond()`; F2: no settle/retry before the first post-bond RFCOMM connect attempt; F3: zero test/on-device coverage of the ~160 new bonding-path lines, disclosed not fixed). All three addressed same session; round 2 APPROVE. Discoverability confirmed live on real hardware twice, independently; the bonding flow itself remains 100% unverified on real hardware — carried to `E04-B10`.
 - [~] E04-B10 · Prove the E04-B09 bonding flow live on real hardware (F1/F2 confirmation + E04-B08 regression re-check on the newly-bonded peer) · todo, substantially complete · depends on E04-B09 (done) — real `createBond()` succeeded live, twice, 2026-09-12 (RF/UI-automation blockers from the prior session resolved: Bluetooth toggled off/on on both devices + physically together). F1 implicitly confirmed (no discovery/bond race observed); F2 partially confirmed (bond+connect succeeded plainly, settle/retry path itself not isolated); E04-B08 regression confirmed clean. Still open: a rejected-pairing → `FAILED` check was never attempted. See task file's own updated Run log for full detail.
 - [x] E04-B11 · `BluetoothTransport.send()` blocks Pigeon's platform thread for up to 3s and self-disconnects on a fresh bond · done · orchestrator (sonnet, direct — real hardware in hand) → reviewer (opus, post-hoc — see note) · PR #227. Root cause: `send`'s Pigeon channel had no `TaskQueue`, so its genuine bounded blocking wait (`CountDownLatch.await`, 3s) ran on the platform thread by default. Fixed via `@TaskQueue(type: TaskQueueType.serialBackgroundThread)`; live-verified via thread-name/timing instrumentation (added, observed, fully reverted) that `send()` now runs on a background worker and the write completes near-instantly. **Process note, disclosed plainly, not hidden**: this PR was merged by the orchestrator without dispatching a review first — a real rule-5 gap (see `L-process-016`, `agent/memory/lessons/process.md`). A post-hoc independent review was dispatched immediately after the gap was noticed: verdict CHANGES (documentation only, two stale comments — no revert warranted, fix itself independently re-verified sound). Both comments corrected in a same-day follow-up commit; `status` reflects the corrected, reviewed state.
-- [ ] E04-B12 · End-to-end message delivery fails because `selfDeviceId` (Signal identity) and the Bluetooth-MAC-based `deviceId` are two never-reconciled namespaces · **blocked**, diagnosis complete · depends on E04-B11 (done) · owner reassigned builder → planner mid-task, since the fix is a foundational identity-model decision, not an ordinary bug fix · priority P1 (human-decision recorded 2026-09-12 under the standing extended-autonomy grant, human asleep) — the last blocker between "the mesh connects" and "a message arrives." Root cause CONFIRMED LIVE (real `selfDeviceId` values captured from both physical devices, `B12DIAG` instrumentation added/observed/fully reverted) — not a hypothesis. Three fix-approach options with trade-offs + an advisory recommendation (Option A: announce `selfDeviceId` over the transport at first contact) written into the task file's own §2a; 🧍 awaiting a human pick before any implementation.
+- [x] E04-B12 · Identity-announce protocol: learn a peer's real `selfDeviceId` over the transport (Option A, part 1/2) · done · builder (sonnet) → reviewer (opus) · PR #236, APPROVE. Human chose Option A 2026-09-13 ("do what is best," delegating to the presented recommendation). New `kControlKindIdentityAnnounce` control-kind, a narrow (verified via mutation-falsification) `isForUs` bypass scoped ONLY to that controlKind, additive `Relationships.remoteSelfDeviceId` schema column (v20→v21, migration-tested against a hand-built v20 DB). Both real physical devices' own production databases confirmed live to have migrated correctly; a full in-app connect-and-observe pass was blocked by an ADB/MIUI synthetic-input restriction (disclosed honestly, not claimed complete) — the announce round trip is instead proven by a real two-`MessagingStack` Dart integration test. **Reviewer finding, carried forward as a hard precondition on E04-B13, not a defect here**: the announced identity string is currently unauthenticated (nothing binds it to the announcing peer) — inert today since nothing yet reads the column, but a real hijack primitive the moment a consumer does a naive reverse lookup. 1507/1507 tests, `flutter analyze` clean.
+- [ ] E04-B13 · Wire the learned `remoteSelfDeviceId` into outbound `RelayPacketFrame` addressing — the half that actually fixes real message delivery (Option A, part 2/2) · todo · depends on E04-B12 (done) · priority P1, same human decision as E04-B12 · **must address E04-B12's own reviewer-flagged authentication gap before or as part of implementation** — this is the final blocker on the original "I can not send any message" report.
 
 **B08/B09 note:** E04-B08 was re-scoped on 2026-09-11 (after two human
 decisions cleared its `bug_priorities` gate) to the identity-mapping fix
@@ -470,3 +469,4 @@ chain — can start once discovery is real, in parallel with T03c/T04.
   extended-autonomy grant does NOT reach ("a foundational choice with no
   advisory recommendation already on record"). The two physical devices
   were released back to normal use once this confirmation was complete.
+- 2026-09-13 Asked the human directly which of E04-B12's §2a options to pick. Answer: "do what is best," delegating the foundational choice to the orchestrator's own already-presented advisory recommendation (Option A) -- this is the rule-3 human decision landing, not the extended asleep-autonomy grant being stretched to cover it. Rescoped E04-B12 from "implement Option A in full" (which would have re-keyed `Relationship.deviceId` and changed the Devices screen UI) down to just the announce/storage half -- narrower, with zero UI/design-contract impact -- and split the outbound-wiring half into a new, dependent task `E04-B13`, avoiding an oversized single task. `E04-B12` built (new one-way identity-announce control protocol, a narrow and falsification-tested `isForUs` bypass, an additive schema column), independently reviewed (opus, APPROVE) with one real finding carried forward as a hard precondition on `E04-B13` rather than blocking `E04-B12` itself: the announced identity is currently unauthenticated, harmless today (nothing reads the column yet) but a real spoofing/hijack risk the moment something does a naive reverse lookup from it. Squash-merged PR #236. `E04-B13` filed (todo, P1) with that security requirement built directly into its own contract. This is now the single remaining piece standing between the mesh's proven transport/bonding/identity-learning stack and an actual message arriving on a real device.
