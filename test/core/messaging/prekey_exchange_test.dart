@@ -974,6 +974,83 @@ void main() {
           expect(a.prekeyExchange.counters.responsesUnsolicited, 0);
         },
       );
+
+      test(
+        'test_E04_B15_blocked_peer_evaluated_by_physical_link_not_claimed_source',
+        () async {
+          // Reviewer finding F1 (round 1, opus): the fix above also
+          // changed `_handleBundleRequest`'s TRUST evaluation from
+          // `_evaluateConnectionRequest(peerDeviceId)` (the claimed,
+          // unauthenticated `frame.source`) to
+          // `_evaluateConnectionRequest(linkDeviceId ?? peerDeviceId)`
+          // (the physical link the request actually arrived on) -- a real
+          // fix (relationships are keyed by Bluetooth MAC, never by a
+          // claimed logical id, so the pre-fix code could never actually
+          // find a blocked peer's row), but the pre-existing
+          // `test_EARS_COMM_15_blocked_peer_gets_no_bundle` cannot prove
+          // it: that test's own `wireStacks` helper conflates a peer's MAC
+          // with its `selfDeviceId` by construction, so reverting the fix
+          // stays green there. This test uses a Bluetooth-MAC-shaped id
+          // for A deliberately DIFFERENT from A's own real `selfDeviceId`
+          // (the same convention this task's own other new tests already
+          // use), so the two evaluation keys are provably different
+          // values -- only a fix keyed by the physical link can see the
+          // block.
+          final aSuffix = nextSuffix();
+          final bSuffix = nextSuffix();
+          final a = await newStack('device-a-real-id', aSuffix);
+          final b = await newStack('device-b', bSuffix);
+          addTearDown(a.dispose);
+          addTearDown(b.dispose);
+
+          const aMac = 'AA:BB:CC:DD:EE:11'; // A's real, dialable MAC (as B sees it)
+          const bMac = 'AA:BB:CC:DD:EE:12'; // B's real, dialable MAC (as A sees it)
+
+          a.inbound.start();
+          b.inbound.start();
+          wireSend(aSuffix, aMac, bSuffix);
+          wireSend(bSuffix, bMac, aSuffix);
+          await connectPeer(aSuffix, bMac);
+          await connectPeer(bSuffix, aMac);
+
+          // B has independently evaluated the peer on THIS PHYSICAL LINK
+          // (`aMac`) as blocked -- exactly how a real relationship row is
+          // ever stored (`relationships.deviceId` is the transport id,
+          // the table's own primary key). B has NO row at all keyed by
+          // A's claimed logical identity (`device-a-real-id`) -- if the
+          // pre-fix code's evaluation key (the claim) were still in
+          // effect, this lookup would find nothing, evaluate as
+          // `unknown`, and serve the bundle.
+          await RelationshipRepository(b.db)
+              .upsert(aMac, RelationshipState.blocked);
+
+          final beforeCount = await b.signalStore.countIssuableOneTimePreKeys();
+
+          await expectLater(
+            a.prekeyExchange.ensureSession(
+              bMac,
+              timeout: const Duration(milliseconds: 500),
+            ),
+            throwsA(isA<TimeoutException>()),
+          );
+
+          // Silence, not a refusal frame (task file §5, same as
+          // `test_EARS_COMM_15_blocked_peer_gets_no_bundle`) -- but this
+          // time the refusal can ONLY have happened because B evaluated
+          // the physical link, not the claim: keying by
+          // `device-a-real-id` (the pre-fix behaviour) would have found
+          // no relationship row at all and served the bundle instead.
+          expect(b.prekeyExchange.counters.requestsRefused, 1);
+          expect(b.prekeyExchange.counters.requestsServed, 0);
+          final afterCount = await b.signalStore.countIssuableOneTimePreKeys();
+          expect(afterCount, beforeCount);
+          expect(
+            await a.signalStore
+                .containsSession(const SignalProtocolAddress(bMac, 1)),
+            isFalse,
+          );
+        },
+      );
     },
   );
 
