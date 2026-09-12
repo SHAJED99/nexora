@@ -674,6 +674,20 @@ class BluetoothTransport(
     }
   }
 
+  /**
+   * E04-B19: this device's own Bluetooth name -- what a nearby device's OS
+   * pairing UI shows for THIS phone. Never an address (see `pigeons/
+   * transport.dart`'s own doc comment for why: a raw address read back from
+   * the OS can be a generic, non-unique masked placeholder on some OEM
+   * builds, per `E04-B17`/`E04-B18`'s live findings). Falls back to a
+   * clearly-labeled placeholder rather than throwing or returning empty --
+   * `adapter` is `null` when Bluetooth hardware/permission is unavailable,
+   * and `BluetoothAdapter.getName()` itself can return `null` even with a
+   * live adapter (e.g. name not yet set by the OS).
+   */
+  fun getLocalDeviceName(): String =
+      adapter?.name ?: "This device (Bluetooth unavailable)"
+
   /** Forwarded by `TransportApiHost` from
    * `MainActivity.onActivityResult` (E04-B09) — mirrors
    * [onRequestPermissionsResult]'s existing forwarding shape. The

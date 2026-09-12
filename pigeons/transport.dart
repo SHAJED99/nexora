@@ -120,6 +120,17 @@ abstract class TransportApi {
   /// the OS system dialog handles user confirmation, and there is no
   /// return value or settled-state event to await.
   void requestDiscoverable();
+
+  /// This device's own Bluetooth name -- what a nearby device's OS-level
+  /// Bluetooth pairing UI shows for THIS phone (`BluetoothAdapter.name` on
+  /// the native side). Deliberately never an address: `E04-B17`/`E04-B18`
+  /// found live evidence that a raw Bluetooth address read back from the OS
+  /// can be a generic, non-unique masked placeholder rather than a real
+  /// per-device MAC on some OEM builds -- showing that to a user as "your
+  /// device's address" would be actively misleading. Never throws and never
+  /// returns an empty string; the native side falls back to a clearly-
+  /// labeled placeholder when no adapter/name is available.
+  String getLocalDeviceName();
 }
 
 /// Flutter-side API: native Kotlin calls into Dart.

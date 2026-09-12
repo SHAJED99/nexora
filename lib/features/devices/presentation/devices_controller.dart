@@ -125,6 +125,15 @@ class DevicesController extends GetxController {
 
   final RxBool loading = false.obs;
 
+  /// E04-B19: this device's own Bluetooth name, fetched once at
+  /// [onInit] -- shown on the Devices screen so a user pairing two phones
+  /// can tell what name to look for in the OTHER phone's OS Bluetooth
+  /// settings. Empty until the fetch resolves; `devices_view.dart` renders
+  /// nothing for an empty value rather than a placeholder, since the real
+  /// value typically arrives within one frame and a flashing placeholder
+  /// would be worse than a brief blank line.
+  final RxString localDeviceName = ''.obs;
+
   /// `E12-T01`'s `readOwnDeviceIds` result, fetched at most once per
   /// *discovery cycle* (reset in [discover], E12-B04) and cached here (§3/§6
   /// of the task: "a best-effort hint, not something to re-fetch on every
@@ -199,6 +208,16 @@ class DevicesController extends GetxController {
   void onInit() {
     super.onInit();
     load();
+    // E04-B19: best-effort, same degraded-case framing as this file's other
+    // peripheral reads (e.g. `_currentAccountUid`) -- a failure here must
+    // never crash the screen; the name simply stays empty and renders
+    // nothing.
+    unawaited(
+      _transportService.getLocalDeviceName().then(
+        (name) => localDeviceName.value = name,
+        onError: (Object _) {},
+      ),
+    );
   }
 
   /// Re-reads every stored relationship from `RelationshipRepository`.

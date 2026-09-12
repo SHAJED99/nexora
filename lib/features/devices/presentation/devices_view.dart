@@ -121,13 +121,30 @@ class _TitleRow extends StatelessWidget {
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('Network Nodes', style: NexoraTextStyles.devicesSectionHeading),
-              SizedBox(height: 4),
-              Text(
+            children: [
+              const Text('Network Nodes', style: NexoraTextStyles.devicesSectionHeading),
+              const SizedBox(height: 4),
+              const Text(
                 'Manage paired and nearby devices.',
                 style: NexoraTextStyles.devicesSectionSubtitle,
               ),
+              // GAP-043 (E04-B19, derived): this device's own Bluetooth
+              // name -- so a user pairing two phones can tell what name to
+              // look for in the OTHER phone's OS Bluetooth settings.
+              // Reuses the existing subtitle token; renders nothing while
+              // the native fetch is still in flight or failed, rather than
+              // a flashing placeholder.
+              Obx(() {
+                final String name = controller.localDeviceName.value;
+                if (name.isEmpty) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Visible to nearby devices as: $name',
+                    style: NexoraTextStyles.devicesSectionSubtitle,
+                  ),
+                );
+              }),
             ],
           ),
         ),

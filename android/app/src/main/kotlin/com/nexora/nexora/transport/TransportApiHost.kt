@@ -66,4 +66,6 @@ class TransportApiHost(binaryMessenger: BinaryMessenger, activity: Activity) : T
       bluetooth.send(deviceId, bytes)
 
   override fun requestDiscoverable() = bluetooth.requestDiscoverable()
+
+  override fun getLocalDeviceName(): String = bluetooth.getLocalDeviceName()
 }

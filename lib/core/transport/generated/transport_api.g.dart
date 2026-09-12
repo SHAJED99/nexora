@@ -398,6 +398,34 @@ class TransportApi {
     )
     ;
   }
+
+  /// This device's own Bluetooth name -- what a nearby device's OS-level
+  /// Bluetooth pairing UI shows for THIS phone (`BluetoothAdapter.name` on
+  /// the native side). Deliberately never an address: `E04-B17`/`E04-B18`
+  /// found live evidence that a raw Bluetooth address read back from the OS
+  /// can be a generic, non-unique masked placeholder rather than a real
+  /// per-device MAC on some OEM builds -- showing that to a user as "your
+  /// device's address" would be actively misleading. Never throws and never
+  /// returns an empty string; the native side falls back to a clearly-
+  /// labeled placeholder when no adapter/name is available.
+  Future<String> getLocalDeviceName() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.nexora.TransportApi.getLocalDeviceName$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
 }
 
 /// Flutter-side API: native Kotlin calls into Dart.
