@@ -1,9 +1,10 @@
 # E04 · Mesh Discovery, Relay & Dynamic Routing · Progress
 
-**Status:** P1/P2 not yet zero — `E04-B12` (P1) open. On-device Bluetooth
-verification (E04-B04/B05/B06/B07/B08) found and fixed five real defects
-that zero unit test could have caught. `E04-B09` (discoverability +
-app-initiated bonding) merged, two review rounds. `E04-B10`'s own
+**Status:** P1/P2 not yet zero — `E04-B12` (P1) **blocked on a 🧍 human
+foundational decision**, not dispatchable as an ordinary bug fix. On-device
+Bluetooth verification (E04-B04/B05/B06/B07/B08) found and fixed five real
+defects that zero unit test could have caught. `E04-B09` (discoverability
++ app-initiated bonding) merged, two review rounds. `E04-B10`'s own
 on-device bonding proof, blocked for a full session by RF/UI-automation
 issues, was substantially completed 2026-09-12 — a real `createBond()`
 succeeded live, twice, between the Redmi 10 2022 and Pixel 8 Pro (see
@@ -11,15 +12,19 @@ succeeded live, twice, between the Redmi 10 2022 and Pixel 8 Pro (see
 actual reason messages still couldn't be sent: `E04-B11`, a real
 main-thread-blocking defect in `BluetoothTransport.send()` (fixed,
 independently reviewed, merged) — and, once that was fixed, a SECOND,
-deeper defect: **`E04-B12`**, a likely architectural mismatch between two
-never-reconciled device-identity namespaces (Bluetooth MAC vs. Signal
-Protocol identity) that stops a message from ever being recognized as
-addressed to its recipient. `E04-B12` is the one remaining blocker
-between "the mesh technically connects" and "two people can actually
-talk" — filed P1, todo, with a precise, code-traced hypothesis ready for
-the next session to verify live.
+deeper defect: **`E04-B12`**, CONFIRMED LIVE (not just hypothesized —
+`selfDeviceId` values captured directly from both physical devices'
+logcat, neither resembling either device's own Bluetooth MAC) — an
+architectural mismatch between two never-reconciled device-identity
+namespaces (Bluetooth MAC vs. Signal Protocol identity) that
+deterministically stops a message from ever being recognized as addressed
+to its recipient. This is the one remaining blocker between "the mesh
+technically connects" and "two people can actually talk" — but the fix
+itself is a foundational identity-model choice (rule 3), presented as
+three options with trade-offs and an advisory recommendation in the task
+file's own §2a, awaiting a human pick before any implementation starts.
 **Started:** 2026-08-27 · **Completed:** — · **Progress:** 10/10 tasks,
-17/19 tasks+bugs (E04-B12 open, P1)
+17/19 tasks+bugs (E04-B12 blocked, P1, human decision needed)
 
 > Only the ORCHESTRATOR edits this file.
 
@@ -42,7 +47,7 @@ the next session to verify live.
 - [x] E04-B09 · Add discoverability (time-boxed `ACTION_REQUEST_DISCOVERABLE`) and an app-initiated `createBond()` pairing flow · done · builder (sonnet) → reviewer (opus) x2 · PR #221. Round 1 CHANGES-REQUESTED (F1: missing `cancelDiscovery()` before `createBond()`; F2: no settle/retry before the first post-bond RFCOMM connect attempt; F3: zero test/on-device coverage of the ~160 new bonding-path lines, disclosed not fixed). All three addressed same session; round 2 APPROVE. Discoverability confirmed live on real hardware twice, independently; the bonding flow itself remains 100% unverified on real hardware — carried to `E04-B10`.
 - [~] E04-B10 · Prove the E04-B09 bonding flow live on real hardware (F1/F2 confirmation + E04-B08 regression re-check on the newly-bonded peer) · todo, substantially complete · depends on E04-B09 (done) — real `createBond()` succeeded live, twice, 2026-09-12 (RF/UI-automation blockers from the prior session resolved: Bluetooth toggled off/on on both devices + physically together). F1 implicitly confirmed (no discovery/bond race observed); F2 partially confirmed (bond+connect succeeded plainly, settle/retry path itself not isolated); E04-B08 regression confirmed clean. Still open: a rejected-pairing → `FAILED` check was never attempted. See task file's own updated Run log for full detail.
 - [x] E04-B11 · `BluetoothTransport.send()` blocks Pigeon's platform thread for up to 3s and self-disconnects on a fresh bond · done · orchestrator (sonnet, direct — real hardware in hand) → reviewer (opus, post-hoc — see note) · PR #227. Root cause: `send`'s Pigeon channel had no `TaskQueue`, so its genuine bounded blocking wait (`CountDownLatch.await`, 3s) ran on the platform thread by default. Fixed via `@TaskQueue(type: TaskQueueType.serialBackgroundThread)`; live-verified via thread-name/timing instrumentation (added, observed, fully reverted) that `send()` now runs on a background worker and the write completes near-instantly. **Process note, disclosed plainly, not hidden**: this PR was merged by the orchestrator without dispatching a review first — a real rule-5 gap (see `L-process-016`, `agent/memory/lessons/process.md`). A post-hoc independent review was dispatched immediately after the gap was noticed: verdict CHANGES (documentation only, two stale comments — no revert warranted, fix itself independently re-verified sound). Both comments corrected in a same-day follow-up commit; `status` reflects the corrected, reviewed state.
-- [ ] E04-B12 · End-to-end message delivery still fails after E04-B11's fix — `ensureSession` times out; code trace points to `selfDeviceId` (Signal identity) and the Bluetooth-MAC-based `deviceId` never being reconciled · todo · depends on E04-B11 (done) · priority P1 (human-decision recorded 2026-09-12 under the standing extended-autonomy grant, human asleep) — the last blocker between "the mesh connects" and "a message arrives." Precise, code-traced hypothesis on file; not yet live-confirmed.
+- [ ] E04-B12 · End-to-end message delivery fails because `selfDeviceId` (Signal identity) and the Bluetooth-MAC-based `deviceId` are two never-reconciled namespaces · **blocked**, diagnosis complete · depends on E04-B11 (done) · owner reassigned builder → planner mid-task, since the fix is a foundational identity-model decision, not an ordinary bug fix · priority P1 (human-decision recorded 2026-09-12 under the standing extended-autonomy grant, human asleep) — the last blocker between "the mesh connects" and "a message arrives." Root cause CONFIRMED LIVE (real `selfDeviceId` values captured from both physical devices, `B12DIAG` instrumentation added/observed/fully reverted) — not a hypothesis. Three fix-approach options with trade-offs + an advisory recommendation (Option A: announce `selfDeviceId` over the transport at first contact) written into the task file's own §2a; 🧍 awaiting a human pick before any implementation.
 
 **B08/B09 note:** E04-B08 was re-scoped on 2026-09-11 (after two human
 decisions cleared its `bug_priorities` gate) to the identity-mapping fix
@@ -441,3 +446,27 @@ chain — can start once discovery is real, in parallel with T03c/T04.
   explicitly flagged as code-traced but not yet live-confirmed. The two
   physical devices were released back to normal use once this
   investigation's live-hardware needs were met for the night.
+- 2026-09-12 (continued) `E04-B12`'s hypothesis was CONFIRMED live and
+  directly, not left as a code trace. The human made the Pixel available
+  again briefly; temporary diagnostic `print()` calls (added, observed,
+  fully reverted — confirmed via `git diff`) captured each device's real
+  `selfDeviceId` straight from logcat: Redmi `65d14b4c75d6ddf5`, Pixel
+  `aecdcd6f9b32dc0f` — neither resembling either device's own Bluetooth
+  MAC address (the Pixel's is `B8:DB:38:7C:D4:BF`). Since the chat's own
+  `conversationId`/`RelayPacketFrame.destination` is always the peer's
+  Bluetooth MAC (confirmed by every chat screenshot this session) and
+  `InboundPipeline`'s `isForUs` check compares that against the
+  receiver's real `selfDeviceId`, the mismatch is a deterministic
+  certainty for any two real, independently-provisioned devices — no
+  further live send needed to prove it past this point. Recognized this
+  as a foundational architecture gap (two device-identity namespaces that
+  have never been reconciled, likely since this app's inception) rather
+  than an ordinary bug: per rule 3, presented three fix-approach options
+  with trade-offs and an advisory recommendation (Option A: an
+  identity-announce step over the transport at first contact) directly in
+  the task file's own new §2a, reassigned the task's `owner_agent` to
+  `planner` and `status` to `blocked`, and stopped short of implementing
+  any of them — this is exactly the class of decision the standing
+  extended-autonomy grant does NOT reach ("a foundational choice with no
+  advisory recommendation already on record"). The two physical devices
+  were released back to normal use once this confirmation was complete.
