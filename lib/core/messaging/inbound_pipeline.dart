@@ -670,6 +670,8 @@ class InboundPipeline {
     String deviceId,
     String peerName,
   ) async {
+    if (peerName.isEmpty) return; // review round 2 (N1): an empty name is
+    // still a valid SQL correlator (unlike NULL) and matches nothing real.
     final db = _stack.db;
     final existing = await (db.select(db.relationships)
           ..where((t) => t.deviceId.equals(deviceId)))

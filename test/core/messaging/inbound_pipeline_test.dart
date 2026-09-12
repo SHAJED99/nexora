@@ -843,6 +843,19 @@ void main() {
                 peerName: const Value('Original Name'),
               ),
             );
+        // Review round 2 (N3): a second, real row whose peerName matches the
+        // NEW display name -- so the guard is genuinely exercised (without
+        // it, this device id would otherwise be a live reconciliation
+        // candidate against this row), not just vacuously true because
+        // nothing else happens to match.
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'someone-elses-address',
+                state: RelationshipState.trusted.name,
+                updatedAt: DateTime.now(),
+                peerName: const Value('A Different Name Now'),
+              ),
+            );
 
         final pipeline = InboundPipeline(stack: stack);
         addTearDown(pipeline.stop);
@@ -866,6 +879,53 @@ void main() {
             .getSingleOrNull();
         expect(unchanged!.state, RelationshipState.blocked.name);
         expect(unchanged.peerName, 'Original Name');
+      },
+    );
+
+    test(
+      'test_E04_B17_does_NOT_reconcile_on_an_empty_peer_name',
+      () async {
+        // Review round 2 (N1): unlike NULL, an empty string is a valid SQL
+        // equality correlator, so a stored empty-`peerName` row and an
+        // incoming device that also reports an empty name would otherwise
+        // "match exactly" -- reachable in practice since native falls back
+        // to the raw address only when the name is genuinely absent
+        // (Kotlin's `?:`), not when it is an empty string.
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'stale-empty-name-address',
+                state: RelationshipState.trusted.name,
+                updatedAt: DateTime.now(),
+                peerName: const Value(''),
+              ),
+            );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+
+        _pushDiscovered(
+          messenger,
+          suffix,
+          'fresh-empty-name-address',
+          displayName: '',
+          bonded: true,
+        );
+        await _settle();
+
+        final row = await (stack.db.select(stack.db.relationships)
+              ..where((t) => t.deviceId.equals('fresh-empty-name-address')))
+            .getSingleOrNull();
+        expect(
+          row,
+          isNull,
+          reason: 'an empty peer name must never be treated as a valid '
+              'correlator for trust inheritance',
+        );
       },
     );
   });
