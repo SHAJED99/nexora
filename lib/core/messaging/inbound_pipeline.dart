@@ -169,6 +169,7 @@ import '../../features/trust/domain/relationship.dart' show RelationshipState;
 import 'ciphertext_codec.dart';
 import 'identity_announce.dart' show kControlKindIdentityAnnounce;
 import 'messaging_stack.dart';
+import 'prekey_exchange.dart' show kControlKindPrekeyExchange;
 import 'relay_packet_frame.dart';
 
 /// The declared extension point for non-ciphertext (`PayloadType.control`)
@@ -192,6 +193,24 @@ typedef ControlHandler = Future<void> Function(RelayPacketFrame frame);
 /// dispatch entirely (see [InboundPipeline._handleBuffer] and
 /// `identity_announce.dart`'s header for the full justification).
 typedef IdentityAnnounceHandler = Future<void> Function(
+  String linkDeviceId,
+  RelayPacketFrame frame,
+);
+
+/// E04-B14: the prekey-exchange handler's own signature — deliberately NOT
+/// [ControlHandler], mirroring [IdentityAnnounceHandler]'s already-
+/// established precedent immediately above. `PrekeyExchange
+/// ._takeMatchingCompleter`'s own bundle-response provenance check needs
+/// [linkDeviceId] (the physical link this frame arrived on, independently
+/// known to this device regardless of what the frame's `source` claims) to
+/// bind acceptance to more than an unauthenticated claimed identity plus a
+/// `requestId` — see that file's own header, "Response provenance", for the
+/// full reasoning this task closes.
+///
+/// Unlike [IdentityAnnounceHandler], this controlKind is NOT a bypass of
+/// `isForUs` — a prekey-exchange frame must still be correctly addressed to
+/// this device; only the ADDITIONAL link-binding check is new.
+typedef PrekeyExchangeHandler = Future<void> Function(
   String linkDeviceId,
   RelayPacketFrame frame,
 );
@@ -376,6 +395,15 @@ class InboundPipeline {
   /// own device id (see [IdentityAnnounceHandler]'s own doc comment).
   IdentityAnnounceHandler? _identityAnnounceHandler;
 
+  /// E04-B14: the ONE handler slot for [kControlKindPrekeyExchange] — a
+  /// dedicated field, not a slot in [_controlHandlers], mirroring
+  /// [_identityAnnounceHandler]'s own reasoning immediately above: this
+  /// handler needs the physical link's own device id, which [ControlHandler]
+  /// does not carry. Unlike [_identityAnnounceHandler], dispatch to this
+  /// handler still happens INSIDE the normal `isForUs`-gated branch (see
+  /// [_handleBuffer]) — only the extra [linkDeviceId] argument is new.
+  PrekeyExchangeHandler? _prekeyExchangeHandler;
+
   final InboundCounters counters = InboundCounters();
 
   final StreamController<Message> _deliveredController =
@@ -436,6 +464,37 @@ class InboundPipeline {
       );
     }
     _identityAnnounceHandler = handler;
+  }
+
+  /// E04-B14: the ONE registration slot for [kControlKindPrekeyExchange] —
+  /// separate from [registerControlHandler] because this handler's own
+  /// signature ([PrekeyExchangeHandler]) carries the physical link's device
+  /// id, not just the frame (see that typedef's own doc comment). Throws
+  /// [StateError] on a second call, mirroring [registerControlHandler]'s and
+  /// [registerIdentityAnnounceHandler]'s own guards.
+  ///
+  /// `PrekeyExchange` is constructed AFTER [MessagingStack.inbound] itself
+  /// (`messaging_stack.dart`'s own constructor order: `inbound = ...` runs
+  /// before `prekeyExchange = PrekeyExchange(stack: this, ...)`), so it
+  /// self-registers here from inside its own constructor rather than relying
+  /// on an external call site in `messaging_stack.dart` — this task's own
+  /// `files:` fence does not include that file (mirrors E07-T06's own,
+  /// already-established "no external composition-root call site available"
+  /// reasoning, this file's header). `messaging_stack.dart`'s pre-existing
+  /// `inbound.registerControlHandler(kControlKindPrekeyExchange,
+  /// prekeyExchange.handleControlFrame)` call still runs unmodified (out of
+  /// this task's fence) but is now provably dead in production: see
+  /// [_handleBuffer]'s own dispatch, which routes [kControlKindPrekeyExchange]
+  /// through this dedicated slot BEFORE the generic [_controlHandlers] map is
+  /// ever consulted — disclosed as a Deviation in this task's own file.
+  void registerPrekeyExchangeHandler(PrekeyExchangeHandler handler) {
+    if (_prekeyExchangeHandler != null) {
+      throw StateError(
+        'InboundPipeline.registerPrekeyExchangeHandler: a handler is '
+        'already registered',
+      );
+    }
+    _prekeyExchangeHandler = handler;
   }
 
   /// Begins consuming `TransportService.incomingData` for every connected
@@ -715,12 +774,6 @@ class InboundPipeline {
         return;
       }
       final int controlKind = frame.payload[0];
-      final ControlHandler? handler = _controlHandlers[controlKind];
-      if (handler == null) {
-        // Dropped and counted, never guessed at (task file §3).
-        counters.unhandledControl++;
-        return;
-      }
       final RelayPacketFrame innerFrame = RelayPacketFrame(
         payloadType: frame.payloadType,
         packetId: frame.packetId,
@@ -731,6 +784,34 @@ class InboundPipeline {
         expiresAtMs: frame.expiresAtMs,
         payload: frame.payload.sublist(1),
       );
+
+      // E04-B14: `kControlKindPrekeyExchange` gets its OWN dedicated,
+      // link-bound dispatch — checked BEFORE the generic [_controlHandlers]
+      // map below, so a still-registered legacy generic handler for this
+      // same controlKind (`messaging_stack.dart`'s own pre-existing
+      // `registerControlHandler` call, out of this task's fence, left
+      // unmodified) can never fire: this branch always intercepts it first.
+      if (controlKind == kControlKindPrekeyExchange) {
+        final PrekeyExchangeHandler? prekeyHandler = _prekeyExchangeHandler;
+        if (prekeyHandler == null) {
+          counters.unhandledControl++;
+          return;
+        }
+        try {
+          await prekeyHandler(linkDeviceId, innerFrame);
+        } catch (_) {
+          // Same "a bad packet/handler failure never kills the loop" policy
+          // as every other control handler in this method.
+        }
+        return;
+      }
+
+      final ControlHandler? handler = _controlHandlers[controlKind];
+      if (handler == null) {
+        // Dropped and counted, never guessed at (task file §3).
+        counters.unhandledControl++;
+        return;
+      }
       try {
         await handler(innerFrame);
       } catch (_) {
