@@ -474,6 +474,17 @@ void main() {
       // widening a sixth time -- current `schemaVersion` is now 20, so this
       // v13 handle also runs the `from < 20` step, adding
       // `version_policy_cache` to the diff below.
+      //
+      // E04-B12 note: same widening a seventh time -- current
+      // `schemaVersion` is now 21, so this v13 handle also runs the
+      // `from >= 3 && from < 21` step. Unlike every widening note above,
+      // this one adds NO new table (nothing added to the table-name diff
+      // below) -- it adds one nullable column, `remote_self_device_id`, to
+      // the ALREADY-existing `relationships` table instead. This is the
+      // first schema-bumping task since this test was written to alter a
+      // pre-existing table's own DDL rather than only adding new ones, so
+      // `relationships` is excluded from the strict byte-identical loop
+      // near the end of this test and checked separately, right after it.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -546,6 +557,9 @@ void main() {
       // task's §4). Compares the actual DDL text against the pre-migration
       // snapshot taken above -- not just that a same-named table exists.
       for (final tableName in _preExistingTables) {
+        // `relationships` is the one documented exception (E04-B12 note
+        // above) -- checked separately immediately below instead.
+        if (tableName == 'relationships') continue;
         final rows = await db
             .customSelect(
               "SELECT sql FROM sqlite_master WHERE type='table' "
@@ -559,6 +573,27 @@ void main() {
           reason: '$tableName DDL should be byte-identical after migration',
         );
       }
+
+      // `relationships`: E04-B12 legitimately adds one nullable column
+      // (`remote_self_device_id`) to this pre-existing table -- asserted
+      // explicitly against the exact DDL SQLite now reports, rather than
+      // silently dropped from coverage.
+      final relationshipsRows = await db
+          .customSelect(
+            "SELECT sql FROM sqlite_master WHERE type='table' "
+            "AND name='relationships'",
+          )
+          .get();
+      expect(relationshipsRows, hasLength(1));
+      expect(
+        relationshipsRows.single.read<String>('sql'),
+        'CREATE TABLE relationships (\n'
+        '      device_id TEXT NOT NULL,\n'
+        '      state TEXT NOT NULL,\n'
+        '      updated_at INTEGER NOT NULL, "remote_self_device_id" TEXT NULL,\n'
+        '      PRIMARY KEY (device_id)\n'
+        '    )',
+      );
     },
   );
 
@@ -674,6 +709,15 @@ void main() {
       // widening a sixth time -- current `schemaVersion` is now 20, so this
       // v14 handle also runs the `from < 20` step, adding
       // `version_policy_cache` to the diff below.
+      //
+      // E04-B12 note: same widening a seventh time -- current
+      // `schemaVersion` is now 21, so this v14 handle also runs the
+      // `from >= 3 && from < 21` step, which adds no new table but does add
+      // one nullable column (`remote_self_device_id`) to the ALREADY-
+      // existing `relationships` table -- see `test_EARS_STORE_3_...`
+      // above's identical note. `relationships` is excluded from the strict
+      // byte-identical loop near the end of this test and checked
+      // separately, right after it.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -745,6 +789,9 @@ void main() {
       // task's §4). Compares the actual DDL text against the pre-migration
       // snapshot taken above -- not just that a same-named table exists.
       for (final tableName in _preExistingTablesV14) {
+        // `relationships` is the one documented exception (E04-B12 note
+        // above) -- checked separately immediately below instead.
+        if (tableName == 'relationships') continue;
         final rows = await db
             .customSelect(
               "SELECT sql FROM sqlite_master WHERE type='table' "
@@ -758,6 +805,26 @@ void main() {
           reason: '$tableName DDL should be byte-identical after migration',
         );
       }
+
+      // `relationships`: E04-B12 legitimately adds one nullable column
+      // (`remote_self_device_id`) -- see `test_EARS_STORE_3_...` above's
+      // identical assertion.
+      final relationshipsRows = await db
+          .customSelect(
+            "SELECT sql FROM sqlite_master WHERE type='table' "
+            "AND name='relationships'",
+          )
+          .get();
+      expect(relationshipsRows, hasLength(1));
+      expect(
+        relationshipsRows.single.read<String>('sql'),
+        'CREATE TABLE relationships (\n'
+        '      device_id TEXT NOT NULL,\n'
+        '      state TEXT NOT NULL,\n'
+        '      updated_at INTEGER NOT NULL, "remote_self_device_id" TEXT NULL,\n'
+        '      PRIMARY KEY (device_id)\n'
+        '    )',
+      );
     },
   );
 

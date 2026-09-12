@@ -16,10 +16,21 @@ class Relationship {
   final RelationshipState state;
   final DateTime updatedAt;
 
+  /// E04-B12 (Option A, part 1/2): the peer's own real `selfDeviceId`,
+  /// learned via the identity-announce control protocol
+  /// (`lib/core/messaging/identity_announce.dart`) and stored keyed by
+  /// [deviceId] above, which stays the Bluetooth-address transport id this
+  /// relationship row was created under (task file §2a: zero re-keying).
+  /// `null` until a peer has announced at least once. Optional/nullable
+  /// named field so every existing call site that constructs a
+  /// [Relationship] without it keeps compiling unchanged.
+  final String? remoteSelfDeviceId;
+
   const Relationship({
     required this.deviceId,
     required this.state,
     required this.updatedAt,
+    this.remoteSelfDeviceId,
   });
 }
 

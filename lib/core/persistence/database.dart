@@ -105,7 +105,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 21;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -631,6 +631,39 @@ class AppDatabase extends _$AppDatabase {
         // creation itself is unchanged from what E14-T01 shipped and
         // reviewed; only its position in the version sequence moved.
         await m.createTable(versionPolicyCache);
+      }
+      if (from >= 3 && from < 21) {
+        // E04-B12 (Option A, part 1/2): `relationships.remote_self_device_id`
+        // -- a new nullable column on an EXISTING table, additive only
+        // (docs/conventions.md "Schema migrations"). Unlike E04-B02's
+        // v9->v10 `relay_packets` migration (which had to rebuild the whole
+        // table because it LOOSENED an existing NOT NULL constraint), this
+        // step adds a genuinely new column with no prior constraint to
+        // relax -- SQLite's `ALTER TABLE ... ADD COLUMN` handles that
+        // directly, so `m.addColumn` (the same primitive already used for
+        // `device_identities.account_uid` at `from < 2` and
+        // `crypto_counters.next_issued_one_time_pre_key_id` at
+        // `from >= 6 && from < 7`, both above) is sufficient here -- no
+        // transaction wrap needed, matching those two precedents, since a
+        // single `ADD COLUMN` statement is already atomic in SQLite.
+        //
+        // Guarded to `from >= 3` for EXACTLY the same reason the
+        // `crypto_counters` step above guards to `from >= 6`: `relationships`
+        // itself is created by the `from < 3` step (E02-T01), and
+        // `createTable` always builds a table from THIS device's *current*
+        // full Dart definition -- column included -- so an install jumping
+        // from before v3 straight to v21+ already gets the new column via
+        // that `createTable` call. Only an install that already had the
+        // table (created without this column, i.e. `from >= 3`) needs it
+        // added here; adding it unconditionally would double-add the column
+        // for anyone jumping from < v3 straight to v21 (`duplicate column
+        // name`, confirmed by `database_migration_test.dart`'s own
+        // pre-existing v1->v2 test before this guard was added).
+        //
+        // No backfill: an existing relationship row simply has not
+        // announced its real `selfDeviceId` yet (identity_announce.dart's
+        // own header; task file §2, "existing rows are unaffected").
+        await m.addColumn(relationships, relationships.remoteSelfDeviceId);
       }
     },
   );

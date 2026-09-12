@@ -146,6 +146,7 @@ import '../../features/trust/domain/evaluate_connection_request_use_case.dart';
 import 'ciphertext_codec.dart';
 import 'delivery_ack.dart';
 import 'group_control.dart';
+import 'identity_announce.dart';
 import 'inbound_pipeline.dart';
 import 'location_share.dart';
 import 'messaging_coordinator.dart';
@@ -414,6 +415,31 @@ class MessagingStack {
       kControlKindLocationShare,
       locationShareService.handleWireFrame,
     );
+
+    // E04-B12 (Option A, part 1/2): same "needs a fully-constructed `this`"
+    // reasoning as every other control sub-protocol above. Registered onto
+    // its OWN dedicated slot (`InboundPipeline.registerIdentityAnnounceHandler`
+    // — deliberately NOT `registerControlHandler`'s `_controlHandlers` map,
+    // since this is the one controlKind whose dispatch bypasses `isForUs`
+    // entirely; see `inbound_pipeline.dart`'s own `_handleBuffer` and
+    // `identity_announce.dart`'s header for the full justification).
+    //
+    // `inbound.peerConnected.listen(...)` mirrors EXACTLY the shape
+    // `inbound.delivered.listen(...)` already uses a few lines above for
+    // `deliveryAckService`: a broadcast stream that produces nothing until
+    // `coordinator.start()` actually calls `inbound.start()` (this file's
+    // own "does NOT start anything" contract, unchanged — subscribing to a
+    // dormant stream starts nothing by itself), so every fresh connection
+    // automatically fires an identity-announce with no call site needed
+    // outside this composition root (task file §3 point 5). Best-effort
+    // (`unawaited`): a failed/timed-out announce is only ever counted on
+    // `identityAnnounce.counters`, never allowed to affect anything else
+    // observing this same connection event.
+    identityAnnounce = IdentityAnnounceService(stack: this);
+    inbound.registerIdentityAnnounceHandler(identityAnnounce.handleAnnounce);
+    inbound.peerConnected.listen((peerDeviceId) {
+      unawaited(identityAnnounce.sendAnnounce(peerDeviceId));
+    });
   }
 
   /// The single app-wide `AppDatabase` — passed in, never constructed here
@@ -515,6 +541,17 @@ class MessagingStack {
   /// (E09-T05) — this device's own position is read only after
   /// `LocationVisibilityPolicy` has already approved a share (task file §2).
   late final LocationShareService locationShareService;
+
+  /// E04-B12 (Option A, part 1/2): identity-announce protocol — learns and
+  /// stores a peer's real `selfDeviceId` (`relationships.remote_self_
+  /// device_id`), keyed by the Bluetooth address the announce arrived on.
+  /// Constructed here, registered on `inbound`'s own dedicated
+  /// identity-announce slot (NOT a `controlKind` in `_controlHandlers` —
+  /// see `identity_announce.dart`'s header for why this one bypasses
+  /// `isForUs`), and wired to fire automatically on every fresh connection
+  /// via `inbound.peerConnected`. Does NOT yet fix outbound
+  /// `RelayPacketFrame` addressing — that is `E04-B13`.
+  late final IdentityAnnounceService identityAnnounce;
 
   /// This device's own local identity (ADR-0005: local, not Firebase-
   /// derived) — from `DeviceIdentityRepository`. May be `''` if no local
