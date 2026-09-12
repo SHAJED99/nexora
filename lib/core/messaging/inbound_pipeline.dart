@@ -587,9 +587,114 @@ class InboundPipeline {
     // Bluetooth discovery re-announces the same device across scan cycles
     // (mirrors devices_controller.dart's own dedup reasoning).
     if (_connectionSubscriptions.containsKey(device.id)) return;
+    // E04-B17: the subscription below MUST be created synchronously, in
+    // this same call, before any `await` -- a native `connected`/data event
+    // for [device.id] can arrive on Dart's very next event-loop turn (this
+    // was observed live: making this method `async` and awaiting
+    // reconciliation BEFORE subscribing reintroduced the exact same
+    // "event broadcast to a deviceId nothing is listening for yet" race
+    // this whole task exists to close, just one layer up). Reconciliation
+    // itself has natural slack: it only needs to finish before
+    // `PrekeyExchange`'s own trust check runs, which is a full network
+    // round trip later, so firing it here as fire-and-forget is safe --
+    // see `_reconcileStaleRelationship`'s own doc comment.
     _connectionSubscriptions[device.id] = _stack.transport
         .connectionState(device.id)
         .listen((ConnectionState state) => _onConnectionStateChanged(device.id, state));
+    // E04-B17 (review round 1, F1): gated on `device.bonded` -- this method
+    // is the handler for EVERY discovered device, including an ordinary
+    // passing stranger's headphones from a routine scan, not only an
+    // accepted connection. Reconciliation must never run for a device this
+    // side has no OS-level authentication for at all (see
+    // `_reconcileStaleRelationship`'s own doc comment for the full
+    // reasoning) -- `bonded` is real Bluetooth OS pairing, the one signal
+    // in this event that a Bluetooth-visible NAME alone (attacker-settable)
+    // is not.
+    if (device.bonded) {
+      unawaited(_reconcileStaleRelationship(device.id, device.displayName));
+    }
+  }
+
+  /// E04-B17: [deviceId] might be a peer this side already trusts under a
+  /// DIFFERENT, now-stale address -- confirmed live: an OS/OEM Bluetooth
+  /// stack can present a different real, currently-bonded address than
+  /// whatever address a relationship was originally keyed under (e.g. from
+  /// an earlier discovery scan, before the peer was OS-bonded — the same
+  /// address-instability class `E04-B08`'s own `resolveDeviceId` already
+  /// found and fixed for the discovery path, but with no mechanism to ever
+  /// correct an ALREADY-stored relationship once its address goes stale).
+  /// Without this, a message to/from an already-trusted peer that
+  /// reconnects under a new address fails forever -- no relationship row
+  /// exists for the new address, so it is either never subscribed to at
+  /// all (the accept-path gap this task's own root-causing found) or
+  /// treated as a brand-new `unknown` contact requiring manual
+  /// re-verification.
+  ///
+  /// **Gated on `bonded` at the ONE call site (E04-B17 review round 1,
+  /// F1/F2)** -- this method itself trusts that its caller only ever
+  /// invokes it for a device this side has REAL OS-level Bluetooth pairing
+  /// with (`TransportDevice.bonded`, populated by the native layer from
+  /// `BluetoothAdapter.bondedDevices`, never by anything a peer's own
+  /// broadcast claims). Never call this for an unbonded device: a
+  /// Bluetooth-visible NAME is attacker-settable and carries zero
+  /// authentication on its own -- confirmed live by an adversarial review
+  /// probe that had an unbonded "stranger" device inherit a `trusted` row
+  /// via a routine discovery scan before this gate existed. A real bond
+  /// requires the OS's own pairing exchange (a user-visible confirmation
+  /// on both ends), which is what makes the name match below a reasonable
+  /// "probably the same peer, reconnecting" signal rather than a spoofable
+  /// one -- it is still not a cryptographic identity check (that is
+  /// `remote_self_device_id`'s job, once the identity-announce protocol
+  /// completes), so this only ever copies an ALREADY-evaluated decision
+  /// forward, never invents a new one, and remains a narrower, secondary
+  /// signal.
+  ///
+  /// Deliberately narrow beyond the `bonded` gate too: only reconciles
+  /// when [deviceId] has no relationship row of its own yet AND exactly
+  /// ONE other stored relationship's `peerName` matches -- an ambiguous
+  /// match (two different bonded, stored peers happen to share a
+  /// Bluetooth-visible name) is left alone rather than guessed at, so
+  /// [deviceId] is treated as a genuinely new, `unknown` contact through
+  /// the normal discovery/trust flow instead (a false negative here costs
+  /// a re-verification; a false positive would silently hand a new
+  /// address someone else's trust decision). Deliberately does NOT fall
+  /// back to matching on an absent (`NULL`) `peerName` for a
+  /// pre-this-column relationship -- review round 1 found that fallback
+  /// never actually healed (it only ever populated the NEW row, leaving
+  /// the stale row permanently `NULL` and the fallback permanently armed)
+  /// and could pick the wrong one among several such rows. A relationship
+  /// that predates this column simply needs one ordinary re-verification
+  /// the first time its peer reconnects under a different address --
+  /// accepted here as the safer trade-off.
+  Future<void> _reconcileStaleRelationship(
+    String deviceId,
+    String peerName,
+  ) async {
+    if (peerName.isEmpty) return; // review round 2 (N1): an empty name is
+    // still a valid SQL correlator (unlike NULL) and matches nothing real.
+    final db = _stack.db;
+    final existing = await (db.select(db.relationships)
+          ..where((t) => t.deviceId.equals(deviceId)))
+        .getSingleOrNull();
+    if (existing != null) return; // already has its own row -- nothing to do.
+
+    final candidates = await (db.select(db.relationships)
+          ..where(
+            (t) =>
+                t.peerName.equals(peerName) & t.deviceId.equals(deviceId).not(),
+          ))
+        .get();
+    if (candidates.length != 1) return; // none, or ambiguous -- leave as new.
+
+    final stale = candidates.single;
+    await db.into(db.relationships).insertOnConflictUpdate(
+          RelationshipsCompanion.insert(
+            deviceId: deviceId,
+            state: stale.state,
+            updatedAt: DateTime.now(),
+            peerName: Value(peerName),
+          ),
+        );
   }
 
   void _onConnectionStateChanged(String deviceId, ConnectionState state) {

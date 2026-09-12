@@ -590,7 +590,7 @@ void main() {
         'CREATE TABLE relationships (\n'
         '      device_id TEXT NOT NULL,\n'
         '      state TEXT NOT NULL,\n'
-        '      updated_at INTEGER NOT NULL, "remote_self_device_id" TEXT NULL,\n'
+        '      updated_at INTEGER NOT NULL, "remote_self_device_id" TEXT NULL, "peer_name" TEXT NULL,\n'
         '      PRIMARY KEY (device_id)\n'
         '    )',
       );
@@ -821,7 +821,7 @@ void main() {
         'CREATE TABLE relationships (\n'
         '      device_id TEXT NOT NULL,\n'
         '      state TEXT NOT NULL,\n'
-        '      updated_at INTEGER NOT NULL, "remote_self_device_id" TEXT NULL,\n'
+        '      updated_at INTEGER NOT NULL, "remote_self_device_id" TEXT NULL, "peer_name" TEXT NULL,\n'
         '      PRIMARY KEY (device_id)\n'
         '    )',
       );

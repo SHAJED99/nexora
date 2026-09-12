@@ -105,7 +105,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 21;
+  int get schemaVersion => 22;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -664,6 +664,16 @@ class AppDatabase extends _$AppDatabase {
         // announced its real `selfDeviceId` yet (identity_announce.dart's
         // own header; task file §2, "existing rows are unaffected").
         await m.addColumn(relationships, relationships.remoteSelfDeviceId);
+      }
+      if (from >= 3 && from < 22) {
+        // E04-B17: `relationships.peer_name` -- additive nullable column,
+        // same shape and same `from >= 3` guard reasoning as the
+        // `remoteSelfDeviceId` step immediately above (this table is first
+        // created by the `from < 3` step, so only an install that already
+        // had the table without this column needs it added here). No
+        // backfill: an existing relationship simply has not been
+        // reconciled under this mechanism yet.
+        await m.addColumn(relationships, relationships.peerName);
       }
     },
   );

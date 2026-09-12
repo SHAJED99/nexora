@@ -308,12 +308,36 @@ class BluetoothTransport(
             } catch (e: IOException) {
               break // socket closed (release()) or a real accept error.
             }
-        val remoteId =
+        val rawRemoteAddress =
             try {
               accepted.remoteDevice?.address
             } catch (e: SecurityException) {
               null
             }
+        val rawRemoteName =
+            try {
+              accepted.remoteDevice?.name
+            } catch (e: SecurityException) {
+              null
+            }
+        // E04-B17: `rawRemoteAddress` can be a masked/obfuscated value (not
+        // the peer's real, bonded BR/EDR address) on some OEM Bluetooth
+        // stacks (confirmed live: MIUI reports a fixed placeholder for an
+        // ACCEPTED connection's remote address, the same placeholder it
+        // reports for its OWN local adapter identity) -- the same class of
+        // address unreliability `E04-B08` already found and fixed for the
+        // discovery-scan (`ACTION_FOUND`) path via `resolveDeviceId`, never
+        // previously applied here. Every Dart-side stream (`connectionState`/
+        // `incomingData`) is keyed by the REAL bonded address stored in
+        // `relationships.device_id`, so a masked accept-time address here
+        // means the connected/data events are broadcast to a deviceId
+        // nothing is listening for -- silently dropped, never reaching
+        // `InboundPipeline` at all. Resolving via the SAME bonded-name-match
+        // helper used for discovery closes this for the (overwhelmingly
+        // common, in this app's design) already-bonded-peer case; an
+        // unbonded/unnamed peer falls back to the raw reported address
+        // unchanged, exactly `resolveDeviceId`'s own existing contract.
+        val remoteId = rawRemoteAddress?.let { resolveDeviceId(it, rawRemoteName) }
         if (remoteId == null) {
           try {
             accepted.close()
@@ -322,6 +346,47 @@ class BluetoothTransport(
             // identify the far end of.
           }
           continue
+        }
+        // E04-B17: emit `onDeviceDiscovered` for this accepted peer BEFORE
+        // `onConnectionStateChanged` -- `InboundPipeline._onDeviceDiscovered`
+        // is the ONLY place a `connectionState`/`incomingData` subscription
+        // ever gets created for a device id the Dart side does not already
+        // have a relationship for (`_seedKnownDevices` only seeds EXISTING
+        // trusted/allowed relationships; nothing previously routed a
+        // genuinely-new-to-Dart accepted connection through that path at
+        // all). Without this, `onConnectionStateChanged`/`onDataReceived`
+        // below still fire correctly and still reach the Dart `_EventsHandler`
+        // -- confirmed live -- but land on a broadcast stream nothing is
+        // listening for and are silently dropped, never reaching
+        // `InboundPipeline`. This also gives `_onDeviceDiscovered` the raw
+        // peer name (mirrors `handleDeviceFound`'s own `name = rawName ?:
+        // address` fallback), which is what lets it reconcile a stale
+        // relationship address (`_reconcileStaleRelationship`) for an
+        // already-bonded peer whose stored address has drifted -- the same
+        // real gap this task's own root-causing found.
+        //
+        // `bonded` (review round 1, F1/F2): re-checked explicitly rather
+        // than assumed -- both this app's socket variants
+        // (`createRfcommSocketToServiceRecord`/
+        // `listenUsingRfcommWithServiceRecord`) are the SECURE flavor,
+        // which the platform only ever completes for an already-bonded
+        // pair, so this is expected to always be `true` for an accepted
+        // connection; asserting it explicitly (rather than hard-coding
+        // `true`) means a future change to the socket variant, or an OS
+        // quirk that somehow accepts an unbonded peer, fails safe (no
+        // reconciliation) instead of silently trusting an assumption that
+        // stopped holding.
+        val remoteBonded = isBonded(remoteId)
+        eventsScope.launch {
+          eventsApi.onDeviceDiscovered(
+              TransportDevice(
+                  id = remoteId,
+                  displayName = rawRemoteName ?: remoteId,
+                  type = TransportType.BLUETOOTH,
+                  rssi = null,
+                  bonded = remoteBonded,
+              ),
+          )
         }
         openSockets[remoteId] = accepted
         startReadLoop(remoteId, accepted)
@@ -360,6 +425,28 @@ class BluetoothTransport(
    * `TransportService.connect()` depends on that shape holding here too).
    */
   fun connect(deviceId: String): Boolean {
+    // E04-B17: idempotent when a live socket for [deviceId] already exists
+    // -- confirmed live: `ConnectionEnsuringSender`'s own Dart-side
+    // "already connected" cache (`_connectedDeviceIds`) is populated ONLY
+    // by a successful OUTBOUND `connect()`, so it has no way to know about
+    // a connection this device ACCEPTED (`acceptLoop`, above). Once
+    // E04-B17's own address-reconciliation fix made an accepted
+    // connection's device id agree with the SAME id Dart later calls
+    // `directSend`/`connect` with for that peer (e.g. from
+    // `IdentityAnnounceService.sendAnnounce` firing right after accept),
+    // that mismatch turned into a real, observed race: the redundant
+    // outbound `doConnect` this method used to always attempt fires its
+    // own `CONNECTING` event, which `InboundPipeline._onConnectionStateChanged`
+    // treats as "no active link" and tears down the `incomingData`
+    // subscription the accept had JUST created -- silently killing the
+    // very connection this call was trying to reuse. Re-emitting `CONNECTED`
+    // (rather than doing nothing) keeps `TransportService.connect`'s own
+    // `await settled.future` contract intact for a caller that raced in
+    // after the connection was already accepted.
+    if (openSockets.containsKey(deviceId)) {
+      eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTED) }
+      return true
+    }
     val bt = adapter
     if (bt == null || !bt.isEnabled) {
       emitFailure(deviceId)
@@ -761,6 +848,33 @@ class BluetoothTransport(
                 // raced ahead of this thread's exit, leaving the live thread
                 // untracked by disconnect()/release().
                 readThreads.remove(deviceId, Thread.currentThread())
+                // E04-B17 (review round 1, F3): this read loop is the ONLY
+                // thing that actually knows a connection died from the
+                // REMOTE end (a clean or errored EOF) -- before this, only
+                // `disconnect()` (a LOCAL close) ever removed `deviceId`
+                // from `openSockets` or emitted `DISCONNECTED`, so a peer
+                // that simply walked out of range left a dead socket keyed
+                // in `openSockets` forever, with no event telling either
+                // this file or Dart the link was gone. That was merely
+                // harmless dead weight before this task's own `connect()`
+                // idempotency fix (below) started trusting
+                // `openSockets.containsKey(deviceId)` as "this link is
+                // live" -- after that fix, a stale entry left in place by a
+                // remote-initiated drop would make `connect()` re-affirm
+                // `CONNECTED` for a corpse forever, and every future send to
+                // that peer would fail permanently until the app restarts.
+                // Two-arg `remove(deviceId, socket)`, not a plain
+                // `remove(deviceId)`: if `disconnect()` already removed
+                // (and closed) THIS exact socket first -- the ordinary local
+                // teardown path -- this is correctly a no-op (the map no
+                // longer maps `deviceId` to `socket`), so `disconnect()`'s
+                // own single `DISCONNECTED` emission is never duplicated. It
+                // only actually removes and emits when this socket was
+                // still the live one, i.e. exactly the remote-drop case this
+                // fix closes.
+                if (openSockets.remove(deviceId, socket)) {
+                  eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.DISCONNECTED) }
+                }
               }
             },
             "nexora-bt-read-$deviceId")
@@ -915,9 +1029,15 @@ class BluetoothTransport(
     // never a default").
     val rssiExtra = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE)
     val rssi = if (rssiExtra == Short.MIN_VALUE) null else rssiExtra.toLong()
+    // E04-B17 (review round 1, F1/F2): re-derived independently of
+    // `resolveDeviceId`'s own internal bonded-list walk -- a genuinely new,
+    // not-yet-bonded peer (the overwhelmingly common discovery-scan case)
+    // correctly reports `bonded = false` here, so `_reconcileStaleRelationship`
+    // never runs for a passing stranger's device.
+    val bonded = isBonded(resolvedId)
     eventsScope.launch {
       eventsApi.onDeviceDiscovered(
-          TransportDevice(id = resolvedId, displayName = name, type = TransportType.BLUETOOTH, rssi = rssi),
+          TransportDevice(id = resolvedId, displayName = name, type = TransportType.BLUETOOTH, rssi = rssi, bonded = bonded),
       )
     }
   }

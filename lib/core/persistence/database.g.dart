@@ -459,12 +459,24 @@ class $RelationshipsTable extends Relationships
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _peerNameMeta = const VerificationMeta(
+    'peerName',
+  );
+  @override
+  late final GeneratedColumn<String> peerName = GeneratedColumn<String>(
+    'peer_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     deviceId,
     state,
     updatedAt,
     remoteSelfDeviceId,
+    peerName,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -511,6 +523,12 @@ class $RelationshipsTable extends Relationships
         ),
       );
     }
+    if (data.containsKey('peer_name')) {
+      context.handle(
+        _peerNameMeta,
+        peerName.isAcceptableOrUnknown(data['peer_name']!, _peerNameMeta),
+      );
+    }
     return context;
   }
 
@@ -535,6 +553,10 @@ class $RelationshipsTable extends Relationships
       remoteSelfDeviceId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}remote_self_device_id'],
+      ),
+      peerName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}peer_name'],
       ),
     );
   }
@@ -561,11 +583,33 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
   /// additive migration (schema v20 -> v21), no backfill for existing rows
   /// (they simply have not announced yet).
   final String? remoteSelfDeviceId;
+
+  /// E04-B17: the peer's Bluetooth-visible name at the time this
+  /// relationship was created or last reconciled — the only correlator
+  /// available to recognize "this is the same already-trusted peer,
+  /// reconnecting under a different address" when [deviceId] itself has
+  /// gone stale (confirmed live: an OS/OEM Bluetooth stack can present a
+  /// DIFFERENT real, currently-bonded address than whatever address a
+  /// relationship was originally keyed under, e.g. from an earlier
+  /// discovery scan — same root cause class `E04-B08`'s own
+  /// `resolveDeviceId` already fixed for the discovery path, found here to
+  /// also silently break inbound delivery on the accept path with no
+  /// mechanism to ever recover). `null` for a relationship created before
+  /// this column existed, or one whose peer has never been seen with a
+  /// resolvable name — reconciliation simply cannot run for those, the
+  /// same "additive, no backfill" shape `remoteSelfDeviceId` above already
+  /// established. Never used for trust decisions itself (a name is not an
+  /// authentication factor) — only to locate the CANDIDATE existing
+  /// relationship whose already-evaluated trust state should carry over to
+  /// a newly-seen address for the same peer; see
+  /// `InboundPipeline._reconcileStaleRelationship` for where this is read.
+  final String? peerName;
   const RelationshipRow({
     required this.deviceId,
     required this.state,
     required this.updatedAt,
     this.remoteSelfDeviceId,
+    this.peerName,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -575,6 +619,9 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
     map['updated_at'] = Variable<DateTime>(updatedAt);
     if (!nullToAbsent || remoteSelfDeviceId != null) {
       map['remote_self_device_id'] = Variable<String>(remoteSelfDeviceId);
+    }
+    if (!nullToAbsent || peerName != null) {
+      map['peer_name'] = Variable<String>(peerName);
     }
     return map;
   }
@@ -587,6 +634,9 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
       remoteSelfDeviceId: remoteSelfDeviceId == null && nullToAbsent
           ? const Value.absent()
           : Value(remoteSelfDeviceId),
+      peerName: peerName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(peerName),
     );
   }
 
@@ -602,6 +652,7 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
       remoteSelfDeviceId: serializer.fromJson<String?>(
         json['remoteSelfDeviceId'],
       ),
+      peerName: serializer.fromJson<String?>(json['peerName']),
     );
   }
   @override
@@ -612,6 +663,7 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
       'state': serializer.toJson<String>(state),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'remoteSelfDeviceId': serializer.toJson<String?>(remoteSelfDeviceId),
+      'peerName': serializer.toJson<String?>(peerName),
     };
   }
 
@@ -620,6 +672,7 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
     String? state,
     DateTime? updatedAt,
     Value<String?> remoteSelfDeviceId = const Value.absent(),
+    Value<String?> peerName = const Value.absent(),
   }) => RelationshipRow(
     deviceId: deviceId ?? this.deviceId,
     state: state ?? this.state,
@@ -627,6 +680,7 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
     remoteSelfDeviceId: remoteSelfDeviceId.present
         ? remoteSelfDeviceId.value
         : this.remoteSelfDeviceId,
+    peerName: peerName.present ? peerName.value : this.peerName,
   );
   RelationshipRow copyWithCompanion(RelationshipsCompanion data) {
     return RelationshipRow(
@@ -636,6 +690,7 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
       remoteSelfDeviceId: data.remoteSelfDeviceId.present
           ? data.remoteSelfDeviceId.value
           : this.remoteSelfDeviceId,
+      peerName: data.peerName.present ? data.peerName.value : this.peerName,
     );
   }
 
@@ -645,14 +700,15 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
           ..write('deviceId: $deviceId, ')
           ..write('state: $state, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('remoteSelfDeviceId: $remoteSelfDeviceId')
+          ..write('remoteSelfDeviceId: $remoteSelfDeviceId, ')
+          ..write('peerName: $peerName')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode =>
-      Object.hash(deviceId, state, updatedAt, remoteSelfDeviceId);
+      Object.hash(deviceId, state, updatedAt, remoteSelfDeviceId, peerName);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -660,7 +716,8 @@ class RelationshipRow extends DataClass implements Insertable<RelationshipRow> {
           other.deviceId == this.deviceId &&
           other.state == this.state &&
           other.updatedAt == this.updatedAt &&
-          other.remoteSelfDeviceId == this.remoteSelfDeviceId);
+          other.remoteSelfDeviceId == this.remoteSelfDeviceId &&
+          other.peerName == this.peerName);
 }
 
 class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
@@ -668,12 +725,14 @@ class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
   final Value<String> state;
   final Value<DateTime> updatedAt;
   final Value<String?> remoteSelfDeviceId;
+  final Value<String?> peerName;
   final Value<int> rowid;
   const RelationshipsCompanion({
     this.deviceId = const Value.absent(),
     this.state = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.remoteSelfDeviceId = const Value.absent(),
+    this.peerName = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   RelationshipsCompanion.insert({
@@ -681,6 +740,7 @@ class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
     required String state,
     required DateTime updatedAt,
     this.remoteSelfDeviceId = const Value.absent(),
+    this.peerName = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : deviceId = Value(deviceId),
        state = Value(state),
@@ -690,6 +750,7 @@ class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
     Expression<String>? state,
     Expression<DateTime>? updatedAt,
     Expression<String>? remoteSelfDeviceId,
+    Expression<String>? peerName,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -698,6 +759,7 @@ class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (remoteSelfDeviceId != null)
         'remote_self_device_id': remoteSelfDeviceId,
+      if (peerName != null) 'peer_name': peerName,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -707,6 +769,7 @@ class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
     Value<String>? state,
     Value<DateTime>? updatedAt,
     Value<String?>? remoteSelfDeviceId,
+    Value<String?>? peerName,
     Value<int>? rowid,
   }) {
     return RelationshipsCompanion(
@@ -714,6 +777,7 @@ class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
       state: state ?? this.state,
       updatedAt: updatedAt ?? this.updatedAt,
       remoteSelfDeviceId: remoteSelfDeviceId ?? this.remoteSelfDeviceId,
+      peerName: peerName ?? this.peerName,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -733,6 +797,9 @@ class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
     if (remoteSelfDeviceId.present) {
       map['remote_self_device_id'] = Variable<String>(remoteSelfDeviceId.value);
     }
+    if (peerName.present) {
+      map['peer_name'] = Variable<String>(peerName.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -746,6 +813,7 @@ class RelationshipsCompanion extends UpdateCompanion<RelationshipRow> {
           ..write('state: $state, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('remoteSelfDeviceId: $remoteSelfDeviceId, ')
+          ..write('peerName: $peerName, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -10204,6 +10272,7 @@ typedef $$RelationshipsTableCreateCompanionBuilder =
       required String state,
       required DateTime updatedAt,
       Value<String?> remoteSelfDeviceId,
+      Value<String?> peerName,
       Value<int> rowid,
     });
 typedef $$RelationshipsTableUpdateCompanionBuilder =
@@ -10212,6 +10281,7 @@ typedef $$RelationshipsTableUpdateCompanionBuilder =
       Value<String> state,
       Value<DateTime> updatedAt,
       Value<String?> remoteSelfDeviceId,
+      Value<String?> peerName,
       Value<int> rowid,
     });
 
@@ -10241,6 +10311,11 @@ class $$RelationshipsTableFilterComposer
 
   ColumnFilters<String> get remoteSelfDeviceId => $composableBuilder(
     column: $table.remoteSelfDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get peerName => $composableBuilder(
+    column: $table.peerName,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -10273,6 +10348,11 @@ class $$RelationshipsTableOrderingComposer
     column: $table.remoteSelfDeviceId,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get peerName => $composableBuilder(
+    column: $table.peerName,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$RelationshipsTableAnnotationComposer
@@ -10297,6 +10377,9 @@ class $$RelationshipsTableAnnotationComposer
     column: $table.remoteSelfDeviceId,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get peerName =>
+      $composableBuilder(column: $table.peerName, builder: (column) => column);
 }
 
 class $$RelationshipsTableTableManager
@@ -10334,12 +10417,14 @@ class $$RelationshipsTableTableManager
                 Value<String> state = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<String?> remoteSelfDeviceId = const Value.absent(),
+                Value<String?> peerName = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RelationshipsCompanion(
                 deviceId: deviceId,
                 state: state,
                 updatedAt: updatedAt,
                 remoteSelfDeviceId: remoteSelfDeviceId,
+                peerName: peerName,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -10348,12 +10433,14 @@ class $$RelationshipsTableTableManager
                 required String state,
                 required DateTime updatedAt,
                 Value<String?> remoteSelfDeviceId = const Value.absent(),
+                Value<String?> peerName = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RelationshipsCompanion.insert(
                 deviceId: deviceId,
                 state: state,
                 updatedAt: updatedAt,
                 remoteSelfDeviceId: remoteSelfDeviceId,
+                peerName: peerName,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

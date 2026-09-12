@@ -51,6 +51,12 @@ class LoopbackTransport(
           id = LOOPBACK_DEVICE_ID,
           displayName = LOOPBACK_DEVICE_NAME,
           type = TransportType.BLUETOOTH,
+          rssi = null,
+          // E04-B17: the loopback double has no real Bluetooth stack to
+          // check bonding against; `false` is the safe default (never
+          // eligible for `_reconcileStaleRelationship`), matching every
+          // other call site's own explicit-rather-than-assumed value.
+          bonded = false,
         ),
       )
     }

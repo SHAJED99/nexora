@@ -270,7 +270,17 @@ class DevicesController extends GetxController {
   Future<void> verify(String deviceId) async {
     final bool wasPendingEnrollment =
         pendingEnrollments.any((d) => d.id == deviceId);
-    await _repository.upsert(deviceId, RelationshipState.allowed);
+    // E04-B17: pass along the peer's Bluetooth-visible name when this
+    // device has recently seen one for it, so a later connection under a
+    // different (drifted) address can be reconciled back to this same
+    // trust decision (`InboundPipeline._reconcileStaleRelationship`).
+    // `null` (nothing discovered recently under this exact id) leaves
+    // `peerName` untouched -- same as omitting the parameter entirely.
+    await _repository.upsert(
+      deviceId,
+      RelationshipState.allowed,
+      peerName: _discoveredNormalDevices[deviceId]?.displayName,
+    );
     // EARS-RECOVER-7: `Approve` (a pending-enrollment row's trailing
     // button) calls this SAME existing method -- once trust is recorded,
     // the device reappears through `load()` as a normal Allowed row

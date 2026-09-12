@@ -43,6 +43,7 @@ class TransportDevice {
     required this.displayName,
     required this.type,
     this.rssi,
+    this.bonded = false,
   });
 
   final String id;
@@ -55,6 +56,21 @@ class TransportDevice {
   /// Contract-only as of E04-B03: no native implementation populates this
   /// field yet — wiring real RSSI is E05's job (FR-ROUTE-001, FR-ROUTE-002).
   final int? rssi;
+
+  /// E04-B17 (review round 1, F1/F2): `true` only when [id] is currently
+  /// in `BluetoothAdapter.bondedDevices` on the native side — i.e. this
+  /// device and the peer have already completed OS-level pairing, a real
+  /// authentication factor a Bluetooth-visible NAME alone is not (a name
+  /// is attacker-settable; a bond requires the OS's own pairing exchange).
+  /// This is what `InboundPipeline._reconcileStaleRelationship` gates on
+  /// before ever copying a trust decision onto a new device id — a false
+  /// value there must never be treated as "not yet known, assume bonded":
+  /// the safe default this field's own absence would otherwise invite is
+  /// exactly backwards for a security-relevant flag, so every native
+  /// emission site sets it explicitly (defaults to `false` here only for
+  /// call sites — none in production — that have no bonded-list access at
+  /// all, e.g. a raw unit-test double).
+  final bool bonded;
 }
 
 /// Lifecycle state of a connection to a given device id.
