@@ -1335,6 +1335,83 @@ void main() {
           reason: 'a 4px radius change must be a HARD style-delta finding');
     });
   });
+
+  // ── E06-B08: dumper regression — icon-only tap targets, icon-name gaps ───
+  // Proves both defects this bug fixes, and proves the "no double-emit on a
+  // genuinely nested separate target" requirement its own fix must honour.
+  // Confirmed failing on the PRE-FIX dumper (reverting the `_walk`/`_iconNames`
+  // changes below reproduces the fail) — see this task's Run log for the
+  // before/after run transcript.
+  group('E06-B08 — icon-only tap targets are their own probe element', () {
+    testWidgets(
+        'test_E06_B08_icon_only_button_glyph_is_its_own_probe_element',
+        (tester) async {
+      await dumpScreenProbe(
+        tester,
+        screenId: '_fixture_icon_only_button',
+        screen: _iconOnlyButtonFixture(),
+      );
+      final raw = await tester.runAsync(
+        () => File('build/design-probe/_fixture_icon_only_button.json')
+            .readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      final elements = (dump['elements'] as List).cast<Map<String, dynamic>>();
+
+      // The `InkWell` itself is still captured as ONE button-role element —
+      // empty text, since an icon-only target has no `Text` label to derive
+      // one from (unchanged behaviour, not this bug's concern).
+      final button = elements.singleWhere((e) => e['role'] == 'button');
+      expect(button['text'], isEmpty);
+
+      // Defect 1: pre-fix, `more_vert`'s `Icon` is walked (insideInteractive)
+      // but the `!insideInteractive` gate drops it — this `where(...)` finds
+      // nothing at all pre-fix. Post-fix it must be its own nested element.
+      expect(
+        elements.where((e) => e['text'] == 'more_vert'),
+        hasLength(1),
+        reason: 'an icon-only tap target\'s glyph must be its own probe '
+            'element, matching the DOM golden\'s nested-span model',
+      );
+
+      // Defect 2: pre-fix, `_iconNames` has no entry for `check`/`done_all`,
+      // so these (bare `Icon`s, already walked and emitted even pre-fix)
+      // dump with empty `text` — this assertion fails pre-fix.
+      expect(elements.where((e) => e['text'] == 'check'), hasLength(1));
+      expect(elements.where((e) => e['text'] == 'done_all'), hasLength(1));
+    });
+
+    testWidgets(
+        'test_E06_B08_nested_separate_tap_target_resolves_once_not_double_emitted',
+        (tester) async {
+      await dumpScreenProbe(
+        tester,
+        screenId: '_fixture_nested_tap_target',
+        screen: _nestedIconButtonFixture(),
+      );
+      final raw = await tester.runAsync(
+        () => File('build/design-probe/_fixture_nested_tap_target.json')
+            .readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      final elements = (dump['elements'] as List).cast<Map<String, dynamic>>();
+
+      // Two genuinely separate tap targets — the outer `InkWell` and the
+      // nested `IconButton` — must each resolve to their OWN button-role
+      // element (the `_isInteractiveBoundary` relaxation this fix adds to
+      // `_walk`'s own interactive gate), not collapse into one.
+      final buttons = elements.where((e) => e['role'] == 'button').toList();
+      expect(buttons, hasLength(2));
+
+      // The outer button's own direct icon child (`chat`) is captured
+      // exactly once, and the inner `IconButton`'s own icon (`close`) is
+      // ALSO captured exactly once — never zero (dropped) and never twice
+      // (double-emitted once under the outer button's scan and again under
+      // the inner one's).
+      expect(elements.where((e) => e['text'] == 'chat'), hasLength(1));
+      expect(elements.where((e) => e['text'] == 'close'), hasLength(1));
+    });
+  });
 }
 
 /// The falsification fixture — deliberately tiny: a heading-ish `Text` under
@@ -1416,6 +1493,64 @@ Widget _fixture({
               ),
             ),
           ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// E06-B08 regression fixture: an icon-only tap target (no `Text` label —
+/// the exact shape of `chat_view.dart`'s `_IconTapTarget`/`_RoundIconButton`
+/// and every screen's own back-arrow/kebab/add/mic buttons), plus two bare
+/// `Icon`s outside any interactive wrapper using the two ligatures
+/// `_iconNames` was missing (`check`/`done_all`, `chat_view.dart`'s own
+/// delivery-tick glyphs).
+Widget _iconOnlyButtonFixture() {
+  return MaterialApp(
+    home: Scaffold(
+      body: Column(
+        children: [
+          InkWell(
+            onTap: () {},
+            child: const SizedBox(
+              width: 44,
+              height: 44,
+              child: Icon(Icons.more_vert, size: 24),
+            ),
+          ),
+          const Icon(Icons.check, size: 18),
+          const Icon(Icons.done_all, size: 18),
+        ],
+      ),
+    ),
+  );
+}
+
+/// E06-B08 regression fixture: a genuinely separate, independently-tappable
+/// `IconButton` nested two levels inside an outer `InkWell`'s own tap
+/// target — proving the fix does not double-emit (or drop) either icon once
+/// `_walk`'s `insideInteractive` gate is relaxed for `_isInteractiveBoundary`
+/// widgets. No such nesting currently exists in this app's own screens (its
+/// own convention is one tap target per row, per `_isInteractiveBoundary`'s
+/// doc comment) — this is deliberately synthetic, defensive coverage for the
+/// shape the task's own Definition of Done calls out by name.
+Widget _nestedIconButtonFixture() {
+  return MaterialApp(
+    home: Scaffold(
+      body: InkWell(
+        onTap: () {},
+        child: SizedBox(
+          width: 120,
+          height: 60,
+          child: Row(
+            children: [
+              const Icon(Icons.chat, size: 20),
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () {},
+              ),
+            ],
+          ),
         ),
       ),
     ),
