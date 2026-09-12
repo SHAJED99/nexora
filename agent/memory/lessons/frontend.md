@@ -72,3 +72,29 @@ automatically for matching tasks (see `index.yaml`).
   owned cross-epic follow-up, never worked around by reshaping either
   widget. Not incremented - this is the rule doing its job on unfamiliar
   ground, which is the harder test than repeating it on the same screen.
+
+- **2026-09-12 (E06-B07) — root-caused down to the exact code path for the
+  first time, with a raw dump as evidence, instead of inferred from a
+  score delta.** Earlier occurrences (E06-T10, E07-T08/B01, E08-T08)
+  disclosed this gap correctly but from symptom evidence (a score number,
+  a copy mismatch). `E06-B07` dumped `build/design-probe/chat.json`'s raw
+  element list directly and confirmed: `test/design/flutter_probe_dumper.dart`'s
+  `_walk` emits exactly one `button`-role element per `_isInteractive`
+  widget, and its `Icon` branch only adds a probe element when
+  `!insideInteractive` — so `arrow_back`/`more_vert`/`add`/`mic` (bare
+  `Icon`s inside `InkWell`/`Material` tap targets in `chat_view.dart`) are
+  walked but never emitted, while the golden (DOM-based `probe.mjs`)
+  always captures an icon-font glyph as its own nested `<span>` element
+  inside the `<button>`. Also found, while investigating: a second,
+  narrower and previously-unnamed instance of the general "icon glyph
+  goes unseen" pattern — `_iconNames`'s lookup map omits `Icons.check`/
+  `Icons.done_all`, so `chat_view.dart`'s own delivery ticks (which are
+  NOT swallowed — they're bare `Icon`s outside any interactive wrapper)
+  still dump with empty text. Not incremented as a new lesson (same
+  underlying "the probe drops something inside/adjacent to a widget it
+  treats as opaque" family as the promoted rule) — recorded because this
+  is the first occurrence with an exact fix locus, which is what let this
+  task file a concretely-scoped follow-up (`E06-B08`) to actually fix the
+  dumper, rather than another disclosed-but-unfixed instance. `E06-B08`
+  fixes both: emit a nested `Icon` even when `insideInteractive`, and add
+  `check`/`done_all` to `_iconNames`.
