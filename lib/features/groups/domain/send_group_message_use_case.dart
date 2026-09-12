@@ -41,6 +41,14 @@ import 'package:drift/drift.dart';
 
 import '../../../core/auth/google_auth_service.dart' show AppFailure;
 import '../../../core/crypto/group_crypto_service.dart';
+// E04-B15: `resolveOutboundDestination` -- deliberately `show`n rather than
+// importing the whole file, since `messaging_stack.dart` already imports
+// THIS file (its own composition-root construction of
+// `SendGroupMessageUseCase`) -- a `show` import of one top-level function
+// keeps this side of the cycle minimal and avoids depending on anything
+// else that file declares.
+import '../../../core/messaging/messaging_stack.dart'
+    show resolveOutboundDestination;
 import '../../../core/messaging/relay_packet_frame.dart';
 import '../../../core/persistence/database.dart';
 import '../../messaging/domain/delivery_state_machine.dart';
@@ -265,17 +273,30 @@ class SendGroupMessageUseCase {
     final expiresAtMs = now.add(_ttl).millisecondsSinceEpoch;
 
     for (final recipientId in recipients) {
-      final frame = RelayPacketFrame(
-        payloadType: PayloadType.control,
-        packetId: messageId,
-        destination: recipientId,
-        source: _selfDeviceId,
-        priority: _priority,
-        createdAtMs: createdAtMs,
-        expiresAtMs: expiresAtMs,
-        payload: controlPayload,
-      );
       try {
+        // E04-B15: resolve the peer's real, learned `selfDeviceId` for the
+        // frame's own `destination` field -- same forward-only pattern
+        // E04-B13 established (`resolveOutboundDestination`'s own doc
+        // comment in `messaging_stack.dart`), reused rather than
+        // re-derived. `_enqueue` below keeps using the raw `recipientId`
+        // (Bluetooth MAC) unchanged -- only the wire frame's own
+        // `destination` field is resolved. Deliberately INSIDE this try
+        // block (mirrors the sibling fix in `delivery_ack.dart`'s own
+        // `_sendAck`): a resolution failure for one recipient must not
+        // abort the whole fan-out loop any more than an `_enqueue` failure
+        // already doesn't.
+        final destination =
+            await resolveOutboundDestination(_db, recipientId);
+        final frame = RelayPacketFrame(
+          payloadType: PayloadType.control,
+          packetId: messageId,
+          destination: destination,
+          source: _selfDeviceId,
+          priority: _priority,
+          createdAtMs: createdAtMs,
+          expiresAtMs: expiresAtMs,
+          payload: controlPayload,
+        );
         await _enqueue(recipientId, frame.serialize(), _priority, _ttl);
       } catch (_) {
         // Best-effort fan-out (task file §2/§6, mirrors

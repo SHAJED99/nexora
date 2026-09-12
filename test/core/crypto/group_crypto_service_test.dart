@@ -25,6 +25,8 @@ import 'package:nexora/core/persistence/group_tables.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/groups/data/group_repository.dart';
+import 'package:nexora/features/trust/domain/relationship.dart'
+    show RelationshipState;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -502,6 +504,97 @@ void main() {
       );
       expect(String.fromCharCodes(plaintext), 'hi group');
     });
+
+    test(
+      'test_E04_B15_key_distribution_frame_destination_uses_learned_remoteSelfDeviceId',
+      () async {
+        // Same defect class E04-B13 fixed for 1:1 chat, applied to
+        // `GroupCryptoService._sendOne`'s own `RelayPacketFrame`
+        // construction site: before this fix, a distribution frame's
+        // `destination` was the raw Bluetooth MAC of the recipient, which
+        // can never equal that recipient's real `selfDeviceId` -- `isForUs`
+        // always false on the receiving device, so the distribution is
+        // mistaken for a relay packet and `GroupCryptoService` never
+        // applies it at all.
+        final aSuffix = nextSuffix();
+        final bSuffix = nextSuffix();
+        mockSendAlwaysSucceeds(aSuffix);
+        mockConnectAlwaysSucceeds(aSuffix);
+        mockSendAlwaysSucceeds(bSuffix);
+        mockConnectAlwaysSucceeds(bSuffix);
+        final a = await newStack('device-a', aSuffix);
+        final b = await newStack('device-b-real-id', bSuffix);
+        addTearDown(a.dispose);
+        addTearDown(b.dispose);
+
+        const bMac = 'AA:BB:CC:DD:EE:60';
+
+        // Mirrors `establishMutualSessions`'s own bootstrap, except A's
+        // local session with B is keyed by `bMac` (the raw MAC
+        // `distributeTo`/`_sendOne` actually address B by), not by
+        // `b.selfDeviceId`.
+        await a.cryptoService.establishSession(
+          const SignalProtocolAddress(bMac, 1),
+          await b.identityService.getLocalPreKeyBundle(),
+        );
+        final bootstrap = await a.cryptoService.encrypt(
+          const SignalProtocolAddress(bMac, 1),
+          Uint8List.fromList([0]),
+        );
+        await b.cryptoService.decrypt(
+          const SignalProtocolAddress('device-a', 1),
+          bootstrap,
+        );
+
+        // A already learned (E04-B12's identity-announce, simulated as its
+        // already-landed effect) that the member on `bMac` is really
+        // `device-b-real-id`.
+        await a.db.into(a.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: bMac,
+                state: RelationshipState.unknown.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('device-b-real-id'),
+              ),
+            );
+
+        final groupId = await GroupRepository(a.db).createGroup(
+          name: 'G',
+          ownerDeviceId: 'device-a',
+          memberDeviceIds: [bMac],
+        );
+
+        await a.groupCryptoService.ensureOwnChain(groupId: groupId, epoch: 0);
+        final results = await a.groupCryptoService.distributeTo(
+          groupId: groupId,
+          epoch: 0,
+          recipientDeviceIds: [bMac],
+        );
+        expect(results[bMac], isNull);
+
+        wireSend(aSuffix, 'device-a', bSuffix);
+        b.inbound.start();
+        await connectPeer(bSuffix, 'device-a');
+        a.routingEngine.recordLinkMeasurement(
+          bMac,
+          latencyMs: 10,
+          lossRate: 0.0,
+          batteryDrain: 0.1,
+        );
+        await a.relayEngine.processQueue();
+        await settle();
+        await settle();
+
+        final bChain = await b.db.select(b.db.groupSenderKeys).get();
+        expect(
+          bChain,
+          hasLength(1),
+          reason: 'B must have received and applied the distribution -- '
+              'only possible if the frame\'s destination resolved to B\'s '
+              'own real selfDeviceId, not the raw MAC it was addressed by',
+        );
+      },
+    );
 
     test(
         'test_EARS_GROUP_13_member_joined_later_is_refused_the_earlier_epoch',

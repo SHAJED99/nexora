@@ -14,6 +14,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
@@ -364,6 +365,147 @@ void main() {
         expect(bobFix.longitude, closeTo(-74.0060, 1e-6));
         expect(bobFix.accuracyM, closeTo(5.0, 1e-6));
         expect(bobFix.capturedAt, 1_700_000_000_000);
+      },
+    );
+
+    test(
+      'test_E04_B15_share_frame_destination_uses_learned_remoteSelfDeviceId',
+      () async {
+        // Same defect class E04-B13 fixed for 1:1 chat, applied to
+        // `LocationShareService.share`'s own `RelayPacketFrame`
+        // construction site: before this fix, the frame's `destination`
+        // was the raw Bluetooth MAC of the peer, which can never equal
+        // that peer's real `selfDeviceId` -- `isForUs` always false on
+        // the receiving device, so the share is mistaken for a relay
+        // packet and never reaches `LocationShareService.handleWireFrame`
+        // at all.
+        final aSuffix = nextSuffix();
+        final bSuffix = nextSuffix();
+        final alice = await newStack('alice', aSuffix);
+        final bob = await newStack('bob-real-id', bSuffix);
+        addTearDown(alice.dispose);
+        addTearDown(bob.dispose);
+
+        const bMac = 'AA:BB:CC:DD:EE:70';
+        const aMac = 'AA:BB:CC:DD:EE:71';
+
+        // Mirrors `establishMutualSessions`'s own bootstrap, except
+        // alice's local session with bob is keyed by `bMac` (the raw MAC
+        // `share` actually addresses bob by), not by `bob.selfDeviceId`.
+        await alice.cryptoService.establishSession(
+          const SignalProtocolAddress(bMac, 1),
+          await bob.identityService.getLocalPreKeyBundle(),
+        );
+        final bootstrap = await alice.cryptoService.encrypt(
+          const SignalProtocolAddress(bMac, 1),
+          Uint8List.fromList([0]),
+        );
+        await bob.cryptoService.decrypt(
+          const SignalProtocolAddress('alice', 1),
+          bootstrap,
+        );
+
+        alice.inbound.start();
+        bob.inbound.start();
+
+        void wireSend(String fromSuffix, String fromDeviceId, String toSuffix) {
+          messenger.setMockMessageHandler(
+            'dev.flutter.pigeon.nexora.TransportApi.send.$fromSuffix',
+            (ByteData? message) async {
+              final args = TransportApi.pigeonChannelCodec
+                      .decodeMessage(message)!
+                  as List<Object?>;
+              final bytes = args[1]! as Uint8List;
+              messenger.handlePlatformMessage(
+                'dev.flutter.pigeon.nexora.TransportEventsApi.onDataReceived.$toSuffix',
+                TransportEventsApi.pigeonChannelCodec
+                    .encodeMessage(<Object?>[fromDeviceId, bytes]),
+                (ByteData? _) {},
+              );
+              return TransportApi.pigeonChannelCodec
+                  .encodeMessage(<Object?>[true]);
+            },
+          );
+          messenger.setMockMessageHandler(
+            'dev.flutter.pigeon.nexora.TransportApi.connect.$fromSuffix',
+            (ByteData? message) async {
+              final args = TransportApi.pigeonChannelCodec
+                      .decodeMessage(message)!
+                  as List<Object?>;
+              final deviceId = args[0]! as String;
+              scheduleMicrotask(() {
+                messenger.handlePlatformMessage(
+                  'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$fromSuffix',
+                  TransportEventsApi.pigeonChannelCodec.encodeMessage(
+                    <Object?>[deviceId, ConnectionState.connected],
+                  ),
+                  (ByteData? _) {},
+                );
+              });
+              return TransportApi.pigeonChannelCodec
+                  .encodeMessage(<Object?>[true]);
+            },
+          );
+        }
+
+        Future<void> connectPeer(String suffix, String deviceId) async {
+          final device = TransportDevice(
+            id: deviceId,
+            displayName: deviceId,
+            type: TransportType.bluetooth,
+          );
+          messenger.handlePlatformMessage(
+            'dev.flutter.pigeon.nexora.TransportEventsApi.onDeviceDiscovered.$suffix',
+            TransportEventsApi.pigeonChannelCodec.encodeMessage(<Object?>[device]),
+            (ByteData? _) {},
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          messenger.handlePlatformMessage(
+            'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$suffix',
+            TransportEventsApi.pigeonChannelCodec
+                .encodeMessage(<Object?>[deviceId, ConnectionState.connected]),
+            (ByteData? _) {},
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
+
+        wireSend(aSuffix, aMac, bSuffix);
+        wireSend(bSuffix, bMac, aSuffix);
+        await connectPeer(aSuffix, bMac);
+        await connectPeer(bSuffix, aMac);
+
+        await allowVisibility(alice, bMac);
+        await allowVisibility(bob, 'alice');
+
+        // Alice already learned (E04-B12's identity-announce, simulated
+        // as its already-landed effect) that the peer on `bMac` is really
+        // `bob-real-id`.
+        await alice.db.into(alice.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: bMac,
+                state: RelationshipState.trusted.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('bob-real-id'),
+              ),
+            );
+
+        final fake = _FakeLocationSource(
+          const LocationFix(
+            latitude: 10.0,
+            longitude: 20.0,
+            capturedAtMs: 1_700_000_000_000,
+          ),
+        );
+        final aliceService = buildService(alice, locationSource: fake);
+
+        final outcome = await aliceService.share(bMac);
+        expect(outcome, const LocationShareOutcomeSent());
+
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        final bobFix = await LocationFixRepository(db: bob.db).readFix('alice');
+        expect(bobFix, isNotNull);
+        expect(bobFix!.latitude, closeTo(10.0, 1e-6));
       },
     );
 

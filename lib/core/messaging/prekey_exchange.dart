@@ -661,7 +661,7 @@ class PrekeyExchange {
 
     switch (body.subType) {
       case _ControlSubType.bundleRequest:
-        await _handleBundleRequest(frame.source, body.requestId);
+        await _handleBundleRequest(frame.source, body.requestId, linkDeviceId);
       case _ControlSubType.bundleResponse:
         _handleBundleResponse(
           frame.source,
@@ -685,14 +685,49 @@ class PrekeyExchange {
   ) =>
       handleControlFrame(frame, linkDeviceId: linkDeviceId);
 
+  /// [peerDeviceId] is `frame.source` -- the requester's CLAIMED,
+  /// unauthenticated logical `selfDeviceId`. This is what the reply's own
+  /// `RelayPacketFrame.destination` field must still carry (unchanged from
+  /// before this fix): it is exactly what the ORIGINAL requester's own
+  /// `_takeMatchingCompleter` will check the reply against, and
+  /// `resolveOutboundDestination`'s own forward-only lookup, keyed by this
+  /// value, can never find a `relationships` row for it (that table is
+  /// always keyed by Bluetooth MAC, never by a claimed logical id), so it
+  /// always falls back to [peerDeviceId] unchanged -- exactly the pre-fix
+  /// behaviour for this field, preserved deliberately.
+  ///
+  /// [linkDeviceId] is the physical link this request actually arrived on
+  /// (`_handleControlFrameOnLink`'s own parameter, E04-B14's dedicated
+  /// dispatch slot) -- E04-B15's own carried-forward finding, `E04-B14`'s
+  /// review: this is the mirror-image, on the RESPONSE leg, of the exact bug
+  /// `E04-B13` fixed for OUTBOUND requests. Before this fix, the reply's
+  /// TRANSPORT dial used [peerDeviceId] itself (the claimed logical id) --
+  /// never a dialable Bluetooth MAC on real hardware. [linkDeviceId] is the
+  /// one thing this device can actually vouch for (mirrors
+  /// `_takeMatchingCompleter`'s own "trust the link, not the claim"
+  /// discipline and `identity_announce.dart`'s header) and is used for BOTH
+  /// the trust evaluation (`relationships` is keyed by Bluetooth MAC) and
+  /// the reply's own transport dial (`_sendControlFrame`'s new
+  /// `transportTarget` parameter) -- never for the frame's `destination`
+  /// field itself, which stays keyed by [peerDeviceId] as above.
+  ///
+  /// [linkDeviceId] is `null` only via this file's own dead
+  /// legacy-registration path (`messaging_stack.dart`'s pre-existing,
+  /// now-unreachable generic `registerControlHandler` call) and this file's
+  /// own pre-existing direct-call tests that predate E04-B14's dedicated
+  /// slot -- falls back to [peerDeviceId] in that one case, preserving those
+  /// tests' own pre-existing behaviour rather than regressing them.
   Future<void> _handleBundleRequest(
     String peerDeviceId,
     String requestId,
+    String? linkDeviceId,
   ) async {
-    final relationship = await _evaluateConnectionRequest(peerDeviceId);
+    final String evaluationKey = linkDeviceId ?? peerDeviceId;
+
+    final relationship = await _evaluateConnectionRequest(evaluationKey);
     // E10-T05: emitted AFTER the relationship resolves, for every state
     // (task file §3/§6) — same as the other evaluation site above.
-    _emitConnectionRequestNotice(peerDeviceId, relationship);
+    _emitConnectionRequestNotice(evaluationKey, relationship);
     if (relationship == RelationshipState.blocked) {
       // Silence, not a refusal frame -- task file §5: blocking must not be
       // remotely probeable.
@@ -711,6 +746,7 @@ class PrekeyExchange {
       await _sendControlFrame(
         peerDeviceId,
         _ControlBody.unavailable(requestId).serialize(),
+        transportTarget: linkDeviceId,
       );
       return;
     }
@@ -720,6 +756,7 @@ class PrekeyExchange {
     await _sendControlFrame(
       peerDeviceId,
       _ControlBody.response(requestId, bundleBytes).serialize(),
+      transportTarget: linkDeviceId,
     );
   }
 
@@ -790,12 +827,30 @@ class PrekeyExchange {
     return outstanding.completer;
   }
 
-  Future<void> _sendControlFrame(String peerDeviceId, Uint8List body) async {
+  /// [peerDeviceId] is the resolution key for the frame's own `destination`
+  /// field (E04-B13) -- for the outbound-request call site
+  /// ([_ensureSessionUncoalesced]) this is also the physical Bluetooth MAC
+  /// the transport dial itself uses, so [transportTarget] is left `null` and
+  /// this method dials [peerDeviceId] directly, exactly as before E04-B15.
+  ///
+  /// E04-B15: [transportTarget], when supplied, is what the TRANSPORT dial
+  /// actually uses instead of [peerDeviceId] -- needed by
+  /// [_handleBundleRequest]'s own reply, where [peerDeviceId] is
+  /// `frame.source` (a claimed logical identity, correct for the frame's own
+  /// `destination` field, but never a dialable address) and the real
+  /// physical link is a SEPARATE value ([_handleBundleRequest]'s own
+  /// `linkDeviceId`). `resolveOutboundDestination`'s own lookup always stays
+  /// keyed by [peerDeviceId] regardless -- only the transport call's target
+  /// changes.
+  Future<void> _sendControlFrame(
+    String peerDeviceId,
+    Uint8List body, {
+    String? transportTarget,
+  }) async {
     final now = _clock();
     // E04-B13: resolve the peer's real, learned `selfDeviceId` for the
-    // frame's own `destination` field -- forward-only, keyed by the SAME
-    // Bluetooth MAC (`peerDeviceId`) this method already sends to via
-    // `directSend` below (see `resolveOutboundDestination`'s doc comment in
+    // frame's own `destination` field -- forward-only, keyed by
+    // [peerDeviceId] (see `resolveOutboundDestination`'s doc comment in
     // `messaging_stack.dart` for the full §1a security reasoning). Falls
     // back to `peerDeviceId` itself when not yet known -- exactly what this
     // line did before this task, so the narrow pre-announce race window
@@ -846,7 +901,10 @@ class PrekeyExchange {
     // out, which used to fail in well under a second and started taking the
     // full 20s `_fanOutSessionTimeout` instead). Explicitly restoring the
     // original fail-fast contract here.
-    final sent = await _stack.directSend(peerDeviceId, frame.serialize());
+    final sent = await _stack.directSend(
+      transportTarget ?? peerDeviceId,
+      frame.serialize(),
+    );
     if (!sent) {
       throw const AppFailure('messaging.transport_send_failed');
     }

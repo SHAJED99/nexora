@@ -13,6 +13,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
@@ -25,6 +26,8 @@ import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
+import 'package:nexora/features/trust/domain/relationship.dart'
+    show RelationshipState;
 
 Uint8List _plaintext(String s) => Uint8List.fromList(s.codeUnits);
 
@@ -564,5 +567,87 @@ void main() {
       // One ack PAIR (accepted + delivered) -- not two.
       expect(b.deliveryAckService.counters.sent, 2);
     });
+
+    test(
+      'test_E04_B15_ack_frame_destination_resolves_via_resolveOutboundDestination',
+      () async {
+        // Same fix pattern E04-B13 established, applied to
+        // `DeliveryAckService._sendAck`'s own `RelayPacketFrame`
+        // construction site. Disclosed honestly (see this task's own Open
+        // Questions): `_sendAck`'s `peerDeviceId` parameter is always the
+        // stored message's own `senderDeviceId` -- populated from
+        // `frame.source`, i.e. already a logical `selfDeviceId`, never a
+        // Bluetooth MAC -- so `resolveOutboundDestination`'s lookup here
+        // can never match a real `relationships` row in production (that
+        // table is keyed by MAC). This test proves the code is correctly
+        // WIRED to call it and use its result for the frame's `destination`
+        // field -- not a claim that this resolves against a real MAC
+        // today. The deeper gap (the ack's own TRANSPORT dial has no
+        // physical-link information available to it at all, the same
+        // shape as the carried-forward `PrekeyExchange._handleBundleRequest`
+        // finding this task also fixed) is out of this task's own `files:`
+        // fence (would require plumbing link data through
+        // `InboundPipeline.delivered`/`messaging_stack.dart`) and is
+        // recorded as a follow-up Open Question instead.
+        final aSuffix = nextSuffix();
+        final bSuffix = nextSuffix();
+        final a = await newStack('device-a', aSuffix);
+        final b = await newStack('device-b', bSuffix);
+        addTearDown(a.dispose);
+        addTearDown(b.dispose);
+
+        a.inbound.start();
+        b.inbound.start();
+
+        wireSend(bSuffix, 'device-b', aSuffix);
+        await connectPeer(aSuffix, 'device-b');
+        await connectPeer(bSuffix, 'device-a');
+
+        await a.cryptoService.establishSession(
+          const SignalProtocolAddress('device-b', 1),
+          await b.identityService.getLocalPreKeyBundle(),
+        );
+
+        final sent = await a.sendMessage.call(
+          'device-b',
+          'device-b',
+          _plaintext('hello bob'),
+        );
+
+        // B has a relationship row keyed by the SAME value
+        // `_sendAck`'s own `peerDeviceId` will be (the message's
+        // `senderDeviceId`, 'device-a') -- see the disclosure above for
+        // why this is a mechanical proof, not a real-MAC scenario.
+        await b.db.into(b.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'device-a',
+                state: RelationshipState.unknown.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('device-a-resolved'),
+              ),
+            );
+
+        Uint8List? capturedAckFrame;
+        messenger.setMockMessageHandler(
+          'dev.flutter.pigeon.nexora.TransportApi.send.$bSuffix',
+          (ByteData? message) async {
+            final args = TransportApi.pigeonChannelCodec
+                    .decodeMessage(message)!
+                as List<Object?>;
+            capturedAckFrame ??= args[1]! as Uint8List;
+            return TransportApi.pigeonChannelCodec
+                .encodeMessage(<Object?>[true]);
+          },
+        );
+
+        pushIncomingData(bSuffix, 'device-a', sent.ciphertext);
+        await settle();
+        await settle();
+
+        expect(capturedAckFrame, isNotNull);
+        final frame = RelayPacketFrame.deserialize(capturedAckFrame!);
+        expect(frame.destination, 'device-a-resolved');
+      },
+    );
   });
 }

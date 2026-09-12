@@ -15,6 +15,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
@@ -912,4 +913,71 @@ void main() {
       },
     );
   });
+
+  group(
+    'E04-B15: outbound call signaling resolves the peer real selfDeviceId',
+    () {
+      test(
+        'test_E04_B15_invite_frame_destination_uses_learned_remoteSelfDeviceId',
+        () async {
+          // Same defect class E04-B13 fixed for 1:1 chat/prekey exchange,
+          // applied to call signaling's own `RelayPacketFrame` construction
+          // site (`_sendFrame`, `call_signaling.dart`): before this fix, an
+          // invite's `destination` field was the raw Bluetooth MAC, which
+          // can never equal the real callee's `selfDeviceId` -- `isForUs`
+          // always false on B, the invite silently mistaken for a relay
+          // packet and never reaches `CallSignaling.handleWireFrame` at all.
+          final aSuffix = nextSuffix();
+          final bSuffix = nextSuffix();
+          final a = await newStack('device-a', aSuffix);
+          final b = await newStack('device-b-real-id', bSuffix);
+          addTearDown(a.dispose);
+          addTearDown(b.dispose);
+
+          const bMac = 'AA:BB:CC:DD:EE:30';
+          const aMac = 'AA:BB:CC:DD:EE:31';
+
+          a.inbound.start();
+          b.inbound.start();
+          wireSend(aSuffix, aMac, bSuffix);
+          wireSend(bSuffix, bMac, aSuffix);
+          await connectPeer(aSuffix, bMac);
+          await connectPeer(bSuffix, aMac);
+
+          // A already learned (E04-B12's identity-announce, simulated as
+          // its already-landed effect, mirroring every E04-B13 test) that
+          // the peer on `bMac` is really `device-b-real-id`.
+          await a.db.into(a.db.relationships).insertOnConflictUpdate(
+                RelationshipsCompanion.insert(
+                  deviceId: bMac,
+                  state: RelationshipState.unknown.name,
+                  updatedAt: DateTime.now(),
+                  remoteSelfDeviceId: const Value('device-b-real-id'),
+                ),
+              );
+
+          // CallSignaling encrypts every frame through the real pairwise
+          // session -- establish it directly (this test is not about
+          // session bootstrap).
+          await a.cryptoService.establishSession(
+            SignalProtocolAddress(bMac, 1),
+            await b.identityService.getLocalPreKeyBundle(),
+          );
+
+          await a.callSignaling.invite(bMac);
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+
+          // The real, end-to-end proof: B's own `isForUs` check only
+          // passes -- and `CallSignaling.handleWireFrame` only ever runs --
+          // when `frame.destination` equals B's real `selfDeviceId`, not
+          // `bMac`.
+          expect(b.callSignaling.currentSession, isNotNull);
+          expect(
+            b.callSignaling.currentSession!.state,
+            CallState.incomingRinging,
+          );
+        },
+      );
+    },
+  );
 }

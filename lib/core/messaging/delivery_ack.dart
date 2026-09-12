@@ -503,17 +503,34 @@ class DeliveryAckService {
     framedBody[0] = kControlKindDeliveryAck;
     framedBody.setRange(1, framedBody.length, body);
 
-    final frame = RelayPacketFrame(
-      payloadType: PayloadType.control,
-      packetId: _nextPacketId(),
-      destination: peerDeviceId,
-      source: _stack.selfDeviceId,
-      priority: 0,
-      createdAtMs: now.millisecondsSinceEpoch,
-      expiresAtMs: now.add(_controlFrameTtl).millisecondsSinceEpoch,
-      payload: framedBody,
-    );
     try {
+      // E04-B15: resolve the peer's real, learned `selfDeviceId` for the
+      // frame's own `destination` field -- same forward-only pattern
+      // E04-B13 established (`resolveOutboundDestination`'s own doc
+      // comment in `messaging_stack.dart`), reused rather than re-derived.
+      // `directSend` below keeps using the raw `peerDeviceId` (Bluetooth
+      // MAC) unchanged -- only the wire frame's own `destination` field is
+      // resolved. Deliberately INSIDE this try block (review finding,
+      // E04-B15): this method is called fire-and-forget, unawaited, from
+      // `MessagingStack`'s own `inbound.delivered` subscription -- a DB
+      // query that throws (e.g. a disposed/closed database, observed in a
+      // real test race) must be caught here exactly like every other
+      // failure this method already swallows, never allowed to escape as
+      // an unhandled async-zone error.
+      final destination = await resolveOutboundDestination(
+        _stack.db,
+        peerDeviceId,
+      );
+      final frame = RelayPacketFrame(
+        payloadType: PayloadType.control,
+        packetId: _nextPacketId(),
+        destination: destination,
+        source: _stack.selfDeviceId,
+        priority: 0,
+        createdAtMs: now.millisecondsSinceEpoch,
+        expiresAtMs: now.add(_controlFrameTtl).millisecondsSinceEpoch,
+        payload: framedBody,
+      );
       // `_stack.directSend`, not `_stack.transport.send` directly -- E04-B05:
       // must connect before sending, not assume an already-open socket.
       await _stack.directSend(peerDeviceId, frame.serialize());
