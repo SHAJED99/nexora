@@ -135,6 +135,7 @@ class TransportDevice {
     required this.displayName,
     required this.type,
     this.rssi,
+    this.bonded = false,
   });
 
   String id;
@@ -150,12 +151,28 @@ class TransportDevice {
   /// field yet — wiring real RSSI is E05's job (FR-ROUTE-001, FR-ROUTE-002).
   int? rssi;
 
+  /// E04-B17 (review round 1, F1/F2): `true` only when [id] is currently
+  /// in `BluetoothAdapter.bondedDevices` on the native side — i.e. this
+  /// device and the peer have already completed OS-level pairing, a real
+  /// authentication factor a Bluetooth-visible NAME alone is not (a name
+  /// is attacker-settable; a bond requires the OS's own pairing exchange).
+  /// This is what `InboundPipeline._reconcileStaleRelationship` gates on
+  /// before ever copying a trust decision onto a new device id — a false
+  /// value there must never be treated as "not yet known, assume bonded":
+  /// the safe default this field's own absence would otherwise invite is
+  /// exactly backwards for a security-relevant flag, so every native
+  /// emission site sets it explicitly (defaults to `false` here only for
+  /// call sites — none in production — that have no bonded-list access at
+  /// all, e.g. a raw unit-test double).
+  bool bonded;
+
   List<Object?> _toList() {
     return <Object?>[
       id,
       displayName,
       type,
       rssi,
+      bonded,
     ];
   }
 
@@ -169,6 +186,7 @@ class TransportDevice {
       displayName: result[1]! as String,
       type: result[2]! as TransportType,
       rssi: result[3] as int?,
+      bonded: result[4]! as bool,
     );
   }
 
@@ -181,7 +199,7 @@ class TransportDevice {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(id, other.id) && _deepEquals(displayName, other.displayName) && _deepEquals(type, other.type) && _deepEquals(rssi, other.rssi);
+    return _deepEquals(id, other.id) && _deepEquals(displayName, other.displayName) && _deepEquals(type, other.type) && _deepEquals(rssi, other.rssi) && _deepEquals(bonded, other.bonded);
   }
 
   @override
@@ -190,7 +208,7 @@ class TransportDevice {
 
   @override
   String toString() {
-    return 'TransportDevice(id: $id, displayName: $displayName, type: $type, rssi: $rssi)';
+    return 'TransportDevice(id: $id, displayName: $displayName, type: $type, rssi: $rssi, bonded: $bonded)';
   }
 }
 

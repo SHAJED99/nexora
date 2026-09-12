@@ -364,6 +364,19 @@ class BluetoothTransport(
         // relationship address (`_reconcileStaleRelationship`) for an
         // already-bonded peer whose stored address has drifted -- the same
         // real gap this task's own root-causing found.
+        //
+        // `bonded` (review round 1, F1/F2): re-checked explicitly rather
+        // than assumed -- both this app's socket variants
+        // (`createRfcommSocketToServiceRecord`/
+        // `listenUsingRfcommWithServiceRecord`) are the SECURE flavor,
+        // which the platform only ever completes for an already-bonded
+        // pair, so this is expected to always be `true` for an accepted
+        // connection; asserting it explicitly (rather than hard-coding
+        // `true`) means a future change to the socket variant, or an OS
+        // quirk that somehow accepts an unbonded peer, fails safe (no
+        // reconciliation) instead of silently trusting an assumption that
+        // stopped holding.
+        val remoteBonded = isBonded(remoteId)
         eventsScope.launch {
           eventsApi.onDeviceDiscovered(
               TransportDevice(
@@ -371,6 +384,7 @@ class BluetoothTransport(
                   displayName = rawRemoteName ?: remoteId,
                   type = TransportType.BLUETOOTH,
                   rssi = null,
+                  bonded = remoteBonded,
               ),
           )
         }
@@ -834,6 +848,33 @@ class BluetoothTransport(
                 // raced ahead of this thread's exit, leaving the live thread
                 // untracked by disconnect()/release().
                 readThreads.remove(deviceId, Thread.currentThread())
+                // E04-B17 (review round 1, F3): this read loop is the ONLY
+                // thing that actually knows a connection died from the
+                // REMOTE end (a clean or errored EOF) -- before this, only
+                // `disconnect()` (a LOCAL close) ever removed `deviceId`
+                // from `openSockets` or emitted `DISCONNECTED`, so a peer
+                // that simply walked out of range left a dead socket keyed
+                // in `openSockets` forever, with no event telling either
+                // this file or Dart the link was gone. That was merely
+                // harmless dead weight before this task's own `connect()`
+                // idempotency fix (below) started trusting
+                // `openSockets.containsKey(deviceId)` as "this link is
+                // live" -- after that fix, a stale entry left in place by a
+                // remote-initiated drop would make `connect()` re-affirm
+                // `CONNECTED` for a corpse forever, and every future send to
+                // that peer would fail permanently until the app restarts.
+                // Two-arg `remove(deviceId, socket)`, not a plain
+                // `remove(deviceId)`: if `disconnect()` already removed
+                // (and closed) THIS exact socket first -- the ordinary local
+                // teardown path -- this is correctly a no-op (the map no
+                // longer maps `deviceId` to `socket`), so `disconnect()`'s
+                // own single `DISCONNECTED` emission is never duplicated. It
+                // only actually removes and emits when this socket was
+                // still the live one, i.e. exactly the remote-drop case this
+                // fix closes.
+                if (openSockets.remove(deviceId, socket)) {
+                  eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.DISCONNECTED) }
+                }
               }
             },
             "nexora-bt-read-$deviceId")
@@ -988,9 +1029,15 @@ class BluetoothTransport(
     // never a default").
     val rssiExtra = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE)
     val rssi = if (rssiExtra == Short.MIN_VALUE) null else rssiExtra.toLong()
+    // E04-B17 (review round 1, F1/F2): re-derived independently of
+    // `resolveDeviceId`'s own internal bonded-list walk -- a genuinely new,
+    // not-yet-bonded peer (the overwhelmingly common discovery-scan case)
+    // correctly reports `bonded = false` here, so `_reconcileStaleRelationship`
+    // never runs for a passing stranger's device.
+    val bonded = isBonded(resolvedId)
     eventsScope.launch {
       eventsApi.onDeviceDiscovered(
-          TransportDevice(id = resolvedId, displayName = name, type = TransportType.BLUETOOTH, rssi = rssi),
+          TransportDevice(id = resolvedId, displayName = name, type = TransportType.BLUETOOTH, rssi = rssi, bonded = bonded),
       )
     }
   }

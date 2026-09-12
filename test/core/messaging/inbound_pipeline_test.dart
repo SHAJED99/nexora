@@ -8,6 +8,7 @@
 // this task's Risks (§6) require to be proven, not assumed.
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,12 +31,15 @@ Uint8List _plaintext(String s) => Uint8List.fromList(s.codeUnits);
 void _pushDiscovered(
   TestDefaultBinaryMessenger messenger,
   String suffix,
-  String deviceId,
-) {
+  String deviceId, {
+  String? displayName,
+  bool bonded = false,
+}) {
   final device = TransportDevice(
     id: deviceId,
-    displayName: deviceId,
+    displayName: displayName ?? deviceId,
     type: TransportType.bluetooth,
+    bonded: bonded,
   );
   final ByteData message =
       TransportEventsApi.pigeonChannelCodec.encodeMessage(<Object?>[device])!;
@@ -632,6 +636,236 @@ void main() {
           reason: 'a seed that resolves AFTER stop() must not repopulate '
               '_connectionSubscriptions on an already-stopped pipeline',
         );
+      },
+    );
+  });
+
+  group('E04-B17 — _reconcileStaleRelationship', () {
+    test(
+      'test_E04_B17_reconciles_a_bonded_peer_name_match_to_a_stale_relationship',
+      () async {
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        // A relationship this device already trusted, under an address
+        // that has since drifted (the exact real-world shape this task's
+        // own root-causing found).
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'stale-address',
+                state: RelationshipState.allowed.name,
+                updatedAt: DateTime.now(),
+                peerName: const Value('Bob Phone'),
+              ),
+            );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+
+        _pushDiscovered(
+          messenger,
+          suffix,
+          'fresh-address',
+          displayName: 'Bob Phone',
+          bonded: true,
+        );
+        await _settle();
+
+        final reconciled = await (stack.db.select(stack.db.relationships)
+              ..where((t) => t.deviceId.equals('fresh-address')))
+            .getSingleOrNull();
+        expect(
+          reconciled,
+          isNotNull,
+          reason: 'a bonded peer whose name matches exactly one existing '
+              'relationship must inherit that relationship\'s trust state',
+        );
+        expect(reconciled!.state, RelationshipState.allowed.name);
+        expect(reconciled.peerName, 'Bob Phone');
+      },
+    );
+
+    test(
+      'test_E04_B17_does_NOT_reconcile_an_unbonded_device_even_with_a_name_match',
+      () async {
+        // Review round 1, F1/F2: this is the exact adversarial scenario the
+        // review found -- an unbonded device (a passing stranger during an
+        // ordinary discovery scan, or an attacker broadcasting a spoofed
+        // name) must never inherit another peer's already-evaluated trust,
+        // no matter how exact the name match is.
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'alices-real-address',
+                state: RelationshipState.trusted.name,
+                updatedAt: DateTime.now(),
+                peerName: const Value("Alice's Pixel"),
+              ),
+            );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+
+        _pushDiscovered(
+          messenger,
+          suffix,
+          'imposter-address',
+          displayName: "Alice's Pixel", // exact name match, NOT bonded.
+          bonded: false,
+        );
+        await _settle();
+
+        final imposterRow = await (stack.db.select(stack.db.relationships)
+              ..where((t) => t.deviceId.equals('imposter-address')))
+            .getSingleOrNull();
+        expect(
+          imposterRow,
+          isNull,
+          reason: 'an unbonded device must never inherit a trust decision '
+              'from a name match alone -- a Bluetooth name is '
+              'attacker-settable and is not an authentication factor',
+        );
+      },
+    );
+
+    test(
+      'test_E04_B17_does_NOT_reconcile_an_ambiguous_name_match',
+      () async {
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        // Two different, already-known peers happen to share a
+        // Bluetooth-visible name.
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'first-address',
+                state: RelationshipState.allowed.name,
+                updatedAt: DateTime.now(),
+                peerName: const Value('Shared Name'),
+              ),
+            );
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'second-address',
+                state: RelationshipState.trusted.name,
+                updatedAt: DateTime.now(),
+                peerName: const Value('Shared Name'),
+              ),
+            );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+
+        _pushDiscovered(
+          messenger,
+          suffix,
+          'third-address',
+          displayName: 'Shared Name',
+          bonded: true,
+        );
+        await _settle();
+
+        final ambiguousRow = await (stack.db.select(stack.db.relationships)
+              ..where((t) => t.deviceId.equals('third-address')))
+            .getSingleOrNull();
+        expect(
+          ambiguousRow,
+          isNull,
+          reason: 'an ambiguous name match (two existing peers share it) '
+              'must be left as a new, unknown contact rather than guessed at',
+        );
+      },
+    );
+
+    test(
+      'test_E04_B17_does_NOT_reconcile_when_no_relationship_name_matches',
+      () async {
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'unrelated-address',
+                state: RelationshipState.allowed.name,
+                updatedAt: DateTime.now(),
+                peerName: const Value('Someone Else'),
+              ),
+            );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+
+        _pushDiscovered(
+          messenger,
+          suffix,
+          'genuinely-new-address',
+          displayName: 'Nobody Recognizes This Name',
+          bonded: true,
+        );
+        await _settle();
+
+        final newRow = await (stack.db.select(stack.db.relationships)
+              ..where((t) => t.deviceId.equals('genuinely-new-address')))
+            .getSingleOrNull();
+        expect(
+          newRow,
+          isNull,
+          reason: 'a genuinely new peer with no matching stored name must '
+              'not gain a relationship row from this method at all -- that '
+              'is the normal discovery/trust flow\'s job, not '
+              'reconciliation\'s',
+        );
+      },
+    );
+
+    test(
+      'test_E04_B17_does_NOT_reconcile_a_device_that_already_has_its_own_relationship',
+      () async {
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'already-known-address',
+                state: RelationshipState.blocked.name,
+                updatedAt: DateTime.now(),
+                peerName: const Value('Original Name'),
+              ),
+            );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+
+        // A discovery result for a device id that ALREADY has its own row
+        // must never have that row's state overwritten via reconciliation,
+        // even if the reported name now differs (e.g. the user renamed
+        // their phone) and even if some OTHER row would otherwise match.
+        _pushDiscovered(
+          messenger,
+          suffix,
+          'already-known-address',
+          displayName: 'A Different Name Now',
+          bonded: true,
+        );
+        await _settle();
+
+        final unchanged = await (stack.db.select(stack.db.relationships)
+              ..where((t) => t.deviceId.equals('already-known-address')))
+            .getSingleOrNull();
+        expect(unchanged!.state, RelationshipState.blocked.name);
+        expect(unchanged.peerName, 'Original Name');
       },
     );
   });

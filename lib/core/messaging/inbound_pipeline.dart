@@ -601,7 +601,18 @@ class InboundPipeline {
     _connectionSubscriptions[device.id] = _stack.transport
         .connectionState(device.id)
         .listen((ConnectionState state) => _onConnectionStateChanged(device.id, state));
-    unawaited(_reconcileStaleRelationship(device.id, device.displayName));
+    // E04-B17 (review round 1, F1): gated on `device.bonded` -- this method
+    // is the handler for EVERY discovered device, including an ordinary
+    // passing stranger's headphones from a routine scan, not only an
+    // accepted connection. Reconciliation must never run for a device this
+    // side has no OS-level authentication for at all (see
+    // `_reconcileStaleRelationship`'s own doc comment for the full
+    // reasoning) -- `bonded` is real Bluetooth OS pairing, the one signal
+    // in this event that a Bluetooth-visible NAME alone (attacker-settable)
+    // is not.
+    if (device.bonded) {
+      unawaited(_reconcileStaleRelationship(device.id, device.displayName));
+    }
   }
 
   /// E04-B17: [deviceId] might be a peer this side already trusts under a
@@ -619,24 +630,42 @@ class InboundPipeline {
   /// treated as a brand-new `unknown` contact requiring manual
   /// re-verification.
   ///
-  /// Matches purely by [peerName] -- never by address, which is exactly
-  /// the unstable value this exists to route around. A name match is NOT
-  /// itself a trust decision or an authentication factor: this method
-  /// never invents a trust state, it only copies an ALREADY-evaluated
-  /// decision (`allowed`/`trusted`/`blocked`/`unknown`) forward to the new
-  /// address, the same "this is probably the same peer, reconnecting"
-  /// judgment call `resolveDeviceId` already makes one layer down, at the
-  /// transport level, for the discovery-scan case.
+  /// **Gated on `bonded` at the ONE call site (E04-B17 review round 1,
+  /// F1/F2)** -- this method itself trusts that its caller only ever
+  /// invokes it for a device this side has REAL OS-level Bluetooth pairing
+  /// with (`TransportDevice.bonded`, populated by the native layer from
+  /// `BluetoothAdapter.bondedDevices`, never by anything a peer's own
+  /// broadcast claims). Never call this for an unbonded device: a
+  /// Bluetooth-visible NAME is attacker-settable and carries zero
+  /// authentication on its own -- confirmed live by an adversarial review
+  /// probe that had an unbonded "stranger" device inherit a `trusted` row
+  /// via a routine discovery scan before this gate existed. A real bond
+  /// requires the OS's own pairing exchange (a user-visible confirmation
+  /// on both ends), which is what makes the name match below a reasonable
+  /// "probably the same peer, reconnecting" signal rather than a spoofable
+  /// one -- it is still not a cryptographic identity check (that is
+  /// `remote_self_device_id`'s job, once the identity-announce protocol
+  /// completes), so this only ever copies an ALREADY-evaluated decision
+  /// forward, never invents a new one, and remains a narrower, secondary
+  /// signal.
   ///
-  /// Deliberately narrow: only reconciles when [deviceId] has no
-  /// relationship row of its own yet AND exactly ONE other stored
-  /// relationship's `peerName` matches -- an ambiguous match (two
-  /// different stored peers happen to share a Bluetooth-visible name) is
-  /// left alone rather than guessed at, so [deviceId] is treated as a
-  /// genuinely new, `unknown` contact through the normal discovery/trust
-  /// flow instead (a false negative here costs a re-verification; a false
-  /// positive would silently hand a new address someone else's trust
-  /// decision).
+  /// Deliberately narrow beyond the `bonded` gate too: only reconciles
+  /// when [deviceId] has no relationship row of its own yet AND exactly
+  /// ONE other stored relationship's `peerName` matches -- an ambiguous
+  /// match (two different bonded, stored peers happen to share a
+  /// Bluetooth-visible name) is left alone rather than guessed at, so
+  /// [deviceId] is treated as a genuinely new, `unknown` contact through
+  /// the normal discovery/trust flow instead (a false negative here costs
+  /// a re-verification; a false positive would silently hand a new
+  /// address someone else's trust decision). Deliberately does NOT fall
+  /// back to matching on an absent (`NULL`) `peerName` for a
+  /// pre-this-column relationship -- review round 1 found that fallback
+  /// never actually healed (it only ever populated the NEW row, leaving
+  /// the stale row permanently `NULL` and the fallback permanently armed)
+  /// and could pick the wrong one among several such rows. A relationship
+  /// that predates this column simply needs one ordinary re-verification
+  /// the first time its peer reconnects under a different address --
+  /// accepted here as the safer trade-off.
   Future<void> _reconcileStaleRelationship(
     String deviceId,
     String peerName,
@@ -647,34 +676,12 @@ class InboundPipeline {
         .getSingleOrNull();
     if (existing != null) return; // already has its own row -- nothing to do.
 
-    var candidates = await (db.select(db.relationships)
+    final candidates = await (db.select(db.relationships)
           ..where(
             (t) =>
                 t.peerName.equals(peerName) & t.deviceId.equals(deviceId).not(),
           ))
         .get();
-    if (candidates.isEmpty) {
-      // One-time migration case: a relationship created before this column
-      // existed has `peerName IS NULL` and can never match the `.equals()`
-      // check above (SQL `NULL = 'x'` is never true) -- exactly the
-      // real-world state this fix's own root-causing found (the peer that
-      // motivated this task predates `peerName` entirely). Falls back to
-      // "exactly one relationship with no name on file yet" -- still
-      // bounded to the same single-unambiguous-candidate safety property
-      // as the name-matched case above, so this is a narrower version of
-      // the same judgment call, not a weaker one. Naturally stops applying
-      // once two or more such never-reconciled rows exist (this device has
-      // more than one contact older than this fix) -- at that point every
-      // FUTURE connection populates `peerName` via this same method's own
-      // write below, so the ambiguity heals over time rather than staying
-      // permanently unresolvable.
-      candidates = await (db.select(db.relationships)
-            ..where(
-              (t) =>
-                  t.peerName.isNull() & t.deviceId.equals(deviceId).not(),
-            ))
-          .get();
-    }
     if (candidates.length != 1) return; // none, or ambiguous -- leave as new.
 
     final stale = candidates.single;

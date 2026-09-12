@@ -252,7 +252,23 @@ data class TransportDevice (
    * Contract-only as of E04-B03: no native implementation populates this
    * field yet — wiring real RSSI is E05's job (FR-ROUTE-001, FR-ROUTE-002).
    */
-  val rssi: Long? = null
+  val rssi: Long? = null,
+  /**
+   * E04-B17 (review round 1, F1/F2): `true` only when [id] is currently
+   * in `BluetoothAdapter.bondedDevices` on the native side — i.e. this
+   * device and the peer have already completed OS-level pairing, a real
+   * authentication factor a Bluetooth-visible NAME alone is not (a name
+   * is attacker-settable; a bond requires the OS's own pairing exchange).
+   * This is what `InboundPipeline._reconcileStaleRelationship` gates on
+   * before ever copying a trust decision onto a new device id — a false
+   * value there must never be treated as "not yet known, assume bonded":
+   * the safe default this field's own absence would otherwise invite is
+   * exactly backwards for a security-relevant flag, so every native
+   * emission site sets it explicitly (defaults to `false` here only for
+   * call sites — none in production — that have no bonded-list access at
+   * all, e.g. a raw unit-test double).
+   */
+  val bonded: Boolean
 )
  {
   companion object {
@@ -261,7 +277,8 @@ data class TransportDevice (
       val displayName = pigeonVar_list[1] as String
       val type = pigeonVar_list[2] as TransportType
       val rssi = pigeonVar_list[3] as Long?
-      return TransportDevice(id, displayName, type, rssi)
+      val bonded = pigeonVar_list[4] as Boolean
+      return TransportDevice(id, displayName, type, rssi, bonded)
     }
   }
   fun toList(): List<Any?> {
@@ -270,6 +287,7 @@ data class TransportDevice (
       displayName,
       type,
       rssi,
+      bonded,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -280,7 +298,7 @@ data class TransportDevice (
       return true
     }
     val other = other as TransportDevice
-    return TransportApiPigeonUtils.deepEquals(this.id, other.id) && TransportApiPigeonUtils.deepEquals(this.displayName, other.displayName) && TransportApiPigeonUtils.deepEquals(this.type, other.type) && TransportApiPigeonUtils.deepEquals(this.rssi, other.rssi)
+    return TransportApiPigeonUtils.deepEquals(this.id, other.id) && TransportApiPigeonUtils.deepEquals(this.displayName, other.displayName) && TransportApiPigeonUtils.deepEquals(this.type, other.type) && TransportApiPigeonUtils.deepEquals(this.rssi, other.rssi) && TransportApiPigeonUtils.deepEquals(this.bonded, other.bonded)
   }
 
   override fun hashCode(): Int {
@@ -289,10 +307,11 @@ data class TransportDevice (
     result = 31 * result + TransportApiPigeonUtils.deepHash(this.displayName)
     result = 31 * result + TransportApiPigeonUtils.deepHash(this.type)
     result = 31 * result + TransportApiPigeonUtils.deepHash(this.rssi)
+    result = 31 * result + TransportApiPigeonUtils.deepHash(this.bonded)
     return result
   }
   override fun toString(): String {
-    return "TransportDevice(id=$id, displayName=$displayName, type=$type, rssi=$rssi)"
+    return "TransportDevice(id=$id, displayName=$displayName, type=$type, rssi=$rssi, bonded=$bonded)"
   }
 }
 private open class TransportApiPigeonCodec : StandardMessageCodec() {
