@@ -65,6 +65,41 @@ void main() {
     expect(controller.relationships.single.state, RelationshipState.allowed);
   });
 
+  test('test_E02_B01_unblock_restores_a_blocked_relationship_to_allowed',
+      () async {
+    await repository.upsert('device-1', RelationshipState.unknown);
+    await repository.upsert('device-3', RelationshipState.trusted);
+    await controller.load();
+
+    await controller.block('device-1');
+    expect(
+      controller.relationships
+          .firstWhere((r) => r.deviceId == 'device-1')
+          .state,
+      RelationshipState.blocked,
+    );
+
+    await controller.unblock('device-1');
+
+    expect(
+      controller.relationships
+          .firstWhere((r) => r.deviceId == 'device-1')
+          .state,
+      RelationshipState.allowed,
+    );
+    // A different row is never touched by unblocking device-1.
+    expect(
+      controller.relationships
+          .firstWhere((r) => r.deviceId == 'device-3')
+          .state,
+      RelationshipState.trusted,
+    );
+
+    // Persisted, not just held in memory.
+    final persisted = await repository.get('device-1');
+    expect(persisted!.state, RelationshipState.allowed);
+  });
+
   test('refresh loads an empty list when no relationships are stored',
       () async {
     await controller.load();
