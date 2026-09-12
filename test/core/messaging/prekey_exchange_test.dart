@@ -795,6 +795,265 @@ void main() {
     );
   });
 
+  group(
+    'E04-B15: bundle-request reply addressed to the physical link, not '
+    'the claimed identity',
+    () {
+      test(
+        'test_E04_B15_bundle_request_reply_uses_physical_link_not_claimed_source',
+        () async {
+          // The carried-forward finding from E04-B14's own review:
+          // `_handleBundleRequest` used to reply via
+          // `_sendControlFrame(frame.source, ...)` -- keyed by the
+          // REQUESTER's claimed, unauthenticated logical `selfDeviceId`,
+          // never a dialable Bluetooth MAC. This test proves the fix by
+          // making B's mock transport BEHAVE like real hardware: only
+          // dialing the real physical link (`aMac`) can ever succeed;
+          // dialing the claimed logical identity (`a.selfDeviceId`, what
+          // the pre-fix code attempted) fails outright, exactly as it
+          // would on a real device (there is no such Bluetooth peer).
+          final aSuffix = nextSuffix();
+          final bSuffix = nextSuffix();
+          final a = await newStack('device-a-real-id', aSuffix);
+          final b = await newStack('device-b-real-id', bSuffix);
+          addTearDown(a.dispose);
+          addTearDown(b.dispose);
+
+          const aMac = 'AA:BB:CC:DD:EE:09'; // A's real, dialable MAC (as B sees it)
+          const bMac = 'AA:BB:CC:DD:EE:10'; // B's real, dialable MAC (as A sees it)
+
+          a.inbound.start();
+          b.inbound.start();
+
+          // Both sides already learned each other's real `selfDeviceId`
+          // (E04-B12's identity-announce, simulated as its already-landed
+          // effect -- mirrors every E04-B13/B14 test above).
+          await a.db.into(a.db.relationships).insertOnConflictUpdate(
+                RelationshipsCompanion.insert(
+                  deviceId: bMac,
+                  state: RelationshipState.unknown.name,
+                  updatedAt: DateTime.now(),
+                  remoteSelfDeviceId: const Value('device-b-real-id'),
+                ),
+              );
+          await b.db.into(b.db.relationships).insertOnConflictUpdate(
+                RelationshipsCompanion.insert(
+                  deviceId: aMac,
+                  state: RelationshipState.unknown.name,
+                  updatedAt: DateTime.now(),
+                  remoteSelfDeviceId: const Value('device-a-real-id'),
+                ),
+              );
+
+          // A's outbound path: any send/connect from A succeeds and lands
+          // at B tagged as arriving on `aMac` -- the physical link B
+          // actually receives A's request on.
+          messenger.setMockMessageHandler(
+            'dev.flutter.pigeon.nexora.TransportApi.send.$aSuffix',
+            (ByteData? message) async {
+              final args = TransportApi.pigeonChannelCodec
+                      .decodeMessage(message)!
+                  as List<Object?>;
+              final bytes = args[1]! as Uint8List;
+              messenger.handlePlatformMessage(
+                'dev.flutter.pigeon.nexora.TransportEventsApi.onDataReceived.$bSuffix',
+                TransportEventsApi.pigeonChannelCodec
+                    .encodeMessage(<Object?>[aMac, bytes]),
+                (ByteData? _) {},
+              );
+              return TransportApi.pigeonChannelCodec
+                  .encodeMessage(<Object?>[true]);
+            },
+          );
+          messenger.setMockMessageHandler(
+            'dev.flutter.pigeon.nexora.TransportApi.connect.$aSuffix',
+            (ByteData? message) async {
+              final args = TransportApi.pigeonChannelCodec
+                      .decodeMessage(message)!
+                  as List<Object?>;
+              final deviceId = args[0]! as String;
+              scheduleMicrotask(() {
+                messenger.handlePlatformMessage(
+                  'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$aSuffix',
+                  TransportEventsApi.pigeonChannelCodec.encodeMessage(
+                    <Object?>[deviceId, ConnectionState.connected],
+                  ),
+                  (ByteData? _) {},
+                );
+              });
+              return TransportApi.pigeonChannelCodec
+                  .encodeMessage(<Object?>[true]);
+            },
+          );
+
+          // B's outbound path: THIS is the falsification. `connect` only
+          // succeeds for the real physical MAC (`aMac`) -- a connect
+          // attempt aimed at the CLAIMED logical identity
+          // (`a.selfDeviceId`, exactly what the pre-fix code passed to
+          // `directSend`) fails, matching real Bluetooth hardware (no such
+          // dialable peer exists). `ConnectionEnsuringSender` never calls
+          // `send` when `connect` fails, so this alone is enough to prove
+          // the addressing bug: before the fix, B's reply could never
+          // leave the device at all.
+          messenger.setMockMessageHandler(
+            'dev.flutter.pigeon.nexora.TransportApi.connect.$bSuffix',
+            (ByteData? message) async {
+              final args = TransportApi.pigeonChannelCodec
+                      .decodeMessage(message)!
+                  as List<Object?>;
+              final deviceId = args[0]! as String;
+              if (deviceId != aMac) {
+                return TransportApi.pigeonChannelCodec
+                    .encodeMessage(<Object?>[false]);
+              }
+              scheduleMicrotask(() {
+                messenger.handlePlatformMessage(
+                  'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$bSuffix',
+                  TransportEventsApi.pigeonChannelCodec.encodeMessage(
+                    <Object?>[deviceId, ConnectionState.connected],
+                  ),
+                  (ByteData? _) {},
+                );
+              });
+              return TransportApi.pigeonChannelCodec
+                  .encodeMessage(<Object?>[true]);
+            },
+          );
+          messenger.setMockMessageHandler(
+            'dev.flutter.pigeon.nexora.TransportApi.send.$bSuffix',
+            (ByteData? message) async {
+              final args = TransportApi.pigeonChannelCodec
+                      .decodeMessage(message)!
+                  as List<Object?>;
+              final deviceId = args[0]! as String;
+              final bytes = args[1]! as Uint8List;
+              if (deviceId != aMac) {
+                return TransportApi.pigeonChannelCodec
+                    .encodeMessage(<Object?>[false]);
+              }
+              messenger.handlePlatformMessage(
+                'dev.flutter.pigeon.nexora.TransportEventsApi.onDataReceived.$aSuffix',
+                TransportEventsApi.pigeonChannelCodec
+                    .encodeMessage(<Object?>[bMac, bytes]),
+                (ByteData? _) {},
+              );
+              return TransportApi.pigeonChannelCodec
+                  .encodeMessage(<Object?>[true]);
+            },
+          );
+
+          await connectPeer(aSuffix, bMac);
+          await connectPeer(bSuffix, aMac);
+
+          // The real, end-to-end proof: A's request reaches B, B's reply
+          // is addressed to the physical link the request arrived on
+          // (`aMac`), so it actually leaves B's device and lands back at
+          // A -- a real Signal session is established. Before this task's
+          // fix, B's reply attempted `directSend(a.selfDeviceId, ...)`,
+          // which this mock rejects exactly as real hardware would (no
+          // dialable peer at that address), so this would have timed out.
+          await a.prekeyExchange.ensureSession(bMac);
+
+          expect(
+            await a.signalStore
+                .containsSession(const SignalProtocolAddress(bMac, 1)),
+            isTrue,
+          );
+          expect(a.prekeyExchange.counters.responsesAccepted, 1);
+          expect(b.prekeyExchange.counters.requestsServed, 1);
+
+          // E04-B14 regression proof (task's own explicit requirement):
+          // the reply above was accepted BECAUSE it arrived on the same
+          // physical link (`bMac`) `_ensureSessionUncoalesced` captured as
+          // `outstanding.linkDeviceId` when the request went out -- proving
+          // this fix did not silently break E04-B14's own link-binding
+          // check (`_takeMatchingCompleter`), which still ran and still
+          // matched. A mismatched-link forgery is separately, and still,
+          // rejected by `test_E04_B14_forged_bundle_response_on_wrong_link_is_rejected`
+          // above (unmodified by this task).
+          expect(a.prekeyExchange.counters.responsesUnsolicited, 0);
+        },
+      );
+
+      test(
+        'test_E04_B15_blocked_peer_evaluated_by_physical_link_not_claimed_source',
+        () async {
+          // Reviewer finding F1 (round 1, opus): the fix above also
+          // changed `_handleBundleRequest`'s TRUST evaluation from
+          // `_evaluateConnectionRequest(peerDeviceId)` (the claimed,
+          // unauthenticated `frame.source`) to
+          // `_evaluateConnectionRequest(linkDeviceId ?? peerDeviceId)`
+          // (the physical link the request actually arrived on) -- a real
+          // fix (relationships are keyed by Bluetooth MAC, never by a
+          // claimed logical id, so the pre-fix code could never actually
+          // find a blocked peer's row), but the pre-existing
+          // `test_EARS_COMM_15_blocked_peer_gets_no_bundle` cannot prove
+          // it: that test's own `wireStacks` helper conflates a peer's MAC
+          // with its `selfDeviceId` by construction, so reverting the fix
+          // stays green there. This test uses a Bluetooth-MAC-shaped id
+          // for A deliberately DIFFERENT from A's own real `selfDeviceId`
+          // (the same convention this task's own other new tests already
+          // use), so the two evaluation keys are provably different
+          // values -- only a fix keyed by the physical link can see the
+          // block.
+          final aSuffix = nextSuffix();
+          final bSuffix = nextSuffix();
+          final a = await newStack('device-a-real-id', aSuffix);
+          final b = await newStack('device-b', bSuffix);
+          addTearDown(a.dispose);
+          addTearDown(b.dispose);
+
+          const aMac = 'AA:BB:CC:DD:EE:11'; // A's real, dialable MAC (as B sees it)
+          const bMac = 'AA:BB:CC:DD:EE:12'; // B's real, dialable MAC (as A sees it)
+
+          a.inbound.start();
+          b.inbound.start();
+          wireSend(aSuffix, aMac, bSuffix);
+          wireSend(bSuffix, bMac, aSuffix);
+          await connectPeer(aSuffix, bMac);
+          await connectPeer(bSuffix, aMac);
+
+          // B has independently evaluated the peer on THIS PHYSICAL LINK
+          // (`aMac`) as blocked -- exactly how a real relationship row is
+          // ever stored (`relationships.deviceId` is the transport id,
+          // the table's own primary key). B has NO row at all keyed by
+          // A's claimed logical identity (`device-a-real-id`) -- if the
+          // pre-fix code's evaluation key (the claim) were still in
+          // effect, this lookup would find nothing, evaluate as
+          // `unknown`, and serve the bundle.
+          await RelationshipRepository(b.db)
+              .upsert(aMac, RelationshipState.blocked);
+
+          final beforeCount = await b.signalStore.countIssuableOneTimePreKeys();
+
+          await expectLater(
+            a.prekeyExchange.ensureSession(
+              bMac,
+              timeout: const Duration(milliseconds: 500),
+            ),
+            throwsA(isA<TimeoutException>()),
+          );
+
+          // Silence, not a refusal frame (task file §5, same as
+          // `test_EARS_COMM_15_blocked_peer_gets_no_bundle`) -- but this
+          // time the refusal can ONLY have happened because B evaluated
+          // the physical link, not the claim: keying by
+          // `device-a-real-id` (the pre-fix behaviour) would have found
+          // no relationship row at all and served the bundle instead.
+          expect(b.prekeyExchange.counters.requestsRefused, 1);
+          expect(b.prekeyExchange.counters.requestsServed, 0);
+          final afterCount = await b.signalStore.countIssuableOneTimePreKeys();
+          expect(afterCount, beforeCount);
+          expect(
+            await a.signalStore
+                .containsSession(const SignalProtocolAddress(bMac, 1)),
+            isFalse,
+          );
+        },
+      );
+    },
+  );
+
   group('E10-T05: PrekeyExchange.connectionRequests', () {
     // Proves the emission side (both evaluation sites) against the real
     // control-frame path -- `connection_request_notification_source_test

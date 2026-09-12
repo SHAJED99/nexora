@@ -14,6 +14,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
@@ -615,6 +616,100 @@ void main() {
       expect(groupOnB!.name, 'New Name');
       expect(groupOnB.membershipEpoch, 1);
     });
+
+    test(
+      'test_E04_B15_group_control_frame_destination_uses_learned_remoteSelfDeviceId',
+      () async {
+        // Same defect class E04-B13 fixed for 1:1 chat, applied to
+        // `GroupMembershipService._sendOne`'s own `RelayPacketFrame`
+        // construction site: before this fix, a fan-out frame's
+        // `destination` was the raw Bluetooth MAC of the member, which can
+        // never equal that member's real `selfDeviceId` -- `isForUs`
+        // always false on the receiving device, so the frame is
+        // mistaken for a relay packet and `GroupMembershipService` never
+        // sees it at all.
+        final aSuffix = nextSuffix();
+        final bSuffix = nextSuffix();
+        final a = await newStack('device-a', aSuffix);
+        final b = await newStack('device-b-real-id', bSuffix);
+        addTearDown(a.dispose);
+        addTearDown(b.dispose);
+
+        const bMac = 'AA:BB:CC:DD:EE:40';
+
+        // Mirrors `establishMutualSessions`'s own bootstrap, except A's
+        // local session with B is keyed by [bMac] (the raw MAC
+        // `_sendOne`'s own `encrypt`/`ensureSession` calls use), not by
+        // `b.selfDeviceId` -- exactly the two-namespace split this whole
+        // fix is about.
+        await a.cryptoService.establishSession(
+          const SignalProtocolAddress(bMac, 1),
+          await b.identityService.getLocalPreKeyBundle(),
+        );
+        final bootstrap = await a.cryptoService.encrypt(
+          const SignalProtocolAddress(bMac, 1),
+          Uint8List.fromList([0]),
+        );
+        await b.cryptoService.decrypt(
+          const SignalProtocolAddress('device-a', 1),
+          bootstrap,
+        );
+
+        mockConnectAlwaysSucceeds(aSuffix);
+        wireSend(aSuffix, 'device-a', bSuffix);
+
+        b.inbound.start();
+        await connectPeer(bSuffix, 'device-a');
+        a.routingEngine.recordLinkMeasurement(
+          bMac,
+          latencyMs: 10,
+          lossRate: 0.0,
+          batteryDrain: 0.1,
+        );
+
+        // A already learned (E04-B12's identity-announce, simulated as its
+        // already-landed effect) that the member on `bMac` is really
+        // `device-b-real-id`.
+        await a.db.into(a.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: bMac,
+                state: RelationshipState.unknown.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('device-b-real-id'),
+              ),
+            );
+
+        final groupId = await GroupRepository(a.db).createGroup(
+          name: 'Old Name',
+          ownerDeviceId: 'device-a',
+          memberDeviceIds: [bMac],
+        );
+        final repoB = GroupRepository(b.db);
+        await repoB.applyEvent(
+          GroupControlFrame(
+            kind: GroupEventKind.created,
+            groupId: groupId,
+            epoch: 0,
+            actorDeviceId: 'device-a',
+            name: 'Old Name',
+            memberList: <String>['device-a', bMac],
+            createdAtMs: 0,
+          ),
+        );
+
+        final serviceA = serviceFor(a);
+        final failure = await serviceA.rename(groupId, 'New Name');
+        expect(failure, isNull);
+
+        await a.relayEngine.processQueue();
+        await settle();
+        await settle();
+
+        final groupOnB = await repoB.groupRow(groupId);
+        expect(groupOnB!.name, 'New Name');
+        expect(groupOnB.membershipEpoch, 1);
+      },
+    );
   });
 
   group(

@@ -52,6 +52,8 @@ import 'package:nexora/features/groups/data/group_repository.dart';
 import 'package:nexora/features/groups/domain/group_message_envelope.dart';
 import 'package:nexora/features/groups/domain/send_group_message_use_case.dart';
 import 'package:nexora/features/messaging/domain/delivery_state_machine.dart';
+import 'package:nexora/features/trust/domain/relationship.dart'
+    show RelationshipState;
 
 class _CountingGroupCryptoService extends GroupCryptoService {
   _CountingGroupCryptoService({required super.stack});
@@ -579,6 +581,130 @@ void main() {
     expect(b.inbound.counters.groupNoChain, 0);
     expect(b.inbound.counters.groupEpochUnknown, 0);
   });
+
+  test(
+    'test_E04_B15_group_message_frame_destination_uses_learned_remoteSelfDeviceId',
+    () async {
+      // Same defect class E04-B13 fixed for 1:1 chat, applied to this
+      // use case's own `RelayPacketFrame` construction site (`send`'s
+      // per-recipient loop): before this fix, the frame's `destination`
+      // was the raw Bluetooth MAC of the member, which can never equal
+      // that member's real `selfDeviceId` -- `isForUs` always false on
+      // the receiving device, so the group message is mistaken for a
+      // relay packet and never reaches `InboundPipeline`'s group-message
+      // handler at all.
+      final aSuffix = nextSuffix();
+      final bSuffix = nextSuffix();
+      mockSendAlwaysSucceeds(aSuffix);
+      mockConnectAlwaysSucceeds(aSuffix);
+      mockSendAlwaysSucceeds(bSuffix);
+      mockConnectAlwaysSucceeds(bSuffix);
+      final a = await newStack('device-a', aSuffix);
+      final b = await newStack('device-b-real-id', bSuffix);
+      addTearDown(a.dispose);
+      addTearDown(b.dispose);
+
+      const bMac = 'AA:BB:CC:DD:EE:50';
+
+      // Mirrors `establishMutualSessions`'s own bootstrap, except A's
+      // local session with B is keyed by `bMac` (the raw MAC
+      // `SendGroupMessageUseCase`/`GroupCryptoService` actually address B
+      // by), not by `b.selfDeviceId`.
+      await a.cryptoService.establishSession(
+        const SignalProtocolAddress(bMac, 1),
+        await b.identityService.getLocalPreKeyBundle(),
+      );
+      final bootstrap = await a.cryptoService.encrypt(
+        const SignalProtocolAddress(bMac, 1),
+        Uint8List.fromList([0]),
+      );
+      await b.cryptoService.decrypt(
+        const SignalProtocolAddress('device-a', 1),
+        bootstrap,
+      );
+
+      // A already learned (E04-B12's identity-announce, simulated as its
+      // already-landed effect) that the member on `bMac` is really
+      // `device-b-real-id`.
+      await a.db.into(a.db.relationships).insertOnConflictUpdate(
+            RelationshipsCompanion.insert(
+              deviceId: bMac,
+              state: RelationshipState.unknown.name,
+              updatedAt: DateTime.now(),
+              remoteSelfDeviceId: const Value('device-b-real-id'),
+            ),
+          );
+
+      final groupId = await GroupRepository(a.db).createGroup(
+        name: 'G',
+        ownerDeviceId: 'device-a',
+        memberDeviceIds: [bMac],
+      );
+      await seedGroupView(
+        b.db,
+        groupId: groupId,
+        membershipEpoch: 0,
+        ownerDeviceId: 'device-a',
+        members: [
+          (deviceId: 'device-a', joinedAtEpoch: 0, removedAtEpoch: null),
+          (deviceId: bMac, joinedAtEpoch: 0, removedAtEpoch: null),
+        ],
+      );
+
+      final deliveredFuture = b.inbound.delivered.first.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => throw StateError('never delivered'),
+      );
+
+      final groups = GroupRepository(a.db);
+      final group = await groups.groupRow(groupId);
+      final epoch = group!.membershipEpoch;
+      await a.groupCryptoService.ensureOwnChain(groupId: groupId, epoch: epoch);
+
+      wireSend(aSuffix, 'device-a', bSuffix);
+      b.inbound.start();
+      await connectPeer(bSuffix, 'device-a');
+      a.routingEngine.recordLinkMeasurement(
+        bMac,
+        latencyMs: 10,
+        lossRate: 0.0,
+        batteryDrain: 0.1,
+      );
+
+      await a.groupCryptoService.distributeTo(
+        groupId: groupId,
+        epoch: epoch,
+        recipientDeviceIds: [bMac],
+      );
+      await a.relayEngine.processQueue();
+      await settle();
+      await settle();
+
+      final useCase = SendGroupMessageUseCase(
+        db: a.db,
+        selfDeviceId: a.selfDeviceId,
+        groups: groups,
+        crypto: a.groupCryptoService,
+        enqueue: a.relayEngine.enqueue,
+        reserveSequence: reserveSequenceFake(a.db, a.selfDeviceId),
+      );
+
+      final result = await useCase.send(
+        groupId: groupId,
+        body: Uint8List.fromList('hi group'.codeUnits),
+      );
+      expect(result, isNull);
+
+      await a.relayEngine.processQueue();
+      await settle();
+      await settle();
+
+      final delivered = await deliveredFuture;
+      expect(delivered.conversationId, groupId);
+      expect(delivered.senderDeviceId, 'device-a');
+      expect(b.inbound.counters.delivered, 1);
+    },
+  );
 
   test(
     'test_EARS_COMM_30_message_is_stored_under_the_group_conversation_id',

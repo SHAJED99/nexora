@@ -337,11 +337,21 @@ class GroupCryptoService {
       framedBody[0] = kControlKindGroupKeyDistribution;
       framedBody.setRange(1, framedBody.length, body);
 
+      // E04-B15: resolve the peer's real, learned `selfDeviceId` for the
+      // frame's own `destination` field -- same forward-only pattern
+      // E04-B13 established, reused rather than re-derived.
+      // `relayEngine.enqueue` below keeps using the raw
+      // `recipientDeviceId` (Bluetooth MAC) unchanged -- only the wire
+      // frame's own `destination` field is resolved.
+      final destination = await resolveOutboundDestination(
+        _stack.db,
+        recipientDeviceId,
+      );
       final now = _clock();
       final wireFrame = RelayPacketFrame(
         payloadType: PayloadType.control,
         packetId: _nextPacketId(),
-        destination: recipientDeviceId,
+        destination: destination,
         source: _stack.selfDeviceId,
         priority: 0,
         createdAtMs: now.millisecondsSinceEpoch,
