@@ -586,6 +586,8 @@ class InboundPipeline {
     // Already tracking this id's connection state -- nothing to do. Real
     // Bluetooth discovery re-announces the same device across scan cycles
     // (mirrors devices_controller.dart's own dedup reasoning).
+    // ignore: avoid_print
+    print('[E04B17DIAG] _onDeviceDiscovered: ${device.id} (already tracked=${_connectionSubscriptions.containsKey(device.id)})');
     if (_connectionSubscriptions.containsKey(device.id)) return;
     _connectionSubscriptions[device.id] = _stack.transport
         .connectionState(device.id)
@@ -593,6 +595,8 @@ class InboundPipeline {
   }
 
   void _onConnectionStateChanged(String deviceId, ConnectionState state) {
+    // ignore: avoid_print
+    print('[E04B17DIAG] _onConnectionStateChanged: $deviceId => $state (dataSub already tracked=${_dataSubscriptions.containsKey(deviceId)})');
     if (state == ConnectionState.connected) {
       // Idempotent: a repeated `connected` event for an id already
       // subscribed must not open a second incomingData listener (the same
@@ -628,13 +632,19 @@ class InboundPipeline {
   }
 
   Future<void> _handleBuffer(String linkDeviceId, Uint8List bytes) async {
+    // ignore: avoid_print
+    print('[E04B17DIAG] _handleBuffer: called, link=$linkDeviceId, ${bytes.length} bytes');
     final RelayPacketFrame frame;
     try {
       frame = RelayPacketFrame.deserialize(bytes);
     } on FormatException {
+      // ignore: avoid_print
+      print('[E04B17DIAG] _handleBuffer: malformed frame from $linkDeviceId');
       counters.malformed++;
       return;
     }
+    // ignore: avoid_print
+    print('[E04B17DIAG] _handleBuffer: link=$linkDeviceId payloadType=${frame.payloadType} dest=${frame.destination} source=${frame.source} self=${_stack.selfDeviceId} ctrlByte=${frame.payload.isNotEmpty ? frame.payload[0] : -1}');
 
     final int nowMs = _clock().millisecondsSinceEpoch;
 

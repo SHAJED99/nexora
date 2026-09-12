@@ -302,18 +302,23 @@ class BluetoothTransport(
   private fun acceptLoop(socket: BluetoothServerSocket) {
     try {
       while (!Thread.currentThread().isInterrupted) {
+        android.util.Log.d("E04B17DIAG", "acceptLoop: calling socket.accept()")
         val accepted =
             try {
               socket.accept() // BLOCKING -- this thread only.
             } catch (e: IOException) {
+              android.util.Log.d("E04B17DIAG", "acceptLoop: accept() threw IOException, breaking: $e")
               break // socket closed (release()) or a real accept error.
             }
+        android.util.Log.d("E04B17DIAG", "acceptLoop: accept() returned a socket")
         val remoteId =
             try {
               accepted.remoteDevice?.address
             } catch (e: SecurityException) {
+              android.util.Log.d("E04B17DIAG", "acceptLoop: remoteDevice.address threw SecurityException: $e")
               null
             }
+        android.util.Log.d("E04B17DIAG", "acceptLoop: remoteId=$remoteId")
         if (remoteId == null) {
           try {
             accepted.close()
@@ -324,10 +329,20 @@ class BluetoothTransport(
           continue
         }
         openSockets[remoteId] = accepted
+        android.util.Log.d("E04B17DIAG", "acceptLoop: calling startReadLoop($remoteId)")
         startReadLoop(remoteId, accepted)
-        eventsScope.launch { eventsApi.onConnectionStateChanged(remoteId, ConnectionState.CONNECTED) }
+        android.util.Log.d("E04B17DIAG", "acceptLoop: launching onConnectionStateChanged($remoteId, CONNECTED)")
+        eventsScope.launch {
+          try {
+            eventsApi.onConnectionStateChanged(remoteId, ConnectionState.CONNECTED)
+            android.util.Log.d("E04B17DIAG", "acceptLoop: onConnectionStateChanged($remoteId, CONNECTED) returned normally")
+          } catch (e: Throwable) {
+            android.util.Log.d("E04B17DIAG", "acceptLoop: onConnectionStateChanged($remoteId) THREW: $e")
+          }
+        }
       }
     } finally {
+      android.util.Log.d("E04B17DIAG", "acceptLoop: exiting (loop ended or interrupted)")
       // Conditional, mirroring `startReadLoop`'s own identical reasoning
       // (its `readThreads.remove(deviceId, Thread.currentThread())`,
       // two-arg for exactly this reason): an unconditional clear here
@@ -733,28 +748,53 @@ class BluetoothTransport(
    * [readThreads] — never left leaked, parked on a dead socket.
    */
   private fun startReadLoop(deviceId: String, socket: BluetoothSocket) {
+    android.util.Log.d("E04B17DIAG", "startReadLoop: starting thread for $deviceId")
     val thread =
         Thread(
             {
               try {
                 val input = socket.inputStream
+                android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): thread running, entering read loop")
                 while (!Thread.currentThread().isInterrupted) {
-                  val header = readFully(input, LENGTH_PREFIX_BYTES) ?: break
+                  val header = readFully(input, LENGTH_PREFIX_BYTES)
+                  if (header == null) {
+                    android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): readFully(header) => null (EOF), breaking")
+                    break
+                  }
                   val length = ByteBuffer.wrap(header).order(ByteOrder.BIG_ENDIAN).int
-                  if (length < 0 || length > MAX_FRAME_BYTES) break // corrupt/hostile frame
-                  val payload = readFully(input, length) ?: break
-                  eventsScope.launch { eventsApi.onDataReceived(deviceId, payload) }
+                  android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): declared frame length=$length")
+                  if (length < 0 || length > MAX_FRAME_BYTES) {
+                    android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): length out of bounds, breaking")
+                    break // corrupt/hostile frame
+                  }
+                  val payload = readFully(input, length)
+                  if (payload == null) {
+                    android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): readFully(payload) => null (EOF), breaking")
+                    break
+                  }
+                  android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): got full frame, ${payload.size} bytes, launching onDataReceived")
+                  eventsScope.launch {
+                    try {
+                      eventsApi.onDataReceived(deviceId, payload)
+                      android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): onDataReceived returned normally")
+                    } catch (e: Throwable) {
+                      android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): onDataReceived THREW: $e")
+                    }
+                  }
                 }
               } catch (e: IOException) {
+                android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): IOException, loop ending: $e")
                 // Socket closed (disconnect()) or a real I/O error — either
                 // way, the loop is done; nothing to report through this
                 // thread, `disconnect()` already emits DISCONNECTED.
               } catch (e: Exception) {
+                android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): unexpected Exception, loop ending: $e")
                 // Anything unexpected (a RuntimeException out of the stream or
                 // out of `eventsScope.launch`) must die with this thread, not
                 // reach the default uncaught handler — an uncaught exception on
                 // any Android thread kills the whole process.
               } finally {
+                android.util.Log.d("E04B17DIAG", "startReadLoop($deviceId): thread exiting")
                 // Two-arg remove: only de-register THIS thread. An
                 // unconditional remove() would drop a newer read thread's
                 // registration if a disconnect/reconnect for the same deviceId

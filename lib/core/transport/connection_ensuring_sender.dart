@@ -133,10 +133,14 @@ class ConnectionEnsuringSender {
   /// was added; this shape does not reproduce it).
   Future<bool> _runConnect(String deviceId) async {
     try {
+      // ignore: avoid_print
+      print('[E04B17DIAG] _runConnect: calling connect($deviceId)');
       final connected = await _callConnect(deviceId).timeout(
         connectTimeout,
         onTimeout: () => false,
       );
+      // ignore: avoid_print
+      print('[E04B17DIAG] _runConnect: connect($deviceId) => $connected');
       if (connected) _connectedDeviceIds.add(deviceId);
       return connected;
     } catch (e) {

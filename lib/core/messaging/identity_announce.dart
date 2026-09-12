@@ -185,8 +185,12 @@ class IdentityAnnounceService {
       payload: framedBody,
     );
 
+    // ignore: avoid_print
+    print('[E04B17DIAG] IdentityAnnounce.sendAnnounce: sending to $peerDeviceId, self=${_stack.selfDeviceId}');
     final bool sent =
         await _stack.directSend(peerDeviceId, frame.serialize());
+    // ignore: avoid_print
+    print('[E04B17DIAG] IdentityAnnounce.sendAnnounce: to $peerDeviceId => $sent');
     if (sent) {
       counters.sent++;
     } else {
@@ -211,6 +215,8 @@ class IdentityAnnounceService {
   ) async {
     counters.received++;
     final String announcedSelfDeviceId = frame.source;
+    // ignore: avoid_print
+    print('[E04B17DIAG] IdentityAnnounce.handleAnnounce: link=$linkDeviceId announced=$announcedSelfDeviceId');
 
     final db = _stack.db;
     final existing = await (db.select(db.relationships)
