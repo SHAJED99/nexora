@@ -14,6 +14,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
@@ -427,6 +428,239 @@ void main() {
     // Does NOT retry forever (task file §4) -- a second explicit call is
     // free to try again; nothing here launches a hidden retry loop for the
     // first call.
+  });
+
+  group('E04-B13: outbound addressing resolution', () {
+    // These tests deliberately use a Bluetooth-MAC-shaped id (`bMac`/`aMac`)
+    // that is DIFFERENT from each stack's own real `selfDeviceId` --
+    // `wireStacks`'s own convention above (MAC == selfDeviceId) can never
+    // exercise this task's actual fix, since the two would always already
+    // match. This mirrors the real-hardware shape E04-B12 confirmed live
+    // (`B8:DB:38:7C:D4:BF` vs. `aecdcd6f9b32dc0f`).
+
+    test(
+      'test_E04_B13_outbound_control_frame_uses_learned_remoteSelfDeviceId',
+      () async {
+        final aSuffix = nextSuffix();
+        final bSuffix = nextSuffix();
+        final a = await newStack('device-a', aSuffix);
+        final b = await newStack('device-b-real-id', bSuffix);
+        addTearDown(a.dispose);
+        addTearDown(b.dispose);
+
+        const bMac = 'AA:BB:CC:DD:EE:01';
+        const aMac = 'AA:BB:CC:DD:EE:02';
+
+        a.inbound.start();
+        b.inbound.start();
+        wireSend(aSuffix, aMac, bSuffix);
+        wireSend(bSuffix, bMac, aSuffix);
+        await connectPeer(aSuffix, bMac);
+        await connectPeer(bSuffix, aMac);
+
+        // A has already learned (via E04-B12's identity-announce -- the
+        // announce mechanism itself is `identity_announce_test.dart`'s job,
+        // not this file's; simulated directly here as its already-landed
+        // effect) that the peer on `bMac` is really `device-b-real-id`.
+        await a.db.into(a.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: bMac,
+                state: RelationshipState.unknown.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('device-b-real-id'),
+              ),
+            );
+
+        // Before E04-B13: the outbound bundleRequest's `destination` would
+        // be `bMac`, which can never equal B's real `selfDeviceId`
+        // (`device-b-real-id`) -- `isForUs` always false on B, this always
+        // times out (E04-B12 §2, confirmed live). After E04-B13: the frame
+        // resolves to `device-b-real-id`, `isForUs` succeeds on B, and the
+        // session establishes for real -- the actual bug, closed.
+        await a.prekeyExchange.ensureSession(bMac);
+
+        expect(
+          await a.signalStore
+              .containsSession(const SignalProtocolAddress('AA:BB:CC:DD:EE:01', 1)),
+          isTrue,
+        );
+        expect(b.prekeyExchange.counters.requestsServed, 1);
+        expect(a.prekeyExchange.counters.responsesAccepted, 1);
+      },
+    );
+
+    test(
+      'test_E04_B13_spoofed_remoteSelfDeviceId_cannot_misdirect_a_message',
+      () async {
+        // §1a's own required falsification: a spoofed/incorrect
+        // `remoteSelfDeviceId` must not cause a message to be misdirected
+        // to the wrong physical device.
+        final aSuffix = nextSuffix();
+        final bSuffix = nextSuffix();
+        final cSuffix = nextSuffix();
+        final a = await newStack('device-a', aSuffix);
+        final b = await newStack('device-b-real-id', bSuffix);
+        // An uninvolved third real device -- if a spoofed
+        // `remoteSelfDeviceId` could ever redirect physical delivery, THIS
+        // is who it would leak the message to.
+        final c = await newStack('device-c-real-id', cSuffix);
+        addTearDown(a.dispose);
+        addTearDown(b.dispose);
+        addTearDown(c.dispose);
+
+        const bMac = 'AA:BB:CC:DD:EE:03';
+        const aMac = 'AA:BB:CC:DD:EE:04';
+
+        a.inbound.start();
+        b.inbound.start();
+        c.inbound.start();
+        // A's outbound bytes are wired ONLY to B's suffix -- C is never
+        // wired to A at all, so there is no transport-level path by which
+        // a frame could ever physically reach C.
+        wireSend(aSuffix, aMac, bSuffix);
+        wireSend(bSuffix, bMac, aSuffix);
+        await connectPeer(aSuffix, bMac);
+        await connectPeer(bSuffix, aMac);
+
+        // Attacker/compromised-peer scenario: the relationship row for the
+        // Bluetooth address A is physically connected to (`bMac` -- really
+        // B) has been spoofed to claim the peer is actually C. This is
+        // exactly the unauthenticated-announce hijack E04-B12's own
+        // reviewer flagged as the reason a bare reverse lookup would be
+        // unsafe (§1a).
+        await a.db.into(a.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: bMac,
+                state: RelationshipState.unknown.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: Value(c.selfDeviceId),
+              ),
+            );
+
+        await expectLater(
+          a.prekeyExchange.ensureSession(
+            bMac,
+            timeout: const Duration(milliseconds: 300),
+          ),
+          throwsA(isA<TimeoutException>()),
+        );
+
+        // The falsification: the spoof did NOT redirect the message to C --
+        // C never received anything at all (proving the PHYSICAL transport
+        // target is governed exclusively by `bMac`, i.e. which
+        // `TransportApi.connect`/`.send` call was actually made, never by
+        // the spoofed `remoteSelfDeviceId`).
+        expect(c.prekeyExchange.counters.requestsServed, 0);
+        // Nor did it succeed against B -- B physically received the bytes
+        // (same wiring every other test in this file uses) but its own
+        // `isForUs` correctly rejects a frame stamped with someone else's
+        // real `selfDeviceId`, so B never recognizes it as its own
+        // bundleRequest to answer.
+        expect(b.prekeyExchange.counters.requestsServed, 0);
+        // The ONLY observable effect of the spoof is a safe, honest
+        // timeout -- the identical failure mode as an unresolved
+        // (never-announced) peer, never a security breach or a message
+        // delivered to/decrypted by the wrong device.
+        expect(a.prekeyExchange.counters.timeouts, 1);
+        expect(
+          await a.signalStore
+              .containsSession(const SignalProtocolAddress('AA:BB:CC:DD:EE:03', 1)),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'test_E04_B13_pre_announce_race_falls_back_safely_without_crashing',
+      () async {
+        // Task file §3 point 3: does NOT assume E04-B12's own
+        // announce-before-any-application-code ordering is airtight --
+        // E04-B12's own review (carried-forward #4) found it is NOT: the
+        // announce is `unawaited`, with no barrier. This proves the race is
+        // handled SAFELY (an honest `TimeoutException`, never a crash,
+        // never a session established against the wrong address) when
+        // `ensureSession` is invoked immediately once the connection reaches
+        // `connected` -- mirroring `ChatController.send()`'s own real call
+        // shape (nothing forces `IdentityAnnounceService.sendAnnounce`,
+        // itself `unawaited` from `MessagingStack`'s own
+        // `inbound.peerConnected` listener, to land before the caller's own
+        // next line runs).
+        final aSuffix = nextSuffix();
+        final bSuffix = nextSuffix();
+        final a = await newStack('device-a', aSuffix);
+        final b = await newStack('device-b-real-id', bSuffix);
+        addTearDown(a.dispose);
+        addTearDown(b.dispose);
+
+        const bMac = 'AA:BB:CC:DD:EE:05';
+        const aMac = 'AA:BB:CC:DD:EE:06';
+
+        a.inbound.start();
+        b.inbound.start();
+        wireSend(aSuffix, aMac, bSuffix);
+        wireSend(bSuffix, bMac, aSuffix);
+
+        // `connectPeer` itself needs its own two-phase settle (discovery,
+        // THEN connected -- `TransportService`'s per-device connection-state
+        // stream is only wired up once the discovery event has actually been
+        // processed) -- this part is not what this test is racing. What
+        // IS raced: `ensureSession` is called on the very next line after
+        // `connectPeer` resolves, with no further settle -- exactly the gap
+        // between "connection reached `connected`" and
+        // "`IdentityAnnounceService.sendAnnounce`'s own further async hops
+        // (connect-then-send) have actually completed" that task file §3
+        // point 3 asks to prove is handled safely, not assumed away.
+        await connectPeer(aSuffix, bMac);
+        await connectPeer(bSuffix, aMac);
+
+        Object? caught;
+        try {
+          await a.prekeyExchange.ensureSession(
+            bMac,
+            timeout: const Duration(milliseconds: 300),
+          );
+        } catch (e) {
+          caught = e;
+        }
+
+        // Whichever way the real race actually resolves, the result must be
+        // ONE of these two safe outcomes -- never a crash, never a session
+        // established against the wrong address.
+        if (caught == null) {
+          // The announce won the race: resolution succeeded first try.
+          expect(
+            await a.signalStore.containsSession(
+              const SignalProtocolAddress('AA:BB:CC:DD:EE:05', 1),
+            ),
+            isTrue,
+          );
+        } else {
+          // ensureSession lost the race (E04-B12's carried-forward #4: the
+          // ordering is not airtight) -- an honest, bounded
+          // TimeoutException, exactly today's already-accepted fallback
+          // behavior for this one narrow window, never a crash or a hang.
+          expect(caught, isA<TimeoutException>());
+          expect(
+            await a.signalStore.containsSession(
+              const SignalProtocolAddress('AA:BB:CC:DD:EE:05', 1),
+            ),
+            isFalse,
+          );
+          // And the peer eventually DOES resolve correctly once the
+          // announce lands (proving the window is narrow and self-healing,
+          // not a permanent failure) -- a second attempt after settling
+          // succeeds.
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          await a.prekeyExchange.ensureSession(bMac);
+          expect(
+            await a.signalStore.containsSession(
+              const SignalProtocolAddress('AA:BB:CC:DD:EE:05', 1),
+            ),
+            isTrue,
+          );
+        }
+      },
+    );
   });
 
   group('E10-T05: PrekeyExchange.connectionRequests', () {

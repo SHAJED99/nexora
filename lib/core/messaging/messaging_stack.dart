@@ -178,6 +178,58 @@ const int _localSignalDeviceId = 1;
 const int _defaultPriority = 0;
 const Duration _defaultTtl = Duration(days: 3);
 
+/// E04-B13 -- resolves [peerDeviceId] (a Bluetooth MAC, the address a
+/// connection is already established on / already being sent to) to that
+/// peer's real, learned `selfDeviceId` for use as an outbound
+/// `RelayPacketFrame.destination`, closing the loop E04-B12 built but never
+/// consumed: `InboundPipeline`'s `isForUs` check compares `frame.destination`
+/// against the RECEIVER's own real `selfDeviceId`, never against a Bluetooth
+/// address, so a frame addressed by MAC can never match on a real device
+/// (E04-B12 §2, confirmed live).
+///
+/// **§1a's blocking security precondition, resolved as forward-only
+/// (option (a)), never a reverse lookup.** This function's only lookup key
+/// is [peerDeviceId] -- the Bluetooth-MAC-shaped id of the specific link the
+/// caller already has open / is already about to send to. It never searches
+/// the `relationships` table FOR a row matching a claimed identity string
+/// (that would be the reverse direction E04-B12's reviewer flagged as unsafe
+/// -- `remoteSelfDeviceId` is peer-asserted and unauthenticated, and nothing
+/// here binds it to a cryptographic identity). Every call site in this
+/// codebase that reaches this function passes the physical link address it
+/// is already using for `TransportService.connect`/`.send`
+/// (`ConnectionEnsuringSender`)/`directSend` -- WHICH PHYSICAL DEVICE
+/// receives the bytes is decided entirely by that address, completely
+/// independent of this function's return value. A spoofed/wrong
+/// `remoteSelfDeviceId` therefore cannot redirect a message to a different
+/// physical device: at worst it stamps the wrong logical `destination`
+/// value into the frame that the SAME physical peer already receives,
+/// which only makes that peer's own `isForUs` check fail (a safe,
+/// self-contained failure -- exactly `test_E04_B13_spoofed_remoteSelfDeviceId_cannot_misdirect_a_message`'s
+/// falsification in `prekey_exchange_test.dart`). See that test and this
+/// task's own `## 1a` section for the full reasoning.
+///
+/// Falls back to [peerDeviceId] itself (today's behavior, unchanged) when no
+/// `remoteSelfDeviceId` has been learned yet for this link -- the
+/// pre-announce race window (task file §3 point 3): the very first frame
+/// sent before E04-B12's automatic announce-on-connect has round-tripped.
+/// `IdentityAnnounceService`'s own send is `unawaited` with no ordering
+/// barrier (E04-B12 review, carried-forward #4) so this race is real, not
+/// theoretical -- this fallback preserves exactly today's (already-broken
+/// for two real devices, but never further regressed) behavior for that one
+/// narrow window rather than crashing or blocking; a later message to the
+/// same peer, once the announce has landed, resolves correctly.
+Future<String> resolveOutboundDestination(
+  AppDatabase db,
+  String peerDeviceId,
+) async {
+  final row = await (db.select(db.relationships)
+        ..where((t) => t.deviceId.equals(peerDeviceId)))
+      .getSingleOrNull();
+  final remote = row?.remoteSelfDeviceId;
+  if (remote == null || remote.isEmpty) return peerDeviceId;
+  return remote;
+}
+
 /// `OQ-E06-T06-1`'s resolved answer (option (c)): the `Timer.periodic` floor
 /// that guarantees `sweepExpired()`/`reclaimPayloads()` still run on a
 /// schedule even with zero mesh traffic. [MessagingStack.create]'s own
@@ -663,10 +715,25 @@ class MessagingStack {
       // plaintext id field, never anything that leaves this device.
       final envelope = MessageEnvelope.deserialize(envelopeBytes);
       final now = clock();
+      // E04-B13: the wire frame's own `destination` field is what the
+      // RECEIVER's `isForUs` check compares against its real `selfDeviceId`
+      // -- it must never be the raw Bluetooth MAC `recipientDeviceId` is
+      // (see `resolveOutboundDestination`'s own doc comment above for the
+      // forward-only resolution and why it is safe against a spoofed
+      // `remoteSelfDeviceId`). `recipientDeviceId` itself is UNCHANGED below
+      // (the `encrypt` call above and the `enqueue` call `SendMessageUseCase`
+      // makes afterward both still use it) -- only this one field, the
+      // logical identity stamped INSIDE the already-encrypted envelope's
+      // frame, is resolved; routing/transport addressing stays exactly the
+      // Bluetooth-MAC-keyed scheme it already is today (task file §1).
+      final destination = await resolveOutboundDestination(
+        db,
+        recipientDeviceId,
+      );
       final frame = RelayPacketFrame(
         payloadType: payloadType,
         packetId: envelope.id,
-        destination: recipientDeviceId,
+        destination: destination,
         source: selfDeviceId,
         priority: _defaultPriority,
         createdAtMs: now.millisecondsSinceEpoch,
