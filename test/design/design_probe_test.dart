@@ -399,23 +399,44 @@ void main() {
       Get.testMode = true;
       db = AppDatabase.forTesting(NativeDatabase.memory());
       final repository = RelationshipRepository(db);
-      // A trusted peer with a five-message thread — the same COUNT and
-      // rough incoming/outgoing shape as design/screens/chat.md's populated
-      // thread (elements 10-25), so the probe's overall layout height is
-      // comparable to the golden capture's. Real device ids/timestamps and
-      // (since no session is ever established here) an undecryptable body
-      // won't literally match the design's copy ("Ahmed"/"Are you
-      // free..."/etc.) — that is a real, expected finding
+      // E06-B07: re-examined against design/screens/chat.md's own element
+      // table (not just the task's prose framing of "8 messages", which
+      // this task found does not survive contact with the actual golden —
+      // see this task's Run log). The golden's message area (elements
+      // 9-25) contains exactly FIVE buildable message bubbles (10, 12, 15,
+      // 20, 23) plus ONE file-transfer bubble (16-19) that is GAP-010's own
+      // already-accepted, deliberately-unbuilt content — so five is the
+      // correct, honest count; there is no sixth real message to add
+      // without either faking GAP-010 or inventing a message the golden
+      // doesn't show. What WAS honestly closeable: the golden's three
+      // outgoing bubbles (12, 20, 23) show three DIFFERENT delivery states
+      // (`done_all` green = Read at 14, `done_all` grey = Delivered at 22,
+      // `check` grey = Sent/Accepted/Stored at 25) — this fixture
+      // previously seeded every message as `DeliveryState.accepted`,
+      // collapsing all three ticks to the same grey `check` and producing
+      // a real, closeable style-delta (tick colour) on top of the
+      // genuinely-unclosable ones (GAP-003 placeholder copy, GAP-010's
+      // bubble, and the probe-tooling gaps below). Real device ids/
+      // timestamps and (since no session is ever established here) an
+      // undecryptable body still won't literally match the design's copy
+      // ("Ahmed"/"Are you free..."/etc.) — that is a real, expected finding
       // (design/gaps.md GAP-003), not something faked here to dodge it,
       // matching E06-T01/T10's own precedent.
       await repository.upsert('device-trusted', RelationshipState.trusted);
       final now = DateTime.now().millisecondsSinceEpoch;
       const senders = [
         'device-trusted', // incoming — mirrors element 10
-        'self-probe-device', // outgoing — mirrors element 12
+        'self-probe-device', // outgoing — mirrors element 12 (tick: element 14, `done_all` green/Read)
         'device-trusted', // incoming — mirrors element 15
-        'self-probe-device', // outgoing — mirrors element 20
-        'self-probe-device', // outgoing — mirrors element 23
+        'self-probe-device', // outgoing — mirrors element 20 (tick: element 22, `done_all` grey/Delivered)
+        'self-probe-device', // outgoing — mirrors element 23 (tick: element 25, `check` grey/Sent)
+      ];
+      const deliveryStates = [
+        DeliveryState.accepted, // incoming — irrelevant, no tick rendered
+        DeliveryState.read,
+        DeliveryState.accepted, // incoming — irrelevant, no tick rendered
+        DeliveryState.delivered,
+        DeliveryState.accepted, // "Sent/Accepted/Stored" per GAP-009's own mapping
       ];
       for (var i = 0; i < senders.length; i++) {
         await db.into(db.messages).insert(
@@ -426,7 +447,7 @@ void main() {
                 sequenceNumber: i,
                 ciphertext: Uint8List.fromList(List<int>.filled(32, 7 + i)),
                 createdAt: now + i * 60000,
-                deliveryState: DeliveryState.accepted.name,
+                deliveryState: deliveryStates[i].name,
               ),
             );
       }
