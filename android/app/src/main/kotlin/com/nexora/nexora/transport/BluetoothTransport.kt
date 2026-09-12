@@ -106,16 +106,20 @@ class BluetoothTransport(
 
     /**
      * Upper bound on how long [send] will park its caller waiting for the
-     * write thread. This is NOT a nicety: Pigeon creates the `send` channel
-     * with no `TaskQueue` (`TransportApi.g.kt` — plain
-     * `BasicMessageChannel(messenger, name, codec)`), so a host `send()` call
-     * runs on the platform/UI thread. An RFCOMM `OutputStream.write()` can
-     * block indefinitely under link-layer flow control (peer stops reading,
-     * link degrades without dropping), and the only escape hatch —
-     * `disconnect()` — is itself a host call on that same blocked thread, so
-     * an unbounded wait is an unrecoverable UI-thread deadlock (ANR). Bounded
-     * below Android's ~5s ANR window; on expiry the connection is torn down
-     * (see [send]) rather than left half-written.
+     * write thread. `send`'s Pigeon channel now runs on a dedicated
+     * background `TaskQueue` (E04-B11 —
+     * `@TaskQueue(type: TaskQueueType.serialBackgroundThread)` in
+     * `pigeons/transport.dart`), so this wait no longer risks blocking the
+     * platform/UI thread the way it did before that fix. It stays bounded
+     * regardless: an RFCOMM `OutputStream.write()` can still block
+     * indefinitely under link-layer flow control (peer stops reading, link
+     * degrades without dropping), and an unbounded wait would still wedge
+     * this device's own background write-dispatch queue for this transport
+     * forever. On expiry the connection is torn down (see [send]) rather
+     * than left half-written. The exact bound is not itself tuned by
+     * E04-B11 — see that task and `E04-B12` for open questions about
+     * whether 3s is the right value now that it no longer doubles as an
+     * ANR guard.
      */
     private const val SEND_TIMEOUT_MS = 3_000L
 

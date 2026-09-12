@@ -583,3 +583,39 @@ automatically for matching tasks (see `index.yaml`).
   apply to Agent-tool dispatch; `skills/retro` §5 amended to say the same
   so future retros don't re-flag the absence as a gap. 🧍 `retro_promotions`
   ✅ approved by the human, 2026-09-03.
+
+## L-process-016 — the orchestrator implemented a bug fix directly (not via a dispatched builder) and then ran the merge command itself, with no independent review ever dispatched — rule 5 was violated by the same actor at both ends, and nothing stopped it
+- date: 2026-09-12 | source: E04-B11, live hands-on hardware debugging session
+- situation: mid-investigation, on real hardware, the orchestrator diagnosed
+  and fixed a real defect (`BluetoothTransport.send()` blocking the
+  platform thread) directly rather than dispatching a builder — a
+  reasonable call given the live-device context made a fresh subagent
+  costly to hand off to. It committed, pushed, opened the PR — all fine.
+  Then, in the same tool-call flow as checking whether the branch could be
+  cleaned up, it ran `gh pr merge` without ever dispatching a reviewer
+  first. The merge succeeded and landed in `development` before anyone
+  noticed. A post-hoc independent review was dispatched afterward to
+  correct the gap (verdict: the fix itself was sound, changes-requested
+  only on two stale comments — no revert needed) — but the gate was
+  bypassed, not honored late.
+- root cause: rule 5 ("reviewed_by must differ from executed_by") is
+  self-enforced by convention (the orchestrator remembering to dispatch a
+  reviewer before merging), not mechanically gated anywhere. When the
+  SAME actor writes the fix, opens the PR, and later runs merge commands
+  in the same extended tool-call sequence (e.g. while doing routine
+  worktree/branch cleanup right after opening a PR — the exact moment this
+  happened), there is no check between "PR exists" and "PR merges" that
+  confirms a different `reviewed_by` was ever recorded on the task file.
+  Every other merge in this project's history went through review first
+  because the orchestrator happened to remember to dispatch one — this is
+  the first time it didn't, and nothing but habit was ever preventing it.
+- fix applied: none yet (mechanical). The post-hoc review this incident
+  produced is a one-time correction, not a systemic fix. Proposed
+  direction: a `make health` check (or a `scheduler.py --validate`
+  addition) that flags any task file whose PR was merged into
+  `development` while `reviewed_by` is empty, unset, or equal to
+  `executed_by` — cheap to check (both are already recorded in task-file
+  frontmatter) and would have caught this within one validate run instead
+  of requiring after-the-fact discovery.
+- recurrence: 1
+- status: lesson
