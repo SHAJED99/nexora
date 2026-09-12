@@ -1812,6 +1812,41 @@ and that is the strongest single argument for this disposition.**
 - **built:** `E15-T05` (round 3) — `lib/features/settings/privacy/presentation/privacy_settings_view.dart`,
   `design/screens/settings-privacy.md` PV22, golden regenerated.
 
+## GAP-041 — chat, the header avatar has no real image data source
+
+- **status:** 🟡 proposed
+- **screen:** chat (`design/screens/chat.md`)
+- **spec:** no FR currently requires a real avatar image; found as a
+  by-product of `E06-B07` (design-probe root-cause pass), not proposed by
+  a task that set out to build avatars.
+- **design shows:** element 3 — an `image` role, 38×38, at the header's
+  avatar position (`design/screens/chat.md`'s own element table). This app
+  (`chat_view.dart`'s `_Header`) renders a 38×38 `Container` filled with
+  the peer's initials text instead — the same "no per-device/per-peer
+  image data source yet" situation `GAP-003` names for the **devices**
+  screen, but `GAP-003` is explicitly scoped to that screen and to
+  name/transport metadata, not to chat's own avatar — so this is its own,
+  previously-unlogged gap, not a re-use of GAP-003 (found and corrected
+  during `E06-B07`'s independent review, round 1 — the code comment at
+  `chat_view.dart:130` citing "GAP-003 precedent" was itself the error
+  this entry fixes: a real gap existed, it just had never been given its
+  own name).
+- **derived from:** the same initials-fallback pattern already established
+  for this exact situation elsewhere in this codebase (`_Header`'s own
+  `_initialsOf` helper, and the devices screen's own row-icon fallback
+  under `GAP-003`) — no new visual language, same avatar-backdrop token
+  (`_avatarBackdrop`) and initials-in-a-circle shape the golden's own
+  avatar position measures.
+- **proposal:** keep rendering the initials fallback (as already built)
+  until a real avatar-image data source exists (a peer-supplied profile
+  image, if this product ever adds one — no spec currently requires it);
+  no code change proposed by this gap entry itself.
+- **approved by:**
+- **built:** already built as the initials fallback (`E06-T11`,
+  `chat_view.dart`'s `_Header`) — this entry only gives that pre-existing,
+  undisclosed divergence a name and an owner; no new build implied unless
+  a future FR requires a real image.
+
 ## The usual suspects
 
 Checklist for the gap pass. In rough order of how often each is missed:
