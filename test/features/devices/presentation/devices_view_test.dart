@@ -178,6 +178,41 @@ void main() {
     expect(blocked.state, RelationshipState.blocked);
   });
 
+  // E02-B01, review round 1 finding 1: the controller-level test proved
+  // `unblock()` itself works, but not that the VIEW ever offers it -- the
+  // actual reported defect ("no button for unblock") is purely at this
+  // layer (`itemBuilder` unconditionally emitting "Block"). This test
+  // fails against the pre-fix `itemBuilder` (no "Unblock" item exists to
+  // tap) and passes with it.
+  testWidgets('kebab menu on a blocked row offers Unblock, not Block',
+      (tester) async {
+    await tester.pumpWidget(GetMaterialApp(home: const DevicesView()));
+    await tester.pumpAndSettle();
+
+    final blockedRow = find.ancestor(
+      of: find.text('device-blocked'),
+      matching: find.byType(Row),
+    );
+    final blockedKebab = find.descendant(
+      of: blockedRow.first,
+      matching: find.byIcon(Icons.more_vert),
+    );
+    await tester.tap(blockedKebab);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unblock'), findsOneWidget);
+    expect(find.text('Block'), findsNothing);
+
+    await tester.tap(find.text('Unblock'));
+    await tester.pumpAndSettle();
+
+    final controller = Get.find<DevicesController>();
+    final unblocked = controller.relationships
+        .where((r) => r.deviceId == 'device-blocked')
+        .single;
+    expect(unblocked.state, RelationshipState.allowed);
+  });
+
   group('test_E06_B05_bottom_nav_actually_navigates', () {
     // Regression for E06-B05: every non-active _NavItem on this screen was
     // wired to `onTap: () {}` -- present, tappable, and a real dead end.

@@ -314,9 +314,19 @@ class DevicesController extends GetxController {
   /// Trusted (a separate, stronger action elsewhere in this screen).
   /// Deliberately a plain repository restore, not routed through
   /// `BlockUseCase` (which exists for block-specific side effects that have
-  /// no reverse here) or Firebase enrollment-grant bookkeeping (blocking
-  /// itself only touches that for a PENDING enrollment being denied --
-  /// `block()`'s own doc comment -- and an unblock is never that case).
+  /// no reverse here).
+  ///
+  /// Review round 1 (`E02-B01`) caught a real, disclosed asymmetry left
+  /// AS-IS rather than fixed here: `block()` unconditionally deletes any
+  /// Firebase enrollment grant for [deviceId] (`E12-B09`, its own doc
+  /// comment -- deliberately UNCONDITIONAL on the device currently being a
+  /// pending enrollment, unlike `verify()`'s gate), so a device that was
+  /// enrolled, then blocked, then unblocked here does NOT get its grant
+  /// re-written -- the peer's own `checkApproval()` still sees the earlier
+  /// revocation. Whether re-granting belongs in `unblock()` is a product
+  /// question outside this bug's scope (a re-approval arguably SHOULD be a
+  /// deliberate `verify()`, not a side effect of undoing a block) --
+  /// flagged here rather than silently assumed either way.
   Future<void> unblock(String deviceId) async {
     await _repository.upsert(deviceId, RelationshipState.allowed);
     await load();
