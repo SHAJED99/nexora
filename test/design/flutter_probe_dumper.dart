@@ -125,6 +125,28 @@ final Map<int, String> _iconNames = {
   Icons.storage.codePoint: 'storage',
   Icons.battery_full.codePoint: 'battery_full',
   Icons.info.codePoint: 'info',
+  // E06-B08: `Icons.check`/`Icons.done_all` — chat_view.dart's own
+  // delivery-tick glyphs (`_tickIconFor`). These are bare `Icon`s outside
+  // any interactive wrapper, so `_walk` already emitted a probe element for
+  // them; they just dumped with empty `text` because the lookup missed.
+  Icons.check.codePoint: 'check',
+  Icons.done_all.codePoint: 'done_all',
+  // E06-B08: the rest of this map's own gap, found by auditing every
+  // `Icons.*` constant actually referenced under `lib/` (not just chat's)
+  // for the same "used but unmapped" shape — one entry per constant this
+  // app's own code actually uses, same convention as the rest of this map.
+  Icons.account_circle.codePoint: 'account_circle',
+  Icons.chevron_right.codePoint: 'chevron_right',
+  Icons.circle.codePoint: 'circle',
+  Icons.dns.codePoint: 'dns',
+  Icons.error_outline.codePoint: 'error_outline',
+  Icons.g_mobiledata.codePoint: 'g_mobiledata',
+  Icons.location_on.codePoint: 'location_on',
+  Icons.policy.codePoint: 'policy',
+  Icons.radio_button_unchecked.codePoint: 'radio_button_unchecked',
+  Icons.sd_storage.codePoint: 'sd_storage',
+  Icons.speed.codePoint: 'speed',
+  Icons.wifi_tethering.codePoint: 'wifi_tethering',
 };
 
 String? _iconName(IconData? icon) => icon == null ? null : _iconNames[icon.codePoint];
@@ -549,7 +571,25 @@ void _walk(
   // nav-style links too, since this dumper does not distinguish navigation
   // intent from an action button. Recorded once at the outermost interactive
   // widget; nested ones inside it are not double-captured.
-  if (_isInteractive(widget) && !insideInteractive) {
+  //
+  // E06-B08: the `insideInteractive` gate below is relaxed for
+  // `_isInteractiveBoundary` widgets specifically — a genuinely separate
+  // nested tap target (`IconButton`/`TextButton`/etc, TWO levels down inside
+  // another already-interactive ancestor) still gets its OWN button element
+  // here, rather than being silently absorbed forever once `insideInteractive`
+  // first flips true. `_isInteractiveBoundary` deliberately excludes
+  // `InkWell`/`InkResponse`/`GestureDetector` (a higher-level button's own
+  // internal gesture plumbing, per that function's own doc comment) — so an
+  // `IconButton`'s internal `InkResponse` still does NOT re-trigger this
+  // branch a second time for the SAME logical button; only a real second
+  // target does. This is what keeps defect 1's fix (below, the `Icon`
+  // branch) from double-emitting: a nested boundary widget's own icon is
+  // captured once, as part of THAT widget's own button processing (fresh
+  // `insideInteractive: true` scoped to it), never also as a stray floating
+  // icon under the outer button's scan (`_collectText`/`_findFirstDecoration`
+  // already stop at the same boundary, so the outer button's own text/style
+  // never reaches into it either).
+  if (_isInteractive(widget) && (!insideInteractive || _isInteractiveBoundary(widget))) {
     final box = _boxOf(element);
     if (box != null) {
       final text = _collectText(element);
@@ -640,36 +680,45 @@ void _walk(
   }
 
   if (widget is Icon) {
-    if (!insideInteractive) {
-      final box = _boxOf(element);
-      if (box != null) {
-        final name = _iconName(widget.icon) ?? '';
-        final style = Map<String, String>.from(_defaultStyle);
-        final iconTheme = IconTheme.of(element);
-        final color = widget.color ?? iconTheme.color;
-        if (color != null) style['color'] = _cssColor(color);
-        // E12-B13 (issue 4): font metadata for `Icon` widgets. `fontSize`
-        // resolves correctly now — every `Icon(..., size: N)` call site's
-        // `N` already matches the design's measured glyph size. `fontFamily`
-        // is honestly reported as Flutter's own bundled icon font
-        // (`IconData.fontFamily`, e.g. `MaterialIcons`) — see this file's
-        // header comment: a REAL, different value from the golden's
-        // `Material Symbols Outlined` (no custom icon font is bundled by
-        // this app), so it stays a genuine, expected style-delta finding,
-        // not something to paper over here.
-        final size = widget.size ?? iconTheme.size;
-        if (size != null) style['fontSize'] = _pxStr(size);
-        final fontFamily = widget.icon?.fontFamily;
-        if (fontFamily != null) style['fontFamily'] = fontFamily;
-        out.add(_ProbeElement(
-          role: 'generic',
-          text: name,
-          alt: widget.semanticLabel ?? '',
-          box: box,
-          surface: false,
-          style: style,
-        ));
-      }
+    // E06-B08 (defect 1): this used to be gated on `!insideInteractive`,
+    // silently dropping every icon-only tap target's glyph — `arrow_back`/
+    // `more_vert`/`add`/`mic` inside an `InkWell`/`Material` wrapper walked
+    // but never emitted, a structural under-count relative to the golden
+    // (DOM-based `probe.mjs` always captures an icon-font glyph as its own
+    // nested element inside its button). Now emitted unconditionally,
+    // mirroring the golden's own "icon glyph is a separate nested element"
+    // model. No double-emission risk: the `insideInteractive` gate above
+    // already resets per genuinely separate nested target
+    // (`_isInteractiveBoundary`), so this icon is always reached exactly
+    // once, under exactly one enclosing button's own recursion.
+    final box = _boxOf(element);
+    if (box != null) {
+      final name = _iconName(widget.icon) ?? '';
+      final style = Map<String, String>.from(_defaultStyle);
+      final iconTheme = IconTheme.of(element);
+      final color = widget.color ?? iconTheme.color;
+      if (color != null) style['color'] = _cssColor(color);
+      // E12-B13 (issue 4): font metadata for `Icon` widgets. `fontSize`
+      // resolves correctly now — every `Icon(..., size: N)` call site's
+      // `N` already matches the design's measured glyph size. `fontFamily`
+      // is honestly reported as Flutter's own bundled icon font
+      // (`IconData.fontFamily`, e.g. `MaterialIcons`) — see this file's
+      // header comment: a REAL, different value from the golden's
+      // `Material Symbols Outlined` (no custom icon font is bundled by
+      // this app), so it stays a genuine, expected style-delta finding,
+      // not something to paper over here.
+      final size = widget.size ?? iconTheme.size;
+      if (size != null) style['fontSize'] = _pxStr(size);
+      final fontFamily = widget.icon?.fontFamily;
+      if (fontFamily != null) style['fontFamily'] = fontFamily;
+      out.add(_ProbeElement(
+        role: 'generic',
+        text: name,
+        alt: widget.semanticLabel ?? '',
+        box: box,
+        surface: false,
+        style: style,
+      ));
     }
     return;
   }
