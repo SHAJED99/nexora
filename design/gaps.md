@@ -1847,6 +1847,31 @@ and that is the strongest single argument for this disposition.**
   undisclosed divergence a name and an owner; no new build implied unless
   a future FR requires a real image.
 
+## GAP-042 — devices, the overflow menu has no reverse action for a blocked row
+
+- **status:** 🟢 built
+- **screen:** devices (`design/screens/devices.md`)
+- **spec:** `FR-BLOCK-001` — blocking prevents direct communication; nothing
+  makes it one-way. Found via human live-device testing (`E02-B01`), not a
+  design-probe finding.
+- **design shows:** element 24 (`devices.md`'s own element table), a
+  `PopupMenuButton` with a single measured item, `Block`. The design has
+  no row state for "already blocked" and so no measured second item either.
+- **derived from:** the same `PopupMenuItem<String>` primitive already in
+  this exact menu (`devices_view.dart`), and the same
+  `RelationshipRepository.upsert` call `DevicesController.verify()` already
+  makes for the Unknown → Allowed transition — no new visual language, no
+  new backend capability, just a second label on an existing menu wired to
+  an existing repository call with a different target state.
+- **proposal:** for a row whose `RelationshipState` is `blocked`, the menu
+  item reads `Unblock` instead of `Block`; selecting it calls the new
+  `DevicesController.unblock(deviceId)`, restoring `RelationshipState.
+  allowed` (mirroring `verify()`'s own choice of tier, not `trusted`).
+- **approved by:** human request, 2026-09-13 (live device testing:
+  "If i block someone, no button for unblock or anything") — direct
+  instruction to add it, not a proposal awaiting sign-off.
+- **built:** `E02-B01`, 2026-09-13.
+
 ## The usual suspects
 
 Checklist for the gap pass. In rough order of how often each is missed:
