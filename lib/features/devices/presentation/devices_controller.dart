@@ -308,6 +308,20 @@ class DevicesController extends GetxController {
     }
   }
 
+  /// "Unblock" (a blocked row's own kebab-menu action, GAP-042/`E02-B01`) --
+  /// restores a blocked relationship to Allowed, the same tier `verify()`
+  /// grants a freshly-approved device, rather than skipping straight to
+  /// Trusted (a separate, stronger action elsewhere in this screen).
+  /// Deliberately a plain repository restore, not routed through
+  /// `BlockUseCase` (which exists for block-specific side effects that have
+  /// no reverse here) or Firebase enrollment-grant bookkeeping (blocking
+  /// itself only touches that for a PENDING enrollment being denied --
+  /// `block()`'s own doc comment -- and an unblock is never that case).
+  Future<void> unblock(String deviceId) async {
+    await _repository.upsert(deviceId, RelationshipState.allowed);
+    await load();
+  }
+
   /// "Discover" button (element 6) — starts real nearby-device discovery
   /// (FR-DISC-001) via `TransportService`, replacing the E02-T02 no-op
   /// stub. Newly-seen device ids not already shown are evaluated through

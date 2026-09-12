@@ -246,10 +246,21 @@ class _DeviceRow extends StatelessWidget {
                 onSelected: (value) {
                   if (value == 'block') {
                     controller.block(relationship.deviceId);
+                  } else if (value == 'unblock') {
+                    controller.unblock(relationship.deviceId);
                   }
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem<String>(value: 'block', child: Text('Block')),
+                // GAP-042 (E02-B01): a blocked row's own reverse action --
+                // same `PopupMenuItem<String>` primitive, wired to the new
+                // `unblock()` call instead of `block()`. A non-blocked row's
+                // menu is unchanged.
+                itemBuilder: (context) => [
+                  if (relationship.state == RelationshipState.blocked)
+                    const PopupMenuItem<String>(
+                        value: 'unblock', child: Text('Unblock'))
+                  else
+                    const PopupMenuItem<String>(
+                        value: 'block', child: Text('Block')),
                 ],
               ),
             ],
