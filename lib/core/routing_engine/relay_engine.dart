@@ -338,14 +338,23 @@ class RelayEngine {
       // `E04-B07`'s deliberate no-eager-connect design app-wide (e.g. a
       // background reconnect timer for every known device, regardless of
       // whether the user is trying to talk to them), this narrowly
-      // treats an explicit SEND to an already `trusted`/`allowed`
-      // relationship as sufficient reason to attempt one direct hop
-      // (destination == next hop, the common 1-hop-mesh case) even with
-      // no measured route -- exactly the "the user needs to talk to
-      // someone they're already paired with, and nothing else is going
-      // to make that connection happen" case, while a stranger with no
-      // relationship at all still gets no eager-connect attempt, same as
-      // before. On success this is recorded exactly like any other
+      // treats ANY queued packet whose destination already has a
+      // `trusted`/`allowed` relationship row as sufficient reason to
+      // attempt one direct hop (destination == next hop, the common
+      // 1-hop-mesh case) even with no measured route -- while a
+      // destination with no relationship row at all, or one marked
+      // `unknown`/`blocked`, still gets no eager-connect attempt, same
+      // as before. Review round 1 correction: this is NOT scoped to "an
+      // explicit send" specifically -- `relay_packets` carries no origin
+      // column, so a packet THIS device is relaying on someone else's
+      // behalf (`InboundPipeline`'s own relay-enqueue path) reaches this
+      // same code identically. In practice this rarely applies (a
+      // relayed frame's destination is the recipient's logical
+      // `remoteSelfDeviceId`, not the Bluetooth-MAC-keyed
+      // `relationships.device_id` this lookup matches against, so the
+      // row lookup normally misses for someone else's traffic) but the
+      // guard itself makes no such distinction, so it is not described
+      // as one here. On success this is recorded exactly like any other
       // single-hop delivery (`RelayDeliveryState.delivered`); on failure
       // the packet is left queued, same as an ordinary failed hop
       // (§3/§6) -- no new failure-handling path.

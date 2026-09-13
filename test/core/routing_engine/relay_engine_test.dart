@@ -13,6 +13,8 @@ import 'package:nexora/core/routing_engine/route_cost_calculator.dart';
 import 'package:nexora/core/routing_engine/routing_engine.dart';
 import 'package:nexora/core/routing_engine/simulation/network_simulator.dart';
 import 'package:nexora/core/routing_engine/simulation/simulated_link.dart';
+import 'package:nexora/features/trust/domain/relationship.dart'
+    show RelationshipState;
 
 /// One record of a captured `RelaySendFn` invocation, for tests asserting
 /// call order and exact bytes without RelayEngine (or this helper) ever
@@ -641,6 +643,67 @@ void main() {
               ..where((t) => t.id.equals(id)))
             .getSingle();
         expect(row.deliveryState, RelayDeliveryState.queued.name);
+      },
+    );
+
+    test(
+      'test_E04_B23_blocked_relationship_with_no_route_still_gets_no_attempt',
+      () async {
+        // Review round-1 finding N2: the DoD claims absent/unknown/blocked
+        // relationships are all unaffected, but only the absent case
+        // ('Z' above) was actually pinned by a test. `blocked` is the
+        // security-sensitive one -- a relationship this device has
+        // actively revoked trust from must never get an eager-connect
+        // attempt just because no route happens to exist.
+        await db.into(db.relationships).insert(
+              RelationshipsCompanion.insert(
+                deviceId: 'B',
+                state: 'blocked',
+                updatedAt: DateTime(2026, 1, 1),
+              ),
+            );
+
+        final sim = NetworkSimulator(seed: 19);
+        final routingEngine = RoutingEngine(selfId: 'A');
+
+        final calls = <_SendCall>[];
+        final relay = RelayEngine(
+          selfId: 'A',
+          db: db,
+          routingEngine: routingEngine,
+          send: _recordingSend(sim, 'A', calls),
+        );
+
+        final id = await relay.enqueue(
+          'B',
+          Uint8List.fromList([1]),
+          0,
+          const Duration(minutes: 10),
+        );
+
+        await relay.processQueue();
+
+        expect(calls, isEmpty, reason: 'blocked -> no attempt, ever');
+        final row = await (db.select(db.relayPackets)
+              ..where((t) => t.id.equals(id)))
+            .getSingle();
+        expect(row.deliveryState, RelayDeliveryState.queued.name);
+      },
+    );
+
+    test(
+      'test_E04_B23_relationship_state_string_literals_match_the_enum',
+      () {
+        // Review round-1 finding N3: relay_engine.dart deliberately
+        // compares against the raw strings 'trusted'/'allowed' rather
+        // than importing RelationshipState (to keep this file's own
+        // narrow dependency surface -- see its own doc comment). This
+        // pins that string choice against the actual enum encoding
+        // `RelationshipRepository.upsert` writes, so a future rename of
+        // the enum's values shows up here instead of silently breaking
+        // the raw-string comparison.
+        expect(RelationshipState.trusted.name, 'trusted');
+        expect(RelationshipState.allowed.name, 'allowed');
       },
     );
 
