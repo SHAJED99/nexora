@@ -1308,14 +1308,21 @@ class BluetoothTransport(
    * (both this app's socket variants are the secure flavor; see this
    * file's header and the `remoteBonded` assertion in [acceptLoop]).
    * Under that invariant, any [candidate] NOT found in `bondedDevices` is
-   * therefore known-masked -- a placeholder value some OEM Bluetooth
-   * stacks (confirmed live on MIUI) report instead of the peer's real
-   * bonded address, sometimes coinciding with this device's OWN
-   * self-reported address. Baking such a value into
-   * `relationships`/`messages.conversation_id` produces a permanently
-   * undialable conversation (confirmed live via `dumpsys
-   * bluetooth_manager`: a real `createBond()` against exactly such a
-   * value fails after ~35s, since no physical device has it).
+   * therefore known-masked -- confirmed live (2026-09-14, live two-device
+   * testing): this is NOT a fake/synthetic placeholder value as originally
+   * assumed -- `00:00:46:00:00:01`, the exact value observed, is the
+   * AFFECTED DEVICE'S OWN genuine, real `Settings.Secure.bluetooth_address`
+   * (confirmed via `adb shell settings get secure bluetooth_address` on
+   * that device, and independently via `dumpsys bluetooth_manager` on its
+   * peer, which has a real, successfully-paired OS bond record for it
+   * under that exact address). The actual defect is a MIUI accept-path
+   * quirk that reports the LOCAL device's own address as the remote
+   * peer's, not a masked/randomized value -- but the practical
+   * consequence is identical either way: baking a device's own address in
+   * as a peer's `relationships`/`messages.conversation_id` produces a
+   * permanently undialable conversation (confirmed live via `dumpsys
+   * bluetooth_manager`: a real `createBond()` against a device's own
+   * address fails after ~35s, since a device cannot bond with itself).
    *
    * When [candidate] is not bonded and there is EXACTLY ONE bonded device
    * to fall back to (unambiguous), that bonded device's real address is
@@ -1326,6 +1333,25 @@ class BluetoothTransport(
    * the one being fixed. Deliberately scoped to the accept path only --
    * see [resolveDeviceId]'s own doc comment for why the discovery-scan
    * path must not use this same guard (it lacks the bonded guarantee).
+   *
+   * **E04-B22:** "exactly one bonded device" was, until this fix,
+   * "exactly one device of ANY kind this phone has ever bonded with" --
+   * `adapter.bondedDevices` includes headphones, a smartwatch, a car kit,
+   * etc., not just Nexora peers. Confirmed live: a real test device with
+   * a Nexora peer bonded ALONGSIDE one unrelated Bluetooth headset had
+   * `bondedDevices.size == 2`, so the "exactly one" check never fired and
+   * this whole guard was silently inert for that device. [candidate] is
+   * now compared against the subset of `bondedDevices` that themselves
+   * advertise [NEXORA_SPP_UUID] in their (already OS-cached, from
+   * bonding-time SDP -- no live query needed here) `uuids` -- narrowing
+   * "unambiguous fallback" to actual Nexora peers, not every bonded
+   * device of any kind. See `E04-T06`'s own SDP-UUID note for why this
+   * UUID means "SPP-capable" rather than strictly "running Nexora" --
+   * the same accepted, narrow residual (E04-T07 tracks the real fix, a
+   * bespoke Nexora-specific UUID); it does not weaken this guard's own
+   * safety, since a false-positive SPP gadget matching here only means
+   * this guard fails to fire (falls through to leaving [candidate]
+   * unchanged), never a wrong-device substitution.
    */
   private fun unmaskIfNotBonded(candidate: String): String {
     if (isBonded(candidate)) return candidate
@@ -1335,8 +1361,18 @@ class BluetoothTransport(
         } catch (e: SecurityException) {
           null
         } ?: return candidate
-    if (bondedDevices.size != 1) return candidate
-    val onlyBonded = bondedDevices.first()
+    val nexoraBondedDevices =
+        bondedDevices.filter { bonded ->
+          val uuids =
+              try {
+                bonded.uuids
+              } catch (e: SecurityException) {
+                null
+              }
+          uuids?.any { (it as? ParcelUuid)?.uuid == NEXORA_SPP_UUID } == true
+        }
+    if (nexoraBondedDevices.size != 1) return candidate
+    val onlyBonded = nexoraBondedDevices.first()
     val onlyBondedAddress =
         try {
           onlyBonded.address
