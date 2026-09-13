@@ -23,7 +23,9 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -158,14 +160,16 @@ class BluetoothTransport(
 
     /** E04-T06: how long a discovered device's SDP inquiry
      * ([BluetoothDevice.fetchUuidsWithSdp]) is allowed to stay pending
-     * before its [pendingNexoraChecks] entry is dropped unanswered. A real
-     * SDP round-trip against a nearby peer is typically well under a
-     * second, but can take several seconds on a busy radio; generous
-     * enough to avoid dropping a real Nexora peer, bounded enough that a
-     * long `discover()` session doesn't accumulate unresolved entries
-     * for devices that never answer (a non-Nexora accessory that simply
-     * has no SPP service to report, or one that stops responding). */
-    private const val SDP_LOOKUP_TIMEOUT_MS = 8000L
+     * before its [pendingNexoraChecks] entry is dropped unanswered.
+     * Review round-1 F5: `fetchUuidsWithSdp()` issued while
+     * `startDiscovery()`'s own inquiry scan is still active commonly has
+     * its SDP transaction deferred until that inquiry completes -- a real
+     * Android inquiry runs ~12s, so `ACTION_UUID` can legitimately land
+     * well after the `ACTION_FOUND` that triggered the query. 15s is
+     * generous enough to cover that ordering without indefinitely
+     * accumulating entries for a device that genuinely never answers
+     * (no SPP service, or gone out of range). */
+    private const val SDP_LOOKUP_TIMEOUT_MS = 15000L
   }
 
   private val bluetoothManager =
@@ -190,8 +194,19 @@ class BluetoothTransport(
       val displayName: String,
       val rssi: Long?,
       val bonded: Boolean,
+      /** Review round-1 F2 fix: a fresh `discover()` call clears and
+       * re-populates [pendingNexoraChecks] for the same address a prior
+       * scan already had a pending, not-yet-timed-out entry for. Without
+       * an identity check, the OLDER entry's own timeout coroutine would
+       * remove the NEWER entry by key alone once its (unrelated) delay
+       * elapsed, silently dropping a still-in-flight, legitimate check.
+       * Each entry gets a unique token from [nexoraCheckGeneration]; the
+       * timeout coroutine only removes the map entry it itself scheduled
+       * for, via the two-arg `ConcurrentHashMap.remove(key, value)`. */
+      val token: Long,
   )
 
+  private val nexoraCheckGeneration = AtomicLong(0)
   private val pendingNexoraChecks = ConcurrentHashMap<String, PendingNexoraCheck>()
 
   private val openSockets = ConcurrentHashMap<String, BluetoothSocket>()
@@ -1112,28 +1127,34 @@ class BluetoothTransport(
     val bonded = isBonded(resolvedId)
     // E04-T06: only ever surface a discovered device once its SDP record
     // confirms it is actually running Nexora (advertises
-    // `NEXORA_SPP_UUID`, the same UUID this file's own listening socket
-    // registers under) -- a generic nearby Bluetooth accessory (headphones,
-    // a car kit, an unrelated phone) is never shown. `device.uuids` is the
-    // platform's own cache of a prior SDP result (populated by bonding, or
-    // by an earlier `fetchUuidsWithSdp()` this process already made) --
-    // checked synchronously first so an already-known answer never waits
-    // on a fresh, redundant SDP round trip.
+    // `NEXORA_SPP_UUID`, the SPP UUID this file's own listening socket
+    // also registers under -- NOTE this is the generic, standard SPP
+    // UUID, not a bespoke Nexora one, so this filter really means
+    // "SPP-capable", a residual, accepted false-positive class covering
+    // e.g. HC-05-style serial modules or OBD dongles; tracked as a named
+    // follow-up rather than claimed away, see task file). `device.uuids`
+    // is the platform's own cache of a prior SDP result (populated by
+    // bonding, or by an earlier `fetchUuidsWithSdp()` this process
+    // already made) -- checked synchronously first so an already-known
+    // POSITIVE answer never waits on a fresh, redundant SDP round trip.
+    // Review round-1 F4: a cached NEGATIVE (or absent) answer does NOT
+    // short-circuit to "never shown" -- that cache is populated at BOND
+    // time, so a peer bonded before it ever ran Nexora (or before its
+    // listening socket first opened) would otherwise be permanently
+    // invisible with no path to a fresh answer. Only a genuine SDP-UUID
+    // match short-circuits; everything else falls through to a live query.
     val cachedUuids =
         try {
           device.uuids
         } catch (e: SecurityException) {
           null
         }
-    if (cachedUuids != null) {
-      if (cachedUuids.any { it.uuid == NEXORA_SPP_UUID }) {
-        emitDiscoveredDevice(resolvedId, name, rssi, bonded)
-      }
-      // else: a cached, definitive answer says this device has no Nexora
-      // SPP service -- drop silently, exactly as if never discovered.
+    if (cachedUuids != null && cachedUuids.any { it.uuid == NEXORA_SPP_UUID }) {
+      emitDiscoveredDevice(resolvedId, name, rssi, bonded)
       return
     }
-    pendingNexoraChecks[address] = PendingNexoraCheck(resolvedId, name, rssi, bonded)
+    val token = nexoraCheckGeneration.incrementAndGet()
+    pendingNexoraChecks[address] = PendingNexoraCheck(resolvedId, name, rssi, bonded, token)
     val queried =
         try {
           device.fetchUuidsWithSdp()
@@ -1144,16 +1165,38 @@ class BluetoothTransport(
       // Could not even start the SDP query (permission gone, adapter
       // torn down mid-scan) -- fail closed, same as an unanswered query:
       // never shown rather than shown without any real confirmation.
-      pendingNexoraChecks.remove(address)
+      // Identity-scoped (F2): only remove the entry THIS call just
+      // created, never an unrelated newer one that raced in under the
+      // same address (can't happen synchronously here, but kept
+      // consistent with every other removal in this feature).
+      pendingNexoraChecks.remove(address, PendingNexoraCheck(resolvedId, name, rssi, bonded, token))
       return
     }
+    // Review round-1 F1 (blocking): `eventsScope` runs on
+    // `Dispatchers.Main` (`TransportApiHost`) -- `Thread.sleep` here
+    // would block the UI thread for the entire timeout, ANR-ing the app
+    // (Android's own dispatch-timeout is 5s, this delay is longer) AND
+    // starving every other `eventsScope`-dispatched callback
+    // (`onDataReceived`, `onConnectionStateChanged`, this very
+    // function's own `emitDiscoveredDevice`) queued behind it on the
+    // single-threaded main dispatcher -- worse still, since a
+    // context-registered receiver's `onReceive` (including this file's
+    // own `ACTION_UUID` handling) ALSO runs on the main thread, a
+    // blocking sleep here would delay the real SDP answer from ever
+    // being processed until after the sleep itself finishes, making the
+    // timeout fire first ~100% of the time and defeating the entire
+    // async path. `delay()` suspends without blocking the looper, fixing
+    // both problems at once.
     eventsScope.launch {
-      Thread.sleep(SDP_LOOKUP_TIMEOUT_MS)
-      // Still here after the timeout means `ACTION_UUID` never arrived
-      // for this address (or arrived and was already consumed by
-      // `handleUuidResult`, in which case this is a harmless no-op
-      // remove-of-nothing) -- either way, never emit unconfirmed.
-      pendingNexoraChecks.remove(address)
+      delay(SDP_LOOKUP_TIMEOUT_MS)
+      // Review round-1 F2 (blocking): identity-scoped removal -- only
+      // remove the entry this exact call created (matched by full
+      // value equality, `token` included), never a newer entry a
+      // subsequent `discover()` call already replaced this address's
+      // pending check with. `handleUuidResult` having already consumed
+      // (removed) this same entry is the common case and this call is
+      // then a harmless no-op, exactly as before.
+      pendingNexoraChecks.remove(address, PendingNexoraCheck(resolvedId, name, rssi, bonded, token))
     }
   }
 
