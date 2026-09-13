@@ -12,6 +12,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import java.io.IOException
 import java.io.InputStream
@@ -22,7 +23,9 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -154,6 +157,19 @@ class BluetoothTransport(
      * own single-attempt contract for the already-bonded case. */
     private const val POST_BOND_CONNECT_DELAY_MS = 400L
     private const val POST_BOND_CONNECT_MAX_ATTEMPTS = 2
+
+    /** E04-T06: how long a discovered device's SDP inquiry
+     * ([BluetoothDevice.fetchUuidsWithSdp]) is allowed to stay pending
+     * before its [pendingNexoraChecks] entry is dropped unanswered.
+     * Review round-1 F5: `fetchUuidsWithSdp()` issued while
+     * `startDiscovery()`'s own inquiry scan is still active commonly has
+     * its SDP transaction deferred until that inquiry completes -- a real
+     * Android inquiry runs ~12s, so `ACTION_UUID` can legitimately land
+     * well after the `ACTION_FOUND` that triggered the query. 15s is
+     * generous enough to cover that ordering without indefinitely
+     * accumulating entries for a device that genuinely never answers
+     * (no SPP service, or gone out of range). */
+    private const val SDP_LOOKUP_TIMEOUT_MS = 15000L
   }
 
   private val bluetoothManager =
@@ -164,6 +180,35 @@ class BluetoothTransport(
    * `ACTION_FOUND` within one discovery session so the same nearby device
    * isn't re-emitted every scan cycle, per §5's contract. */
   private val discoveredAddresses = ConcurrentHashMap.newKeySet<String>()
+
+  /** E04-T06: a discovered device this file has NOT yet confirmed is
+   * running Nexora (its SDP record hasn't been checked, or was checked
+   * and had no cached answer) but has already asked to check
+   * ([BluetoothDevice.fetchUuidsWithSdp]) — keyed by address, holding
+   * everything needed to finish emitting [TransportEventsApi.onDeviceDiscovered]
+   * once the matching `ACTION_UUID` broadcast arrives (or to simply be
+   * dropped, unanswered, after [SDP_LOOKUP_TIMEOUT_MS]). See
+   * [handleDeviceFound]/[handleUuidResult]. */
+  private data class PendingNexoraCheck(
+      val resolvedId: String,
+      val displayName: String,
+      val rssi: Long?,
+      val bonded: Boolean,
+      /** Review round-1 F2 fix: a fresh `discover()` call clears and
+       * re-populates [pendingNexoraChecks] for the same address a prior
+       * scan already had a pending, not-yet-timed-out entry for. Without
+       * an identity check, the OLDER entry's own timeout coroutine would
+       * remove the NEWER entry by key alone once its (unrelated) delay
+       * elapsed, silently dropping a still-in-flight, legitimate check.
+       * Each entry gets a unique token from [nexoraCheckGeneration]; the
+       * timeout coroutine only removes the map entry it itself scheduled
+       * for, via the two-arg `ConcurrentHashMap.remove(key, value)`. */
+      val token: Long,
+  )
+
+  private val nexoraCheckGeneration = AtomicLong(0)
+  private val pendingNexoraChecks = ConcurrentHashMap<String, PendingNexoraCheck>()
+
   private val openSockets = ConcurrentHashMap<String, BluetoothSocket>()
 
   /** One background read-loop thread per connected device, keyed the same
@@ -981,6 +1026,7 @@ class BluetoothTransport(
     }
     openSockets.clear()
     sendOutcomes.clear()
+    pendingNexoraChecks.clear() // E04-T06.
   }
 
   private fun doStartDiscovery() {
@@ -991,6 +1037,7 @@ class BluetoothTransport(
     }
     ensureListening() // E04-B06 -- see that method's own doc comment.
     discoveredAddresses.clear()
+    pendingNexoraChecks.clear() // E04-T06 -- don't carry stale pending SDP checks across scans.
     registerReceiverIfNeeded()
     if (bt.isDiscovering) bt.cancelDiscovery()
     bt.startDiscovery()
@@ -1002,13 +1049,21 @@ class BluetoothTransport(
         object : BroadcastReceiver() {
           override fun onReceive(context: Context?, intent: Intent?) {
             intent ?: return
-            if (intent.action == BluetoothDevice.ACTION_FOUND) handleDeviceFound(intent)
+            when (intent.action) {
+              BluetoothDevice.ACTION_FOUND -> handleDeviceFound(intent)
+              // E04-T06: the async reply to this file's own
+              // `fetchUuidsWithSdp()` call in `handleDeviceFound` --
+              // completes (or drops) the Nexora-peer check for one
+              // pending discovered device.
+              BluetoothDevice.ACTION_UUID -> handleUuidResult(intent)
+            }
           }
         }
     val filter =
         IntentFilter().apply {
           addAction(BluetoothDevice.ACTION_FOUND)
           addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+          addAction(BluetoothDevice.ACTION_UUID)
         }
     // API 33+ requires an explicit exported/not-exported flag for
     // context-registered receivers. `E04-B04`: `ACTION_FOUND` is sent by
@@ -1070,9 +1125,110 @@ class BluetoothTransport(
     // correctly reports `bonded = false` here, so `_reconcileStaleRelationship`
     // never runs for a passing stranger's device.
     val bonded = isBonded(resolvedId)
+    // E04-T06: only ever surface a discovered device once its SDP record
+    // confirms it is actually running Nexora (advertises
+    // `NEXORA_SPP_UUID`, the SPP UUID this file's own listening socket
+    // also registers under -- NOTE this is the generic, standard SPP
+    // UUID, not a bespoke Nexora one, so this filter really means
+    // "SPP-capable", a residual, accepted false-positive class covering
+    // e.g. HC-05-style serial modules or OBD dongles; tracked as a named
+    // follow-up rather than claimed away, see task file). `device.uuids`
+    // is the platform's own cache of a prior SDP result (populated by
+    // bonding, or by an earlier `fetchUuidsWithSdp()` this process
+    // already made) -- checked synchronously first so an already-known
+    // POSITIVE answer never waits on a fresh, redundant SDP round trip.
+    // Review round-1 F4: a cached NEGATIVE (or absent) answer does NOT
+    // short-circuit to "never shown" -- that cache is populated at BOND
+    // time, so a peer bonded before it ever ran Nexora (or before its
+    // listening socket first opened) would otherwise be permanently
+    // invisible with no path to a fresh answer. Only a genuine SDP-UUID
+    // match short-circuits; everything else falls through to a live query.
+    val cachedUuids =
+        try {
+          device.uuids
+        } catch (e: SecurityException) {
+          null
+        }
+    if (cachedUuids != null && cachedUuids.any { (it as? ParcelUuid)?.uuid == NEXORA_SPP_UUID }) {
+      emitDiscoveredDevice(resolvedId, name, rssi, bonded)
+      return
+    }
+    val token = nexoraCheckGeneration.incrementAndGet()
+    pendingNexoraChecks[address] = PendingNexoraCheck(resolvedId, name, rssi, bonded, token)
+    val queried =
+        try {
+          device.fetchUuidsWithSdp()
+        } catch (e: SecurityException) {
+          false
+        }
+    if (!queried) {
+      // Could not even start the SDP query (permission gone, adapter
+      // torn down mid-scan) -- fail closed, same as an unanswered query:
+      // never shown rather than shown without any real confirmation.
+      // Identity-scoped (F2): only remove the entry THIS call just
+      // created, never an unrelated newer one that raced in under the
+      // same address (can't happen synchronously here, but kept
+      // consistent with every other removal in this feature).
+      pendingNexoraChecks.remove(address, PendingNexoraCheck(resolvedId, name, rssi, bonded, token))
+      return
+    }
+    // Review round-1 F1 (blocking): `eventsScope` runs on
+    // `Dispatchers.Main` (`TransportApiHost`) -- `Thread.sleep` here
+    // would block the UI thread for the entire timeout, ANR-ing the app
+    // (Android's own dispatch-timeout is 5s, this delay is longer) AND
+    // starving every other `eventsScope`-dispatched callback
+    // (`onDataReceived`, `onConnectionStateChanged`, this very
+    // function's own `emitDiscoveredDevice`) queued behind it on the
+    // single-threaded main dispatcher -- worse still, since a
+    // context-registered receiver's `onReceive` (including this file's
+    // own `ACTION_UUID` handling) ALSO runs on the main thread, a
+    // blocking sleep here would delay the real SDP answer from ever
+    // being processed until after the sleep itself finishes, making the
+    // timeout fire first ~100% of the time and defeating the entire
+    // async path. `delay()` suspends without blocking the looper, fixing
+    // both problems at once.
+    eventsScope.launch {
+      delay(SDP_LOOKUP_TIMEOUT_MS)
+      // Review round-1 F2 (blocking): identity-scoped removal -- only
+      // remove the entry this exact call created (matched by full
+      // value equality, `token` included), never a newer entry a
+      // subsequent `discover()` call already replaced this address's
+      // pending check with. `handleUuidResult` having already consumed
+      // (removed) this same entry is the common case and this call is
+      // then a harmless no-op, exactly as before.
+      pendingNexoraChecks.remove(address, PendingNexoraCheck(resolvedId, name, rssi, bonded, token))
+    }
+  }
+
+  /** E04-T06: the async reply to [handleDeviceFound]'s own
+   * `fetchUuidsWithSdp()` call for one pending discovered device.
+   * Finishes that device's Nexora-peer check: emits
+   * [TransportEventsApi.onDeviceDiscovered] only if the SDP result
+   * actually includes [NEXORA_SPP_UUID]; otherwise the device is dropped
+   * silently, exactly as if it had never been discovered. A result for an
+   * address this file isn't tracking (already timed out, or never asked)
+   * is ignored. */
+  private fun handleUuidResult(intent: Intent) {
+    val device = deviceFromIntent(intent) ?: return
+    val address = device.address ?: return
+    val pending = pendingNexoraChecks.remove(address) ?: return
+    val uuids =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+          intent.getParcelableArrayExtra(BluetoothDevice.EXTRA_UUID, ParcelUuid::class.java)
+        } else {
+          @Suppress("DEPRECATION") intent.getParcelableArrayExtra(BluetoothDevice.EXTRA_UUID)
+        }
+    val isNexoraPeer =
+        uuids?.any { (it as? ParcelUuid)?.uuid == NEXORA_SPP_UUID } == true
+    if (isNexoraPeer) {
+      emitDiscoveredDevice(pending.resolvedId, pending.displayName, pending.rssi, pending.bonded)
+    }
+  }
+
+  private fun emitDiscoveredDevice(resolvedId: String, displayName: String, rssi: Long?, bonded: Boolean) {
     eventsScope.launch {
       eventsApi.onDeviceDiscovered(
-          TransportDevice(id = resolvedId, displayName = name, type = TransportType.BLUETOOTH, rssi = rssi, bonded = bonded),
+          TransportDevice(id = resolvedId, displayName = displayName, type = TransportType.BLUETOOTH, rssi = rssi, bonded = bonded),
       )
     }
   }
