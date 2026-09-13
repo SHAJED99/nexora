@@ -1371,8 +1371,21 @@ class BluetoothTransport(
               }
           uuids?.any { (it as? ParcelUuid)?.uuid == NEXORA_SPP_UUID } == true
         }
-    if (nexoraBondedDevices.size != 1) return candidate
-    val onlyBonded = nexoraBondedDevices.first()
+    // Review round-1 finding F1: a cached `uuids` MISS (E04-T06's own
+    // documented case -- populated at bond time, so a peer bonded before
+    // it ever ran Nexora, or before this specific bonding's SDP happened
+    // to include the SPP record, has no cached match) must not silently
+    // exclude a genuine Nexora peer from the candidate set. If NOTHING in
+    // `bondedDevices` matches by UUID, fall back to the raw, unfiltered
+    // bonded set instead of treating the empty result as authoritative --
+    // sound under this function's own accept-path invariant (an accepted
+    // secure-socket connection came from SOME bonded device; if there is
+    // only one bonded device at all, it must be that one, UUID cache or
+    // not). Only actually narrows the ambiguity check when the UUID
+    // filter has something to narrow WITH.
+    val candidates = nexoraBondedDevices.ifEmpty { bondedDevices }
+    if (candidates.size != 1) return candidate
+    val onlyBonded = candidates.first()
     val onlyBondedAddress =
         try {
           onlyBonded.address
