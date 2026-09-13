@@ -314,8 +314,68 @@ class RelayEngine {
   Future<void> _attempt(RelayPacketRow row) async {
     Route? route = _routingEngine.computeRoute(row.destinationId, _profile);
     if (route == null || route.hops.isEmpty) {
-      // No known path at all — stays queued until a route appears or the
-      // packet expires (§3).
+      // E04-B23: `computeRoute` only ever knows a link once
+      // `RoutingEngine.recordLinkMeasurement` has fired for it — which
+      // itself only ever happens from live link-quality data during an
+      // ALREADY-active connection (`LinkQualityFeed`). A device this
+      // process has never yet connected to (or one whose only prior
+      // connection dropped without this process happening to still hold
+      // that measurement -- e.g. after an app restart) therefore has NO
+      // route, ever, until *something* connects to it first -- but
+      // nothing else does that on this device's own initiative
+      // (`MessagingCoordinator._seedKnownDevices`'s own doc comment:
+      // "Does NOT call `connect()` ... same no-eager-connect reasoning").
+      // The result, confirmed live (two-device testing, 2026-09-14): a
+      // real, already-bonded, already-trusted contact's very first
+      // message send (or the first one after any connection drop) can
+      // never leave this device at all -- not even a failed native
+      // connect attempt is ever made, since this early `return` fires
+      // before `_send` (which is what actually calls
+      // `TransportService.connect`) is ever reached.
+      //
+      // Human decision (2026-09-14, "do the best" -- delegating the
+      // choice among three presented options): rather than weakening
+      // `E04-B07`'s deliberate no-eager-connect design app-wide (e.g. a
+      // background reconnect timer for every known device, regardless of
+      // whether the user is trying to talk to them), this narrowly
+      // treats an explicit SEND to an already `trusted`/`allowed`
+      // relationship as sufficient reason to attempt one direct hop
+      // (destination == next hop, the common 1-hop-mesh case) even with
+      // no measured route -- exactly the "the user needs to talk to
+      // someone they're already paired with, and nothing else is going
+      // to make that connection happen" case, while a stranger with no
+      // relationship at all still gets no eager-connect attempt, same as
+      // before. On success this is recorded exactly like any other
+      // single-hop delivery (`RelayDeliveryState.delivered`); on failure
+      // the packet is left queued, same as an ordinary failed hop
+      // (§3/§6) -- no new failure-handling path.
+      // Queried directly against the `relationships` table (not via
+      // `features/trust`'s own repository/domain enum) -- this file
+      // already treats `core/persistence` as its only allowed dependency
+      // beyond routing itself (see this file's own FR-ROUTE-003 header
+      // note on import discipline), and the two states that matter here
+      // are exactly the same two strings `RelationshipRepository.upsert`
+      // itself writes (`RelationshipState.trusted.name`/`.allowed.name`).
+      final relationshipRow = await (_db.select(_db.relationships)
+            ..where((t) => t.deviceId.equals(row.destinationId)))
+          .getSingleOrNull();
+      final isKnownContact = relationshipRow != null &&
+          (relationshipRow.state == 'trusted' ||
+              relationshipRow.state == 'allowed');
+      if (!isKnownContact) return;
+
+      bool sentDirect;
+      try {
+        sentDirect = await _send(row.destinationId, row.payload!);
+      } catch (_) {
+        sentDirect = false;
+      }
+      if (sentDirect) {
+        await _setState(row.id, RelayDeliveryState.delivered);
+      }
+      // A failed direct attempt leaves the packet queued for the next
+      // `processQueue()` pass, exactly like a genuinely-routed hop that
+      // failed and had no alternative (§3) -- not a new failure state.
       return;
     }
 
