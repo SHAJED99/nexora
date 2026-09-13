@@ -1149,7 +1149,7 @@ class BluetoothTransport(
         } catch (e: SecurityException) {
           null
         }
-    if (cachedUuids != null && cachedUuids.any { it.uuid == NEXORA_SPP_UUID }) {
+    if (cachedUuids != null && cachedUuids.any { (it as? ParcelUuid)?.uuid == NEXORA_SPP_UUID }) {
       emitDiscoveredDevice(resolvedId, name, rssi, bonded)
       return
     }
