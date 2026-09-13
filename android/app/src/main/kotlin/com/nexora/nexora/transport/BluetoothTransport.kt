@@ -1348,10 +1348,20 @@ class BluetoothTransport(
    * device of any kind. See `E04-T06`'s own SDP-UUID note for why this
    * UUID means "SPP-capable" rather than strictly "running Nexora" --
    * the same accepted, narrow residual (E04-T07 tracks the real fix, a
-   * bespoke Nexora-specific UUID); it does not weaken this guard's own
-   * safety, since a false-positive SPP gadget matching here only means
-   * this guard fails to fire (falls through to leaving [candidate]
-   * unchanged), never a wrong-device substitution.
+   * bespoke Nexora-specific UUID). Round-2 review (F4) -- correcting an
+   * earlier, too-strong claim here -- found this residual is NOT always
+   * inert: the `ifEmpty { bondedDevices }` fallback below means that if
+   * the genuine Nexora peer's own `uuids` cache happens to miss (the
+   * exact case that fallback exists for) while a DIFFERENT bonded
+   * accessory's cache happens to hit on the generic SPP UUID, that
+   * accessory's address -- not the real peer's -- would be substituted
+   * in. On the test hardware this is confirmed harmless in practice
+   * (the substituted candidate would be a headset, not a Nexora peer,
+   * so the conversation stays undialable either way -- differently
+   * broken, not worse) but the general case (two real, bonded Nexora
+   * peers, one with a cache hit and one without) is a genuine
+   * wrong-device-substitution risk, tracked in `OQ-E04-B22-1` alongside
+   * F3 rather than claimed away.
    */
   private fun unmaskIfNotBonded(candidate: String): String {
     if (isBonded(candidate)) return candidate
