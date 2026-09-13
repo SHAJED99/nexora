@@ -198,6 +198,7 @@ class ConversationRepository {
         ciphertext: row.ciphertext,
         createdAt: row.createdAt,
         deliveryState: DeliveryState.values.byName(row.deliveryState),
+        plaintextPayload: row.plaintextPayload,
       );
 
   ConversationSummary _summaryFromRow(QueryRow row) {

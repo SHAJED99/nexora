@@ -205,6 +205,46 @@ void main() {
         expect(rows.single.id, 'dup-msg-1');
       },
     );
+
+    // E04-B18: this call already decrypts the envelope (line ~107 of the
+    // use case, to recover id/conversationId/sequenceNumber) -- this test
+    // proves that ALREADY-decrypted payload is now persisted, not thrown
+    // away, so the chat screen never has to (and structurally cannot
+    // safely) decrypt this exact ciphertext a second time.
+    test(
+      'test_E04_B18_persists_the_already_decrypted_payload_not_just_ciphertext',
+      () async {
+        final useCase = ReceiveMessageUseCase(
+          database: bob.db,
+          decrypt: bob.crypto.decrypt,
+        );
+
+        final envelope = MessageEnvelope(
+          id: 'plain-msg-1',
+          conversationId: 'conv-1',
+          sequenceNumber: 1,
+          payload: _plaintext('the real text'),
+        );
+        final wire = await alice.crypto.encrypt(
+          bobAddress,
+          envelope.serialize(),
+        );
+
+        final result = await useCase.call('alice', wire);
+        expect(result, isNotNull);
+        expect(result!.plaintextPayload, isNotNull);
+        expect(utf8.decode(result.plaintextPayload!), 'the real text');
+
+        final row = await (bob.db.select(bob.db.messages)
+              ..where((t) => t.id.equals('plain-msg-1')))
+            .getSingle();
+        expect(row.plaintextPayload, isNotNull);
+        expect(utf8.decode(row.plaintextPayload!), 'the real text');
+        // The ciphertext is still persisted too -- this is additive, not a
+        // replacement of the existing opaque-bytes column.
+        expect(row.ciphertext, isNotEmpty);
+      },
+    );
   });
 
   group('ReceiveMessageUseCase — fake decrypt seam', () {

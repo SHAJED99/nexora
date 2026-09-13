@@ -30,6 +30,7 @@ class Message {
     required this.ciphertext,
     required this.createdAt,
     required this.deliveryState,
+    this.plaintextPayload,
   });
 
   /// Client-generated, globally unique. Never server-assigned — this app
@@ -55,6 +56,13 @@ class Message {
 
   final DeliveryState deliveryState;
 
+  /// E04-B18: this message's already-decrypted `MessageEnvelope.payload`
+  /// bytes, when known -- see `message_tables.dart`'s own doc comment for
+  /// the full root-cause/security reasoning. `null` for a pre-fix row, or
+  /// any row this entity was constructed for without that context (e.g. a
+  /// group message, out of this fix's scope).
+  final Uint8List? plaintextPayload;
+
   /// Returns a copy of this message with [deliveryState] replaced by
   /// [next], if [next] is a legal transition from the current state per
   /// [DeliveryStateMachine]. Throws [StateError] otherwise — this is the
@@ -70,6 +78,7 @@ class Message {
       ciphertext: ciphertext,
       createdAt: createdAt,
       deliveryState: applied,
+      plaintextPayload: plaintextPayload,
     );
   }
 
@@ -82,7 +91,8 @@ class Message {
       other.sequenceNumber == sequenceNumber &&
       _listEquals(other.ciphertext, ciphertext) &&
       other.createdAt == createdAt &&
-      other.deliveryState == deliveryState;
+      other.deliveryState == deliveryState &&
+      _nullableListEquals(other.plaintextPayload, plaintextPayload);
 
   @override
   int get hashCode => Object.hash(
@@ -108,4 +118,9 @@ bool _listEquals(Uint8List a, Uint8List b) {
     if (a[i] != b[i]) return false;
   }
   return true;
+}
+
+bool _nullableListEquals(Uint8List? a, Uint8List? b) {
+  if (a == null || b == null) return a == b;
+  return _listEquals(a, b);
 }

@@ -1,8 +1,14 @@
 // features/chat/presentation — ChatController (E06-T11, "the wedge").
 //
-// EARS-COMM-1/23/24/25 plus the hard confidentiality contract (task §2/§9):
-// decrypted plaintext lives ONLY in this controller's ephemeral view-model,
-// never persisted, logged, or written back.
+// EARS-COMM-1/23/24/25 plus the confidentiality contract (task §2/§9):
+// decrypted plaintext is never logged. E04-B18 (human-approved 2026-09-13)
+// relaxed the earlier, stricter "never persisted" half of that contract for
+// exactly one column (`messages.plaintext_payload`) -- see that task and
+// `message_tables.dart`'s doc comment for the full root-cause and security
+// reasoning: re-deriving plaintext by decrypting the same stored ciphertext
+// a second time (which is what this controller used to do on every render)
+// is not safe against Signal's Double Ratchet, so the ALREADY-decrypted
+// payload is persisted once instead of thrown away.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -81,7 +87,17 @@ Future<void> _insertMessage(
 /// Same falsification helper `conversations_controller_test.dart` already
 /// established — scans every table/column, not just the one the
 /// implementation happens to touch.
-Future<bool> _markerPresentAnywhere(AppDatabase db, String marker) async {
+/// [excludeTable]/[excludeColumn] (E04-B18): the one column deliberately,
+/// human-approvedly allowed to hold plaintext now
+/// (`messages.plaintext_payload` -- see `message_tables.dart`'s doc comment)
+/// is skipped, so this otherwise-unchanged generic scan still catches an
+/// accidental leak into any OTHER table/column exactly as it always has.
+Future<bool> _markerPresentAnywhere(
+  AppDatabase db,
+  String marker, {
+  String? excludeTable,
+  String? excludeColumn,
+}) async {
   final tables = await db
       .customSelect(
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
@@ -93,6 +109,7 @@ Future<bool> _markerPresentAnywhere(AppDatabase db, String marker) async {
         await db.customSelect('PRAGMA table_info($tableName)').get();
     for (final columnRow in columns) {
       final columnName = columnRow.data['name'] as String;
+      if (tableName == excludeTable && columnName == excludeColumn) continue;
       final hit = await db
           .customSelect(
             'SELECT COUNT(*) AS c FROM $tableName '
@@ -561,7 +578,20 @@ void main() {
     },
   );
 
-  test('test_no_plaintext_is_persisted_or_logged', () async {
+  test(
+      'test_E04_B18_plaintext_is_never_persisted_outside_its_one_dedicated_column',
+      () async {
+    // E04-B18: this test used to assert plaintext NEVER appears in the DB
+    // at all. That invariant is deliberately, human-approvedly relaxed for
+    // exactly ONE column now (`messages.plaintext_payload` -- see
+    // `message_tables.dart`'s doc comment for the full root-cause and
+    // security reasoning): the chat screen used to re-decrypt the same
+    // stored `ciphertext` a second time on every render, which Signal
+    // Double Ratchet decrypt cannot safely do twice. This test now proves
+    // the NARROWER invariant that actually matters: plaintext is allowed
+    // in that one dedicated column and NOWHERE else -- not in
+    // `ciphertext`, not in any other table, not in any log.
+    //
     // Outgoing half: a real send through the full stack (ensureSession ->
     // SendMessageUseCase -> encrypt), same as
     // `test_EARS_COMM_1_send_persists_and_renders`.
@@ -647,12 +677,107 @@ void main() {
 
     expect(bController.messages.single.text, incomingText);
 
-    // Neither device's database -- ANY table, ANY column -- ever contains
-    // either plaintext (NFR-SEC-001, task §9).
-    expect(await _markerPresentAnywhere(a.db, outgoingText), isFalse);
+    // E04-B18: [outgoingText] went through the real, unmodified
+    // `SendMessageUseCase.call` above, which now persists it into
+    // `messages.plaintext_payload` -- confirmed present there directly
+    // (positive check, not just "the screen could show it").
+    final aRow = await (a.db.select(a.db.messages)
+          ..where((t) => t.senderDeviceId.equals('device-a')))
+        .getSingle();
+    expect(utf8.decode(aRow.plaintextPayload!), outgoingText);
+
+    // Everywhere else, in EITHER device's database, remains exactly as
+    // strict as before this fix: no plaintext outside that one dedicated
+    // column (NFR-SEC-001, task §9). [incomingText] never goes through
+    // `ReceiveMessageUseCase` in this test (see the comment above the
+    // manual insert) so it is held to the ORIGINAL, unrelaxed "nowhere at
+    // all" bar.
+    expect(
+      await _markerPresentAnywhere(
+        a.db,
+        outgoingText,
+        excludeTable: 'messages',
+        excludeColumn: 'plaintext_payload',
+      ),
+      isFalse,
+    );
     expect(await _markerPresentAnywhere(b.db, outgoingText), isFalse);
     expect(await _markerPresentAnywhere(a.db, incomingText), isFalse);
     expect(await _markerPresentAnywhere(b.db, incomingText), isFalse);
+  });
+
+  // E04-B18: the actual live-hardware repro this bug was found from -- a
+  // message decrypts correctly once, then a FRESH `ChatController` for the
+  // same conversation (what GetX creates on every navigation away and back,
+  // and always on app restart) fails to redisplay it, because the old code
+  // called `CryptoService.decrypt` on the same stored ciphertext a SECOND
+  // time. Proven here by making a second decrypt attempt IMPOSSIBLE to
+  // succeed (deliberately corrupted ciphertext bytes) while the real,
+  // once-only-decrypted plaintext is present in `plaintextPayload` -- if
+  // the fix is working, the second controller must show the correct text
+  // WITHOUT ever touching that unusable ciphertext.
+  test(
+      'test_E04_B18_a_second_ChatController_instance_still_displays_a_received_message',
+      () async {
+    final stack = await newStack('self-device', nextSuffix());
+    addTearDown(stack.dispose);
+
+    const receivedText = 'still readable after navigating back';
+    await _insertMessage(
+      stack.db,
+      id: 'received-1',
+      conversationId: 'peer-device',
+      senderDeviceId: 'peer-device',
+      sequenceNumber: 0,
+      // Deliberately garbage -- not a real, decryptable Double Ratchet
+      // message. A real duplicate-decrypt attempt against this would throw
+      // (mapped to `CryptoDecryptFailure`), never silently succeed. This
+      // stands in for the real case: by the time a SECOND controller
+      // exists, the original ciphertext's message key has already been
+      // consumed by the first, legitimate decrypt at receive time.
+      ciphertext: Uint8List.fromList(utf8.encode('not real ciphertext')),
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    await (stack.db.update(stack.db.messages)
+          ..where((t) => t.id.equals('received-1')))
+        .write(
+      MessagesCompanion(
+        plaintextPayload: Value(
+          Uint8List.fromList(utf8.encode(receivedText)),
+        ),
+      ),
+    );
+
+    final repo = ConversationRepository(stack.db, selfDeviceId: 'self-device');
+
+    final first = ChatController(
+      conversationId: 'peer-device',
+      repo: repo,
+      send: stack.sendMessage,
+      sessions: stack.prekeyExchange,
+      crypto: stack.cryptoService,
+      acks: stack.deliveryAckService,
+    );
+    first.onInit();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(first.messages.single.text, receivedText);
+    first.onClose();
+
+    // A brand-new instance -- empty `_plaintextCache`, exactly what GetX
+    // constructs on the next navigation to this same conversation.
+    final second = ChatController(
+      conversationId: 'peer-device',
+      repo: repo,
+      send: stack.sendMessage,
+      sessions: stack.prekeyExchange,
+      crypto: stack.cryptoService,
+      acks: stack.deliveryAckService,
+    );
+    second.onInit();
+    addTearDown(second.onClose);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+
+    expect(second.messages.single.text, receivedText);
   });
 
   // E08-T03: access-frequency signals (FR-STORE-005). The recorder itself is

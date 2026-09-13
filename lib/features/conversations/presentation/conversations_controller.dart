@@ -1,12 +1,19 @@
 // features/conversations/presentation — ConversationsController (E06-T10).
 //
 // Built against design/screens/conversations.md. Reads the live conversation
-// list from `ConversationRepository.watchConversations()` (E06-T09) and, for
-// display only, decrypts each conversation's last message via the stack's
-// `CryptoService` (E03-T03) — the repository itself never decrypts anything
-// (E06-T09 §2/§4). Decrypted plaintext lives ONLY in this controller's
-// ephemeral in-memory view-model list (`conversations`); it is never
-// persisted, logged, or written back to the database (task §2).
+// list from `ConversationRepository.watchConversations()` (E06-T09). For a
+// personal (1:1) row's preview, E04-B18 (human-approved 2026-09-13) reads
+// `Message.plaintextPayload` when present — the same already-decrypted
+// payload `ChatController` now reads, populated once at receive/send time —
+// rather than independently decrypting `messages.ciphertext` a second time
+// via the stack's `CryptoService` (E03-T03). This file previously did
+// exactly that second, redundant decrypt; it is unsafe against Signal's
+// Double Ratchet for the identical reason `chat_controller.dart`'s own doc
+// comment explains (see `message_tables.dart`/`E04-B18.md` for the full
+// root-cause). The decrypt-from-`ciphertext` path below now only runs as a
+// fallback for a row written before that column existed. Preview text is
+// never persisted BY THIS FILE or logged; it lives only in this
+// controller's ephemeral in-memory view-model list (`conversations`).
 //
 // Preview decryption note: `messages.ciphertext` is stored as the raw
 // serialized `CiphertextMessage` bytes with no payload-type tag alongside it
@@ -429,13 +436,20 @@ class ConversationsController extends GetxController {
     try {
       final page = await _repo.messagesPage(summary.conversationId, limit: 1);
       if (page.isNotEmpty && page.first.id == summary.lastMessageId) {
-        final ciphertextMessage = _decodeCiphertext(page.first.ciphertext);
-        final plaintext = await _crypto.decrypt(
-          SignalProtocolAddress(peerDeviceId, _localSignalDeviceId),
-          ciphertextMessage,
-        );
-        final envelope = MessageEnvelope.deserialize(plaintext);
-        preview = utf8.decode(envelope.payload);
+        final persistedPayload = page.first.plaintextPayload;
+        if (persistedPayload != null) {
+          // E04-B18: use the already-decrypted payload directly — never
+          // re-decrypt `ciphertext` (see this file's header).
+          preview = utf8.decode(persistedPayload);
+        } else {
+          final ciphertextMessage = _decodeCiphertext(page.first.ciphertext);
+          final plaintext = await _crypto.decrypt(
+            SignalProtocolAddress(peerDeviceId, _localSignalDeviceId),
+            ciphertextMessage,
+          );
+          final envelope = MessageEnvelope.deserialize(plaintext);
+          preview = utf8.decode(envelope.payload);
+        }
       }
     } catch (_) {
       // Graceful degrade — see this file's header note.

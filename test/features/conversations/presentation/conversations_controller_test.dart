@@ -6,11 +6,11 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:drift/drift.dart' show Variable;
+import 'package:drift/drift.dart' show Value, Variable;
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get/get.dart';
+import 'package:get/get.dart' hide Value;
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 import 'package:nexora/core/crypto/crypto_stub.dart';
 import 'package:nexora/core/crypto/drift_signal_store.dart';
@@ -459,5 +459,43 @@ void main() {
     // above -- the plaintext preview must not have leaked anywhere.
     expect(await _markerPresentAnywhere(db, 'top secret preview'), isFalse);
     controller.onClose();
+  });
+
+  // E04-B18: the same double-decrypt hazard `chat_controller_test.dart`
+  // proves fixed for the chat screen, here for the conversations-list
+  // preview. Ciphertext is deliberately unusable -- a real decrypt attempt
+  // would fail -- so the preview can only be correct if it comes from
+  // `plaintextPayload` directly, never a second decrypt.
+  test(
+      'test_E04_B18_preview_uses_plaintextPayload_without_a_second_decrypt',
+      () async {
+    await relationships.upsert('bob-device', RelationshipState.trusted);
+    await _insertMessage(
+      db,
+      id: 'm-bob-2',
+      conversationId: 'bob-device',
+      senderDeviceId: 'bob-device',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(utf8.encode('not real ciphertext')),
+      createdAt: 1000,
+    );
+    await (db.update(db.messages)..where((t) => t.id.equals('m-bob-2'))).write(
+      MessagesCompanion(
+        plaintextPayload: Value(
+          Uint8List.fromList(utf8.encode('a persisted preview')),
+        ),
+      ),
+    );
+
+    final controller = ConversationsController(
+      repo: repo,
+      crypto: stack.cryptoService,
+      stack: stack,
+    );
+    controller.onInit();
+    addTearDown(controller.onClose);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+
+    expect(controller.conversations.single.preview, 'a persisted preview');
   });
 }
