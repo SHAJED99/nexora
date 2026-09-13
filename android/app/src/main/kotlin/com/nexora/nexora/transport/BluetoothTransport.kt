@@ -1089,33 +1089,93 @@ class BluetoothTransport(
    * bonded device's address. Two same-named bonded peers is expected to be
    * rare; disambiguating them would need a stronger correlator than name
    * (out of this fix's own scope -- flagged, not silently accepted).
+   *
+   * **E04-B21 hardening:** confirmed live (2026-09-13) that this method's
+   * own fallback -- returning [scannedAddress] unchanged when [rawName] is
+   * absent or matches no bonded device -- can produce a value equal to
+   * THIS device's own masked address (`adapter?.address`, e.g. a fixed
+   * `00:00:46:00:00:01`-shaped placeholder some OEM Bluetooth stacks
+   * return for both "my own identity" and, in that same fallback
+   * condition, an accepted connection's remote address). Once such a value
+   * is used as a `relationships`/conversation key it can never be dialed
+   * again -- no real device anywhere has this device's own address. Before
+   * ever returning [scannedAddress] as a final answer, this method now
+   * checks for exactly that collision and, when there is exactly one
+   * bonded device to fall back to (unambiguous -- `acceptLoop`'s own
+   * secure-socket precondition already guarantees the real remote peer IS
+   * bonded, per this file's header), uses its real address instead.
+   * Deliberately narrow: only fires for the confirmed-bad self-referential
+   * case, never changes behaviour for a genuinely new, not-yet-bonded peer.
    */
   private fun resolveDeviceId(scannedAddress: String, rawName: String?): String {
-    if (rawName.isNullOrEmpty()) return scannedAddress
+    if (!rawName.isNullOrEmpty()) {
+      val bondedDevices =
+          try {
+            adapter?.bondedDevices
+          } catch (e: SecurityException) {
+            null
+          }
+      if (bondedDevices != null) {
+        for (bonded in bondedDevices) {
+          val bondedName =
+              try {
+                bonded.name
+              } catch (e: SecurityException) {
+                null
+              }
+          if (bondedName != null && bondedName == rawName) {
+            val bondedAddress =
+                try {
+                  bonded.address
+                } catch (e: SecurityException) {
+                  null
+                }
+            if (bondedAddress != null) return bondedAddress
+          }
+        }
+      }
+    }
+    return unmaskIfSelfReferential(scannedAddress)
+  }
+
+  /**
+   * E04-B21: the last line of defence against baking this device's own
+   * masked address in as if it were a real remote peer's identity (see
+   * [resolveDeviceId]'s own doc comment for the full mechanism this
+   * guards against). [candidate] is whatever [resolveDeviceId] was about
+   * to return as a final answer; if it equals `adapter?.address` (this
+   * device's own reported identity -- no real remote peer can ever
+   * legitimately equal it), and there is EXACTLY one bonded device to
+   * fall back to, that bonded device's real address is used instead.
+   * Zero or multiple bonded devices leaves [candidate] unchanged --
+   * still wrong, but no worse than before this hardening, and picking
+   * arbitrarily among several bonded peers here would risk misattributing
+   * a real message exchange to the wrong device, a strictly worse
+   * failure mode than the one being fixed.
+   */
+  private fun unmaskIfSelfReferential(candidate: String): String {
+    val selfAddress =
+        try {
+          adapter?.address
+        } catch (e: SecurityException) {
+          null
+        }
+    if (selfAddress == null || candidate != selfAddress) return candidate
     val bondedDevices =
         try {
           adapter?.bondedDevices
         } catch (e: SecurityException) {
           null
-        } ?: return scannedAddress
-    for (bonded in bondedDevices) {
-      val bondedName =
-          try {
-            bonded.name
-          } catch (e: SecurityException) {
-            null
-          }
-      if (bondedName != null && bondedName == rawName) {
-        val bondedAddress =
-            try {
-              bonded.address
-            } catch (e: SecurityException) {
-              null
-            }
-        if (bondedAddress != null) return bondedAddress
-      }
-    }
-    return scannedAddress
+        } ?: return candidate
+    if (bondedDevices.size != 1) return candidate
+    val onlyBonded = bondedDevices.first()
+    val onlyBondedAddress =
+        try {
+          onlyBonded.address
+        } catch (e: SecurityException) {
+          null
+        } ?: return candidate
+    return onlyBondedAddress
   }
 
   private fun deviceFromIntent(intent: Intent): BluetoothDevice? =
