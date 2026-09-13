@@ -242,6 +242,45 @@ void main() {
     }
   });
 
+  // E04-B18 review round 1, nit 2: a send that fails at the encrypt step
+  // (no session yet) previously left a Failed row with plaintextPayload
+  // NULL -- this device's own composed text became unrecoverable even
+  // though it was known before encryption was ever attempted. Fixed by
+  // persisting it right after phase 1's reservation, before the encrypt
+  // call that can throw.
+  test(
+      'test_E04_B18_plaintext_survives_a_no_session_failure',
+      () async {
+    Future<String> relay(
+      String destination,
+      Uint8List payload,
+      int priority,
+      Duration ttl,
+    ) async =>
+        'relay-id';
+
+    final useCase = SendMessageUseCase(
+      db: db,
+      selfDeviceId: 'self',
+      encrypt: _fakeEncryptor(),
+      enqueue: relay,
+    );
+
+    await expectLater(
+      () => useCase.call(
+        'conv-1',
+        'recipient-without-session',
+        _plaintext('recoverable text'),
+      ),
+      throwsA(isA<AppFailure>()),
+    );
+
+    final row = await db.select(db.messages).getSingle();
+    expect(row.deliveryState, DeliveryState.failed.name);
+    expect(row.plaintextPayload, isNotNull);
+    expect(row.plaintextPayload, orderedEquals(_plaintext('recoverable text')));
+  });
+
   test(
       'test_sequence_numbers_increase_monotonically_per_conversation',
       () async {

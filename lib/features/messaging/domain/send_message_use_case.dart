@@ -228,7 +228,22 @@ class SendMessageUseCase {
       ciphertext: Uint8List(0),
       createdAt: now.millisecondsSinceEpoch,
       deliveryState: DeliveryState.queued,
+      plaintextPayload: plaintext,
     );
+
+    // E04-B18 (review round 1, nit 2): persist the caller's own plaintext
+    // right away, BEFORE phase 2's encrypt call can throw -- this device
+    // already knows it (typed into the composer, never
+    // encrypted-then-received), so there is no reason it should only
+    // survive a successful encrypt. Without this, a `no_session` failure
+    // below left a `Failed` row with `plaintextPayload: NULL`, the one
+    // remaining case where this device could not redisplay its own
+    // composed text. A separate, small write outside the reservation
+    // transaction (`message_sequence_reserver.dart`'s own single
+    // responsibility is sequence numbers, shared with group sends --
+    // deliberately not widened here for a 1:1-only concern).
+    await (_db.update(_db.messages)..where((t) => t.id.equals(id)))
+        .write(MessagesCompanion(plaintextPayload: Value(plaintext)));
 
     // Phase 2 (E05-B01): build + serialize the envelope now that the
     // sequence number is known, then encrypt it -- deliberately OUTSIDE any
@@ -260,20 +275,10 @@ class SendMessageUseCase {
 
     // Phase 3: persist the real ciphertext over the placeholder -- the row
     // stays Queued at this point, now genuinely encrypted and ready to hand
-    // off.
-    await (_db.update(_db.messages)..where((t) => t.id.equals(id))).write(
-      MessagesCompanion(
-        ciphertext: Value(ciphertext),
-        // E04-B18: this device already knows its own plaintext -- it was
-        // never encrypted-then-received here, it was typed into the
-        // composer. Persisting it removes the ONLY reason
-        // `ChatController._resolvePlaintext` ever tried to decrypt this
-        // device's own outgoing message, which Double Ratchet's asymmetry
-        // makes impossible in the first place (see `message_tables.dart`'s
-        // doc comment).
-        plaintextPayload: Value(plaintext),
-      ),
-    );
+    // off. `plaintextPayload` was already written above, before phase 2 --
+    // not repeated here.
+    await (_db.update(_db.messages)..where((t) => t.id.equals(id)))
+        .write(MessagesCompanion(ciphertext: Value(ciphertext)));
     message = Message(
       id: message.id,
       conversationId: message.conversationId,
