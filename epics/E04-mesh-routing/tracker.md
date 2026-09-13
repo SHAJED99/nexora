@@ -561,3 +561,55 @@ reconciliation gate additionally requires an exact name match, exactly
 one candidate, and no pre-existing row. **No owner assigned** -- revisit
 if this file's socket-variant assumptions ever change, or fold into
 `E04-B22`'s own investigation if convenient.
+
+- 2026-09-14 (continued) With E04-B21/B22/T06 all merged and their
+  address-resolution fixes confirmed working live, a correctly-addressed
+  message send still never left the device: `dumpsys bluetooth_manager`
+  showed zero native connection attempts, ever, and the packet stayed
+  `delivery_state: 'queued'` indefinitely. Root-caused to
+  `RelayEngine._attempt()`'s unconditional early return whenever
+  `RoutingEngine.computeRoute()` has no known route -- routes are learned
+  only from live link-quality data during an already-active connection
+  (in-memory, never persisted or seeded), and `MessagingCoordinator
+  ._seedKnownDevices`'s own doc comment confirms deliberately never
+  calling `connect()` for a known device (`E04-B07`'s no-eager-connect
+  design). The two designs collided: a real, already-trusted contact
+  with no currently-known route got the exact same "zero attempts, ever"
+  treatment as a total stranger. Presented three options to the human
+  (weaken the no-eager-connect design app-wide / leave it untouched and
+  rely on something else / file-and-stop); human replied "do the best."
+  Filed and fixed as `E04-B23` (S1/P1): a narrow exception -- any queued
+  packet whose destination already has a `trusted`/`allowed`
+  relationship row now gets one direct-hop send attempt even with no
+  measured route, while a stranger (or `unknown`/`blocked`) still gets
+  none, unchanged. Independently reviewed (opus): APPROVE WITH NITS.
+  Reviewer independently re-falsified the fix, wrote and ran nine of
+  their own probe tests (blocked/unknown/no-duplicate-send/failed-retry/
+  expired/reclaimed-payload/enum-encoding), and found no exploitable path
+  to force an unwanted connection to an untrusted device. Two nits fixed
+  same round (a test added pinning the `blocked` case specifically, since
+  only the absent-relationship case had been tested; a test pinning the
+  raw `'trusted'`/`'allowed'` string literals against the actual
+  `RelationshipState` enum encoding) plus a doc-comment correction (the
+  fix is not scoped to "an explicit send" specifically -- `relay_packets`
+  carries no origin column, so a packet this device is relaying on
+  someone else's behalf reaches the same code path, though the lookup
+  normally misses for that case since a relayed frame's destination is a
+  logical id, not the Bluetooth-MAC-keyed `relationships.device_id` this
+  guard matches against).
+
+**Carried-forward observation (E04-B23's review, 2026-09-14, S4, not
+blocking):** the `relationships.device_id == destination_id` lookup this
+fix (and the pre-existing routed-send path, and `ConnectionEnsuringSender`)
+all rely on matches for a Devices-screen- or locally-initiated
+conversation, but silently misses for an INBOUND-FIRST conversation --
+one where `messages.conversation_id` was minted by the remote sender
+(`ReceiveMessageUseCase`/`InboundPipeline`) and is therefore not
+necessarily in this device's own `relationships.device_id` keyspace. A
+reply to such a conversation could stay `queued` with zero connect
+attempts, looking exactly like the bug `E04-B23` just fixed. Pre-existing
+keyspace divergence, not introduced by `E04-B23` -- the routed path and
+`ConnectionEnsuringSender` already have the identical issue. **No owner
+assigned** -- worth its own investigation (confirm whether this keyspace
+divergence is real and reproducible before filing a fix task) rather than
+widening `E04-B23`'s own scope fence after the fact.

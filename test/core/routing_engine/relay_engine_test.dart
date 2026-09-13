@@ -13,6 +13,8 @@ import 'package:nexora/core/routing_engine/route_cost_calculator.dart';
 import 'package:nexora/core/routing_engine/routing_engine.dart';
 import 'package:nexora/core/routing_engine/simulation/network_simulator.dart';
 import 'package:nexora/core/routing_engine/simulation/simulated_link.dart';
+import 'package:nexora/features/trust/domain/relationship.dart'
+    show RelationshipState;
 
 /// One record of a captured `RelaySendFn` invocation, for tests asserting
 /// call order and exact bytes without RelayEngine (or this helper) ever
@@ -539,4 +541,213 @@ void main() {
       expect(row.deliveryState, RelayDeliveryState.queued.name);
     },
   );
+
+  group('E04-B23 — route bootstrap for an already-known contact', () {
+    test(
+      'test_E04_B23_known_contact_with_no_route_gets_a_direct_send_attempt',
+      () async {
+        // No link to 'B' is ever recorded (mirrors the unreachable-packet
+        // test above) -- but 'B' IS a trusted relationship, unlike that
+        // test's stranger 'Z'. This is the exact real-world shape the live
+        // two-device session found: a real, already-bonded contact whose
+        // link measurement this process has never recorded (e.g. after an
+        // app restart, or the only prior connection having dropped) could
+        // never have a message leave the device at all -- not even a
+        // failed native connect was ever attempted, since `_attempt`
+        // returned before `_send` was ever reached.
+        await db.into(db.relationships).insert(
+              RelationshipsCompanion.insert(
+                deviceId: 'B',
+                state: 'trusted',
+                updatedAt: DateTime(2026, 1, 1),
+              ),
+            );
+
+        final sim = NetworkSimulator(seed: 11);
+        sim.setLink(
+          'A',
+          'B',
+          const SimulatedLink(
+            latencyMs: 15,
+            packetLossRate: 0.0,
+            batteryDrainPerMessage: 0.1,
+          ),
+        );
+        final routingEngine = RoutingEngine(selfId: 'A');
+        // Deliberately NOT calling recordLinkMeasurement -- computeRoute
+        // must return null here, exactly the case this fix handles.
+
+        final calls = <_SendCall>[];
+        final relay = RelayEngine(
+          selfId: 'A',
+          db: db,
+          routingEngine: routingEngine,
+          send: _recordingSend(sim, 'A', calls),
+        );
+
+        final id = await relay.enqueue(
+          'B',
+          Uint8List.fromList([9, 9, 9]),
+          0,
+          const Duration(minutes: 10),
+        );
+
+        await relay.processQueue();
+
+        expect(
+          calls,
+          hasLength(1),
+          reason:
+              'a known (trusted/allowed) contact must get a direct send '
+              'attempt even with no measured route',
+        );
+        expect(calls.single.nextHopId, 'B');
+        final row = await (db.select(db.relayPackets)
+              ..where((t) => t.id.equals(id)))
+            .getSingle();
+        expect(row.deliveryState, RelayDeliveryState.delivered.name);
+      },
+    );
+
+    test(
+      'test_E04_B23_unknown_stranger_with_no_route_still_gets_no_attempt',
+      () async {
+        // No relationship row at all for 'Z' -- the no-eager-connect
+        // behaviour E04-B07 established must stay exactly as it was for
+        // anyone this device has no relationship with at all. This is the
+        // negative-space companion to the test above: same "no route"
+        // starting condition, different (absent) relationship, different
+        // outcome.
+        final sim = NetworkSimulator(seed: 13);
+        final routingEngine = RoutingEngine(selfId: 'A');
+
+        final calls = <_SendCall>[];
+        final relay = RelayEngine(
+          selfId: 'A',
+          db: db,
+          routingEngine: routingEngine,
+          send: _recordingSend(sim, 'A', calls),
+        );
+
+        final id = await relay.enqueue(
+          'Z',
+          Uint8List.fromList([1]),
+          0,
+          const Duration(minutes: 10),
+        );
+
+        await relay.processQueue();
+
+        expect(calls, isEmpty, reason: 'no relationship at all -> no attempt');
+        final row = await (db.select(db.relayPackets)
+              ..where((t) => t.id.equals(id)))
+            .getSingle();
+        expect(row.deliveryState, RelayDeliveryState.queued.name);
+      },
+    );
+
+    test(
+      'test_E04_B23_blocked_relationship_with_no_route_still_gets_no_attempt',
+      () async {
+        // Review round-1 finding N2: the DoD claims absent/unknown/blocked
+        // relationships are all unaffected, but only the absent case
+        // ('Z' above) was actually pinned by a test. `blocked` is the
+        // security-sensitive one -- a relationship this device has
+        // actively revoked trust from must never get an eager-connect
+        // attempt just because no route happens to exist.
+        await db.into(db.relationships).insert(
+              RelationshipsCompanion.insert(
+                deviceId: 'B',
+                state: 'blocked',
+                updatedAt: DateTime(2026, 1, 1),
+              ),
+            );
+
+        final sim = NetworkSimulator(seed: 19);
+        final routingEngine = RoutingEngine(selfId: 'A');
+
+        final calls = <_SendCall>[];
+        final relay = RelayEngine(
+          selfId: 'A',
+          db: db,
+          routingEngine: routingEngine,
+          send: _recordingSend(sim, 'A', calls),
+        );
+
+        final id = await relay.enqueue(
+          'B',
+          Uint8List.fromList([1]),
+          0,
+          const Duration(minutes: 10),
+        );
+
+        await relay.processQueue();
+
+        expect(calls, isEmpty, reason: 'blocked -> no attempt, ever');
+        final row = await (db.select(db.relayPackets)
+              ..where((t) => t.id.equals(id)))
+            .getSingle();
+        expect(row.deliveryState, RelayDeliveryState.queued.name);
+      },
+    );
+
+    test(
+      'test_E04_B23_relationship_state_string_literals_match_the_enum',
+      () {
+        // Review round-1 finding N3: relay_engine.dart deliberately
+        // compares against the raw strings 'trusted'/'allowed' rather
+        // than importing RelationshipState (to keep this file's own
+        // narrow dependency surface -- see its own doc comment). This
+        // pins that string choice against the actual enum encoding
+        // `RelationshipRepository.upsert` writes, so a future rename of
+        // the enum's values shows up here instead of silently breaking
+        // the raw-string comparison.
+        expect(RelationshipState.trusted.name, 'trusted');
+        expect(RelationshipState.allowed.name, 'allowed');
+      },
+    );
+
+    test(
+      'test_E04_B23_known_contact_direct_attempt_fails_stays_queued',
+      () async {
+        // 'B' is trusted, but no link is set up in the simulator at all --
+        // NetworkSimulator.send must report failure (no path), and the
+        // packet must stay queued exactly like any other failed hop
+        // (§3/§6), not transition to a new failure state.
+        await db.into(db.relationships).insert(
+              RelationshipsCompanion.insert(
+                deviceId: 'B',
+                state: 'allowed',
+                updatedAt: DateTime(2026, 1, 1),
+              ),
+            );
+
+        final sim = NetworkSimulator(seed: 17);
+        final routingEngine = RoutingEngine(selfId: 'A');
+
+        final calls = <_SendCall>[];
+        final relay = RelayEngine(
+          selfId: 'A',
+          db: db,
+          routingEngine: routingEngine,
+          send: _recordingSend(sim, 'A', calls),
+        );
+
+        final id = await relay.enqueue(
+          'B',
+          Uint8List.fromList([1]),
+          0,
+          const Duration(minutes: 10),
+        );
+
+        await relay.processQueue();
+
+        expect(calls, hasLength(1));
+        final row = await (db.select(db.relayPackets)
+              ..where((t) => t.id.equals(id)))
+            .getSingle();
+        expect(row.deliveryState, RelayDeliveryState.queued.name);
+      },
+    );
+  });
 }
