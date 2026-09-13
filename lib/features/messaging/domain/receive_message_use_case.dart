@@ -37,6 +37,7 @@
 // that would exercise it.
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 
 import '../../../core/crypto/crypto_stub.dart';
@@ -155,6 +156,13 @@ class ReceiveMessageUseCase {
               senderDeviceId: senderDeviceId,
               sequenceNumber: envelope.sequenceNumber,
               ciphertext: ciphertextBytes,
+              // E04-B18: persist the payload this decrypt call ALREADY
+              // recovered above, rather than discarding it -- this is the
+              // ONLY legitimate decrypt this ciphertext will ever undergo
+              // (see `message_tables.dart`'s own doc comment). The chat
+              // screen reads this column instead of ever calling
+              // `CryptoService.decrypt` on this row's `ciphertext` again.
+              plaintextPayload: Value(envelope.payload),
               createdAt: createdAt,
               // Received and decrypted successfully — the receiving-side
               // equivalent of T02's `Sent` (task file §3.4).
@@ -170,6 +178,7 @@ class ReceiveMessageUseCase {
         ciphertext: ciphertextBytes,
         createdAt: createdAt,
         deliveryState: DeliveryState.accepted,
+        plaintextPayload: envelope.payload,
       );
     });
   }

@@ -455,7 +455,7 @@ void main() {
         // here and asserted separately below, mirroring the identical
         // documented exception in
         // `test/core/persistence/database_migration_test.dart`.
-        if (tableName == 'relationships') continue;
+        if (tableName == 'relationships' || tableName == 'messages') continue;
         final rows = await db
             .customSelect(
               "SELECT sql FROM sqlite_master WHERE type='table' "
@@ -484,6 +484,31 @@ void main() {
         '      state TEXT NOT NULL,\n'
         '      updated_at INTEGER NOT NULL, "remote_self_device_id" TEXT NULL, "peer_name" TEXT NULL,\n'
         '      PRIMARY KEY (device_id)\n'
+        '    )',
+      );
+
+      // `messages`: E04-B18 legitimately adds one nullable column
+      // (`plaintext_payload`) to this pre-existing table -- asserted
+      // explicitly against the exact DDL SQLite now reports, same pattern
+      // as `relationships` above.
+      final messagesRows = await db
+          .customSelect(
+            "SELECT sql FROM sqlite_master WHERE type='table' "
+            "AND name='messages'",
+          )
+          .get();
+      expect(messagesRows, hasLength(1));
+      expect(
+        messagesRows.single.read<String>('sql'),
+        'CREATE TABLE messages (\n'
+        '      id TEXT NOT NULL,\n'
+        '      conversation_id TEXT NOT NULL,\n'
+        '      sender_device_id TEXT NOT NULL,\n'
+        '      sequence_number INTEGER NOT NULL,\n'
+        '      ciphertext BLOB NOT NULL,\n'
+        '      created_at INTEGER NOT NULL,\n'
+        '      delivery_state TEXT NOT NULL, "plaintext_payload" BLOB NULL,\n'
+        '      PRIMARY KEY (id)\n'
         '    )',
       );
     },

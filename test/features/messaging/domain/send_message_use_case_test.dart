@@ -144,6 +144,38 @@ void main() {
     expect(rows.single.deliveryState, DeliveryState.sent.name);
   });
 
+  // E04-B18: this device already knows its own plaintext (it was typed into
+  // the composer, never encrypted-then-received here) -- this test proves
+  // it is persisted alongside the ciphertext, not discarded, so the chat
+  // screen never needs Double Ratchet's asymmetric, one-time decrypt to
+  // redisplay a message this device itself sent.
+  test('test_E04_B18_persists_the_callers_own_plaintext_alongside_ciphertext',
+      () async {
+    final useCase = SendMessageUseCase(
+      db: db,
+      selfDeviceId: 'self',
+      encrypt: _fakeEncryptor(),
+      enqueue: (destination, payload, priority, ttl) async => 'relay-id',
+    );
+
+    final message = await useCase.call(
+      'conv-1',
+      'recipient-with-session',
+      _plaintext('hello'),
+    );
+
+    expect(message.plaintextPayload, isNotNull);
+    expect(message.plaintextPayload, orderedEquals(_plaintext('hello')));
+
+    final row = await (db.select(db.messages)
+          ..where((t) => t.id.equals(message.id)))
+        .getSingle();
+    expect(row.plaintextPayload, isNotNull);
+    expect(row.plaintextPayload, orderedEquals(_plaintext('hello')));
+    // Still not the SAME bytes as ciphertext -- additive, not a replacement.
+    expect(row.ciphertext, isNot(orderedEquals(_plaintext('hello'))));
+  });
+
   test('test_EARS_MSG_1_failed_enqueue_transitions_to_failed', () async {
     Future<String> failingRelay(
       String destination,
@@ -208,6 +240,45 @@ void main() {
     for (final row in rows) {
       expect(row.deliveryState, isNot(DeliveryState.queued.name));
     }
+  });
+
+  // E04-B18 review round 1, nit 2: a send that fails at the encrypt step
+  // (no session yet) previously left a Failed row with plaintextPayload
+  // NULL -- this device's own composed text became unrecoverable even
+  // though it was known before encryption was ever attempted. Fixed by
+  // persisting it right after phase 1's reservation, before the encrypt
+  // call that can throw.
+  test(
+      'test_E04_B18_plaintext_survives_a_no_session_failure',
+      () async {
+    Future<String> relay(
+      String destination,
+      Uint8List payload,
+      int priority,
+      Duration ttl,
+    ) async =>
+        'relay-id';
+
+    final useCase = SendMessageUseCase(
+      db: db,
+      selfDeviceId: 'self',
+      encrypt: _fakeEncryptor(),
+      enqueue: relay,
+    );
+
+    await expectLater(
+      () => useCase.call(
+        'conv-1',
+        'recipient-without-session',
+        _plaintext('recoverable text'),
+      ),
+      throwsA(isA<AppFailure>()),
+    );
+
+    final row = await db.select(db.messages).getSingle();
+    expect(row.deliveryState, DeliveryState.failed.name);
+    expect(row.plaintextPayload, isNotNull);
+    expect(row.plaintextPayload, orderedEquals(_plaintext('recoverable text')));
   });
 
   test(

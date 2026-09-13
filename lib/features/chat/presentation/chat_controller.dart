@@ -24,11 +24,14 @@
 // limitation of the per-sender sequence-number design (E05-T01), not a bug
 // introduced here — logged in this task's Run log / Deviations.
 //
-// **Decryption for display only (NFR-SEC-001).** Plaintext lives ONLY in
-// [messages]' `ChatBubble.text` — an ephemeral, in-memory view-model list.
-// It is never written back to `messages.ciphertext`, never logged, and
-// never leaves this controller / the widget tree it feeds
-// (`test_no_plaintext_is_persisted_or_logged`).
+// **Decryption for display (NFR-SEC-001).** Plaintext is never logged, and
+// [messages]' `ChatBubble.text` is an ephemeral, in-memory view-model list.
+// E04-B18 (human-approved 2026-09-13): a row's plaintext is now read from
+// `messages.plaintext_payload` when present, never re-derived by decrypting
+// `messages.ciphertext` a second time — the crypto layer already decrypted
+// it once, at receive/send time, and Signal's Double Ratchet decrypt cannot
+// safely repeat. See `_resolvePlaintext`'s own doc comment,
+// `message_tables.dart`, and `E04-B18.md` for the full reasoning.
 //
 // **`ensureSession` can block for seconds (task §6 Risks).** [send] does
 // NOT await `ensureSession` before returning control to the caller in a way
@@ -417,20 +420,45 @@ class ChatController extends GetxController {
     _recorder?.recordAccess(StorageItemKind.message, messageId);
   }
 
-  /// Decrypts [row]'s ciphertext for display only (NFR-SEC-001). Returns
-  /// `null` on any failure — no session, wrong ratchet chain (this device's
-  /// own outgoing message, which this device can never decrypt — Double
-  /// Ratchet sessions are asymmetric, same note `ConversationsController`
-  /// already documents), a parse failure, or an empty placeholder
-  /// (`SendMessageUseCase`'s phase-1 `Uint8List(0)` row before phase 3
-  /// writes the real ciphertext) — so the row still renders (with a
-  /// placeholder), never as an error row.
+  /// Resolves [row]'s display text (NFR-SEC-001). Returns `null` on any
+  /// failure — no session, wrong ratchet chain, a parse failure, or an
+  /// empty placeholder (`SendMessageUseCase`'s phase-1 `Uint8List(0)` row
+  /// before phase 3 writes the real ciphertext) — so the row still renders
+  /// (with a placeholder), never as an error row.
+  ///
+  /// E04-B18: [row.plaintextPayload], when present, is used DIRECTLY —
+  /// never re-decrypted. That column is populated once, at receive time
+  /// (`ReceiveMessageUseCase`) or send time (`SendMessageUseCase`), by
+  /// whichever call already legitimately decrypted (or, for this device's
+  /// own composed message, always already had) this exact plaintext. Signal
+  /// Double Ratchet decrypt is a one-time, stateful operation — calling
+  /// `CryptoService.decrypt` a SECOND time on the same stored `ciphertext`
+  /// (which is what this method used to do, unconditionally, on every
+  /// render) is what `crypto_stub.dart`'s own documented
+  /// `CryptoDecryptFailureReason.duplicateMessage` exists to reject. See
+  /// `message_tables.dart`'s doc comment and `E04-B18.md` for the full
+  /// root-cause writeup.
+  ///
+  /// The decrypt-from-`ciphertext` path below now only ever runs for a row
+  /// written before this column existed (`plaintextPayload == null`) —
+  /// never backfilled (`database.dart`'s migration note), so those rows
+  /// keep exactly their pre-fix behavior, including the pre-fix asymmetry
+  /// that this device can never decrypt its own outgoing ciphertext
+  /// (Double Ratchet sessions are asymmetric, same note
+  /// `ConversationsController` already documents).
   Future<String?> _resolvePlaintext(Message row) async {
     if (_plaintextCache.containsKey(row.id)) {
       return _plaintextCache[row.id];
     }
+    final Uint8List? persistedPayload = row.plaintextPayload;
     String? text;
-    if (row.ciphertext.isNotEmpty) {
+    if (persistedPayload != null) {
+      try {
+        text = utf8.decode(persistedPayload);
+      } catch (_) {
+        text = null;
+      }
+    } else if (row.ciphertext.isNotEmpty) {
       try {
         final address = SignalProtocolAddress(
           row.senderDeviceId == _selfDeviceId

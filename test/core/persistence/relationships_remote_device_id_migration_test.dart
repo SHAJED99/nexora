@@ -40,6 +40,26 @@ void main() {
           PRIMARY KEY (device_id)
         );
       ''');
+      // E04-B18: a real v20 install already has `messages` (created at
+      // v11, long before this test's own v20->v21 concern) -- this
+      // fixture's own minimal scope (only the two tables its OWN migration
+      // step touches) otherwise doesn't reflect that, and the messages
+      // migration step added for E04-B18 (`from >= 11 && from < 23`) then
+      // has nothing to add its column to. Included here, not because this
+      // test cares about `messages`, but so it keeps modeling a REAL
+      // pre-existing install rather than an artificially bare one.
+      raw.execute('''
+        CREATE TABLE messages (
+          id TEXT NOT NULL,
+          conversation_id TEXT NOT NULL,
+          sender_device_id TEXT NOT NULL,
+          sequence_number INTEGER NOT NULL,
+          ciphertext BLOB NOT NULL,
+          created_at INTEGER NOT NULL,
+          delivery_state TEXT NOT NULL,
+          PRIMARY KEY (id)
+        );
+      ''');
       raw.execute(
         "INSERT INTO device_identities (device_id, signed_in) VALUES ('pre-b12-device', 1);",
       );

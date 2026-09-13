@@ -3345,6 +3345,18 @@ class $MessagesTable extends Messages
     type: DriftSqlType.blob,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _plaintextPayloadMeta = const VerificationMeta(
+    'plaintextPayload',
+  );
+  @override
+  late final GeneratedColumn<Uint8List> plaintextPayload =
+      GeneratedColumn<Uint8List>(
+        'plaintext_payload',
+        aliasedName,
+        true,
+        type: DriftSqlType.blob,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -3374,6 +3386,7 @@ class $MessagesTable extends Messages
     senderDeviceId,
     sequenceNumber,
     ciphertext,
+    plaintextPayload,
     createdAt,
     deliveryState,
   ];
@@ -3435,6 +3448,15 @@ class $MessagesTable extends Messages
     } else if (isInserting) {
       context.missing(_ciphertextMeta);
     }
+    if (data.containsKey('plaintext_payload')) {
+      context.handle(
+        _plaintextPayloadMeta,
+        plaintextPayload.isAcceptableOrUnknown(
+          data['plaintext_payload']!,
+          _plaintextPayloadMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -3483,6 +3505,10 @@ class $MessagesTable extends Messages
         DriftSqlType.blob,
         data['${effectivePrefix}ciphertext'],
       )!,
+      plaintextPayload: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}plaintext_payload'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -3517,6 +3543,14 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
   /// anything in this table's own file (this task's §4).
   final Uint8List ciphertext;
 
+  /// E04-B18: this message's already-decrypted `MessageEnvelope.payload`
+  /// bytes -- see this file's header for the full root-cause and security
+  /// reasoning. `null` for any row written before this column existed
+  /// (never backfilled -- those messages' Double Ratchet keys are already
+  /// consumed and cannot be recovered) and for any row a future writer
+  /// deliberately chooses not to populate.
+  final Uint8List? plaintextPayload;
+
   /// Epoch-ms wall-clock creation time -- keyset pagination cursor, never
   /// used for logical ordering (that's [sequenceNumber]'s job -- clock
   /// drift across devices makes wall-clock time unfit for that).
@@ -3532,6 +3566,7 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
     required this.senderDeviceId,
     required this.sequenceNumber,
     required this.ciphertext,
+    this.plaintextPayload,
     required this.createdAt,
     required this.deliveryState,
   });
@@ -3543,6 +3578,9 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
     map['sender_device_id'] = Variable<String>(senderDeviceId);
     map['sequence_number'] = Variable<int>(sequenceNumber);
     map['ciphertext'] = Variable<Uint8List>(ciphertext);
+    if (!nullToAbsent || plaintextPayload != null) {
+      map['plaintext_payload'] = Variable<Uint8List>(plaintextPayload);
+    }
     map['created_at'] = Variable<int>(createdAt);
     map['delivery_state'] = Variable<String>(deliveryState);
     return map;
@@ -3555,6 +3593,9 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
       senderDeviceId: Value(senderDeviceId),
       sequenceNumber: Value(sequenceNumber),
       ciphertext: Value(ciphertext),
+      plaintextPayload: plaintextPayload == null && nullToAbsent
+          ? const Value.absent()
+          : Value(plaintextPayload),
       createdAt: Value(createdAt),
       deliveryState: Value(deliveryState),
     );
@@ -3571,6 +3612,9 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
       senderDeviceId: serializer.fromJson<String>(json['senderDeviceId']),
       sequenceNumber: serializer.fromJson<int>(json['sequenceNumber']),
       ciphertext: serializer.fromJson<Uint8List>(json['ciphertext']),
+      plaintextPayload: serializer.fromJson<Uint8List?>(
+        json['plaintextPayload'],
+      ),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       deliveryState: serializer.fromJson<String>(json['deliveryState']),
     );
@@ -3584,6 +3628,7 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
       'senderDeviceId': serializer.toJson<String>(senderDeviceId),
       'sequenceNumber': serializer.toJson<int>(sequenceNumber),
       'ciphertext': serializer.toJson<Uint8List>(ciphertext),
+      'plaintextPayload': serializer.toJson<Uint8List?>(plaintextPayload),
       'createdAt': serializer.toJson<int>(createdAt),
       'deliveryState': serializer.toJson<String>(deliveryState),
     };
@@ -3595,6 +3640,7 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
     String? senderDeviceId,
     int? sequenceNumber,
     Uint8List? ciphertext,
+    Value<Uint8List?> plaintextPayload = const Value.absent(),
     int? createdAt,
     String? deliveryState,
   }) => MessageRow(
@@ -3603,6 +3649,9 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
     senderDeviceId: senderDeviceId ?? this.senderDeviceId,
     sequenceNumber: sequenceNumber ?? this.sequenceNumber,
     ciphertext: ciphertext ?? this.ciphertext,
+    plaintextPayload: plaintextPayload.present
+        ? plaintextPayload.value
+        : this.plaintextPayload,
     createdAt: createdAt ?? this.createdAt,
     deliveryState: deliveryState ?? this.deliveryState,
   );
@@ -3621,6 +3670,9 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
       ciphertext: data.ciphertext.present
           ? data.ciphertext.value
           : this.ciphertext,
+      plaintextPayload: data.plaintextPayload.present
+          ? data.plaintextPayload.value
+          : this.plaintextPayload,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       deliveryState: data.deliveryState.present
           ? data.deliveryState.value
@@ -3636,6 +3688,7 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
           ..write('senderDeviceId: $senderDeviceId, ')
           ..write('sequenceNumber: $sequenceNumber, ')
           ..write('ciphertext: $ciphertext, ')
+          ..write('plaintextPayload: $plaintextPayload, ')
           ..write('createdAt: $createdAt, ')
           ..write('deliveryState: $deliveryState')
           ..write(')'))
@@ -3649,6 +3702,7 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
     senderDeviceId,
     sequenceNumber,
     $driftBlobEquality.hash(ciphertext),
+    $driftBlobEquality.hash(plaintextPayload),
     createdAt,
     deliveryState,
   );
@@ -3661,6 +3715,10 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
           other.senderDeviceId == this.senderDeviceId &&
           other.sequenceNumber == this.sequenceNumber &&
           $driftBlobEquality.equals(other.ciphertext, this.ciphertext) &&
+          $driftBlobEquality.equals(
+            other.plaintextPayload,
+            this.plaintextPayload,
+          ) &&
           other.createdAt == this.createdAt &&
           other.deliveryState == this.deliveryState);
 }
@@ -3671,6 +3729,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
   final Value<String> senderDeviceId;
   final Value<int> sequenceNumber;
   final Value<Uint8List> ciphertext;
+  final Value<Uint8List?> plaintextPayload;
   final Value<int> createdAt;
   final Value<String> deliveryState;
   final Value<int> rowid;
@@ -3680,6 +3739,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
     this.senderDeviceId = const Value.absent(),
     this.sequenceNumber = const Value.absent(),
     this.ciphertext = const Value.absent(),
+    this.plaintextPayload = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.deliveryState = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3690,6 +3750,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
     required String senderDeviceId,
     required int sequenceNumber,
     required Uint8List ciphertext,
+    this.plaintextPayload = const Value.absent(),
     required int createdAt,
     required String deliveryState,
     this.rowid = const Value.absent(),
@@ -3706,6 +3767,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
     Expression<String>? senderDeviceId,
     Expression<int>? sequenceNumber,
     Expression<Uint8List>? ciphertext,
+    Expression<Uint8List>? plaintextPayload,
     Expression<int>? createdAt,
     Expression<String>? deliveryState,
     Expression<int>? rowid,
@@ -3716,6 +3778,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
       if (senderDeviceId != null) 'sender_device_id': senderDeviceId,
       if (sequenceNumber != null) 'sequence_number': sequenceNumber,
       if (ciphertext != null) 'ciphertext': ciphertext,
+      if (plaintextPayload != null) 'plaintext_payload': plaintextPayload,
       if (createdAt != null) 'created_at': createdAt,
       if (deliveryState != null) 'delivery_state': deliveryState,
       if (rowid != null) 'rowid': rowid,
@@ -3728,6 +3791,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
     Value<String>? senderDeviceId,
     Value<int>? sequenceNumber,
     Value<Uint8List>? ciphertext,
+    Value<Uint8List?>? plaintextPayload,
     Value<int>? createdAt,
     Value<String>? deliveryState,
     Value<int>? rowid,
@@ -3738,6 +3802,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
       senderDeviceId: senderDeviceId ?? this.senderDeviceId,
       sequenceNumber: sequenceNumber ?? this.sequenceNumber,
       ciphertext: ciphertext ?? this.ciphertext,
+      plaintextPayload: plaintextPayload ?? this.plaintextPayload,
       createdAt: createdAt ?? this.createdAt,
       deliveryState: deliveryState ?? this.deliveryState,
       rowid: rowid ?? this.rowid,
@@ -3762,6 +3827,9 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
     if (ciphertext.present) {
       map['ciphertext'] = Variable<Uint8List>(ciphertext.value);
     }
+    if (plaintextPayload.present) {
+      map['plaintext_payload'] = Variable<Uint8List>(plaintextPayload.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -3782,6 +3850,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
           ..write('senderDeviceId: $senderDeviceId, ')
           ..write('sequenceNumber: $sequenceNumber, ')
           ..write('ciphertext: $ciphertext, ')
+          ..write('plaintextPayload: $plaintextPayload, ')
           ..write('createdAt: $createdAt, ')
           ..write('deliveryState: $deliveryState, ')
           ..write('rowid: $rowid')
@@ -11914,6 +11983,7 @@ typedef $$MessagesTableCreateCompanionBuilder =
       required String senderDeviceId,
       required int sequenceNumber,
       required Uint8List ciphertext,
+      Value<Uint8List?> plaintextPayload,
       required int createdAt,
       required String deliveryState,
       Value<int> rowid,
@@ -11925,6 +11995,7 @@ typedef $$MessagesTableUpdateCompanionBuilder =
       Value<String> senderDeviceId,
       Value<int> sequenceNumber,
       Value<Uint8List> ciphertext,
+      Value<Uint8List?> plaintextPayload,
       Value<int> createdAt,
       Value<String> deliveryState,
       Value<int> rowid,
@@ -11961,6 +12032,11 @@ class $$MessagesTableFilterComposer
 
   ColumnFilters<Uint8List> get ciphertext => $composableBuilder(
     column: $table.ciphertext,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get plaintextPayload => $composableBuilder(
+    column: $table.plaintextPayload,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12009,6 +12085,11 @@ class $$MessagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<Uint8List> get plaintextPayload => $composableBuilder(
+    column: $table.plaintextPayload,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -12049,6 +12130,11 @@ class $$MessagesTableAnnotationComposer
 
   GeneratedColumn<Uint8List> get ciphertext => $composableBuilder(
     column: $table.ciphertext,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<Uint8List> get plaintextPayload => $composableBuilder(
+    column: $table.plaintextPayload,
     builder: (column) => column,
   );
 
@@ -12097,6 +12183,7 @@ class $$MessagesTableTableManager
                 Value<String> senderDeviceId = const Value.absent(),
                 Value<int> sequenceNumber = const Value.absent(),
                 Value<Uint8List> ciphertext = const Value.absent(),
+                Value<Uint8List?> plaintextPayload = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<String> deliveryState = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -12106,6 +12193,7 @@ class $$MessagesTableTableManager
                 senderDeviceId: senderDeviceId,
                 sequenceNumber: sequenceNumber,
                 ciphertext: ciphertext,
+                plaintextPayload: plaintextPayload,
                 createdAt: createdAt,
                 deliveryState: deliveryState,
                 rowid: rowid,
@@ -12117,6 +12205,7 @@ class $$MessagesTableTableManager
                 required String senderDeviceId,
                 required int sequenceNumber,
                 required Uint8List ciphertext,
+                Value<Uint8List?> plaintextPayload = const Value.absent(),
                 required int createdAt,
                 required String deliveryState,
                 Value<int> rowid = const Value.absent(),
@@ -12126,6 +12215,7 @@ class $$MessagesTableTableManager
                 senderDeviceId: senderDeviceId,
                 sequenceNumber: sequenceNumber,
                 ciphertext: ciphertext,
+                plaintextPayload: plaintextPayload,
                 createdAt: createdAt,
                 deliveryState: deliveryState,
                 rowid: rowid,

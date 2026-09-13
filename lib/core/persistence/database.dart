@@ -105,7 +105,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 22;
+  int get schemaVersion => 23;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -674,6 +674,18 @@ class AppDatabase extends _$AppDatabase {
         // backfill: an existing relationship simply has not been
         // reconciled under this mechanism yet.
         await m.addColumn(relationships, relationships.peerName);
+      }
+      if (from >= 11 && from < 23) {
+        // E04-B18: `messages.plaintext_payload` -- additive nullable column,
+        // same shape and same "only an install that already had the table
+        // needs it added here" guard reasoning as `relationships.peerName`
+        // above (`messages` is first created by the `from < 11` step). No
+        // backfill: an existing message's ciphertext was already decrypted
+        // once (by the very bug this column fixes) and cannot be safely
+        // decrypted again to populate this column after the fact -- it
+        // simply stays `NULL` and keeps showing "(unable to decrypt this
+        // message)", same as before this migration.
+        await m.addColumn(messages, messages.plaintextPayload);
       }
     },
   );
