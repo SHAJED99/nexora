@@ -188,6 +188,15 @@ class BluetoothTransport(
     private const val POST_BOND_CONNECT_DELAY_MS = 400L
     private const val POST_BOND_CONNECT_MAX_ATTEMPTS = 2
 
+    /** E04-B29: after a failed or rejected pairing with an address, do not
+     * start another `createBond()` for it for this long, doubling per
+     * consecutive failure up to [BOND_RETRY_BACKOFF_MAX_MS]. The relay queue
+     * retries a queued message every tick, and each retry used to raise a
+     * fresh system pairing prompt (live, 2026-09-15: about once a minute,
+     * indefinitely). */
+    private const val BOND_RETRY_BACKOFF_BASE_MS = 120_000L
+    private const val BOND_RETRY_BACKOFF_MAX_MS = 30 * 60_000L
+
     /** E04-T06: how long a discovered device's SDP inquiry
      * ([BluetoothDevice.fetchUuidsWithSdp]) is allowed to stay pending
      * before its [pendingNexoraChecks] entry is dropped unanswered.
@@ -210,6 +219,18 @@ class BluetoothTransport(
    * `ACTION_FOUND` within one discovery session so the same nearby device
    * isn't re-emitted every scan cycle, per §5's contract. */
   private val discoveredAddresses = ConcurrentHashMap.newKeySet<String>()
+
+  /** E04-B29: address -> (earliest time another bond may be attempted, in
+   * `System.currentTimeMillis()`, consecutive failure count). Cleared on a
+   * successful bond. In-memory only: an app restart resets the backoff. */
+  private val bondRetryBackoff = ConcurrentHashMap<String, Pair<Long, Int>>()
+
+  private fun recordBondFailure(deviceId: String) {
+    val failures = (bondRetryBackoff[deviceId]?.second ?: 0) + 1
+    val shift = (failures - 1).coerceAtMost(10)
+    val delayMs = (BOND_RETRY_BACKOFF_BASE_MS shl shift).coerceAtMost(BOND_RETRY_BACKOFF_MAX_MS)
+    bondRetryBackoff[deviceId] = Pair(System.currentTimeMillis() + delayMs, failures)
+  }
 
   /** E04-B28: resolved device ids this scan has emitted via
    * [emitDiscoveredDevice], and the same set from the previous completed
@@ -658,6 +679,14 @@ class BluetoothTransport(
     // Reusing `isBonded` here (rather than re-deriving it) keeps the two
     // call sites' notion of "already bonded" identical.
     if (!isBonded(deviceId)) {
+      // E04-B29: a recent failed pairing with this address suppresses a new
+      // system pairing prompt until the backoff expires -- fail fast instead,
+      // exactly like any other unreachable connect.
+      val retryNotBefore = bondRetryBackoff[deviceId]?.first
+      if (retryNotBefore != null && System.currentTimeMillis() < retryNotBefore) {
+        emitFailure(deviceId)
+        return false
+      }
       startBondAndConnect(bt, deviceId)
       return true
     }
@@ -719,6 +748,7 @@ class BluetoothTransport(
         }
     if (!started) {
       pendingBondConnections.remove(deviceId)
+      recordBondFailure(deviceId) // E04-B29
       emitFailure(deviceId)
     }
   }
@@ -755,6 +785,7 @@ class BluetoothTransport(
     when (bondState) {
       BluetoothDevice.BOND_BONDED -> {
         pendingBondConnections.remove(address)
+        bondRetryBackoff.remove(address) // E04-B29: a real bond resets the backoff
         continuation()
       }
       BluetoothDevice.BOND_NONE -> {
@@ -762,6 +793,7 @@ class BluetoothTransport(
         // pairing failed or the user rejected/cancelled the system dialog.
         // A clean FAILED, never a hang (§ risk in the task file).
         pendingBondConnections.remove(address)
+        recordBondFailure(address) // E04-B29
         emitFailure(address)
       }
       // BOND_BONDING: still in progress, nothing to do yet.
