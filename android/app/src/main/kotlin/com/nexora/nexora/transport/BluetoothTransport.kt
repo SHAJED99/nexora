@@ -2,6 +2,7 @@ package com.nexora.nexora.transport
 
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothServerSocket
@@ -623,7 +624,24 @@ class BluetoothTransport(
       try {
         val cached = device.uuids
         val sppCapable = cached?.any { it?.uuid == NEXORA_SPP_UUID } == true
-        if (sppCapable && !advertisesNexora(cached)) device.fetchUuidsWithSdp()
+        // E04-B30: only a device that could actually run Nexora (a phone, or
+        // a tablet, which reports the COMPUTER major class). Headphones,
+        // printers, car kits and wearables often advertise SPP too, and each
+        // absent one costs a ~5 s SDP page timeout, serialized, on every
+        // listener start (live, Pixel 8 Pro, 2026-09-15: six accessories,
+        // SDP_CFG_FAILED one after another).
+        // Review nit (S3): a missing or UNCATEGORIZED class is refreshed too.
+        // Skipping it could leave a genuine Nexora phone that misreports its
+        // Class of Device with a stale cache, and `unmaskIfNotBonded` only
+        // falls back to the raw bonded set when NO bonded device matches.
+        // Only classes that are clearly not a Nexora host are skipped.
+        val major = device.bluetoothClass?.majorDeviceClass
+        val couldRunNexora =
+            major == null ||
+                major == BluetoothClass.Device.Major.PHONE ||
+                major == BluetoothClass.Device.Major.COMPUTER ||
+                major == BluetoothClass.Device.Major.UNCATEGORIZED
+        if (sppCapable && couldRunNexora && !advertisesNexora(cached)) device.fetchUuidsWithSdp()
       } catch (e: SecurityException) {
         return
       }
