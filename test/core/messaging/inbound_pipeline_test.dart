@@ -1322,5 +1322,119 @@ void main() {
         );
       },
     );
+
+    test(
+      'test_E04_B24_must_not_use_a_blocked_relationships_own_conversation_as_a_migration_source',
+      () async {
+        // Review round-2 finding F5: the ORPHAN test ("does this
+        // conversation have no relationship row of its own") must use
+        // EVERY relationship row, not only the trusted/allowed ones
+        // eligible as a migration TARGET -- otherwise a conversation
+        // that already has its own `blocked` relationship row looks
+        // "orphaned" and its messages can be redirected into a
+        // DIFFERENT, trusted contact's thread by a spoofed
+        // senderDeviceId claim (the frame's `source` field is
+        // unauthenticated -- see this function's own Security note).
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'blocked-peer',
+                state: RelationshipState.blocked.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('blocked-identity'),
+              ),
+            );
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'trusted-peer',
+                state: RelationshipState.allowed.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('trusted-identity'),
+              ),
+            );
+        // A message sitting in the BLOCKED peer's own conversation, but
+        // claiming (a spoofable claim) to be from the trusted peer.
+        await insertMessage(
+          stack,
+          id: 'm1',
+          conversationId: 'blocked-peer',
+          senderDeviceId: 'trusted-identity',
+        );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+        await _settle();
+
+        final row = await (stack.db.select(stack.db.messages)
+              ..where((t) => t.id.equals('m1')))
+            .getSingle();
+        expect(
+          row.conversationId,
+          'blocked-peer',
+          reason: 'a conversation that already has its OWN relationship '
+              'row (even a blocked one) is not an orphan and must never '
+              'be redirected elsewhere, no matter what senderDeviceId a '
+              'message inside it claims',
+        );
+      },
+    );
+
+    test(
+      'test_E04_B24_must_not_treat_a_relationship_with_no_announced_identity_yet_as_an_orphan',
+      () async {
+        // Review round-2 finding F5, second half: a `trusted`/`allowed`
+        // relationship with `remoteSelfDeviceId == null` (the default
+        // state until IdentityAnnounceService runs at least once) is
+        // still a relationship this conversation already has -- not an
+        // orphan -- even though it can never be a migration TARGET
+        // either (it has no identity to match against).
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'not-yet-announced-peer',
+                state: RelationshipState.allowed.name,
+                updatedAt: DateTime.now(),
+                // No remoteSelfDeviceId -- default/never-announced.
+              ),
+            );
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'trusted-peer',
+                state: RelationshipState.allowed.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('trusted-identity'),
+              ),
+            );
+        await insertMessage(
+          stack,
+          id: 'm1',
+          conversationId: 'not-yet-announced-peer',
+          senderDeviceId: 'trusted-identity',
+        );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+        await _settle();
+
+        final row = await (stack.db.select(stack.db.messages)
+              ..where((t) => t.id.equals('m1')))
+            .getSingle();
+        expect(
+          row.conversationId,
+          'not-yet-announced-peer',
+          reason: 'this conversation already has its own relationship '
+              'row -- it is not an orphan, regardless of whether that '
+              'relationship has announced an identity yet',
+        );
+      },
+    );
   });
 }
