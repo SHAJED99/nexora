@@ -198,6 +198,15 @@ class BluetoothTransport(
     private const val BOND_RETRY_BACKOFF_BASE_MS = 120_000L
     private const val BOND_RETRY_BACKOFF_MAX_MS = 30 * 60_000L
 
+    /** E04-B32: two peers that both have a queued packet for each other
+     * dial at the same moment (their coordinator ticks run in step), and
+     * the RFCOMM multiplexer collision fails both attempts (live,
+     * 2026-09-15). [doConnect] retries a failed connect after a random
+     * delay in this range, so the two sides fall out of step. */
+    private const val CONNECT_COLLISION_RETRY_MIN_MS = 300L
+    private const val CONNECT_COLLISION_RETRY_MAX_MS = 1500L
+    private const val CONNECT_COLLISION_MAX_ATTEMPTS = 3
+
     /** E04-T06: how long a discovered device's SDP inquiry
      * ([BluetoothDevice.fetchUuidsWithSdp]) is allowed to stay pending
      * before its [pendingNexoraChecks] entry is dropped unanswered.
@@ -827,23 +836,60 @@ class BluetoothTransport(
     eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTING) }
 
     Thread({
-      try {
-        val device = bt.getRemoteDevice(deviceId)
-        val socket = device.createRfcommSocketToServiceRecord(NEXORA_SPP_UUID)
-        // Discovery and an active connect attempt compete for the radio;
-        // Android's own docs recommend cancelling discovery before connect.
-        cancelDiscoveryQuietly(bt)
-        socket.connect() // BLOCKING — this background thread only.
-        openSockets[deviceId] = socket
-        startReadLoop(deviceId, socket)
-        eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTED) }
-      } catch (e: IOException) {
-        emitFailure(deviceId)
-      } catch (e: SecurityException) {
-        emitFailure(deviceId)
-      } catch (e: IllegalArgumentException) {
-        // getRemoteDevice() throws this for a malformed MAC address.
-        emitFailure(deviceId)
+      // E04-B32: an IOException is retried after a random delay, because a
+      // simultaneous dial from the peer collides in the RFCOMM multiplexer
+      // and fails both sides. The peer's own attempt may land through
+      // `acceptLoop` (which registers it in `openSockets`) while this one
+      // waits; that accepted socket is reused instead of dialing again.
+      var attempt = 0
+      while (true) {
+        attempt++
+        var socket: BluetoothSocket? = null
+        try {
+          val device = bt.getRemoteDevice(deviceId)
+          socket = device.createRfcommSocketToServiceRecord(NEXORA_SPP_UUID)
+          // Discovery and an active connect attempt compete for the radio;
+          // Android's own docs recommend cancelling discovery before connect.
+          cancelDiscoveryQuietly(bt)
+          socket.connect() // BLOCKING — this background thread only.
+          openSockets[deviceId] = socket
+          startReadLoop(deviceId, socket)
+          eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTED) }
+          return@Thread
+        } catch (e: IOException) {
+          try {
+            socket?.close()
+          } catch (closeError: IOException) {
+            // Already broken; nothing further to release.
+          }
+          if (openSockets.containsKey(deviceId)) {
+            eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTED) }
+            return@Thread
+          }
+          if (attempt >= CONNECT_COLLISION_MAX_ATTEMPTS) {
+            emitFailure(deviceId)
+            return@Thread
+          }
+          try {
+            Thread.sleep(
+                kotlin.random.Random.nextLong(
+                    CONNECT_COLLISION_RETRY_MIN_MS, CONNECT_COLLISION_RETRY_MAX_MS + 1))
+          } catch (interrupted: InterruptedException) {
+            emitFailure(deviceId)
+            return@Thread
+          }
+          if (openSockets.containsKey(deviceId)) {
+            eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTED) }
+            return@Thread
+          }
+        } catch (e: SecurityException) {
+          emitFailure(deviceId)
+          return@Thread
+        } catch (e: IllegalArgumentException) {
+          // getRemoteDevice() throws this for a malformed MAC address.
+          emitFailure(deviceId)
+          return@Thread
+        }
       }
     }, "nexora-bt-connect-$deviceId").start()
   }
