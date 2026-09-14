@@ -199,6 +199,12 @@ void main() {
     expect(rows.single.conversationId, groupId);
     expect(rows.single.senderDeviceId, 'device-a');
     expect(rows.single.deliveryState, DeliveryState.sent.name);
+    // E04-B20: the sender persists its own body -- it can never decrypt its
+    // own outgoing sender-key ciphertext later.
+    expect(
+      rows.single.plaintextPayload,
+      Uint8List.fromList('hi squad'.codeUnits),
+    );
   });
 
   test('test_EARS_COMM_29_non_member_cannot_send', () async {
@@ -932,6 +938,43 @@ void main() {
       expect(delivered, hasLength(1));
       expect(stack.inbound.counters.duplicate, 1);
       expect(stack.inbound.counters.delivered, 1);
+    },
+  );
+
+  test(
+    'test_E04_B20_received_group_message_persists_its_decrypted_body',
+    () async {
+      // E04-B20: `GroupCipher.decrypt` discards a message key once used, so
+      // the body `handleGroupMessage` receives (already decrypted once by the
+      // wire-frame handler) must be persisted -- a later display can never
+      // re-derive it from the stored ciphertext.
+      final stack = await newStack('device-b');
+      addTearDown(stack.dispose);
+
+      final groupId = await GroupRepository(stack.db).createGroup(
+        name: 'G',
+        ownerDeviceId: 'device-a',
+        memberDeviceIds: ['device-b'],
+      );
+      final body = Uint8List.fromList('persist me'.codeUnits);
+      final envelope = GroupMessageEnvelope(
+        groupId: groupId,
+        epoch: 0,
+        senderDeviceId: 'device-a',
+        messageId: 'b20-received',
+        sequenceNumber: 0,
+        createdAtMs: DateTime.now().millisecondsSinceEpoch,
+        body: body,
+      );
+
+      await stack.inbound.handleGroupMessage(
+        'device-a',
+        envelope,
+        Uint8List.fromList([9, 9, 9]),
+      );
+
+      final row = await stack.db.select(stack.db.messages).getSingle();
+      expect(row.plaintextPayload, body);
     },
   );
 
