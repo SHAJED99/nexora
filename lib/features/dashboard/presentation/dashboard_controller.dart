@@ -554,13 +554,24 @@ class DashboardController extends GetxController {
     try {
       final page = await _repo.messagesPage(summary.conversationId, limit: 1);
       if (page.isNotEmpty && page.first.id == summary.lastMessageId) {
-        final ciphertextMessage = _decodeCiphertext(page.first.ciphertext);
-        final plaintext = await _crypto.decrypt(
-          SignalProtocolAddress(peerDeviceId, _localSignalDeviceId),
-          ciphertextMessage,
-        );
-        final envelope = MessageEnvelope.deserialize(plaintext);
-        preview = utf8.decode(envelope.payload);
+        final persistedPayload = page.first.plaintextPayload;
+        if (persistedPayload != null) {
+          // E04-B25: use the payload `ReceiveMessageUseCase` already
+          // decrypted and persisted (E04-B18) — never re-decrypt
+          // `ciphertext`. A second decrypt of a PreKeySignalMessage whose
+          // one-time prekey the first decrypt already consumed throws
+          // `InvalidKeyIdException` (live-reproduced on hardware) and can
+          // disturb session state. Mirrors `ConversationsController`.
+          preview = utf8.decode(persistedPayload);
+        } else {
+          final ciphertextMessage = _decodeCiphertext(page.first.ciphertext);
+          final plaintext = await _crypto.decrypt(
+            SignalProtocolAddress(peerDeviceId, _localSignalDeviceId),
+            ciphertextMessage,
+          );
+          final envelope = MessageEnvelope.deserialize(plaintext);
+          preview = utf8.decode(envelope.payload);
+        }
       }
     } catch (_) {
       preview = null;

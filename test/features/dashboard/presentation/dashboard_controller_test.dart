@@ -15,13 +15,15 @@
 // (`test/features/dashboard/presentation/dashboard_controller_test.dart`,
 // matching every other `presentation` test in this project) — a small,
 // disclosed path discrepancy in the task file, not a new test file.
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get/get.dart';
+import 'package:get/get.dart' hide Value;
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/routing_engine/link_quality_feed.dart';
@@ -824,5 +826,41 @@ void main() {
 
     inProcessController.onClose();
     relaunchController.onClose();
+  });
+
+  // E04-B25: the Dashboard's Recent Conversations preview must read the
+  // payload E04-B18 already persisted, never re-decrypt `ciphertext` (a
+  // second decrypt of a consumed PreKeySignalMessage throws
+  // `InvalidKeyIdException` on real hardware). Ciphertext is deliberately
+  // unusable, so the preview can only be correct if it comes from
+  // `plaintextPayload` directly — reverting the fix yields a null preview.
+  test(
+      'test_E04_B25_dashboard_preview_uses_plaintextPayload_without_a_second_decrypt',
+      () async {
+    await relationships.upsert('bob-device', RelationshipState.trusted);
+    await _insertMessage(
+      db,
+      id: 'm-bob-dash',
+      conversationId: 'bob-device',
+      senderDeviceId: 'bob-device',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(utf8.encode('not real ciphertext')),
+      createdAt: 1000,
+    );
+    await (db.update(db.messages)..where((t) => t.id.equals('m-bob-dash')))
+        .write(
+      MessagesCompanion(
+        plaintextPayload: Value(
+          Uint8List.fromList(utf8.encode('a persisted dashboard preview')),
+        ),
+      ),
+    );
+
+    final controller = newController();
+    controller.onInit();
+    addTearDown(controller.onClose);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+
+    expect(controller.recent.single.preview, 'a persisted dashboard preview');
   });
 }
