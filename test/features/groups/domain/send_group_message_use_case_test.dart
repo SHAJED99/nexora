@@ -1216,4 +1216,41 @@ void main() {
           'sequence numbers -- one counter, one transaction',
     );
   });
+
+  test(
+    'test_E04_B27_a_message_finishing_after_stop_does_not_throw',
+    () async {
+      // E04-B27 (audit finding 2): `stop()` closes the delivered stream while
+      // an in-flight handler can still be past its last await. Adding to a
+      // closed controller used to throw `StateError`; the row is still
+      // persisted, only the event is skipped.
+      final stack = await newStack('device-b');
+      addTearDown(stack.dispose);
+
+      final groupId = await GroupRepository(stack.db).createGroup(
+        name: 'G',
+        ownerDeviceId: 'device-a',
+        memberDeviceIds: ['device-b'],
+      );
+      await stack.inbound.stop();
+
+      await expectLater(
+        stack.inbound.handleGroupMessage(
+          'device-a',
+          GroupMessageEnvelope(
+            groupId: groupId,
+            epoch: 0,
+            senderDeviceId: 'device-a',
+            messageId: 'after-stop',
+            sequenceNumber: 0,
+            createdAtMs: DateTime.now().millisecondsSinceEpoch,
+            body: Uint8List.fromList('late'.codeUnits),
+          ),
+          Uint8List.fromList([1, 2, 3]),
+        ),
+        completes,
+      );
+      expect(await stack.db.select(stack.db.messages).get(), hasLength(1));
+    },
+  );
 }

@@ -135,11 +135,18 @@ class IdentityService {
       return 0;
     }
 
-    final ids = await _store.allocateOneTimePreKeyIds(batch);
-    for (final id in ids) {
-      final record = generatePreKeys(id, 1).single;
-      await _store.storePreKey(record.id, record);
-    }
+    // E04-B27: allocation and storage commit together. Before, the id cursor
+    // advanced in its own transaction and each row was stored separately, so
+    // a crash in between left allocated ids with no rows (wasted forever).
+    // `allocateOneTimePreKeyIds`' own transaction nests as a savepoint.
+    final ids = await _db.transaction(() async {
+      final allocated = await _store.allocateOneTimePreKeyIds(batch);
+      for (final id in allocated) {
+        final record = generatePreKeys(id, 1).single;
+        await _store.storePreKey(record.id, record);
+      }
+      return allocated;
+    });
     // E11-T06: only fires when the pool was actually replenished -- the
     // early `return 0` above (pool already at/above minimum) must not
     // trigger a directory republish for material that did not change.
