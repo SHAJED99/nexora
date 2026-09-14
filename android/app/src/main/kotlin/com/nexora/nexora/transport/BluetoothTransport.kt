@@ -222,7 +222,12 @@ class BluetoothTransport(
 
   /** E04-B29: address -> (earliest time another bond may be attempted, in
    * `System.currentTimeMillis()`, consecutive failure count). Cleared on a
-   * successful bond. In-memory only: an app restart resets the backoff. */
+   * successful bond. In-memory only: an app restart resets the backoff.
+   * Thread assumption (review nit): every reader and writer runs on the main
+   * thread (Pigeon's `connect` has no TaskQueue; the bond receiver has no
+   * Handler), so [recordBondFailure]'s get-then-put is not a race. If
+   * `connect` is ever moved to a background TaskQueue, make that update
+   * atomic (e.g. `compute`). */
   private val bondRetryBackoff = ConcurrentHashMap<String, Pair<Long, Int>>()
 
   private fun recordBondFailure(deviceId: String) {
