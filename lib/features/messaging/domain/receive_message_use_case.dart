@@ -37,7 +37,7 @@
 // that would exercise it.
 import 'dart:typed_data';
 
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show BooleanExpressionOperators, Value;
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 
 import '../../../core/crypto/crypto_stub.dart';
@@ -149,10 +149,26 @@ class ReceiveMessageUseCase {
       final createdAt = DateTime.now().millisecondsSinceEpoch;
       final ciphertextBytes = Uint8List.fromList(ciphertext.serialize());
 
+      // ── E04-B26: conversation-id remapping ──────────────────────────
+      //
+      // The sender puts ITS OWN `relationships.device_id` for us into
+      // `MessageEnvelope.conversationId`, but THIS device knows that same
+      // peer by a DIFFERENT `device_id` (its own relationship row's key).
+      // Without remapping, the message lands in a ghost conversation this
+      // user can never reply from. The remap is safe because
+      // `senderDeviceId` is the address the ciphertext above was JUST
+      // successfully decrypted under (session-authenticated after TOFU),
+      // and the remap target must already be independently trusted or
+      // allowed — the worst case is filing into an already-trusted thread.
+      // This never grants trust, never makes an untrusted device dialable.
+      // Group messages do not go through this use case.
+      final conversationId =
+          await _resolveConversationId(envelope.conversationId, senderDeviceId);
+
       await _db.into(_db.messages).insert(
             MessagesCompanion.insert(
               id: envelope.id,
-              conversationId: envelope.conversationId,
+              conversationId: conversationId,
               senderDeviceId: senderDeviceId,
               sequenceNumber: envelope.sequenceNumber,
               ciphertext: ciphertextBytes,
@@ -172,7 +188,7 @@ class ReceiveMessageUseCase {
 
       return Message(
         id: envelope.id,
-        conversationId: envelope.conversationId,
+        conversationId: conversationId,
         senderDeviceId: senderDeviceId,
         sequenceNumber: envelope.sequenceNumber,
         ciphertext: ciphertextBytes,
@@ -181,5 +197,53 @@ class ReceiveMessageUseCase {
         plaintextPayload: envelope.payload,
       );
     });
+  }
+
+  /// E04-B26: determine the correct local conversation id for an inbound
+  /// message whose envelope carries the SENDER's own conversation id.
+  ///
+  /// **Security rationale.** [senderDeviceId] is the address the ciphertext
+  /// was just successfully decrypted under — session-authenticated after
+  /// TOFU (Trust On First Use). The remap target must already be
+  /// independently `trusted` or `allowed`, so the worst case is filing a
+  /// message into an already-trusted thread. This never grants trust and
+  /// never makes an untrusted device dialable. Group messages do not flow
+  /// through `ReceiveMessageUseCase` — do not apply this logic to the
+  /// group path.
+  ///
+  /// Algorithm (inside the same Drift transaction as the insert):
+  /// 1. If a relationship row already exists whose `deviceId` ==
+  ///    [envelopeConversationId] (any state), return [envelopeConversationId]
+  ///    verbatim — never pull a conversation that already has its own
+  ///    relationship row (e.g. a blocked peer's) into a different contact's
+  ///    thread (mirrors E04-B24's round-2 F5 lesson).
+  /// 2. Look up relationship rows where `remoteSelfDeviceId` ==
+  ///    [senderDeviceId] AND `state` IN ('trusted', 'allowed').
+  /// 3. If exactly ONE match, return that row's `deviceId` (the local
+  ///    conversation id for this already-known peer).
+  /// 4. Otherwise (zero or multiple matches), return
+  ///    [envelopeConversationId] verbatim — no remap when ambiguous.
+  Future<String> _resolveConversationId(
+    String envelopeConversationId,
+    String senderDeviceId,
+  ) async {
+    // Guard 1: does envelope.conversationId already own a relationship row?
+    final existingRow = await (_db.select(_db.relationships)
+          ..where((r) => r.deviceId.equals(envelopeConversationId)))
+        .getSingleOrNull();
+    if (existingRow != null) return envelopeConversationId;
+
+    // Find relationships whose remoteSelfDeviceId matches senderDeviceId
+    // and whose state is trusted or allowed.
+    final candidates = await (_db.select(_db.relationships)
+          ..where((r) =>
+              r.remoteSelfDeviceId.equals(senderDeviceId) &
+              r.state.isIn(const ['trusted', 'allowed'])))
+        .get();
+
+    if (candidates.length == 1) return candidates.single.deviceId;
+
+    // Zero or ambiguous matches — keep verbatim.
+    return envelopeConversationId;
   }
 }
