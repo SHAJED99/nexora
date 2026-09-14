@@ -551,6 +551,16 @@ class InboundPipeline {
           relationship.state != RelationshipState.allowed) {
         continue;
       }
+      // E04-B16: re-seed routing's identity aliases after a restart, for the
+      // same trusted/allowed peers only (`IdentityAnnounceService.
+      // handleAnnounce` keeps them current while the app runs).
+      final announced = relationship.remoteSelfDeviceId;
+      if (announced != null) {
+        _stack.routingEngine.recordIdentityAlias(
+          relationship.deviceId,
+          announced,
+        );
+      }
       _onDeviceDiscovered(
         TransportDevice(
           id: relationship.deviceId,
