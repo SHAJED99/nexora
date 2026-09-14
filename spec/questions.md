@@ -41,7 +41,7 @@ Batching rule: **≤10 per round**, grouped by area.
 ## Open questions (🟡)
 
 ### Q-SEC-009 — What happens to the REMOTE device-registry row when a device signs out?
-- **Priority:** 🟡 **blocking** — blocks `E15-T01` (and therefore `E15-T07`)
+- **Priority:** blocking — blocks `E15-T01` (and therefore `E15-T07`)
 - **Raised by:** `skills/change-impact` / `IMP-003`, 2026-09-08
 - **Question:** `FR-AUTH-006` wipes everything **local**. It says nothing about
   `users/$uid/devices/<deviceId>` in the Realtime Database (`FR-FB-001`'s device
@@ -80,7 +80,7 @@ Batching rule: **≤10 per round**, grouped by area.
 - **fed_into:** `FR-AUTH-006`'s remote clause and `E15-T01` §2/§5
 
 ### Q-FUNC-010 — Logout+login on one phone trips E12's enrollment gate and E13's rate limiter
-- **Priority:** 🟡 **blocking** — blocks `E15-T01`
+- **Priority:** blocking — blocks `E15-T01`
 - **Raised by:** `skills/change-impact` / `IMP-003`, 2026-09-08
 - **Question:** After a wipe-logout, the next sign-in mints a **new** device id.
   If the old remote registry row survives (`Q-SEC-009` option (a)),
