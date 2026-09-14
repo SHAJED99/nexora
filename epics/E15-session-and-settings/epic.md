@@ -1,7 +1,7 @@
 ---
 id: E15
 title: Session Lifecycle & Settings Sub-Screens
-status: todo
+status: done  # 2026-09-15 bookkeeping fix: tracker.md already records 14/14 done, completed 2026-09-11; retro.md for this epic is still owed (skills/retro)
 type: feature
 priority: { moscow: must, wsjf: 3.0 }
 depends_on: [E01, E02, E08, E09, E10, E12, E13, E14]
