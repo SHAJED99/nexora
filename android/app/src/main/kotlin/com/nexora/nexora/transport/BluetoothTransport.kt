@@ -193,6 +193,23 @@ class BluetoothTransport(
   @Volatile private var previousScanIds: Set<String> = emptySet()
   private val scanGeneration = AtomicLong(0)
 
+  /** E04-B28 review F1: Android broadcasts `ACTION_DISCOVERY_FINISHED` for a
+   * CANCELLED scan too, not only a completed one. This file cancels discovery
+   * itself (stop, restart, before bonding, before connecting), and a
+   * cancelled scan's partial result set must never be diffed, or peers the
+   * truncated scan had not re-confirmed would be reported lost just because
+   * the user connected to someone else. Set only when a scan was actually
+   * running at cancel time, so a finish broadcast is guaranteed to consume it. */
+  private val finishCausedByOwnCancel = AtomicBoolean(false)
+
+  /** Every app-initiated discovery cancel goes through here (E04-B28). */
+  private fun cancelDiscoveryQuietly(bt: BluetoothAdapter) {
+    if (bt.isDiscovering) {
+      finishCausedByOwnCancel.set(true)
+      bt.cancelDiscovery()
+    }
+  }
+
   /** E04-T06: a discovered device this file has NOT yet confirmed is
    * running Nexora (its SDP record hasn't been checked, or was checked
    * and had no cached answer) but has already asked to check
@@ -481,7 +498,7 @@ class BluetoothTransport(
   }
 
   fun stopDiscovery() {
-    adapter?.let { if (it.isDiscovering) it.cancelDiscovery() }
+    adapter?.let { cancelDiscoveryQuietly(it) }
   }
 
   /**
@@ -583,7 +600,7 @@ class BluetoothTransport(
     // Discovery and an active bond attempt compete for the radio, same as
     // discovery vs. connect in doConnect below; Android's own docs recommend
     // cancelling discovery before createBond() for the same reason.
-    if (bt.isDiscovering) bt.cancelDiscovery()
+    cancelDiscoveryQuietly(bt)
     registerBondReceiverIfNeeded()
     pendingBondConnections[deviceId] = { doConnectAfterBond(bt, deviceId) }
     eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTING) }
@@ -653,7 +670,7 @@ class BluetoothTransport(
         val socket = device.createRfcommSocketToServiceRecord(NEXORA_SPP_UUID)
         // Discovery and an active connect attempt compete for the radio;
         // Android's own docs recommend cancelling discovery before connect.
-        if (bt.isDiscovering) bt.cancelDiscovery()
+        cancelDiscoveryQuietly(bt)
         socket.connect() // BLOCKING — this background thread only.
         openSockets[deviceId] = socket
         startReadLoop(deviceId, socket)
@@ -693,7 +710,7 @@ class BluetoothTransport(
           Thread.sleep(POST_BOND_CONNECT_DELAY_MS)
           val device = bt.getRemoteDevice(deviceId)
           val socket = device.createRfcommSocketToServiceRecord(NEXORA_SPP_UUID)
-          if (bt.isDiscovering) bt.cancelDiscovery()
+          cancelDiscoveryQuietly(bt)
           socket.connect() // BLOCKING -- this background thread only.
           openSockets[deviceId] = socket
           startReadLoop(deviceId, socket)
@@ -1053,7 +1070,7 @@ class BluetoothTransport(
     currentScanIds.clear() // E04-B28
     scanGeneration.incrementAndGet() // E04-B28: supersedes any pending lost-diff
     registerReceiverIfNeeded()
-    if (bt.isDiscovering) bt.cancelDiscovery()
+    cancelDiscoveryQuietly(bt)
     bt.startDiscovery()
   }
 
@@ -1249,6 +1266,9 @@ class BluetoothTransport(
    * reached through an accepted connection is not a scan result and is never
    * reported lost here. */
   private fun handleDiscoveryFinished() {
+    // E04-B28 review F1: a finish caused by this file's own cancel is not a
+    // completed observation -- consume the flag and never diff it.
+    if (finishCausedByOwnCancel.getAndSet(false)) return
     val generation = scanGeneration.get()
     eventsScope.launch {
       delay(SDP_LOOKUP_TIMEOUT_MS)
