@@ -219,6 +219,47 @@ class RoutingEngine {
     return _bestRoute(destinationId, profile);
   }
 
+  /// E04-B16: link id -> the peer identity (`selfDeviceId`) it announced.
+  final Map<String, String> _identityByLink = {};
+
+  /// E04-B16 (human decision 2026-09-15, "routing alias map"): records that
+  /// the direct link [linkId] belongs to the peer whose announced identity is
+  /// [selfDeviceId], so a packet addressed to that identity (E04-B12/B13/B15's
+  /// addressing) can be routed over that link. The graph itself stays keyed by
+  /// link ids; only the destination is resolved.
+  ///
+  /// Scoped deliberately narrowly, because this is a reverse lookup of a
+  /// peer-asserted value (see E04-B13 §1a):
+  /// - The caller records aliases only for `trusted`/`allowed` relationships,
+  ///   so a stranger announcing someone else's identity never gets one.
+  /// - Used ONLY to pick a next hop for forwarding. It never grants trust, and
+  ///   never changes where decrypted content is filed. The payload stays
+  ///   end-to-end encrypted, so a wrong alias can at worst delay a packet,
+  ///   never expose it.
+  /// - If two different links claim the same identity, the alias is treated
+  ///   as ambiguous and resolves to nothing, rather than guessing.
+  /// A link that re-announces a different identity replaces its old alias.
+  void recordIdentityAlias(String linkId, String selfDeviceId) {
+    _identityByLink[linkId] = selfDeviceId;
+  }
+
+  /// Forgets [linkId]'s alias (e.g. the relationship is no longer trusted).
+  void forgetIdentityAlias(String linkId) {
+    _identityByLink.remove(linkId);
+  }
+
+  /// The single link whose alias is [selfDeviceId], or `null` if none or
+  /// more than one claims it.
+  String? _linkForIdentity(String selfDeviceId) {
+    String? found;
+    for (final entry in _identityByLink.entries) {
+      if (entry.value != selfDeviceId) continue;
+      if (found != null) return null; // ambiguous
+      found = entry.key;
+    }
+    return found;
+  }
+
   /// Compares the currently-active route's cost against the best known
   /// alternative and applies the make-before-break rule (OQ-E04-2):
   /// migrate only once the alternative is >=20% cheaper AND has held that
@@ -339,6 +380,24 @@ class RoutingEngine {
   /// carries `hopCount: 1`, so a multi-hop route's total cost is the
   /// linear weighted-sum formula's natural sum over its edges).
   Route? _bestRoute(String destinationId, TrafficProfile profile) {
+    final direct = _bestRouteToNode(destinationId, profile);
+    if (direct != null) return direct;
+    // E04-B16: a destination that is not itself a graph node may be a peer
+    // identity with a recorded alias to one of this device's links. Every
+    // lookup (computeRoute, considerMigration, onRouteFailure) goes through
+    // here, so an identity-addressed destination behaves like any other.
+    final linkId = _linkForIdentity(destinationId);
+    if (linkId == null) return null;
+    final viaLink = _bestRouteToNode(linkId, profile);
+    if (viaLink == null) return null;
+    return Route(
+      destinationId: destinationId,
+      hops: viaLink.hops,
+      cost: viaLink.cost,
+    );
+  }
+
+  Route? _bestRouteToNode(String destinationId, TrafficProfile profile) {
     if (destinationId == selfId) return null;
 
     final dist = <String, double>{selfId: 0.0};
