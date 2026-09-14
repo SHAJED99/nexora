@@ -352,4 +352,155 @@ void main() {
       },
     );
   });
+
+  // E04-B26: each device mints a 1:1 conversation id from its OWN
+  // `relationships.device_id` for the peer, and the sender puts its own id
+  // into the envelope. Live hardware: Pixel's id for Redmi is
+  // `00:00:46:00:00:01`, Redmi's id for Pixel is `B8:DB:38:7C:D4:BF`, so every
+  // inbound message landed in a ghost conversation on the receiver.
+  group('E04-B26 — inbound conversation id remap', () {
+    late AppDatabase db;
+
+    setUp(() {
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+    });
+
+    tearDown(() => db.close());
+
+    const sender = 'peer-identity';
+    const senderMintedId = 'sender-minted-id';
+
+    Future<void> insertRelationship(
+      String deviceId,
+      String state, {
+      String? remoteSelfDeviceId,
+    }) async {
+      await db.into(db.relationships).insert(
+            RelationshipsCompanion.insert(
+              deviceId: deviceId,
+              state: state,
+              updatedAt: DateTime.now(),
+              remoteSelfDeviceId: Value(remoteSelfDeviceId),
+            ),
+          );
+    }
+
+    ReceiveMessageUseCase useCaseFor(String id) {
+      final envelope = MessageEnvelope(
+        id: id,
+        conversationId: senderMintedId,
+        sequenceNumber: 1,
+        payload: _plaintext('hello'),
+      );
+      return ReceiveMessageUseCase(
+        database: db,
+        decrypt: (_, _) async => envelope.serialize(),
+      );
+    }
+
+    Future<String> persistedConversationId(String id) async {
+      final row = await (db.select(db.messages)..where((t) => t.id.equals(id)))
+          .getSingle();
+      return row.conversationId;
+    }
+
+    test(
+        'test_E04_B26_remaps_to_the_single_trusted_or_allowed_relationship_for_the_sender',
+        () async {
+      await insertRelationship(
+        'local-id-for-peer',
+        'allowed',
+        remoteSelfDeviceId: sender,
+      );
+
+      final message =
+          await useCaseFor('m1').call(sender, const _FakeCiphertext('m1'));
+
+      expect(await persistedConversationId('m1'), 'local-id-for-peer');
+      expect(message!.conversationId, 'local-id-for-peer');
+    });
+
+    test('test_E04_B26_no_matching_relationship_keeps_the_envelope_id',
+        () async {
+      await insertRelationship(
+        'someone-else',
+        'trusted',
+        remoteSelfDeviceId: 'another-identity',
+      );
+
+      final message =
+          await useCaseFor('m2').call(sender, const _FakeCiphertext('m2'));
+
+      expect(await persistedConversationId('m2'), senderMintedId);
+      expect(message!.conversationId, senderMintedId);
+    });
+
+    test('test_E04_B26_ambiguous_matches_keep_the_envelope_id', () async {
+      await insertRelationship('dup-a', 'trusted', remoteSelfDeviceId: sender);
+      await insertRelationship('dup-b', 'allowed', remoteSelfDeviceId: sender);
+
+      await useCaseFor('m3').call(sender, const _FakeCiphertext('m3'));
+
+      expect(await persistedConversationId('m3'), senderMintedId);
+    });
+
+    test('test_E04_B26_never_remaps_into_a_blocked_or_unknown_relationship',
+        () async {
+      await insertRelationship(
+        'blocked-peer',
+        'blocked',
+        remoteSelfDeviceId: sender,
+      );
+      await useCaseFor('m4').call(sender, const _FakeCiphertext('m4'));
+      expect(await persistedConversationId('m4'), senderMintedId);
+
+      await (db.delete(db.relationships)).go();
+      await insertRelationship(
+        'unknown-peer',
+        'unknown',
+        remoteSelfDeviceId: sender,
+      );
+      await useCaseFor('m5').call(sender, const _FakeCiphertext('m5'));
+      expect(await persistedConversationId('m5'), senderMintedId);
+    });
+
+    test(
+        'test_E04_B26_never_remaps_an_envelope_id_that_already_has_its_own_relationship',
+        () async {
+      // The envelope's conversation id already belongs to a (blocked)
+      // relationship on THIS device; a spoofed sender claim matching an
+      // allowed contact must not pull it into that contact's thread
+      // (E04-B24 round-2 F5, restated for the receive path).
+      await insertRelationship(senderMintedId, 'blocked');
+      await insertRelationship(
+        'trusted-contact',
+        'allowed',
+        remoteSelfDeviceId: sender,
+      );
+
+      await useCaseFor('m6').call(sender, const _FakeCiphertext('m6'));
+
+      expect(await persistedConversationId('m6'), senderMintedId);
+    });
+
+    test('test_E04_B26_duplicate_is_still_dropped_after_a_remap', () async {
+      await insertRelationship(
+        'local-id-for-peer',
+        'trusted',
+        remoteSelfDeviceId: sender,
+      );
+      final useCase = useCaseFor('m7');
+
+      final first = await useCase.call(sender, const _FakeCiphertext('m7'));
+      final second = await useCase.call(sender, const _FakeCiphertext('m7'));
+
+      expect(first, isNotNull);
+      expect(second, isNull);
+      final rows = await (db.select(db.messages)
+            ..where((t) => t.id.equals('m7')))
+          .get();
+      expect(rows, hasLength(1));
+      expect(rows.single.conversationId, 'local-id-for-peer');
+    });
+  });
 }
