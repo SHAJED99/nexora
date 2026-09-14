@@ -508,6 +508,7 @@ class InboundPipeline {
     _discoverySubscription =
         _stack.transport.discoveredDevices.listen(_onDeviceDiscovered);
     unawaited(_seedKnownDevices());
+    unawaited(_reconcileOrphanedMessagesByIdentity());
   }
 
   /// E04-B07: [_onDeviceDiscovered] alone only ever learns about a device
@@ -557,6 +558,161 @@ class InboundPipeline {
           type: TransportType.bluetooth,
         ),
       );
+    }
+  }
+
+  /// E04-B24: a conversation can end up permanently "orphaned" -- messages
+  /// stored under a `conversation_id` that has NO `relationships` row of its
+  /// own at all (not merely a stale one `_reconcileStaleRelationship` above
+  /// already handles) -- when an ACCEPTED connection's remote address was
+  /// mis-resolved at the moment those messages first arrived (the exact
+  /// defect class `E04-B21`/`E04-B22` fixed for NEW accept events going
+  /// forward; see those tasks for the full mechanism). Those code fixes
+  /// cannot retroactively repair data that was already written under the
+  /// wrong id before they existed -- confirmed live, 2026-09-14: a real
+  /// conversation kept accumulating new incoming messages from a genuinely
+  /// trusted peer under an id that turned out to be THIS DEVICE'S OWN
+  /// Bluetooth address, permanently undialable for a reply (Android refuses
+  /// a connection to a device's own address).
+  ///
+  /// This device has no reliable, permission-free way to ask "is this id
+  /// literally my own address" (`BluetoothAdapter.getAddress()` returns an
+  /// OS-hardened placeholder for an unprivileged app -- E04-B21's own round-1
+  /// review finding). It does NOT need one: an orphaned conversation's
+  /// received messages carry a `senderDeviceId` claim, and a `relationships`
+  /// row's own `remoteSelfDeviceId` (learned via `IdentityAnnounceService`,
+  /// E04-B12) may already record that same claimed identity for an existing,
+  /// independently-trusted peer -- so a conversation with no relationship row
+  /// of its own, whose received messages' `senderDeviceId` matches an
+  /// existing `trusted`/`allowed` relationship's `remoteSelfDeviceId`, is
+  /// migrated there.
+  ///
+  /// SECURITY NOTE (review round 1, F2/F3, 2026-09-14): `senderDeviceId` is
+  /// NOT itself a verified cryptographic identity here -- it is
+  /// `RelayPacketFrame.source`, an unauthenticated claim carried in the
+  /// frame header (`_onDataReceived` -> `receiveMessage.call(frame.source,
+  /// ...)` below), and `remoteSelfDeviceId` is likewise unauthenticated,
+  /// peer-asserted, and freely rewritable by any device in range
+  /// (`IdentityAnnounceService`, E04-B12's own documented precondition). This
+  /// function therefore performs the exact reverse lookup (claimed identity
+  /// -> relationship row) that E04-B12's review flagged as unsafe in
+  /// general -- it is deliberately narrowed to be safe here by requiring the
+  /// TARGET relationship to already be `trusted`/`allowed` (mirroring
+  /// `_seedKnownDevices`'s own gate below): the worst a spoofed match can do
+  /// is misfile an orphan's messages into an ALREADY-trusted conversation,
+  /// never grant trust to, or enable dialing, an `unknown`/`blocked` device.
+  /// A round-1 review probe confirmed the pre-fix version (matching against
+  /// ANY relationship state) let an orphan's messages migrate into a
+  /// `blocked` or `unknown` peer's conversation -- closed by the state
+  /// filter below.
+  ///
+  /// Deliberately conservative, mirroring `_reconcileStaleRelationship`'s
+  /// own posture: only migrates when EXACTLY ONE `trusted`/`allowed`,
+  /// identity-announced relationship's `remoteSelfDeviceId` matches (an
+  /// orphaned conversation whose received messages disagree on sender
+  /// identity, or match zero or more than one such relationship, is left
+  /// alone rather than guessed at -- this never invents a new trust
+  /// decision, only ever corrects the KEY a message is filed under for a
+  /// peer already independently trusted elsewhere). Never touches a
+  /// conversation that already has its own relationship row (an ordinary,
+  /// correctly-resolved conversation) -- ANY row, of ANY state, with ANY
+  /// (including null) `remoteSelfDeviceId`, per the F5 fix below: whether a
+  /// conversation counts as "orphaned" is a completely different question
+  /// from whether a relationship is an eligible migration TARGET, and
+  /// conflating the two sets (an earlier revision reused the same,
+  /// state-filtered list for both) let a `blocked`/`unknown` relationship's
+  /// OWN conversation, or a `trusted`/`allowed` one that has simply never
+  /// announced an identity yet (the default state of every relationship
+  /// until `IdentityAnnounceService` runs at least once), get wrongly
+  /// treated as orphaned and merged into an unrelated trusted contact's
+  /// thread by a spoofed `senderDeviceId` claim -- a review round-2 finding
+  /// (F5), independently falsified by the reviewer and fixed same round.
+  /// Also never touches a group conversation (`groups.id` is a distinct id
+  /// space from a Bluetooth address/relationship `device_id` and is
+  /// excluded explicitly below).
+  ///
+  /// KNOWN LIMITATION, disclosed (review F4): this pass runs once per
+  /// `start()` call, not per-message -- a message written to an orphaned
+  /// conversation_id AFTER this pass has already completed stays split
+  /// until the next app launch/`start()` call. Self-heals on next launch;
+  /// not fixed here (would require running this per-message, a materially
+  /// different design left for a follow-up if it proves to matter live).
+  Future<void> _reconcileOrphanedMessagesByIdentity() async {
+    final db = _stack.db;
+    // Every relationship row, regardless of state or `remoteSelfDeviceId` --
+    // used ONLY to decide whether a conversation is "orphaned" (has NO
+    // relationship row of its own). Review round-2 finding F5: narrowing
+    // THIS set to trusted/allowed-with-an-identity (as an earlier revision
+    // did, reusing the migration-TARGET candidate list for both purposes)
+    // made a conversation with a `blocked`/`unknown` relationship, or a
+    // `trusted`/`allowed` one that has simply never announced an identity
+    // yet (the default state of every relationship until `IdentityAnnounceService`
+    // runs at least once, per `relationships_table.dart`), look "orphaned"
+    // even though it already has its own row -- letting an attacker's
+    // `senderDeviceId` claim (unauthenticated, see the Security note above)
+    // redirect that conversation's messages into a DIFFERENT, unrelated
+    // trusted contact's thread. The orphan test and the migration-target
+    // test are two different questions and must use two different sets.
+    final allRelationships = await db.select(db.relationships).get();
+    if (!_started) return;
+
+    // The migration TARGET candidates: only a relationship this device
+    // already independently trusts, that has actually announced an
+    // identity -- see this function's own doc comment above for why this
+    // narrowing (not the orphan test above) is where the state filter
+    // belongs.
+    final targetRelationships = allRelationships
+        .where(
+          (r) =>
+              r.remoteSelfDeviceId != null &&
+              (r.state == 'trusted' || r.state == 'allowed'),
+        )
+        .toList();
+    if (targetRelationships.isEmpty) return;
+
+    final knownConversationIds = <String>{
+      for (final r in allRelationships) r.deviceId,
+    };
+    final groupIds = (await db.select(db.groups).get())
+        .map((g) => g.id)
+        .toSet();
+    if (!_started) return;
+
+    final distinctConversationRows = await db
+        .customSelect(
+          'SELECT DISTINCT conversation_id FROM messages',
+        )
+        .get();
+    if (!_started) return;
+
+    for (final row in distinctConversationRows) {
+      final conversationId = row.read<String>('conversation_id');
+      if (knownConversationIds.contains(conversationId)) continue;
+      if (groupIds.contains(conversationId)) continue;
+
+      final receivedSenderIds = await (db.select(db.messages)
+            ..where(
+              (t) =>
+                  t.conversationId.equals(conversationId) &
+                  t.senderDeviceId.equals(_stack.selfDeviceId).not(),
+            ))
+          .map((m) => m.senderDeviceId)
+          .get();
+      if (!_started) return;
+      final distinctSenderIds = receivedSenderIds.toSet();
+      if (distinctSenderIds.length != 1) continue; // none, or ambiguous.
+
+      final senderId = distinctSenderIds.single;
+      final matches = targetRelationships
+          .where((r) => r.remoteSelfDeviceId == senderId)
+          .toList();
+      if (matches.length != 1) continue; // no known peer, or ambiguous.
+
+      final correctConversationId = matches.single.deviceId;
+      await (db.update(db.messages)
+            ..where((t) => t.conversationId.equals(conversationId)))
+          .write(MessagesCompanion(conversationId: Value(correctConversationId)));
+      if (!_started) return;
     }
   }
 
