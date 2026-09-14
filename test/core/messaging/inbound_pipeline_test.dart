@@ -929,4 +929,281 @@ void main() {
       },
     );
   });
+
+  group('E04-B24 — _reconcileOrphanedMessagesByIdentity', () {
+    Future<void> insertMessage(
+      MessagingStack stack, {
+      required String id,
+      required String conversationId,
+      required String senderDeviceId,
+    }) {
+      return stack.db.into(stack.db.messages).insert(
+            MessagesCompanion.insert(
+              id: id,
+              conversationId: conversationId,
+              senderDeviceId: senderDeviceId,
+              sequenceNumber: 0,
+              ciphertext: Uint8List.fromList([1, 2, 3]),
+              createdAt: DateTime.now().millisecondsSinceEpoch,
+              deliveryState: 'accepted',
+            ),
+          );
+    }
+
+    test(
+      'test_E04_B24_orphaned_conversation_migrates_to_the_known_peer_it_matches',
+      () async {
+        // The exact real-world shape found live, 2026-09-14: a peer this
+        // device already trusts under its REAL address ('real-address')
+        // also has messages sitting under a DIFFERENT, orphaned id
+        // ('orphaned-address', no relationship row of its own at all) --
+        // e.g. from a since-fixed accept-path mis-resolution. Both
+        // messages' senderDeviceId carry the SAME cryptographic identity,
+        // which is also this peer's already-known `remoteSelfDeviceId`.
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'real-address',
+                state: RelationshipState.allowed.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('peer-identity-hash'),
+              ),
+            );
+        await insertMessage(
+          stack,
+          id: 'm1',
+          conversationId: 'orphaned-address',
+          senderDeviceId: 'peer-identity-hash',
+        );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+        await _settle();
+
+        final row = await (stack.db.select(stack.db.messages)
+              ..where((t) => t.id.equals('m1')))
+            .getSingle();
+        expect(
+          row.conversationId,
+          'real-address',
+          reason: 'a message whose sender is already a known peer under a '
+              'DIFFERENT id must migrate to that peer\'s real conversation',
+        );
+      },
+    );
+
+    test(
+      'test_E04_B24_does_NOT_migrate_when_the_orphan_already_has_a_relationship',
+      () async {
+        // An ordinary, correctly-resolved conversation (has its own
+        // relationship row) must never be touched, even if some other
+        // known relationship happens to share a sender id (shouldn't be
+        // possible in practice, but the guard is the relationship-row
+        // check itself, not identity uniqueness).
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'not-orphaned-address',
+                state: RelationshipState.allowed.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('peer-identity-hash'),
+              ),
+            );
+        await insertMessage(
+          stack,
+          id: 'm1',
+          conversationId: 'not-orphaned-address',
+          senderDeviceId: 'peer-identity-hash',
+        );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+        await _settle();
+
+        final row = await (stack.db.select(stack.db.messages)
+              ..where((t) => t.id.equals('m1')))
+            .getSingle();
+        expect(row.conversationId, 'not-orphaned-address');
+      },
+    );
+
+    test(
+      'test_E04_B24_does_NOT_migrate_when_no_known_relationship_matches',
+      () async {
+        // A genuinely new/unknown sender's orphaned messages must be left
+        // alone -- this is not the reconciliation's job to invent a new
+        // relationship, only to correct the key for an ALREADY-trusted one.
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await insertMessage(
+          stack,
+          id: 'm1',
+          conversationId: 'orphaned-address',
+          senderDeviceId: 'nobody-we-know',
+        );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+        await _settle();
+
+        final row = await (stack.db.select(stack.db.messages)
+              ..where((t) => t.id.equals('m1')))
+            .getSingle();
+        expect(row.conversationId, 'orphaned-address');
+      },
+    );
+
+    test(
+      'test_E04_B24_does_NOT_migrate_on_ambiguous_sender_identity',
+      () async {
+        // Two DIFFERENT senders' messages both sitting under the same
+        // orphaned id -- can't safely say which one it "really" belongs
+        // to, so leave it alone rather than guess.
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'real-address-a',
+                state: RelationshipState.allowed.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('identity-a'),
+              ),
+            );
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'real-address-b',
+                state: RelationshipState.allowed.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('identity-b'),
+              ),
+            );
+        await insertMessage(
+          stack,
+          id: 'm1',
+          conversationId: 'orphaned-address',
+          senderDeviceId: 'identity-a',
+        );
+        await insertMessage(
+          stack,
+          id: 'm2',
+          conversationId: 'orphaned-address',
+          senderDeviceId: 'identity-b',
+        );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+        await _settle();
+
+        final rows = await (stack.db.select(stack.db.messages)
+              ..where((t) => t.conversationId.equals('orphaned-address')))
+            .get();
+        expect(rows, hasLength(2), reason: 'ambiguous sender -> left alone');
+      },
+    );
+
+    test(
+      'test_E04_B24_does_NOT_migrate_a_group_conversation_id',
+      () async {
+        // A group's own id lives in a completely different id space
+        // (`groups.id`, not a Bluetooth address/relationship device_id) --
+        // must never be treated as an orphaned 1:1 conversation, even if
+        // (implausibly) its id string happened to equal some peer's
+        // identity hash.
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await stack.db.into(stack.db.groups).insertOnConflictUpdate(
+              GroupsCompanion.insert(
+                id: 'a-group-id',
+                name: 'Test Group',
+                createdAt: DateTime.now().millisecondsSinceEpoch,
+                createdByDeviceId: 'self-device',
+              ),
+            );
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'real-address',
+                state: RelationshipState.allowed.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('peer-identity-hash'),
+              ),
+            );
+        await insertMessage(
+          stack,
+          id: 'm1',
+          conversationId: 'a-group-id',
+          senderDeviceId: 'peer-identity-hash',
+        );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+        await _settle();
+
+        final row = await (stack.db.select(stack.db.messages)
+              ..where((t) => t.id.equals('m1')))
+            .getSingle();
+        expect(row.conversationId, 'a-group-id');
+      },
+    );
+
+    test(
+      'test_E04_B24_never_treats_this_devices_own_sent_messages_as_the_signal',
+      () async {
+        // A message THIS device sent (senderDeviceId == its own
+        // selfDeviceId) must never be used as the reconciliation signal --
+        // it says nothing about who the conversation's remote peer is.
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'real-address',
+                state: RelationshipState.allowed.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('self-device'),
+              ),
+            );
+        await insertMessage(
+          stack,
+          id: 'm1',
+          conversationId: 'orphaned-address',
+          senderDeviceId: 'self-device', // this device's OWN id.
+        );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+        await _settle();
+
+        final row = await (stack.db.select(stack.db.messages)
+              ..where((t) => t.id.equals('m1')))
+            .getSingle();
+        expect(
+          row.conversationId,
+          'orphaned-address',
+          reason: 'a self-sent message must never drive reconciliation, '
+              'even if some relationship happens to share this device\'s '
+              'own id as its remoteSelfDeviceId (a malformed/adversarial '
+              'row, not a real case, but must still fail closed)',
+        );
+      },
+    );
+  });
 }

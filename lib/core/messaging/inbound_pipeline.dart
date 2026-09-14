@@ -508,6 +508,7 @@ class InboundPipeline {
     _discoverySubscription =
         _stack.transport.discoveredDevices.listen(_onDeviceDiscovered);
     unawaited(_seedKnownDevices());
+    unawaited(_reconcileOrphanedMessagesByIdentity());
   }
 
   /// E04-B07: [_onDeviceDiscovered] alone only ever learns about a device
@@ -557,6 +558,100 @@ class InboundPipeline {
           type: TransportType.bluetooth,
         ),
       );
+    }
+  }
+
+  /// E04-B24: a conversation can end up permanently "orphaned" -- messages
+  /// stored under a `conversation_id` that has NO `relationships` row of its
+  /// own at all (not merely a stale one `_reconcileStaleRelationship` above
+  /// already handles) -- when an ACCEPTED connection's remote address was
+  /// mis-resolved at the moment those messages first arrived (the exact
+  /// defect class `E04-B21`/`E04-B22` fixed for NEW accept events going
+  /// forward; see those tasks for the full mechanism). Those code fixes
+  /// cannot retroactively repair data that was already written under the
+  /// wrong id before they existed -- confirmed live, 2026-09-14: a real
+  /// conversation kept accumulating new incoming messages from a genuinely
+  /// trusted peer under an id that turned out to be THIS DEVICE'S OWN
+  /// Bluetooth address, permanently undialable for a reply (Android refuses
+  /// a connection to a device's own address).
+  ///
+  /// This device has no reliable, permission-free way to ask "is this id
+  /// literally my own address" (`BluetoothAdapter.getAddress()` returns an
+  /// OS-hardened placeholder for an unprivileged app -- E04-B21's own round-1
+  /// review finding). It does NOT need one: every message this device has
+  /// ever RECEIVED already carries the sender's own cryptographic identity
+  /// (`senderDeviceId`, populated from the Signal Protocol session, never
+  /// from the transport address) -- and a `relationships` row's own
+  /// `remoteSelfDeviceId` (learned via `IdentityAnnounceService`, E04-B12)
+  /// already records that same identity for whichever conversation is
+  /// CORRECTLY keyed for that peer. So: a conversation with no relationship
+  /// row of its own, whose received messages' `senderDeviceId` matches an
+  /// EXISTING relationship's `remoteSelfDeviceId`, is provably the same
+  /// peer's traffic filed under the wrong id -- migrate it there.
+  ///
+  /// Deliberately conservative, mirroring `_reconcileStaleRelationship`'s
+  /// own posture: only migrates when EXACTLY ONE existing relationship's
+  /// `remoteSelfDeviceId` matches (an orphaned conversation whose received
+  /// messages disagree on sender identity, or match zero or more than one
+  /// known relationship, is left alone rather than guessed at -- this never
+  /// invents a new trust decision, only ever corrects the KEY a message is
+  /// filed under for a peer already independently trusted elsewhere). Never
+  /// touches a conversation that already has its own relationship row (an
+  /// ordinary, correctly-resolved conversation), and never touches a group
+  /// conversation (`groups.id` is a distinct id space from a Bluetooth
+  /// address/relationship `device_id` and is excluded explicitly below).
+  Future<void> _reconcileOrphanedMessagesByIdentity() async {
+    final db = _stack.db;
+    final relationships = await (db.select(db.relationships)
+          ..where((t) => t.remoteSelfDeviceId.isNotNull()))
+        .get();
+    // Review round-2 precedent (`_reconcileStaleRelationship`): re-check
+    // after every `await` that this pipeline hasn't been stopped in the
+    // meantime -- this is fire-and-forget from `start()`, same as
+    // `_seedKnownDevices`.
+    if (!_started || relationships.isEmpty) return;
+
+    final knownConversationIds = <String>{
+      for (final r in relationships) r.deviceId,
+    };
+    final groupIds = (await db.select(db.groups).get())
+        .map((g) => g.id)
+        .toSet();
+
+    final distinctConversationRows = await db
+        .customSelect(
+          'SELECT DISTINCT conversation_id FROM messages',
+        )
+        .get();
+    if (!_started) return;
+
+    for (final row in distinctConversationRows) {
+      final conversationId = row.read<String>('conversation_id');
+      if (knownConversationIds.contains(conversationId)) continue;
+      if (groupIds.contains(conversationId)) continue;
+
+      final receivedSenderIds = await (db.select(db.messages)
+            ..where(
+              (t) =>
+                  t.conversationId.equals(conversationId) &
+                  t.senderDeviceId.equals(_stack.selfDeviceId).not(),
+            ))
+          .map((m) => m.senderDeviceId)
+          .get();
+      if (!_started) return;
+      final distinctSenderIds = receivedSenderIds.toSet();
+      if (distinctSenderIds.length != 1) continue; // none, or ambiguous.
+
+      final senderId = distinctSenderIds.single;
+      final matches = relationships
+          .where((r) => r.remoteSelfDeviceId == senderId)
+          .toList();
+      if (matches.length != 1) continue; // no known peer, or ambiguous.
+
+      final correctConversationId = matches.single.deviceId;
+      await (db.update(db.messages)
+            ..where((t) => t.conversationId.equals(conversationId)))
+          .write(MessagesCompanion(conversationId: Value(correctConversationId)));
     }
   }
 
