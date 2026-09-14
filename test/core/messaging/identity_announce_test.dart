@@ -28,6 +28,7 @@ import 'package:nexora/core/messaging/inbound_pipeline.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/messaging/relay_packet_frame.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/routing_engine/route_cost_calculator.dart';
 import 'package:nexora/core/transport/generated/transport_api.g.dart';
 import 'package:nexora/core/transport/transport_service.dart';
 
@@ -405,4 +406,69 @@ void main() {
       expect(await receiver.db.select(receiver.db.relayPackets).get(), isEmpty);
     },
   );
+
+  group('E04-B16 — announce feeds routing aliases only for trusted peers', () {
+    RelayPacketFrame announceFrame(String announcedId) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      return RelayPacketFrame(
+        payloadType: PayloadType.control,
+        packetId: 'pkt-b16-$announcedId',
+        destination: 'LINK-B16',
+        source: announcedId,
+        priority: 0,
+        createdAtMs: now,
+        expiresAtMs: now + 30000,
+        payload: Uint8List.fromList(<int>[
+          kControlKindIdentityAnnounce,
+          ...announcedId.codeUnits,
+        ]),
+      );
+    }
+
+    Future<MessagingStack> stackWithRelationship(String state) async {
+      final stack = await newStack('self-b16-$state', nextSuffix());
+      await stack.db.into(stack.db.relationships).insert(
+            RelationshipsCompanion.insert(
+              deviceId: 'LINK-B16',
+              state: state,
+              updatedAt: DateTime.now(),
+            ),
+          );
+      stack.routingEngine.recordLinkMeasurement(
+        'LINK-B16',
+        latencyMs: 10,
+        lossRate: 0.0,
+        batteryDrain: 0.1,
+      );
+      return stack;
+    }
+
+    test('test_E04_B16_trusted_peer_announce_creates_a_routing_alias',
+        () async {
+      final stack = await stackWithRelationship('trusted');
+      addTearDown(stack.dispose);
+
+      await stack.identityAnnounce
+          .handleAnnounce('LINK-B16', announceFrame('peer-identity-b16'));
+
+      final route = stack.routingEngine
+          .computeRoute('peer-identity-b16', TrafficProfile.interactive);
+      expect(route?.hops, ['LINK-B16']);
+    });
+
+    test('test_E04_B16_unknown_peer_announce_creates_no_routing_alias',
+        () async {
+      final stack = await stackWithRelationship('unknown');
+      addTearDown(stack.dispose);
+
+      await stack.identityAnnounce
+          .handleAnnounce('LINK-B16', announceFrame('peer-identity-b16'));
+
+      expect(
+        stack.routingEngine
+            .computeRoute('peer-identity-b16', TrafficProfile.interactive),
+        isNull,
+      );
+    });
+  });
 }

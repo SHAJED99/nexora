@@ -260,6 +260,10 @@ class DashboardController extends GetxController {
   /// has arrived yet (EARS-COMM-26). Never defaulted.
   int? _latestLatencyMs;
 
+  /// E04-B27: which device produced [_latestLatencyMs], so the reading is
+  /// cleared when that peer is lost instead of lingering as a stale value.
+  String? _latestLatencyDeviceId;
+
   /// Decrypted-preview cache, keyed by message id — same reasoning
   /// `ConversationsController._previewCache` already documents (messages are
   /// immutable once stored).
@@ -314,10 +318,22 @@ class DashboardController extends GetxController {
     });
     _lostSub = _links.transport.lostDevices.listen((deviceId) {
       _knownPeerIds.remove(deviceId);
+      // E04-B27: a measurement from a peer that is gone is no longer a real
+      // reading (EARS-COMM-26) -- it was left on screen next to "No peers
+      // nearby" on real hardware.
+      if (_latestLatencyDeviceId == deviceId) {
+        _latestLatencyMs = null;
+        _latestLatencyDeviceId = null;
+      }
       _recomputeNetworkStatus();
     });
     _linkQualitySub = _links.transport.linkQuality.listen((quality) {
+      // E04-B27: a device reporting a live link measurement is by definition
+      // a nearby peer, even if it arrived via an accepted/bonded connection
+      // rather than this process's discovery scan.
+      _knownPeerIds.add(quality.deviceId);
       _latestLatencyMs = quality.latencyMs;
+      _latestLatencyDeviceId = quality.deviceId;
       _recomputeNetworkStatus();
     });
 

@@ -247,6 +247,18 @@ class IdentityAnnounceService {
           updatedAt: Value(DateTime.now()),
         ),
       );
+      // E04-B16: let routing resolve this identity to this link, but ONLY
+      // for a peer this device already trusts/allows. A first-contact or
+      // blocked peer's announce never creates a routing alias (see
+      // `RoutingEngine.recordIdentityAlias` for the full scoping).
+      if (existing.state == 'trusted' || existing.state == 'allowed') {
+        _stack.routingEngine.recordIdentityAlias(
+          linkDeviceId,
+          announcedSelfDeviceId,
+        );
+      } else {
+        _stack.routingEngine.forgetIdentityAlias(linkDeviceId);
+      }
     }
   }
 }

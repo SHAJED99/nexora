@@ -265,6 +265,11 @@ class InboundCounters {
   /// typed `CryptoDecryptFailure` (E03-B03).
   int undecryptable = 0;
 
+  /// E04-B27: a fire-and-forget startup task (`_seedKnownDevices` or
+  /// `_reconcileOrphanedMessagesByIdentity`) threw. Counted rather than left
+  /// as an unhandled async error; both self-heal on the next `start()`.
+  int startupTaskFailed = 0;
+
   /// `ReceiveMessageUseCase.call` returned `null` — FR-MSG-003's documented
   /// duplicate signal, not an error.
   int duplicate = 0;
@@ -507,8 +512,19 @@ class InboundPipeline {
     _started = true;
     _discoverySubscription =
         _stack.transport.discoveredDevices.listen(_onDeviceDiscovered);
-    unawaited(_seedKnownDevices());
-    unawaited(_reconcileOrphanedMessagesByIdentity());
+    // E04-B27: both startup tasks stay fire-and-forget (start() is
+    // synchronous by contract), but a failure is counted instead of vanishing
+    // as an unhandled async error. Both self-heal on the next start().
+    unawaited(
+      _seedKnownDevices().catchError((Object _) {
+        counters.startupTaskFailed++;
+      }),
+    );
+    unawaited(
+      _reconcileOrphanedMessagesByIdentity().catchError((Object _) {
+        counters.startupTaskFailed++;
+      }),
+    );
   }
 
   /// E04-B07: [_onDeviceDiscovered] alone only ever learns about a device
@@ -550,6 +566,16 @@ class InboundPipeline {
       if (relationship.state != RelationshipState.trusted &&
           relationship.state != RelationshipState.allowed) {
         continue;
+      }
+      // E04-B16: re-seed routing's identity aliases after a restart, for the
+      // same trusted/allowed peers only (`IdentityAnnounceService.
+      // handleAnnounce` keeps them current while the app runs).
+      final announced = relationship.remoteSelfDeviceId;
+      if (announced != null) {
+        _stack.routingEngine.recordIdentityAlias(
+          relationship.deviceId,
+          announced,
+        );
       }
       _onDeviceDiscovered(
         TransportDevice(
@@ -1096,7 +1122,7 @@ class InboundPipeline {
         counters.duplicate++;
       } else {
         counters.delivered++;
-        _deliveredController.add(message);
+        if (!_deliveredController.isClosed) _deliveredController.add(message);
       }
     } on CryptoDecryptFailure catch (failure) {
       // E03-B03's catch. Judgment call, logged in the task's Run log: the
@@ -1111,7 +1137,12 @@ class InboundPipeline {
       // typed failure (invalidMessage/noSession/untrustedIdentity/unknown)
       // is metadata-only (never plaintext/key material) and drops the
       // packet without taking the pipeline down.
-      if (failure.reason == CryptoDecryptFailureReason.duplicateMessage) {
+      // E04-B27: a re-delivered PreKeySignalMessage fails one step earlier,
+      // at the already-consumed one-time prekey, but it is the same
+      // duplicate-packet outcome and is counted as one.
+      if (failure.reason == CryptoDecryptFailureReason.duplicateMessage ||
+          failure.reason ==
+              CryptoDecryptFailureReason.consumedOneTimePreKey) {
         counters.duplicate++;
       } else {
         counters.undecryptable++;
@@ -1249,6 +1280,12 @@ class InboundPipeline {
               sequenceNumber: envelope.sequenceNumber,
               ciphertext: senderKeyMessageBytes,
               createdAt: createdAt,
+              // E04-B20: persist the body this device ALREADY decrypted once
+              // (the caller's `decryptFromGroup`). `GroupCipher.decrypt`
+              // discards a message key once used, so re-deriving this text
+              // later from `senderKeyMessageBytes` fails -- same defect class
+              // E04-B18 fixed for 1:1 `plaintext_payload`.
+              plaintextPayload: Value(envelope.body),
               // Received and decrypted successfully -- the group-message
               // equivalent of `ReceiveMessageUseCase`'s own `Accepted`
               // (task file §2: same `delivery_state` machine, no
@@ -1272,7 +1309,7 @@ class InboundPipeline {
       counters.duplicate++;
     } else {
       counters.delivered++;
-      _deliveredController.add(message);
+      if (!_deliveredController.isClosed) _deliveredController.add(message);
     }
   }
 }

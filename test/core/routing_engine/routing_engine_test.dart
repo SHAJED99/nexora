@@ -555,4 +555,90 @@ void main() {
       expect(engine.activeRouteFor('dest'), isNull);
     });
   });
+
+  group('E04-B16 — identity aliases', () {
+    RoutingEngine engineWithLinkTo(String selfId, String linkId) {
+      final engine = RoutingEngine(selfId: selfId);
+      engine.recordLinkMeasurement(
+        linkId,
+        latencyMs: 20,
+        lossRate: 0.0,
+        batteryDrain: 0.1,
+      );
+      return engine;
+    }
+
+    test('test_E04_B16_identity_destination_routes_over_its_aliased_link', () {
+      final engine = engineWithLinkTo('B', 'C-link');
+      engine.recordIdentityAlias('C-link', 'C-identity');
+
+      final route =
+          engine.computeRoute('C-identity', TrafficProfile.interactive);
+
+      expect(route, isNotNull);
+      expect(route!.destinationId, 'C-identity');
+      expect(route.hops, ['C-link']);
+    });
+
+    test('test_E04_B16_no_alias_means_no_route', () {
+      final engine = engineWithLinkTo('B', 'C-link');
+      expect(
+        engine.computeRoute('C-identity', TrafficProfile.interactive),
+        isNull,
+      );
+    });
+
+    test('test_E04_B16_identity_claimed_by_two_links_is_ambiguous', () {
+      final engine = engineWithLinkTo('B', 'C-link');
+      engine.recordLinkMeasurement(
+        'D-link',
+        latencyMs: 20,
+        lossRate: 0.0,
+        batteryDrain: 0.1,
+      );
+      engine.recordIdentityAlias('C-link', 'C-identity');
+      engine.recordIdentityAlias('D-link', 'C-identity');
+
+      expect(
+        engine.computeRoute('C-identity', TrafficProfile.interactive),
+        isNull,
+      );
+    });
+
+    test('test_E04_B16_reannounce_replaces_and_forget_removes_the_alias', () {
+      final engine = engineWithLinkTo('B', 'C-link');
+      engine.recordIdentityAlias('C-link', 'old-identity');
+      engine.recordIdentityAlias('C-link', 'new-identity');
+
+      expect(
+        engine.computeRoute('old-identity', TrafficProfile.interactive),
+        isNull,
+      );
+      expect(
+        engine.computeRoute('new-identity', TrafficProfile.interactive),
+        isNotNull,
+      );
+
+      engine.forgetIdentityAlias('C-link');
+      expect(
+        engine.computeRoute('new-identity', TrafficProfile.interactive),
+        isNull,
+      );
+    });
+
+    test('test_E04_B16_route_failure_on_an_identity_destination_recovers',
+        () {
+      final engine = engineWithLinkTo('B', 'C-link');
+      engine.recordIdentityAlias('C-link', 'C-identity');
+      final route =
+          engine.computeRoute('C-identity', TrafficProfile.interactive)!;
+      engine.setActiveRoute(route);
+
+      // The only link fails: no alternative, and no crash.
+      expect(
+        engine.onRouteFailure('C-identity', TrafficProfile.interactive),
+        isNull,
+      );
+    });
+  });
 }

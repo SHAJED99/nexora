@@ -60,8 +60,18 @@ enum CryptoDecryptFailureReason {
   /// from the library.
   duplicateMessage,
 
+  /// E04-B27: a `PreKeySignalMessage` names a one-time prekey this device no
+  /// longer holds (`InvalidKeyIdException` from
+  /// `DriftSignalProtocolStore.loadPreKey`). Each one-time prekey id is issued
+  /// once (E03-B01/B02) and deleted when the first PreKey message using it is
+  /// processed, so in practice this is the SAME session-establishing message
+  /// re-delivered over another mesh path. A missing SIGNED prekey is a
+  /// different fault and stays [unknown].
+  consumedOneTimePreKey,
+
   /// Every other failure this seam can produce (e.g. the library's
-  /// `InvalidKeyException`/`InvalidKeyIdException`/`LegacyMessageException`,
+  /// `InvalidKeyException`/`LegacyMessageException`, a missing signed
+  /// prekey's `InvalidKeyIdException`,
   /// or anything not recognised at all). Never swallowed — [cause] always
   /// carries the original so a caller that needs more detail than the
   /// closed reason set still has it.
@@ -134,6 +144,18 @@ CryptoDecryptFailure mapSignalException(Object error) {
       return CryptoDecryptFailure(
         CryptoDecryptFailureReason.untrustedIdentity,
         'remote identity key does not match the previously trusted one',
+        cause: error,
+      );
+    // E04-B27: only the ONE-TIME prekey variant. The message text is written
+    // by this codebase's own `DriftSignalProtocolStore.loadPreKey`
+    // ("No such one-time prekey: <id>"); `loadSignedPreKey` throws the same
+    // type with "No such signed prekey", which is a real fault and falls
+    // through to `unknown`.
+    case 'InvalidKeyIdException'
+        when error.toString().contains('one-time prekey'):
+      return CryptoDecryptFailure(
+        CryptoDecryptFailureReason.consumedOneTimePreKey,
+        'one-time prekey already consumed (a re-delivered session-establishing message)',
         cause: error,
       );
     default:

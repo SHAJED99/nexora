@@ -545,6 +545,51 @@ void main() {
     });
 
     testWidgets(
+        'test_E04_B20_group_preview_uses_persisted_body_without_a_second_decrypt',
+        (tester) async {
+      // E04-B20: the stored ciphertext is deliberately unusable, so the
+      // preview can only be right if it comes from `plaintextPayload`.
+      // Reverting the controller change makes `decryptFromGroup` throw on
+      // these bytes and the preview degrade to empty.
+      final groupId = await GroupRepository(stack.db).createGroup(
+        name: 'Persisted',
+        ownerDeviceId: 'device-a',
+        memberDeviceIds: ['self-device'],
+      );
+      await _insertMessage(
+        db,
+        id: 'm-b20',
+        conversationId: groupId,
+        senderDeviceId: 'device-a',
+        sequenceNumber: 0,
+        ciphertext: Uint8List.fromList(utf8.encode('not a sender key message')),
+        createdAt: 1000,
+      );
+      await (db.update(db.messages)..where((t) => t.id.equals('m-b20'))).write(
+        MessagesCompanion(
+          plaintextPayload: Value(
+            Uint8List.fromList(utf8.encode('persisted group body')),
+          ),
+        ),
+      );
+
+      final controller = ConversationsController(
+        repo: ConversationRepository(db, selfDeviceId: 'self-device'),
+        crypto: stack.cryptoService,
+        stack: stack,
+      );
+      Get.put<ConversationsController>(controller);
+
+      await tester.pumpWidget(
+        const GetMaterialApp(home: ConversationsView()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(controller.groups, hasLength(1));
+      expect(controller.groups.single.preview, 'persisted group body');
+    });
+
+    testWidgets(
         'test_own_outgoing_group_message_preview_degrades_gracefully',
         (tester) async {
       // A single device is never both the sender AND a receiver of its own
