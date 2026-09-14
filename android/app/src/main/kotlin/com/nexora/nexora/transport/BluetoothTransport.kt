@@ -199,14 +199,18 @@ class BluetoothTransport(
    * cancelled scan's partial result set must never be diffed, or peers the
    * truncated scan had not re-confirmed would be reported lost just because
    * the user connected to someone else. Set only when a scan was actually
-   * running at cancel time, so a finish broadcast is guaranteed to consume it. */
+   * running at cancel time, and cleared again if the cancel itself fails (no
+   * finish broadcast would come to consume it). Best-effort: see
+   * OQ-E04-B28-3 for the one remaining one-scan-cycle mismatch. */
   private val finishCausedByOwnCancel = AtomicBoolean(false)
 
   /** Every app-initiated discovery cancel goes through here (E04-B28). */
   private fun cancelDiscoveryQuietly(bt: BluetoothAdapter) {
     if (bt.isDiscovering) {
       finishCausedByOwnCancel.set(true)
-      bt.cancelDiscovery()
+      // Review round 2 nit: a failed cancel broadcasts nothing, so the flag
+      // must not stay set and swallow the next genuine scan's diff.
+      if (!bt.cancelDiscovery()) finishCausedByOwnCancel.set(false)
     }
   }
 
