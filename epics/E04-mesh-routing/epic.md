@@ -1,7 +1,7 @@
 ---
 id: E04
 title: Mesh Discovery, Relay & Dynamic Routing
-status: done
+status: in-progress  # 2026-09-15: reopened in bookkeeping only. E04-B10 (live bonding proof) is still in-progress, blocked on a human re-pairing the two test phones; live hardware verification is also pending for E04-T07, E04-B28 and E04-B29. All E04 code is merged into development.
 type: feature
 priority: { moscow: must, wsjf: 2.8 }
 depends_on: [E01, E03]
