@@ -1205,5 +1205,122 @@ void main() {
         );
       },
     );
+
+    test(
+      'test_E04_B24_does_NOT_migrate_into_a_blocked_or_unknown_relationship',
+      () async {
+        // Review round-1 finding (F1): the migration TARGET must itself be
+        // trusted/allowed. Without this filter, an orphan's messages could
+        // be merged into a blocked or never-accepted stranger's
+        // conversation, and a reply from there would then dial that
+        // untrusted device -- worse than the original orphan, not better.
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'blocked-peer',
+                state: RelationshipState.blocked.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('blocked-identity'),
+              ),
+            );
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'stranger-peer',
+                state: RelationshipState.unknown.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('stranger-identity'),
+              ),
+            );
+        await insertMessage(
+          stack,
+          id: 'm1',
+          conversationId: 'orphaned-blocked',
+          senderDeviceId: 'blocked-identity',
+        );
+        await insertMessage(
+          stack,
+          id: 'm2',
+          conversationId: 'orphaned-stranger',
+          senderDeviceId: 'stranger-identity',
+        );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+        await _settle();
+
+        final row1 = await (stack.db.select(stack.db.messages)
+              ..where((t) => t.id.equals('m1')))
+            .getSingle();
+        final row2 = await (stack.db.select(stack.db.messages)
+              ..where((t) => t.id.equals('m2')))
+            .getSingle();
+        expect(
+          row1.conversationId,
+          'orphaned-blocked',
+          reason: 'a blocked relationship must never become a migration '
+              'target, even with a matching identity',
+        );
+        expect(
+          row2.conversationId,
+          'orphaned-stranger',
+          reason: 'an unknown/never-accepted relationship must never '
+              'become a migration target either',
+        );
+      },
+    );
+
+    test(
+      'test_E04_B24_migrates_a_mix_of_self_sent_and_received_messages',
+      () async {
+        // The actual live shape: an orphaned conversation holds BOTH the
+        // user's own earlier (failed) reply attempts and the peer's
+        // incoming messages. Only the received message drives the
+        // decision, but every message in the conversation -- including
+        // the self-sent ones -- must migrate together.
+        final suffix = nextSuffix();
+        final stack = await newStack('self-device', suffix);
+        addTearDown(stack.dispose);
+
+        await stack.db.into(stack.db.relationships).insertOnConflictUpdate(
+              RelationshipsCompanion.insert(
+                deviceId: 'real-address',
+                state: RelationshipState.allowed.name,
+                updatedAt: DateTime.now(),
+                remoteSelfDeviceId: const Value('peer-identity-hash'),
+              ),
+            );
+        await insertMessage(
+          stack,
+          id: 'm1',
+          conversationId: 'orphaned-address',
+          senderDeviceId: 'peer-identity-hash',
+        );
+        await insertMessage(
+          stack,
+          id: 'm2',
+          conversationId: 'orphaned-address',
+          senderDeviceId: 'self-device',
+        );
+
+        final pipeline = InboundPipeline(stack: stack);
+        addTearDown(pipeline.stop);
+        pipeline.start();
+        await _settle();
+
+        final rows = await (stack.db.select(stack.db.messages)
+              ..where((t) => t.conversationId.equals('real-address')))
+            .get();
+        expect(
+          rows.map((r) => r.id).toSet(),
+          {'m1', 'm2'},
+          reason: 'the whole conversation migrates together, including '
+              'this device\'s own earlier sent messages',
+        );
+      },
+    );
   });
 }

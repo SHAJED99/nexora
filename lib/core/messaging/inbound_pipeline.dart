@@ -578,33 +578,64 @@ class InboundPipeline {
   /// This device has no reliable, permission-free way to ask "is this id
   /// literally my own address" (`BluetoothAdapter.getAddress()` returns an
   /// OS-hardened placeholder for an unprivileged app -- E04-B21's own round-1
-  /// review finding). It does NOT need one: every message this device has
-  /// ever RECEIVED already carries the sender's own cryptographic identity
-  /// (`senderDeviceId`, populated from the Signal Protocol session, never
-  /// from the transport address) -- and a `relationships` row's own
-  /// `remoteSelfDeviceId` (learned via `IdentityAnnounceService`, E04-B12)
-  /// already records that same identity for whichever conversation is
-  /// CORRECTLY keyed for that peer. So: a conversation with no relationship
-  /// row of its own, whose received messages' `senderDeviceId` matches an
-  /// EXISTING relationship's `remoteSelfDeviceId`, is provably the same
-  /// peer's traffic filed under the wrong id -- migrate it there.
+  /// review finding). It does NOT need one: an orphaned conversation's
+  /// received messages carry a `senderDeviceId` claim, and a `relationships`
+  /// row's own `remoteSelfDeviceId` (learned via `IdentityAnnounceService`,
+  /// E04-B12) may already record that same claimed identity for an existing,
+  /// independently-trusted peer -- so a conversation with no relationship row
+  /// of its own, whose received messages' `senderDeviceId` matches an
+  /// existing `trusted`/`allowed` relationship's `remoteSelfDeviceId`, is
+  /// migrated there.
+  ///
+  /// SECURITY NOTE (review round 1, F2/F3, 2026-09-14): `senderDeviceId` is
+  /// NOT itself a verified cryptographic identity here -- it is
+  /// `RelayPacketFrame.source`, an unauthenticated claim carried in the
+  /// frame header (`_onDataReceived` -> `receiveMessage.call(frame.source,
+  /// ...)` below), and `remoteSelfDeviceId` is likewise unauthenticated,
+  /// peer-asserted, and freely rewritable by any device in range
+  /// (`IdentityAnnounceService`, E04-B12's own documented precondition). This
+  /// function therefore performs the exact reverse lookup (claimed identity
+  /// -> relationship row) that E04-B12's review flagged as unsafe in
+  /// general -- it is deliberately narrowed to be safe here by requiring the
+  /// TARGET relationship to already be `trusted`/`allowed` (mirroring
+  /// `_seedKnownDevices`'s own gate below): the worst a spoofed match can do
+  /// is misfile an orphan's messages into an ALREADY-trusted conversation,
+  /// never grant trust to, or enable dialing, an `unknown`/`blocked` device.
+  /// A round-1 review probe confirmed the pre-fix version (matching against
+  /// ANY relationship state) let an orphan's messages migrate into a
+  /// `blocked` or `unknown` peer's conversation -- closed by the state
+  /// filter below.
   ///
   /// Deliberately conservative, mirroring `_reconcileStaleRelationship`'s
-  /// own posture: only migrates when EXACTLY ONE existing relationship's
-  /// `remoteSelfDeviceId` matches (an orphaned conversation whose received
-  /// messages disagree on sender identity, or match zero or more than one
-  /// known relationship, is left alone rather than guessed at -- this never
-  /// invents a new trust decision, only ever corrects the KEY a message is
-  /// filed under for a peer already independently trusted elsewhere). Never
-  /// touches a conversation that already has its own relationship row (an
-  /// ordinary, correctly-resolved conversation), and never touches a group
-  /// conversation (`groups.id` is a distinct id space from a Bluetooth
-  /// address/relationship `device_id` and is excluded explicitly below).
+  /// own posture: only migrates when EXACTLY ONE existing `trusted`/`allowed`
+  /// relationship's `remoteSelfDeviceId` matches (an orphaned conversation
+  /// whose received messages disagree on sender identity, or match zero or
+  /// more than one such relationship, is left alone rather than guessed at
+  /// -- this never invents a new trust decision, only ever corrects the KEY
+  /// a message is filed under for a peer already independently trusted
+  /// elsewhere). Never touches a conversation that already has its own
+  /// relationship row (an ordinary, correctly-resolved conversation), and
+  /// never touches a group conversation (`groups.id` is a distinct id space
+  /// from a Bluetooth address/relationship `device_id` and is excluded
+  /// explicitly below).
+  ///
+  /// KNOWN LIMITATION, disclosed (review F4): this pass runs once per
+  /// `start()` call, not per-message -- a message written to an orphaned
+  /// conversation_id AFTER this pass has already completed stays split
+  /// until the next app launch/`start()` call. Self-heals on next launch;
+  /// not fixed here (would require running this per-message, a materially
+  /// different design left for a follow-up if it proves to matter live).
   Future<void> _reconcileOrphanedMessagesByIdentity() async {
     final db = _stack.db;
-    final relationships = await (db.select(db.relationships)
-          ..where((t) => t.remoteSelfDeviceId.isNotNull()))
-        .get();
+    final relationships = (await (db.select(db.relationships)
+              ..where((t) => t.remoteSelfDeviceId.isNotNull()))
+            .get())
+        .where(
+          (r) =>
+              r.state == 'trusted' ||
+              r.state == 'allowed',
+        )
+        .toList();
     // Review round-2 precedent (`_reconcileStaleRelationship`): re-check
     // after every `await` that this pipeline hasn't been stopped in the
     // meantime -- this is fire-and-forget from `start()`, same as
@@ -617,6 +648,7 @@ class InboundPipeline {
     final groupIds = (await db.select(db.groups).get())
         .map((g) => g.id)
         .toSet();
+    if (!_started) return;
 
     final distinctConversationRows = await db
         .customSelect(
@@ -652,6 +684,7 @@ class InboundPipeline {
       await (db.update(db.messages)
             ..where((t) => t.conversationId.equals(conversationId)))
           .write(MessagesCompanion(conversationId: Value(correctConversationId)));
+      if (!_started) return;
     }
   }
 
