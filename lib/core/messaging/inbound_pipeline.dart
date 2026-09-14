@@ -1249,6 +1249,12 @@ class InboundPipeline {
               sequenceNumber: envelope.sequenceNumber,
               ciphertext: senderKeyMessageBytes,
               createdAt: createdAt,
+              // E04-B20: persist the body this device ALREADY decrypted once
+              // (the caller's `decryptFromGroup`). `GroupCipher.decrypt`
+              // discards a message key once used, so re-deriving this text
+              // later from `senderKeyMessageBytes` fails -- same defect class
+              // E04-B18 fixed for 1:1 `plaintext_payload`.
+              plaintextPayload: Value(envelope.body),
               // Received and decrypted successfully -- the group-message
               // equivalent of `ReceiveMessageUseCase`'s own `Accepted`
               // (task file §2: same `delivery_state` machine, no

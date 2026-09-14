@@ -507,14 +507,23 @@ class ConversationsController extends GetxController {
           limit: 1,
         );
         if (page.isNotEmpty && page.first.id == summary.lastMessageId) {
-          final plaintext = await _stack.groupCryptoService.decryptFromGroup(
-            groupId: summary.conversationId,
-            epoch: epoch,
-            senderDeviceId: summary.lastMessageSenderDeviceId,
-            bytes: page.first.ciphertext,
-          );
-          final envelope = GroupMessageEnvelope.deserialize(plaintext);
-          preview = utf8.decode(envelope.body);
+          final persistedBody = page.first.plaintextPayload;
+          if (persistedBody != null) {
+            // E04-B20: the body persisted at receive/send time -- never a
+            // second `decryptFromGroup` on a spent message key.
+            preview = utf8.decode(persistedBody);
+          } else {
+            // Pre-E04-B20 row: no persisted body, keep the old behavior.
+            final plaintext =
+                await _stack.groupCryptoService.decryptFromGroup(
+              groupId: summary.conversationId,
+              epoch: epoch,
+              senderDeviceId: summary.lastMessageSenderDeviceId,
+              bytes: page.first.ciphertext,
+            );
+            final envelope = GroupMessageEnvelope.deserialize(plaintext);
+            preview = utf8.decode(envelope.body);
+          }
         }
       }
     } catch (_) {
