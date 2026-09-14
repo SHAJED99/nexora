@@ -303,6 +303,16 @@ class BluetoothTransport(
    * open for as long as [serverSocket] is, and closed in [release]. */
   @Volatile private var discoverySocket: BluetoothServerSocket? = null
 
+  /** E04-T07 review round 2: serializes every compound read-check-write of the
+   * listener fields ([serverSocket], [acceptThread], [discoverySocket]) across
+   * the three threads that touch them: [ensureListening] (main), the dying
+   * [acceptLoop]'s cleanup (accept thread) and [release] (main). Without it a
+   * Bluetooth toggle could interleave the cleanup with a new
+   * [ensureListening], leaving a healthy SPP listener with a closed, nulled
+   * discovery socket that is never reopened. The blocking `accept()` itself
+   * never runs under this lock, and no path takes it twice. */
+  private val listenerLock = Any()
+
   /** Set when a call is deferred behind a runtime permission request;
    * invoked from `onRequestPermissionsResult` once granted. */
   private var pendingPermissionAction: (() -> Unit)? = null
@@ -347,6 +357,7 @@ class BluetoothTransport(
    * or messaging right now.
    */
   private fun ensureListening() {
+    synchronized(listenerLock) {
     if (acceptThread != null) return // already listening
     val bt = adapter ?: return
     if (!bt.isEnabled || !BluetoothPermissions.hasAll(activity)) return
@@ -380,6 +391,7 @@ class BluetoothTransport(
     val thread = Thread({ acceptLoop(socket) }, "nexora-bt-accept")
     acceptThread = thread
     thread.start()
+    }
   }
 
   /**
@@ -512,6 +524,7 @@ class BluetoothTransport(
       // `acceptThread` that no longer belongs to any live loop (review
       // finding, E04-B06 round 2). Only clear the fields if THIS thread
       // is still the one currently registered.
+      synchronized(listenerLock) {
       if (acceptThread === Thread.currentThread()) {
         serverSocket = null
         acceptThread = null
@@ -528,6 +541,7 @@ class BluetoothTransport(
           }
         }
         discoverySocket = null
+      }
       }
     }
   }
@@ -1077,6 +1091,7 @@ class BluetoothTransport(
     // is closed from another thread, which is what lets `acceptLoop`'s own
     // catch exit the loop and let this thread die, mirroring `disconnect()`'s
     // identical reasoning for a client-side read loop.
+    synchronized(listenerLock) {
     acceptThread?.interrupt()
     serverSocket?.let {
       try {
@@ -1095,6 +1110,7 @@ class BluetoothTransport(
       }
     }
     discoverySocket = null
+    }
     discoveryReceiver?.let {
       try {
         activity.unregisterReceiver(it)
