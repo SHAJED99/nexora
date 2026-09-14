@@ -454,6 +454,58 @@ void main() {
       ),
     );
   });
+
+  group('E04-B27 — mapSignalException for a missing prekey', () {
+    test('test_E04_B27_missing_one_time_prekey_maps_to_consumedOneTimePreKey',
+        () {
+      // The exact message `DriftSignalProtocolStore.loadPreKey` throws, and
+      // the exact live log line from real hardware.
+      final failure = mapSignalException(
+        InvalidKeyIdException('No such one-time prekey: 1'),
+      );
+      expect(
+        failure.reason,
+        CryptoDecryptFailureReason.consumedOneTimePreKey,
+      );
+    });
+
+    test('test_E04_B27_missing_signed_prekey_stays_unknown', () {
+      // A missing SIGNED prekey is a real fault, not a re-delivery.
+      final failure = mapSignalException(
+        InvalidKeyIdException('No such signed prekey: 1'),
+      );
+      expect(failure.reason, CryptoDecryptFailureReason.unknown);
+    });
+
+    test(
+        'test_E04_B27_real_redelivered_prekey_message_fails_as_consumedOneTimePreKey',
+        () async {
+      // Real crypto, no fakes: Bob decrypts Alice's first (PreKey) message,
+      // which consumes the one-time prekey; the same bytes delivered again
+      // must surface as the re-delivery reason, not `unknown`.
+      await alice.crypto.establishSession(bobAddress, await bob.bundle());
+      final first = await alice.crypto.encrypt(bobAddress, _plaintext('hi'));
+      expect(first, isA<PreKeySignalMessage>());
+
+      await bob.crypto.decrypt(aliceAddress, first);
+      final replay = PreKeySignalMessage(first.serialize());
+
+      await expectLater(
+        bob.crypto.decrypt(aliceAddress, replay),
+        throwsA(
+          isA<CryptoDecryptFailure>().having(
+            (f) => f.reason,
+            'reason',
+            anyOf(
+              CryptoDecryptFailureReason.consumedOneTimePreKey,
+              // libsignal may recognise the already-built session first.
+              CryptoDecryptFailureReason.duplicateMessage,
+            ),
+          ),
+        ),
+      );
+    });
+  });
 }
 
 bool _bytesContain(Uint8List haystack, Uint8List needle) {

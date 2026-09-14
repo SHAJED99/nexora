@@ -863,4 +863,75 @@ void main() {
 
     expect(controller.recent.single.preview, 'a persisted dashboard preview');
   });
+
+  group('E04-B27 — latency never outlives its peer', () {
+    void pushDeviceLost(String id) {
+      final eventMessage =
+          TransportEventsApi.pigeonChannelCodec.encodeMessage(<Object?>[id])!;
+      messenger.handlePlatformMessage(
+        'dev.flutter.pigeon.nexora.TransportEventsApi.onDeviceLost.$suffix',
+        eventMessage,
+        (ByteData? _) {},
+      );
+    }
+
+    test('test_E04_B27_latency_is_cleared_when_its_peer_is_lost', () async {
+      final controller = newController();
+      controller.onInit();
+      addTearDown(controller.onClose);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      pushDeviceDiscovered('neighbor-1');
+      pushLinkQuality('neighbor-1', 42, 0.0);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(controller.networkStatus.value.latencyMs, 42);
+
+      pushDeviceLost('neighbor-1');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      // Live repro: "No peers nearby" was shown next to "Latency 1ms".
+      expect(
+        controller.networkStatus.value.reading,
+        ConnectivityReading.noPeers,
+      );
+      expect(controller.networkStatus.value.latencyMs, isNull);
+    });
+
+    test(
+        'test_E04_B27_a_measured_link_counts_as_a_nearby_peer_without_discovery',
+        () async {
+      final controller = newController();
+      controller.onInit();
+      addTearDown(controller.onClose);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      // An accepted/bonded connection reports link quality with no
+      // discovery-scan event for that device.
+      pushLinkQuality('bonded-peer', 7, 0.0);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(
+        controller.networkStatus.value.reading,
+        isNot(ConnectivityReading.noPeers),
+      );
+      expect(controller.networkStatus.value.latencyMs, 7);
+    });
+
+    test('test_E04_B27_losing_a_different_peer_keeps_the_latency', () async {
+      final controller = newController();
+      controller.onInit();
+      addTearDown(controller.onClose);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      pushDeviceDiscovered('neighbor-1');
+      pushDeviceDiscovered('neighbor-2');
+      pushLinkQuality('neighbor-1', 30, 0.0);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      pushDeviceLost('neighbor-2');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(controller.networkStatus.value.latencyMs, 30);
+    });
+  });
 }
