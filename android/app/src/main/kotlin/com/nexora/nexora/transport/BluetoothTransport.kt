@@ -515,6 +515,19 @@ class BluetoothTransport(
       if (acceptThread === Thread.currentThread()) {
         serverSocket = null
         acceptThread = null
+        // E04-T07 review F1: the discovery-record socket shares this
+        // listener's lifetime. When the accept loop dies (a Bluetooth toggle
+        // tears down every socket), close and forget it too, so the next
+        // ensureListening() re-publishes the SDP record instead of skipping a
+        // dead non-null handle.
+        discoverySocket?.let {
+          try {
+            it.close()
+          } catch (e: IOException) {
+            // Already closed by the stack -- nothing to do.
+          }
+        }
+        discoverySocket = null
       }
     }
   }
@@ -1285,7 +1298,8 @@ class BluetoothTransport(
    * `fetchUuidsWithSdp()` call for one pending discovered device.
    * Finishes that device's Nexora-peer check: emits
    * [TransportEventsApi.onDeviceDiscovered] only if the SDP result
-   * actually includes [NEXORA_SPP_UUID]; otherwise the device is dropped
+   * actually includes [NEXORA_DISCOVERY_UUID] (E04-T07; previously the
+   * generic [NEXORA_SPP_UUID]); otherwise the device is dropped
    * silently, exactly as if it had never been discovered. A result for an
    * address this file isn't tracking (already timed out, or never asked)
    * is ignored. */
@@ -1423,7 +1437,8 @@ class BluetoothTransport(
    * `bondedDevices.size == 2`, so the "exactly one" check never fired and
    * this whole guard was silently inert for that device. [candidate] is
    * now compared against the subset of `bondedDevices` that themselves
-   * advertise [NEXORA_SPP_UUID] in their (already OS-cached, from
+   * advertise [NEXORA_DISCOVERY_UUID] (E04-T07; previously the generic
+   * [NEXORA_SPP_UUID]) in their (already OS-cached, from
    * bonding-time SDP -- no live query needed here) `uuids` -- narrowing
    * "unambiguous fallback" to actual Nexora peers, not every bonded
    * device of any kind. See `E04-T06`'s own SDP-UUID note for why this
