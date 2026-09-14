@@ -750,4 +750,46 @@ void main() {
       },
     );
   });
+
+  group('E04-B16 — multi-hop relay of an identity-addressed packet', () {
+    test(
+      'test_E04_B16_intermediate_relay_forwards_to_the_aliased_next_hop',
+      () async {
+        // A -> B -> C. B is the intermediate relay: it holds a packet A
+        // addressed to C's announced identity (E04-B12/B13/B15 addressing),
+        // while B's own routing graph only knows transport link ids.
+        final sim = NetworkSimulator(seed: 16);
+        sim.setLink(
+          'B',
+          'C-link',
+          const SimulatedLink(
+            latencyMs: 15,
+            packetLossRate: 0.0,
+            batteryDrainPerMessage: 0.1,
+          ),
+        );
+        final routingEngine = RoutingEngine(selfId: 'B');
+        _recordFromSimulatedLink(routingEngine, sim, 'B', 'C-link');
+        routingEngine.recordIdentityAlias('C-link', 'C-identity');
+
+        final calls = <_SendCall>[];
+        final relay = RelayEngine(
+          selfId: 'B',
+          db: db,
+          routingEngine: routingEngine,
+          send: _recordingSend(sim, 'B', calls),
+        );
+
+        final bytes = Uint8List.fromList([1, 2, 3, 4]);
+        await relay.enqueue('C-identity', bytes, 0, const Duration(minutes: 5));
+        await relay.processQueue();
+
+        expect(calls, hasLength(1));
+        expect(calls.single.nextHopId, 'C-link');
+        expect(calls.single.bytes, orderedEquals(bytes));
+        final rows = await db.select(db.relayPackets).get();
+        expect(rows.single.deliveryState, RelayDeliveryState.delivered.name);
+      },
+    );
+  });
 }
