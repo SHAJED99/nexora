@@ -240,8 +240,17 @@ class SendGroupMessageUseCase {
 
     // Step 4 (task file §3): persist the real ciphertext over the
     // placeholder -- the row stays Queued at this point.
+    // E04-B20: persist the body alongside the ciphertext. This device can
+    // never decrypt its own outgoing sender-key ciphertext, and a stored
+    // group ciphertext cannot be decrypted twice by a receiver either, so the
+    // plaintext is the only durable source for display.
     await (_db.update(_db.messages)..where((t) => t.id.equals(messageId)))
-        .write(MessagesCompanion(ciphertext: Value(ciphertext)));
+        .write(
+      MessagesCompanion(
+        ciphertext: Value(ciphertext),
+        plaintextPayload: Value(body),
+      ),
+    );
     message = Message(
       id: message.id,
       conversationId: message.conversationId,
