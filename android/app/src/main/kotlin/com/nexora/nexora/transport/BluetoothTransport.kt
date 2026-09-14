@@ -1396,7 +1396,17 @@ class BluetoothTransport(
   private fun handleUuidResult(intent: Intent) {
     val device = deviceFromIntent(intent) ?: return
     val address = device.address ?: return
-    val pending = pendingNexoraChecks.remove(address) ?: return
+    // E04-B31: look up WITHOUT removing. While discovery is running, Android
+    // answers `fetchUuidsWithSdp()` immediately with the device's CACHED
+    // UUIDs and only later (if at all) with a fresh SDP result -- confirmed
+    // live, Pixel 8 Pro 2026-09-15 05:17:34: `ACTION_UUID ... count: 11` (the
+    // stale cache) while the real SDP failed at 05:17:51. Consuming the
+    // pending check on that first, stale answer dropped a genuine Nexora
+    // peer whose cache predates its discovery record, and ignored any later
+    // fresh answer. A negative result now leaves the check pending; only a
+    // positive one consumes it, and the existing SDP_LOOKUP_TIMEOUT_MS
+    // removal in handleDeviceFound still bounds its lifetime.
+    val pending = pendingNexoraChecks[address] ?: return
     val uuids =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
           intent.getParcelableArrayExtra(BluetoothDevice.EXTRA_UUID, ParcelUuid::class.java)
@@ -1405,7 +1415,10 @@ class BluetoothTransport(
         }
     val isNexoraPeer =
         advertisesNexora(uuids)
-    if (isNexoraPeer) {
+    // Identity-scoped remove (E04-T06 F2): only emit if THIS exact pending
+    // check is still the registered one, so a duplicate positive answer, or
+    // a check a newer scan already replaced, never emits twice.
+    if (isNexoraPeer && pendingNexoraChecks.remove(address, pending)) {
       emitDiscoveredDevice(pending.resolvedId, pending.displayName, pending.rssi, pending.bonded)
     }
   }
