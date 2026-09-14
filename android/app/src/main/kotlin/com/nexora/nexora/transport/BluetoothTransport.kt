@@ -76,6 +76,36 @@ class BluetoothTransport(
      */
     private val NEXORA_SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
+    /**
+     * E04-T07: a bespoke, randomly generated (v4) UUID registered as a SECOND
+     * SDP service record, purely so another device can tell "this device is
+     * running Nexora" apart from any generic SPP serial device.
+     * [NEXORA_SPP_UUID] is the standard SPP UUID that HC-05 modules, OBD
+     * dongles and serial printers also advertise. This UUID is never used for
+     * the data connection itself; that stays on [NEXORA_SPP_UUID].
+     */
+    private val NEXORA_DISCOVERY_UUID: UUID = UUID.fromString("6f3b2c1e-8a47-4d2b-9c5e-1b7a0d4e9f21")
+
+    /** Some Android Bluetooth stacks report SDP UUIDs with the byte order
+     * reversed (a long-standing platform bug), so both forms are accepted. */
+    private val NEXORA_DISCOVERY_UUID_REVERSED: UUID = reverseUuidBytes(NEXORA_DISCOVERY_UUID)
+
+    private fun reverseUuidBytes(uuid: UUID): UUID {
+      val forward =
+          ByteBuffer.allocate(16).putLong(uuid.mostSignificantBits).putLong(uuid.leastSignificantBits).array()
+      val reversed = ByteBuffer.wrap(forward.reversedArray())
+      return UUID(reversed.long, reversed.long)
+    }
+
+    /** E04-T07: true only if [uuids] (a live SDP result or the OS cache)
+     * includes this app's discovery record -- "actually running Nexora", not
+     * merely "SPP-capable". */
+    private fun advertisesNexora(uuids: Array<out android.os.Parcelable>?): Boolean =
+        uuids?.any {
+          val uuid = (it as? ParcelUuid)?.uuid
+          uuid == NEXORA_DISCOVERY_UUID || uuid == NEXORA_DISCOVERY_UUID_REVERSED
+        } == true
+
     /** Human-readable SDP service name advertised alongside [NEXORA_SPP_UUID]
      * by [listenUsingRfcommWithServiceRecord] — cosmetic only (shown by
      * generic Bluetooth tooling doing an SDP inquiry), never read by this
@@ -300,6 +330,22 @@ class BluetoothTransport(
    * reason as [serverSocket]. */
   @Volatile private var acceptThread: Thread? = null
 
+  /** E04-T07: the listening socket that only exists to publish
+   * [NEXORA_DISCOVERY_UUID]'s SDP record. Nothing ever dials it (clients
+   * connect on [NEXORA_SPP_UUID]), so it is never accepted on; it is held
+   * open for as long as [serverSocket] is, and closed in [release]. */
+  @Volatile private var discoverySocket: BluetoothServerSocket? = null
+
+  /** E04-T07 review round 2: serializes every compound read-check-write of the
+   * listener fields ([serverSocket], [acceptThread], [discoverySocket]) across
+   * the three threads that touch them: [ensureListening] (main), the dying
+   * [acceptLoop]'s cleanup (accept thread) and [release] (main). Without it a
+   * Bluetooth toggle could interleave the cleanup with a new
+   * [ensureListening], leaving a healthy SPP listener with a closed, nulled
+   * discovery socket that is never reopened. The blocking `accept()` itself
+   * never runs under this lock, and no path takes it twice. */
+  private val listenerLock = Any()
+
   /** Set when a call is deferred behind a runtime permission request;
    * invoked from `onRequestPermissionsResult` once granted. */
   private var pendingPermissionAction: (() -> Unit)? = null
@@ -344,6 +390,7 @@ class BluetoothTransport(
    * or messaging right now.
    */
   private fun ensureListening() {
+    synchronized(listenerLock) {
     if (acceptThread != null) return // already listening
     val bt = adapter ?: return
     if (!bt.isEnabled || !BluetoothPermissions.hasAll(activity)) return
@@ -359,9 +406,25 @@ class BluetoothTransport(
           return
         }
     serverSocket = socket
+    // E04-T07: publish the Nexora-specific SDP record alongside the SPP one.
+    // Best-effort: if it cannot be opened, this device is still reachable,
+    // it just will not pass another device's Discover filter until the next
+    // successful ensureListening().
+    if (discoverySocket == null) {
+      discoverySocket =
+          try {
+            bt.listenUsingRfcommWithServiceRecord(SERVICE_NAME, NEXORA_DISCOVERY_UUID)
+          } catch (e: IOException) {
+            null
+          } catch (e: SecurityException) {
+            null
+          }
+    }
+    refreshNexoraCandidateUuidCaches(bt)
     val thread = Thread({ acceptLoop(socket) }, "nexora-bt-accept")
     acceptThread = thread
     thread.start()
+    }
   }
 
   /**
@@ -494,9 +557,49 @@ class BluetoothTransport(
       // `acceptThread` that no longer belongs to any live loop (review
       // finding, E04-B06 round 2). Only clear the fields if THIS thread
       // is still the one currently registered.
+      synchronized(listenerLock) {
       if (acceptThread === Thread.currentThread()) {
         serverSocket = null
         acceptThread = null
+        // E04-T07 review F1: the discovery-record socket shares this
+        // listener's lifetime. When the accept loop dies (a Bluetooth toggle
+        // tears down every socket), close and forget it too, so the next
+        // ensureListening() re-publishes the SDP record instead of skipping a
+        // dead non-null handle.
+        discoverySocket?.let {
+          try {
+            it.close()
+          } catch (e: IOException) {
+            // Already closed by the stack -- nothing to do.
+          }
+        }
+        discoverySocket = null
+      }
+      }
+    }
+  }
+
+  /** E04-T07: a peer bonded before it advertised [NEXORA_DISCOVERY_UUID]
+   * has an OS UUID cache without it, which [unmaskIfNotBonded] reads
+   * synchronously. Refresh the cache (asynchronously, via SDP) for bonded
+   * devices that look like possible Nexora peers -- they advertise SPP but
+   * not yet the discovery record. Headsets and other non-SPP bonds are left
+   * alone. Replies arrive as `ACTION_UUID` for addresses [handleUuidResult]
+   * is not tracking, so it ignores them; only the OS cache changes. */
+  private fun refreshNexoraCandidateUuidCaches(bt: BluetoothAdapter) {
+    val bonded =
+        try {
+          bt.bondedDevices
+        } catch (e: SecurityException) {
+          null
+        } ?: return
+    for (device in bonded) {
+      try {
+        val cached = device.uuids
+        val sppCapable = cached?.any { it?.uuid == NEXORA_SPP_UUID } == true
+        if (sppCapable && !advertisesNexora(cached)) device.fetchUuidsWithSdp()
+      } catch (e: SecurityException) {
+        return
       }
     }
   }
@@ -1021,6 +1124,7 @@ class BluetoothTransport(
     // is closed from another thread, which is what lets `acceptLoop`'s own
     // catch exit the loop and let this thread die, mirroring `disconnect()`'s
     // identical reasoning for a client-side read loop.
+    synchronized(listenerLock) {
     acceptThread?.interrupt()
     serverSocket?.let {
       try {
@@ -1031,6 +1135,15 @@ class BluetoothTransport(
     }
     serverSocket = null
     acceptThread = null
+    discoverySocket?.let {
+      try {
+        it.close()
+      } catch (e: IOException) {
+        // Already closed / adapter gone -- not actionable here.
+      }
+    }
+    discoverySocket = null
+    }
     discoveryReceiver?.let {
       try {
         activity.unregisterReceiver(it)
@@ -1163,13 +1276,10 @@ class BluetoothTransport(
     // never runs for a passing stranger's device.
     val bonded = isBonded(resolvedId)
     // E04-T06: only ever surface a discovered device once its SDP record
-    // confirms it is actually running Nexora (advertises
-    // `NEXORA_SPP_UUID`, the SPP UUID this file's own listening socket
-    // also registers under -- NOTE this is the generic, standard SPP
-    // UUID, not a bespoke Nexora one, so this filter really means
-    // "SPP-capable", a residual, accepted false-positive class covering
-    // e.g. HC-05-style serial modules or OBD dongles; tracked as a named
-    // follow-up rather than claimed away, see task file). `device.uuids`
+    // confirms it is actually running Nexora -- E04-T07: it must advertise
+    // `NEXORA_DISCOVERY_UUID`, this app's own bespoke SDP record, not merely
+    // the generic SPP UUID that serial modules and OBD dongles also
+    // advertise. `device.uuids`
     // is the platform's own cache of a prior SDP result (populated by
     // bonding, or by an earlier `fetchUuidsWithSdp()` this process
     // already made) -- checked synchronously first so an already-known
@@ -1186,7 +1296,7 @@ class BluetoothTransport(
         } catch (e: SecurityException) {
           null
         }
-    if (cachedUuids != null && cachedUuids.any { (it as? ParcelUuid)?.uuid == NEXORA_SPP_UUID }) {
+    if (advertisesNexora(cachedUuids)) {
       emitDiscoveredDevice(resolvedId, name, rssi, bonded)
       return
     }
@@ -1241,7 +1351,8 @@ class BluetoothTransport(
    * `fetchUuidsWithSdp()` call for one pending discovered device.
    * Finishes that device's Nexora-peer check: emits
    * [TransportEventsApi.onDeviceDiscovered] only if the SDP result
-   * actually includes [NEXORA_SPP_UUID]; otherwise the device is dropped
+   * actually includes [NEXORA_DISCOVERY_UUID] (E04-T07; previously the
+   * generic [NEXORA_SPP_UUID]); otherwise the device is dropped
    * silently, exactly as if it had never been discovered. A result for an
    * address this file isn't tracking (already timed out, or never asked)
    * is ignored. */
@@ -1256,7 +1367,7 @@ class BluetoothTransport(
           @Suppress("DEPRECATION") intent.getParcelableArrayExtra(BluetoothDevice.EXTRA_UUID)
         }
     val isNexoraPeer =
-        uuids?.any { (it as? ParcelUuid)?.uuid == NEXORA_SPP_UUID } == true
+        advertisesNexora(uuids)
     if (isNexoraPeer) {
       emitDiscoveredDevice(pending.resolvedId, pending.displayName, pending.rssi, pending.bonded)
     }
@@ -1402,7 +1513,8 @@ class BluetoothTransport(
    * `bondedDevices.size == 2`, so the "exactly one" check never fired and
    * this whole guard was silently inert for that device. [candidate] is
    * now compared against the subset of `bondedDevices` that themselves
-   * advertise [NEXORA_SPP_UUID] in their (already OS-cached, from
+   * advertise [NEXORA_DISCOVERY_UUID] (E04-T07; previously the generic
+   * [NEXORA_SPP_UUID]) in their (already OS-cached, from
    * bonding-time SDP -- no live query needed here) `uuids` -- narrowing
    * "unambiguous fallback" to actual Nexora peers, not every bonded
    * device of any kind. See `E04-T06`'s own SDP-UUID note for why this
@@ -1439,7 +1551,7 @@ class BluetoothTransport(
               } catch (e: SecurityException) {
                 null
               }
-          uuids?.any { (it as? ParcelUuid)?.uuid == NEXORA_SPP_UUID } == true
+          advertisesNexora(uuids)
         }
     // Review round-1 finding F1: a cached `uuids` MISS (E04-T06's own
     // documented case -- populated at bond time, so a peer bonded before
