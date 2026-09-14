@@ -41,7 +41,7 @@ Batching rule: **≤10 per round**, grouped by area.
 ## Open questions (🟡)
 
 ### Q-SEC-009 — What happens to the REMOTE device-registry row when a device signs out?
-- **Priority:** 🟡 **blocking** — blocks `E15-T01` (and therefore `E15-T07`)
+- **Priority:** blocking — blocks `E15-T01` (and therefore `E15-T07`)
 - **Raised by:** `skills/change-impact` / `IMP-003`, 2026-09-08
 - **Question:** `FR-AUTH-006` wipes everything **local**. It says nothing about
   `users/$uid/devices/<deviceId>` in the Realtime Database (`FR-FB-001`'s device
@@ -69,7 +69,7 @@ Batching rule: **≤10 per round**, grouped by area.
   reuses a shipped mechanism, it is the only option that actively tells peers
   anything, and its failure mode (network down during logout) degrades to (a)
   rather than to a stuck wipe.
-- **Status:** ✅ answered
+- **Status:** 🟢 answered
 - **Answer:** **(b)** — revoke via `DeviceRevocationService.revoke(uid, deviceId)`,
   best-effort and non-blocking. If the network write fails (offline at
   logout), the local wipe proceeds anyway and the failure is logged, not
@@ -80,7 +80,7 @@ Batching rule: **≤10 per round**, grouped by area.
 - **fed_into:** `FR-AUTH-006`'s remote clause and `E15-T01` §2/§5
 
 ### Q-FUNC-010 — Logout+login on one phone trips E12's enrollment gate and E13's rate limiter
-- **Priority:** 🟡 **blocking** — blocks `E15-T01`
+- **Priority:** blocking — blocks `E15-T01`
 - **Raised by:** `skills/change-impact` / `IMP-003`, 2026-09-08
 - **Question:** After a wipe-logout, the next sign-in mints a **new** device id.
   If the old remote registry row survives (`Q-SEC-009` option (a)),
@@ -113,7 +113,7 @@ Batching rule: **≤10 per round**, grouped by area.
   abnormal pattern, and weakening `FR-ABUSE-001` to serve it is the wrong trade.
   If the human disagrees, that is a genuinely different answer, which is why
   this is asked rather than assumed.
-- **Status:** ✅ answered
+- **Status:** 🟢 answered
 - **Answer:** **(a)** for the enrollment gate — falls out of `Q-SEC-009`(b)
   for free, no new code needed. **Accept the rate limit as-is** — weakening
   `FR-ABUSE-001` to serve an abnormal logout-cycling pattern is the wrong
