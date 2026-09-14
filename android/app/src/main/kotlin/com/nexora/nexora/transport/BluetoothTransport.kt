@@ -181,6 +181,18 @@ class BluetoothTransport(
    * isn't re-emitted every scan cycle, per §5's contract. */
   private val discoveredAddresses = ConcurrentHashMap.newKeySet<String>()
 
+  /** E04-B28: resolved device ids this scan has emitted via
+   * [emitDiscoveredDevice], and the same set from the previous completed
+   * scan. `TransportEventsApi.onDeviceLost` was declared by the Pigeon schema
+   * but never called, so `TransportService.lostDevices` never fired on a real
+   * device, and a peer that walked away stayed "nearby" (with its last
+   * latency) forever. A device the previous scan confirmed but this scan did
+   * not is reported lost once this scan's late SDP confirmations have had
+   * time to arrive. */
+  private val currentScanIds = ConcurrentHashMap.newKeySet<String>()
+  @Volatile private var previousScanIds: Set<String> = emptySet()
+  private val scanGeneration = AtomicLong(0)
+
   /** E04-T06: a discovered device this file has NOT yet confirmed is
    * running Nexora (its SDP record hasn't been checked, or was checked
    * and had no cached answer) but has already asked to check
@@ -1038,6 +1050,8 @@ class BluetoothTransport(
     ensureListening() // E04-B06 -- see that method's own doc comment.
     discoveredAddresses.clear()
     pendingNexoraChecks.clear() // E04-T06 -- don't carry stale pending SDP checks across scans.
+    currentScanIds.clear() // E04-B28
+    scanGeneration.incrementAndGet() // E04-B28: supersedes any pending lost-diff
     registerReceiverIfNeeded()
     if (bt.isDiscovering) bt.cancelDiscovery()
     bt.startDiscovery()
@@ -1056,6 +1070,8 @@ class BluetoothTransport(
               // completes (or drops) the Nexora-peer check for one
               // pending discovered device.
               BluetoothDevice.ACTION_UUID -> handleUuidResult(intent)
+              // E04-B28: previously registered but never handled.
+              BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> handleDiscoveryFinished()
             }
           }
         }
@@ -1225,7 +1241,27 @@ class BluetoothTransport(
     }
   }
 
+  /** E04-B28: reports devices the previous completed scan confirmed but this
+   * one did not as lost. Waits [SDP_LOOKUP_TIMEOUT_MS] first, because
+   * [handleUuidResult] can still confirm a device after the inquiry itself has
+   * finished, and skips entirely if a newer scan has started in the meantime
+   * (its own finish will diff instead). Only scan results take part; a peer
+   * reached through an accepted connection is not a scan result and is never
+   * reported lost here. */
+  private fun handleDiscoveryFinished() {
+    val generation = scanGeneration.get()
+    eventsScope.launch {
+      delay(SDP_LOOKUP_TIMEOUT_MS)
+      if (scanGeneration.get() != generation) return@launch
+      val seen: Set<String> = HashSet(currentScanIds)
+      val lost = previousScanIds - seen
+      previousScanIds = seen
+      for (id in lost) eventsApi.onDeviceLost(id)
+    }
+  }
+
   private fun emitDiscoveredDevice(resolvedId: String, displayName: String, rssi: Long?, bonded: Boolean) {
+    currentScanIds.add(resolvedId) // E04-B28
     eventsScope.launch {
       eventsApi.onDeviceDiscovered(
           TransportDevice(id = resolvedId, displayName = displayName, type = TransportType.BLUETOOTH, rssi = rssi, bonded = bonded),
