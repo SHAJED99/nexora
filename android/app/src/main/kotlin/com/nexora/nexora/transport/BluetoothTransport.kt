@@ -207,6 +207,20 @@ class BluetoothTransport(
     private const val CONNECT_COLLISION_RETRY_MAX_MS = 1500L
     private const val CONNECT_COLLISION_MAX_ATTEMPTS = 3
 
+    /** E04-B33: [doConnect] must settle (CONNECTED/FAILED) before
+     * `ConnectionEnsuringSender`'s 30 s Dart-side connect timeout, or it
+     * emits a late event after Dart has already given up. Kept 2 s under
+     * that timeout for event delivery. */
+    private const val CONNECT_SETTLE_DEADLINE_MS = 28_000L
+
+    /** E04-B33: assumed worst case for one blocking `socket.connect()` to an
+     * unreachable peer (one Bluetooth page timeout plus SDP; the stack
+     * default page timeout is 5.12 s, and some stacks raise it). A retry is
+     * only started if the sleep before it plus one attempt of this length
+     * still ends by [CONNECT_SETTLE_DEADLINE_MS]. It is an assumption, not
+     * a bound the platform enforces (OQ-E04-B33-1). */
+    private const val CONNECT_ATTEMPT_MAX_BLOCK_MS = 13_000L
+
     /** E04-T06: how long a discovered device's SDP inquiry
      * ([BluetoothDevice.fetchUuidsWithSdp]) is allowed to stay pending
      * before its [pendingNexoraChecks] entry is dropped unanswered.
@@ -842,6 +856,7 @@ class BluetoothTransport(
       // `acceptLoop` (which registers it in `openSockets`) while this one
       // waits; that accepted socket is reused instead of dialing again.
       var attempt = 0
+      val startedAtMs = android.os.SystemClock.elapsedRealtime()
       while (true) {
         attempt++
         var socket: BluetoothSocket? = null
@@ -866,7 +881,14 @@ class BluetoothTransport(
             eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTED) }
             return@Thread
           }
-          if (attempt >= CONNECT_COLLISION_MAX_ATTEMPTS) {
+          // E04-B33: only retry if the longest sleep plus one worst-case
+          // blocking connect() still ends by the settle deadline, so an
+          // unreachable peer's retries do not run past the Dart-side 30 s
+          // timeout (given CONNECT_ATTEMPT_MAX_BLOCK_MS holds).
+          val elapsedMs = android.os.SystemClock.elapsedRealtime() - startedAtMs
+          if (attempt >= CONNECT_COLLISION_MAX_ATTEMPTS ||
+              elapsedMs + CONNECT_COLLISION_RETRY_MAX_MS + CONNECT_ATTEMPT_MAX_BLOCK_MS >
+                  CONNECT_SETTLE_DEADLINE_MS) {
             emitFailure(deviceId)
             return@Thread
           }
