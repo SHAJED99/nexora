@@ -20,7 +20,7 @@ import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart' hide Value;
@@ -206,6 +206,17 @@ void main() {
     )!;
     messenger.handlePlatformMessage(
       'dev.flutter.pigeon.nexora.TransportEventsApi.onLinkQuality.$suffix',
+      eventMessage,
+      (ByteData? _) {},
+    );
+  }
+
+  void pushConnectionState(String deviceId, ConnectionState state) {
+    final eventMessage = TransportEventsApi.pigeonChannelCodec.encodeMessage(
+      <Object?>[deviceId, state],
+    )!;
+    messenger.handlePlatformMessage(
+      'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$suffix',
       eventMessage,
       (ByteData? _) {},
     );
@@ -932,6 +943,72 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       expect(controller.networkStatus.value.latencyMs, 30);
+    });
+  });
+
+  group('E04-B34 — a link-only peer does not outlive its connection', () {
+    test('test_E04_B34_disconnect_clears_a_link_only_peer_and_its_latency',
+        () async {
+      final controller = newController();
+      controller.onInit();
+      addTearDown(controller.onClose);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      pushLinkQuality('bonded-peer', 3, 0.0);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(controller.networkStatus.value.latencyMs, 3);
+
+      pushConnectionState('bonded-peer', ConnectionState.disconnected);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      // Live repro: "Connected, 3ms" stayed after the peer's Bluetooth was off.
+      expect(
+        controller.networkStatus.value.reading,
+        ConnectivityReading.noPeers,
+      );
+      expect(controller.networkStatus.value.latencyMs, isNull);
+    });
+
+    test('test_E04_B34_disconnect_keeps_a_discovered_peer_but_clears_latency',
+        () async {
+      final controller = newController();
+      controller.onInit();
+      addTearDown(controller.onClose);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      pushDeviceDiscovered('neighbor-1');
+      pushLinkQuality('neighbor-1', 12, 0.0);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      pushConnectionState('neighbor-1', ConnectionState.failed);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      // Still vouched for by the scan: loss of the peer is E04-B28's job.
+      expect(
+        controller.networkStatus.value.reading,
+        isNot(ConnectivityReading.noPeers),
+      );
+      expect(controller.networkStatus.value.latencyMs, isNull);
+    });
+
+    test('test_E04_B34_other_connection_states_change_nothing', () async {
+      final controller = newController();
+      controller.onInit();
+      addTearDown(controller.onClose);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      pushLinkQuality('bonded-peer', 5, 0.0);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      pushConnectionState('bonded-peer', ConnectionState.connecting);
+      pushConnectionState('other-peer', ConnectionState.disconnected);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(
+        controller.networkStatus.value.reading,
+        isNot(ConnectivityReading.noPeers),
+      );
+      expect(controller.networkStatus.value.latencyMs, 5);
     });
   });
 }
