@@ -22,6 +22,8 @@ import java.nio.ByteOrder
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -156,6 +158,18 @@ class BluetoothTransport(
      * ANR guard.
      */
     private const val SEND_TIMEOUT_MS = 3_000L
+
+    /** E04-B35: a link with no outbound write for this long gets one
+     * zero-length keepalive frame (`00 00 00 00`), so the peer can tell a
+     * quiet link from a dead one. */
+    private const val KEEPALIVE_INTERVAL_MS = 10_000L
+
+    /** E04-B35: a peer that has proven it sends keepalives and then sends
+     * nothing at all for this long is treated as gone, and its link is
+     * closed with [disconnect]. Three keepalive intervals, so one or two
+     * late frames do not drop a healthy link. A peer that has never sent a
+     * keepalive (an older build) is never closed for silence. */
+    private const val LINK_SILENCE_TIMEOUT_MS = 30_000L
 
     /** Bounded window of recent `send()` attempts per device, used to
      * compute `lossRate` as a real ratio (E06-T04, §6 risk: never let this
@@ -335,6 +349,24 @@ class BluetoothTransport(
    * `onLinkQuality` (E06-T04). Guarded by `synchronized(window)` since
    * `send()` can run from more than one caller thread. */
   private val sendOutcomes = ConcurrentHashMap<String, ArrayDeque<Boolean>>()
+
+  /** E04-B35: liveness bookkeeping for one open socket. Keyed by the socket
+   * itself, not the device id, so a second socket registered for the same
+   * peer (OQ-E04-B32-3) never keeps a dead one looking alive. */
+  private class LinkLiveness(val deviceId: String, nowMs: Long) {
+    @Volatile var lastReceivedAtMs: Long = nowMs
+    @Volatile var lastSentAtMs: Long = nowMs
+    /** Set once this peer has sent at least one keepalive, proving it runs
+     * a build that sends them; only then may silence close the link. */
+    @Volatile var peerSendsKeepalive: Boolean = false
+  }
+
+  private val linkLiveness = ConcurrentHashMap<BluetoothSocket, LinkLiveness>()
+
+  /** E04-B35: one scheduler for every link's keepalive and silence check,
+   * started with the first read loop and shut down in [release]. */
+  private var keepaliveScheduler: ScheduledExecutorService? = null
+  private val keepaliveLock = Any()
 
   private var discoveryReceiver: BroadcastReceiver? = null
 
@@ -1039,6 +1071,7 @@ class BluetoothTransport(
     // costs nothing and helps if the thread is ever between reads).
     readThreads.remove(deviceId)?.interrupt()
     openSockets.remove(deviceId)?.let {
+      linkLiveness.remove(it) // E04-B35
       try {
         it.close()
       } catch (e: IOException) {
@@ -1143,9 +1176,85 @@ class BluetoothTransport(
         output.write(bytes)
         output.flush()
       }
+      // E04-B35: any completed write, data or keepalive, proves this side
+      // is not idle, so no keepalive is needed until the interval passes.
+      linkLiveness[socket]?.lastSentAtMs = android.os.SystemClock.elapsedRealtime()
       true
     } catch (e: IOException) {
       false
+    }
+  }
+
+  /** E04-B35: starts the shared keepalive scheduler once. */
+  private fun ensureKeepaliveScheduler() {
+    synchronized(keepaliveLock) {
+      if (keepaliveScheduler != null) return
+      val scheduler =
+          Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "nexora-bt-keepalive").apply { isDaemon = true }
+          }
+      scheduler.scheduleWithFixedDelay(
+          { keepaliveTick() },
+          KEEPALIVE_INTERVAL_MS,
+          KEEPALIVE_INTERVAL_MS,
+          TimeUnit.MILLISECONDS,
+      )
+      keepaliveScheduler = scheduler
+    }
+  }
+
+  /**
+   * E04-B35: one pass over every open link. Silence checks run first, so a
+   * slow keepalive write on one link cannot delay closing another link that
+   * is already dead. Only the socket currently registered for its device id
+   * is acted on. Never throws: an exception escaping a
+   * `scheduleWithFixedDelay` task would silently cancel every later run.
+   */
+  private fun keepaliveTick() {
+    try {
+      val nowMs = android.os.SystemClock.elapsedRealtime()
+      val links = linkLiveness.entries.toList()
+      for ((socket, state) in links) {
+        if (openSockets[state.deviceId] !== socket) continue
+        if (state.peerSendsKeepalive &&
+            nowMs - state.lastReceivedAtMs > LINK_SILENCE_TIMEOUT_MS) {
+          disconnect(state.deviceId)
+        }
+      }
+      for ((socket, state) in links) {
+        if (openSockets[state.deviceId] !== socket) continue
+        if (nowMs - state.lastSentAtMs >= KEEPALIVE_INTERVAL_MS) {
+          sendKeepalive(state.deviceId, socket)
+        }
+      }
+    } catch (e: Exception) {
+      // Keep the scheduler alive; the next tick retries.
+    }
+  }
+
+  /**
+   * E04-B35: writes one zero-length frame to [socket], with the same framing
+   * lock and bounded wait as [send]. A failed or timed-out write means the
+   * link is dead (or stuck mid-frame), so it is closed with [disconnect],
+   * which emits DISCONNECTED.
+   */
+  private fun sendKeepalive(deviceId: String, socket: BluetoothSocket) {
+    val result = AtomicBoolean(false)
+    val done = CountDownLatch(1)
+    Thread({
+          result.set(writeFrame(socket, ByteArray(0)))
+          done.countDown()
+        }, "nexora-bt-keepalive-write-$deviceId")
+        .start()
+    val settled =
+        try {
+          done.await(SEND_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        } catch (e: InterruptedException) {
+          Thread.currentThread().interrupt()
+          return
+        }
+    if ((!settled || !result.get()) && openSockets[deviceId] === socket) {
+      disconnect(deviceId)
     }
   }
 
@@ -1159,6 +1268,12 @@ class BluetoothTransport(
    * [readThreads] — never left leaked, parked on a dead socket.
    */
   private fun startReadLoop(deviceId: String, socket: BluetoothSocket) {
+    // E04-B35: every registration path (accept, connect, post-bond connect)
+    // reaches this method right after registering the socket, so liveness
+    // bookkeeping starts here and nowhere else.
+    val liveness = LinkLiveness(deviceId, android.os.SystemClock.elapsedRealtime())
+    linkLiveness[socket] = liveness
+    ensureKeepaliveScheduler()
     val thread =
         Thread(
             {
@@ -1169,6 +1284,13 @@ class BluetoothTransport(
                   val length = ByteBuffer.wrap(header).order(ByteOrder.BIG_ENDIAN).int
                   if (length < 0 || length > MAX_FRAME_BYTES) break // corrupt/hostile frame
                   val payload = readFully(input, length) ?: break
+                  liveness.lastReceivedAtMs = android.os.SystemClock.elapsedRealtime()
+                  if (length == 0) {
+                    // E04-B35: a keepalive. Never application data, so it
+                    // is not forwarded to Dart.
+                    liveness.peerSendsKeepalive = true
+                    continue
+                  }
                   eventsScope.launch { eventsApi.onDataReceived(deviceId, payload) }
                 }
               } catch (e: IOException) {
@@ -1187,6 +1309,7 @@ class BluetoothTransport(
                 // raced ahead of this thread's exit, leaving the live thread
                 // untracked by disconnect()/release().
                 readThreads.remove(deviceId, Thread.currentThread())
+                linkLiveness.remove(socket, liveness) // E04-B35: by identity
                 // E04-B17 (review round 1, F3): this read loop is the ONLY
                 // thing that actually knows a connection died from the
                 // REMOTE end (a clean or errored EOF) -- before this, only
@@ -1295,6 +1418,11 @@ class BluetoothTransport(
     }
     openSockets.clear()
     sendOutcomes.clear()
+    linkLiveness.clear() // E04-B35
+    synchronized(keepaliveLock) {
+      keepaliveScheduler?.shutdownNow()
+      keepaliveScheduler = null
+    }
     pendingNexoraChecks.clear() // E04-T06.
   }
 
