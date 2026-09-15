@@ -40,6 +40,7 @@
 ## Promotion candidates
 - **PENDING HUMAN GATE (retro_promotions)**: `L-frontend-001` recurrence warrants promotion to a mechanical test hook (e.g., a shared `expectNoInteractiveAffordance` test helper that walks the gesture surface natively).
 - **PENDING HUMAN GATE (retro_promotions)**: `L-qa-001` reinforcing evidence proves its utility, but the sheer volume of vacuous tests suggests it needs to move from a reviewer rule to a mechanical mutation-testing hook.
+  - ✅ Decided 2026-09-16 under the human's delegation ("on you"), for both items above: no promotion now. `L-frontend-001` is already a rule (`skills/design-fidelity`), and so is `L-qa-001` (`skills/review` §2, "Falsify the evidence"); both keep operating as rules. The proposed hooks are deferred rather than rejected. A shared `expectNoInteractiveAffordance` test helper is test code for a later task. A mutation-testing hook needs a new dev dependency, which is a separate rule-3 call and not made here.
 
 ## Open follow-ups
 - `OQ-E15-T10-2`: No local diagnostic log store exists; the About screen's Diagnostics card renders empty in production. (Requires a future epic).

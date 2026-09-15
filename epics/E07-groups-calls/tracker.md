@@ -124,7 +124,7 @@ own Feedback log and Review section). All four `E07-B01`..`B04` are
 
 | Gate | State |
 |---|---|
-| 🧍 `analyze_report` | ⏳ AWAITING HUMAN acceptance of the disclosed MoSCoW exception (`epic.md` §Analyze report) — not blocking dispatch |
+| 🧍 `analyze_report` | ✅ cleared retroactively 2026-09-16 under the human's delegation ("on you"), MoSCoW exception accepted; epic already done |
 | 🧍 `OQ-E07-4` — schema migration | ✅ resolved 2026-08-31 — all 3 advisories accepted; unblocks T01→T08 |
 | 🟢 `OQ-E07-3` — real-time media transport | ✅ resolved 2026-08-31 — (a) datagram audio over mesh, (c) named fallback; unblocks T13 + prospective media path |
 | 🧍 `design_contract_approval` | ✅ cleared by human, 2026-08-31 — GAP-018…GAP-022 (`design/gaps.md`) |

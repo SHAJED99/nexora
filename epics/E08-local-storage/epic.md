@@ -311,7 +311,7 @@ Mode may delete), plus one 🧍 schema-migration gate (`OQ-E08-T01-1`) and
 four ⚠️ important questions** — each with options, honest trade-offs and an
 advisory recommendation.
 
-🧍 **HUMAN GATE** (`analyze_report`) — ⏳ AWAITING HUMAN.
+🧍 **HUMAN GATE** (`analyze_report`) — ✅ cleared retroactively, 2026-09-16, under the human's explicit delegation ("on you"). E08 was already fully built, swept, reviewed and merged; this only closes the bookkeeping line.
 
 **What is dispatchable once this gate clears, and what is not.**
 `E08-T07` (the design gap pass) is dispatchable immediately — it is the

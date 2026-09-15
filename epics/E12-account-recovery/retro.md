@@ -40,6 +40,7 @@
 
 ## Promotion candidates
 - **PENDING HUMAN GATE (retro_promotions)**: `L-process-007` recurrence warrants promotion to a rule (require integration test or caller verification for new services).
+  - ✅ Decided 2026-09-16 under the human's delegation ("on you"): the pattern was mis-cited. L-process-007 is a different, already-promoted lesson. The "new service never wired" pattern is now its own lesson, `L-process-017`, promoted to a review rule ("Every new capability has a production caller", `skills/review`). A mechanical hook is not built yet.
 
 ## Open follow-ups
 - A literal `Code: [pairing code]` placeholder shipped in `device_enrollment_view.dart`, explicitly out of T03's scope, needing a real protocol in a future epic.

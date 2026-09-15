@@ -31,6 +31,7 @@
 
 ## Promotion candidates
 - **PENDING HUMAN GATE (retro_promotions)**: `L-process-007` recurrence (now spanning E06, E09, E11, E12, E13, E14) strongly warrants promotion to a mechanical hook (e.g., dead-code analysis for new public methods).
+  - ✅ Decided 2026-09-16 under the human's delegation ("on you"): promoted as `L-process-017` (the correct id; L-process-007 is a different lesson) to a review rule in `skills/review`. The dead-code analysis hook is deferred: it is new harness tooling, left for a later task.
 
 ## Open follow-ups
 - `RelayEngine` rate limiting accepts rotating claimed source IDs (evasion limitation accepted due to TOFU trust posture).

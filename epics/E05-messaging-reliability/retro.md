@@ -162,7 +162,7 @@ human should set the false-positive tolerance before it becomes blocking.
   false-comment shape as B01's root cause, in a second file. Comments that
   assert a wiring nobody built are how B01 happened.
 
-## What got promoted (🧍 `retro_promotions` — ⏳ AWAITING HUMAN)
+## What got promoted (🧍 `retro_promotions` — ✅ approved by the human, 2026-09-03; recorded at the E08 retro and in each lesson's status line, this heading updated 2026-09-16)
 Skill files are code; these edits are written and pending review, not
 self-approved.
 

@@ -104,6 +104,19 @@ check can only confirm rule 5 held by finding a declared model name
 somewhere in the field — full disclosure for a human reader belongs in the
 Run log, not instead of the model name in this field (L-process-010).
 
+**Never merge without a recorded review.** Before any merge command runs, the
+task file's `reviewed_by` must be filled with a model different from
+`executed_by`, and the review verdict must be APPROVE or APPROVE WITH NITS.
+This applies most of all when the orchestrator wrote the fix itself: the
+moment a PR is opened is exactly when a merge gets run out of habit
+(L-process-016).
+
+**Every new capability has a production caller.** For each new public
+class, method or stream in the diff, grep `lib/` (outside tests) for a real
+call site. If there is none, the task file must name the later task that
+owns wiring it, as an Open Question. Otherwise it is a CHANGES finding: a
+tested, approved feature that nothing calls does not exist (L-process-017).
+
 **Second rejection of the same task** → escalate to the planner. Two rounds on
 one task is a specification problem wearing a coding problem's clothes; a third
 round of the same conversation won't fix it.
