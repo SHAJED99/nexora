@@ -1,7 +1,7 @@
 ---
 id: E04
 title: Mesh Discovery, Relay & Dynamic Routing
-status: in-progress  # 2026-09-15: reopened in bookkeeping only. E04-B10 (live bonding proof) is still in-progress, blocked on a human re-pairing the two test phones; live hardware verification is also pending for E04-T07, E04-B28 and E04-B29. All E04 code is merged into development.
+status: done  # 2026-09-15: every task and bug done and merged into development (last: E04-B34, #280). Known hardware-verification gaps carried forward, each recorded in its own task file: E04-B10 F2 (post-bond settle/retry; unattended pairing prompts fail on the Redmi, OQ-E04-B10-2), E04-B28 latency-cleared-by-lost-event box, E04-B31 stale-cache branch (not reproducible on these phones), E04-T07 never-known peer as a new Discover row (needs a third device), E04-B34 live box (the Pixel's stack reported no link loss within 40 s, OQ-E04-B34-2), E04-B32 retry branch (no collision occurred live).
 type: feature
 priority: { moscow: must, wsjf: 2.8 }
 depends_on: [E01, E03]
