@@ -141,7 +141,7 @@ now).
 
 ## Retro
 → `retro.md` (written 2026-08-29). Four promotions proposed, 🧍
-`retro_promotions` ⏳ AWAITING HUMAN: L-backend-003 rule extended
+`retro_promotions` ✅ approved by the human, 2026-09-03 (recorded at the E08 retro and in each lesson's status line; this line updated 2026-09-16): L-backend-003 rule extended
 (`skills/implement` §6, writer-side atomicity), L-process-006 +
 L-process-007 promoted to rules (`skills/task-sharding` §0 and two new
 Analyze-gate rows), L-qa-001 promoted to a rule (`skills/review` §2).

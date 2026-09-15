@@ -617,5 +617,39 @@ automatically for matching tasks (see `index.yaml`).
   `executed_by` — cheap to check (both are already recorded in task-file
   frontmatter) and would have caught this within one validate run instead
   of requiring after-the-fact discovery.
-- recurrence: 1
-- status: lesson
+- recurrence: 3 (per the E10 and E11 retros' own bump; re-checked 2026-09-16)
+- status: promoted-to-rule — `agent/skills/review/SKILL.md` ("Never merge
+  without a recorded review"), 2026-09-16 via `skills/retro`,
+  🧍 `retro_promotions` decided under the human's explicit delegation ("on
+  you", 2026-09-16). The mechanical next rung (a `make health` /
+  `scheduler.py --validate` check flagging a `done` task whose `reviewed_by`
+  is empty or equals `executed_by`) is NOT built yet; it touches harness
+  code and historical task files, so it is left as a follow-up.
+
+## L-process-017 — a new service, method or stream is built, tested and approved, but nothing in production ever calls it, so the feature silently does not exist
+- date: 2026-09-16 | source: consolidation at the 2026-09-16 gate
+  clean-up. The E12, E13 and E14 retros (drafted 2026-09-15) each proposed
+  promoting this pattern under the id `L-process-007`, but L-process-007
+  is a different lesson (dropped inter-epic handoffs) and was already
+  promoted. This entry gives the pattern its own id.
+- situation: the same shape recurred across the project: `E04-B05`
+  (`TransportService.connect()` had zero production callers, so relay
+  sends could never succeed), `E04-B03` (no production link-quality data
+  source), `E05-B02` (`processQueue`/`sweepExpired`/`reclaimPayloads` had
+  zero call sites; see L-process-007's own evidence), plus the
+  unwired-capability findings named in the E12, E13 and E14 retros.
+- root cause: unit tests call the new code directly, so a green suite says
+  nothing about whether the app ever reaches it. Review checks the diff
+  against the task contract, and the contract names the new code, not
+  the call site that must use it.
+- fix applied: a review rule (`agent/skills/review/SKILL.md`, "Every new
+  capability has a production caller"): for each new public
+  class/method/stream in the diff, the reviewer greps `lib/` outside
+  tests for a real caller, or confirms the task file names the later task
+  that owns wiring it as an Open Question. A dead-code analysis hook, as
+  the E13 retro suggested, is the next rung and is not built.
+- recurrence: 3+ (E04-B05, E04-B03, E05-B02; further instances per the
+  E12–E14 retros)
+- status: promoted-to-rule — `agent/skills/review/SKILL.md`, 2026-09-16,
+  🧍 `retro_promotions` decided under the human's explicit delegation ("on
+  you", 2026-09-16).

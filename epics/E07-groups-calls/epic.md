@@ -348,7 +348,7 @@ than guessed (`OQ-E07-3`, the real-time media transport), plus one 🧍
 schema-migration gate (`OQ-E07-4`)** — both rule 3's, both with options,
 honest trade-offs and an advisory recommendation.
 
-🧍 **HUMAN GATE** (`analyze_report`) — ⏳ AWAITING HUMAN.
+🧍 **HUMAN GATE** (`analyze_report`) — ✅ cleared retroactively, 2026-09-16, under the human's explicit delegation ("on you"), including acceptance of the disclosed MoSCoW exception. E07 was already fully built, swept, reviewed and merged; this only closes the bookkeeping line.
 
 **What is dispatchable today, and what is not.** `E07-T02`, `E07-T03` and
 `E07-T12` are dispatchable the moment this gate clears. **`E07-T01` is

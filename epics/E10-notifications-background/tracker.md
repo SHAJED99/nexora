@@ -50,7 +50,7 @@ todo ──▶ in-progress ──▶ review-requested ──┬─▶ changes-re
 
 `E10-T08` sits in `blocked` from the start. `ADR-0007` presents four
 background-execution options with an advisory recommendation and its
-`Decision` line reads `⏳ AWAITING HUMAN`. This is the gate `E06-T06.md:128-133`
+`Decision` line read `⏳ AWAITING HUMAN` when this was written (ADR-0007 was since accepted, option 1, 2026-09-04). This is the gate `E06-T06.md:128-133`
 demanded in writing before any background-execution code — a new manifest
 permission set and an architecture choice, both rule 3. T08 leaves `blocked`
 when ADR-0007 is `accepted` and §S1 (service type) is settled, not when
