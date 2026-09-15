@@ -87,6 +87,8 @@ import 'package:nexora/core/storage/retention_plan.dart';
 import 'package:nexora/core/storage/storage_manager.dart';
 import 'package:nexora/core/storage/storage_settings_repository.dart'
     show StorageMode;
+import 'package:nexora/core/transport/generated/transport_api.g.dart' as pigeon
+    show ConnectionState;
 import 'package:nexora/core/transport/transport_service.dart';
 import 'package:nexora/features/conversations/presentation/conversations_controller.dart'
     show ConversationTile;
@@ -264,6 +266,18 @@ class DashboardController extends GetxController {
   /// cleared when that peer is lost instead of lingering as a stale value.
   String? _latestLatencyDeviceId;
 
+  /// E04-B34: peers a discovery scan reported and no scan has reported lost.
+  /// A link-measured peer that is not in this set is known only through its
+  /// live connection, so it is dropped when that connection ends.
+  final Set<String> _discoveredPeerIds = <String>{};
+
+  /// E04-B34: one connection-state subscription per link-measured peer, so a
+  /// dropped or failed connection clears the peer and its latency instead of
+  /// leaving "Connected" on screen after the peer is gone (live, Pixel 8 Pro,
+  /// 2026-09-15 22:51).
+  final Map<String, StreamSubscription<pigeon.ConnectionState>>
+      _linkStateSubs = <String, StreamSubscription<pigeon.ConnectionState>>{};
+
   /// Decrypted-preview cache, keyed by message id — same reasoning
   /// `ConversationsController._previewCache` already documents (messages are
   /// immutable once stored).
@@ -314,10 +328,12 @@ class DashboardController extends GetxController {
 
     _discoveredSub = _links.transport.discoveredDevices.listen((device) {
       _knownPeerIds.add(device.id);
+      _discoveredPeerIds.add(device.id);
       _recomputeNetworkStatus();
     });
     _lostSub = _links.transport.lostDevices.listen((deviceId) {
       _knownPeerIds.remove(deviceId);
+      _discoveredPeerIds.remove(deviceId);
       // E04-B27: a measurement from a peer that is gone is no longer a real
       // reading (EARS-COMM-26) -- it was left on screen next to "No peers
       // nearby" on real hardware.
@@ -334,10 +350,36 @@ class DashboardController extends GetxController {
       _knownPeerIds.add(quality.deviceId);
       _latestLatencyMs = quality.latencyMs;
       _latestLatencyDeviceId = quality.deviceId;
+      _watchLinkState(quality.deviceId);
       _recomputeNetworkStatus();
     });
 
     _recomputeNetworkStatus();
+  }
+
+  /// E04-B34: follows [deviceId]'s connection state once it has reported a
+  /// link measurement. When the connection ends (`disconnected`/`failed`),
+  /// its latency reading is cleared, and the peer is dropped unless a
+  /// discovery scan still vouches for it (that case stays with
+  /// `lostDevices`, E04-B28).
+  void _watchLinkState(String deviceId) {
+    if (_linkStateSubs.containsKey(deviceId)) return;
+    _linkStateSubs[deviceId] =
+        _links.transport.connectionState(deviceId).listen((state) {
+      if (state != pigeon.ConnectionState.disconnected &&
+          state != pigeon.ConnectionState.failed) {
+        return;
+      }
+      if (!_discoveredPeerIds.contains(deviceId)) {
+        _knownPeerIds.remove(deviceId);
+      }
+      if (_latestLatencyDeviceId == deviceId) {
+        _latestLatencyMs = null;
+        _latestLatencyDeviceId = null;
+      }
+      unawaited(_linkStateSubs.remove(deviceId)?.cancel());
+      _recomputeNetworkStatus();
+    });
   }
 
   @override
@@ -346,6 +388,10 @@ class DashboardController extends GetxController {
     unawaited(_discoveredSub?.cancel());
     unawaited(_lostSub?.cancel());
     unawaited(_linkQualitySub?.cancel());
+    for (final sub in _linkStateSubs.values) {
+      unawaited(sub.cancel());
+    }
+    _linkStateSubs.clear();
     _storagePlanWorker?.dispose();
     super.onClose();
   }
