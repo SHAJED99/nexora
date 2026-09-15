@@ -207,6 +207,14 @@ class BluetoothTransport(
     private const val CONNECT_COLLISION_RETRY_MAX_MS = 1500L
     private const val CONNECT_COLLISION_MAX_ATTEMPTS = 3
 
+    /** E04-B33: total time [doConnect] may spend across its collision
+     * retries before it gives up. `socket.connect()` to an unreachable peer
+     * blocks for a full page timeout, so three attempts could outlive
+     * `ConnectionEnsuringSender`'s 30 s Dart-side connect timeout and emit a
+     * late CONNECTED/FAILED after Dart has already given up. A retry is only
+     * started if it can begin inside this budget. */
+    private const val CONNECT_RETRY_BUDGET_MS = 20_000L
+
     /** E04-T06: how long a discovered device's SDP inquiry
      * ([BluetoothDevice.fetchUuidsWithSdp]) is allowed to stay pending
      * before its [pendingNexoraChecks] entry is dropped unanswered.
@@ -842,6 +850,7 @@ class BluetoothTransport(
       // `acceptLoop` (which registers it in `openSockets`) while this one
       // waits; that accepted socket is reused instead of dialing again.
       var attempt = 0
+      val startedAtMs = android.os.SystemClock.elapsedRealtime()
       while (true) {
         attempt++
         var socket: BluetoothSocket? = null
@@ -866,7 +875,12 @@ class BluetoothTransport(
             eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.CONNECTED) }
             return@Thread
           }
-          if (attempt >= CONNECT_COLLISION_MAX_ATTEMPTS) {
+          // E04-B33: a retry that could only start after the budget is not
+          // attempted; an unreachable peer's blocking connect() otherwise
+          // outlives the Dart-side 30 s timeout.
+          val elapsedMs = android.os.SystemClock.elapsedRealtime() - startedAtMs
+          if (attempt >= CONNECT_COLLISION_MAX_ATTEMPTS ||
+              elapsedMs + CONNECT_COLLISION_RETRY_MAX_MS > CONNECT_RETRY_BUDGET_MS) {
             emitFailure(deviceId)
             return@Thread
           }
