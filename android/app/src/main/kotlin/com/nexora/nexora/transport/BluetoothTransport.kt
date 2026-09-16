@@ -396,6 +396,15 @@ class BluetoothTransport(
    * `ACTION_FOUND`/`ACTION_DISCOVERY_FINISHED` receiver. */
   private var bondStateReceiver: BroadcastReceiver? = null
 
+  /** E04-B36: `ACTION_STATE_CHANGED` + `ACTION_ACL_DISCONNECTED` receiver.
+   * Registered lazily from [startReadLoop] (there is nothing to tear down
+   * before a link exists) and cleared in [release], mirroring
+   * [bondStateReceiver]'s own lifecycle. This is the ONLY reliable signal
+   * that a link died: silence is not observable, because both stacks keep
+   * serving buffered frames on a stale socket for minutes after the peer's
+   * adapter goes off (E04-B36, live 2026-09-16). */
+  private var adapterStateReceiver: BroadcastReceiver? = null
+
   /** Device addresses [connect] is currently waiting on a bond outcome for,
    * mapped to the `connect()` continuation to run once `BOND_BONDED` fires
    * for that address. An address present here is also the signal that a
@@ -1312,6 +1321,7 @@ class BluetoothTransport(
     val liveness = LinkLiveness(deviceId, android.os.SystemClock.elapsedRealtime())
     linkLiveness[socket] = liveness
     ensureKeepaliveScheduler()
+    registerAdapterStateReceiverIfNeeded() // E04-B36
     val thread =
         Thread(
             {
@@ -1448,6 +1458,14 @@ class BluetoothTransport(
       }
     }
     bondStateReceiver = null
+    adapterStateReceiver?.let { // E04-B36
+      try {
+        activity.unregisterReceiver(it)
+      } catch (e: IllegalArgumentException) {
+        // Not registered — nothing to clean up.
+      }
+    }
+    adapterStateReceiver = null
     pendingBondConnections.clear()
     readThreads.values.forEach { it.interrupt() }
     readThreads.clear()
@@ -1482,6 +1500,76 @@ class BluetoothTransport(
     registerReceiverIfNeeded()
     cancelDiscoveryQuietly(bt)
     bt.startDiscovery()
+  }
+
+  /**
+   * E04-B36: registers the adapter-state / ACL-disconnect receiver once.
+   * `ACTION_ACL_DISCONNECTED` fires when the baseband link to one device
+   * drops; `ACTION_STATE_CHANGED` covers this device's own adapter being
+   * switched off, which drops every link at once. Both are delivered by
+   * the platform Bluetooth stack (protected broadcasts), so neither can be
+   * forged by another app.
+   */
+  private fun registerAdapterStateReceiverIfNeeded() {
+    if (adapterStateReceiver != null) return
+    val receiver =
+        object : BroadcastReceiver() {
+          override fun onReceive(context: Context?, intent: Intent?) {
+            intent ?: return
+            when (intent.action) {
+              BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                val state =
+                    intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.STATE_OFF)
+                if (state != BluetoothAdapter.STATE_ON) handleAdapterDown(state)
+              }
+              BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                val device: BluetoothDevice? =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      intent.getParcelableExtra(
+                          BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                    } else {
+                      @Suppress("DEPRECATION")
+                      intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                    }
+                device?.address?.let { handleAclDisconnected(it) }
+              }
+            }
+          }
+        }
+    val filter =
+        IntentFilter().apply {
+          addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+          addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+        }
+    ContextCompat.registerReceiver(activity, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+    adapterStateReceiver = receiver
+  }
+
+  /**
+   * E04-B36: this device's own adapter left `STATE_ON`, so every open link
+   * is gone. Each is torn down through [disconnect], which closes the
+   * socket, clears its liveness state and emits exactly one DISCONNECTED
+   * (the read loop's own two-arg removal then finds nothing left to emit).
+   */
+  private fun handleAdapterDown(state: Int) {
+    val deviceIds = openSockets.keys.toList()
+    android.util.Log.i("NexoraKA", "adapter state=$state, tearing down ${deviceIds.size} link(s)")
+    for (deviceId in deviceIds) disconnect(deviceId)
+  }
+
+  /**
+   * E04-B36: the baseband link to [address] dropped. Only acts when this
+   * address currently has a registered socket; `resolveDeviceId` is not
+   * consulted, because `openSockets` is keyed by whatever id that link was
+   * registered under and the raw address is what the broadcast carries.
+   */
+  private fun handleAclDisconnected(address: String) {
+    if (!openSockets.containsKey(address)) {
+      android.util.Log.i("NexoraKA", "ACL disconnect for $address — no registered socket, ignored")
+      return
+    }
+    android.util.Log.i("NexoraKA", "ACL disconnect for $address — closing link")
+    disconnect(address)
   }
 
   private fun registerReceiverIfNeeded() {
