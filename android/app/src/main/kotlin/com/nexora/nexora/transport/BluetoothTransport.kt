@@ -167,9 +167,22 @@ class BluetoothTransport(
     /** E04-B35: a peer that has proven it sends keepalives and then sends
      * nothing at all for this long is treated as gone, and its link is
      * closed with [disconnect]. Three keepalive intervals, so one or two
-     * late frames do not drop a healthy link. A peer that has never sent a
-     * keepalive (an older build) is never closed for silence. */
+     * late frames do not drop a healthy link. */
     private const val LINK_SILENCE_TIMEOUT_MS = 30_000L
+
+    /** E04-B36: the same silence rule for a peer that has sent frames but
+     * never a keepalive — either an older build, or a current one whose
+     * first keepalive had not gone out yet. Much longer than
+     * [LINK_SILENCE_TIMEOUT_MS] because an idle older peer is legitimately
+     * quiet; closing its link only costs a reconnect on the next send.
+     *
+     * E04-B36 root cause: arming used to require a RECEIVED keepalive, so a
+     * link that died young (peer's first keepalive never sent) was never
+     * armed and never closed — the exact case E04-B35 existed to fix, and
+     * it failed live on 2026-09-16. A successful keepalive WRITE proves
+     * nothing either: RFCOMM buffers a 4-byte write with no error long
+     * after the peer's radio is off. Only a silence deadline detects this. */
+    private const val LINK_IDLE_NO_KEEPALIVE_TIMEOUT_MS = 120_000L
 
     /** Bounded window of recent `send()` attempts per device, used to
      * compute `lossRate` as a real ratio (E06-T04, §6 risk: never let this
@@ -357,8 +370,15 @@ class BluetoothTransport(
     @Volatile var lastReceivedAtMs: Long = nowMs
     @Volatile var lastSentAtMs: Long = nowMs
     /** Set once this peer has sent at least one keepalive, proving it runs
-     * a build that sends them; only then may silence close the link. */
+     * a build that sends them. E04-B36: this now only SELECTS which silence
+     * deadline applies, never whether one applies at all. */
     @Volatile var peerSendsKeepalive: Boolean = false
+
+    /** E04-B36: set by ANY frame received on this link, keepalive or data.
+     * A received frame is what proves the peer was alive, so it is what
+     * starts the silence clock. Arming on keepalives alone left a young
+     * link permanently unwatched (see [LINK_IDLE_NO_KEEPALIVE_TIMEOUT_MS]). */
+    @Volatile var armed: Boolean = false
   }
 
   private val linkLiveness = ConcurrentHashMap<BluetoothSocket, LinkLiveness>()
@@ -1214,10 +1234,21 @@ class BluetoothTransport(
     try {
       val nowMs = android.os.SystemClock.elapsedRealtime()
       val links = linkLiveness.entries.toList()
+      android.util.Log.i(
+          "NexoraKA", "tick links=${links.size} openSockets=${openSockets.size}")
       for ((socket, state) in links) {
         if (openSockets[state.deviceId] !== socket) continue
-        if (state.peerSendsKeepalive &&
-            nowMs - state.lastReceivedAtMs > LINK_SILENCE_TIMEOUT_MS) {
+        val silentMs = nowMs - state.lastReceivedAtMs
+        val deadlineMs =
+            if (state.peerSendsKeepalive) LINK_SILENCE_TIMEOUT_MS
+            else LINK_IDLE_NO_KEEPALIVE_TIMEOUT_MS
+        android.util.Log.i(
+            "NexoraKA",
+            "link ${state.deviceId} armed=${state.armed} ka=${state.peerSendsKeepalive} " +
+                "silent=${silentMs}ms deadline=${deadlineMs}ms")
+        // E04-B36: armed by any received frame, not only by a keepalive.
+        if (state.armed && silentMs > deadlineMs) {
+          android.util.Log.i("NexoraKA", "closing dead link ${state.deviceId} after ${silentMs}ms")
           disconnect(state.deviceId)
         }
       }
@@ -1237,6 +1268,12 @@ class BluetoothTransport(
    * lock and bounded wait as [send]. A failed or timed-out write means the
    * link is dead (or stuck mid-frame), so it is closed with [disconnect],
    * which emits DISCONNECTED.
+   *
+   * E04-B36: the converse does NOT hold. A write that SUCCEEDS proves
+   * nothing about the peer: RFCOMM accepts and buffers a 4-byte write with
+   * no error for minutes after the peer's radio is off (observed live,
+   * 2026-09-16). Detecting that peer is the silence deadline's job in
+   * [keepaliveTick], never this method's return value.
    */
   private fun sendKeepalive(deviceId: String, socket: BluetoothSocket) {
     val result = AtomicBoolean(false)
@@ -1253,6 +1290,7 @@ class BluetoothTransport(
           Thread.currentThread().interrupt()
           return
         }
+    android.util.Log.i("NexoraKA", "keepalive write $deviceId settled=$settled ok=${result.get()}")
     if ((!settled || !result.get()) && openSockets[deviceId] === socket) {
       disconnect(deviceId)
     }
@@ -1285,10 +1323,14 @@ class BluetoothTransport(
                   if (length < 0 || length > MAX_FRAME_BYTES) break // corrupt/hostile frame
                   val payload = readFully(input, length) ?: break
                   liveness.lastReceivedAtMs = android.os.SystemClock.elapsedRealtime()
+                  // E04-B36: any frame proves the peer is alive and starts
+                  // the silence clock for this link.
+                  liveness.armed = true
                   if (length == 0) {
                     // E04-B35: a keepalive. Never application data, so it
                     // is not forwarded to Dart.
                     liveness.peerSendsKeepalive = true
+                    android.util.Log.i("NexoraKA", "keepalive received from $deviceId")
                     continue
                   }
                   eventsScope.launch { eventsApi.onDataReceived(deviceId, payload) }
