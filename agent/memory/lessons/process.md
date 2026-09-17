@@ -653,3 +653,43 @@ automatically for matching tasks (see `index.yaml`).
 - status: promoted-to-rule — `agent/skills/review/SKILL.md`, 2026-09-16,
   🧍 `retro_promotions` decided under the human's explicit delegation ("on
   you", 2026-09-16).
+
+## L-process-018 — a live hardware test's raw logs are read once, summarised into counters, and never persisted, so the evidence is gone before the write-up and the run has to be repeated
+- date: 2026-09-18 | source: E04-B36's first fix-build run (2026-09-16
+  10:47–10:51), re-run 2026-09-18 01:38–01:53.
+- situation: the fix build was installed on both phones and the live check
+  was run. The link did drop within ~4–8 s — a decisive improvement over
+  E04-B35 — but what was kept was a set of derived counters
+  (`pixel_teardown_lines=0 pixel_port_rfc_closed=1 redmi_adapter_lines=2`)
+  plus a handful of lines pasted into the session. Two days later, writing
+  the run log required naming *which* code path closed the socket. The
+  counters could not answer that: `redmi_adapter_lines=2` matched a regex
+  that three different log statements satisfy. Going back for the lines
+  found the phones' `main` ring buffer (2 MiB) had already rolled — the
+  earliest surviving app line was ~37 h after the test. The evidence was
+  unrecoverable and the whole run had to be repeated on both devices,
+  including re-driving the human's personal phone.
+- root cause: the harness treats a live hardware check as a step that
+  yields a verdict, not as a step that produces an *artifact*. Nothing in
+  `skills/implement` or a task's §8 "Manual" block says where the raw
+  output is written, so the natural move — poll, grep, report the number —
+  destroys the primary source at the moment it is read. A device log
+  buffer is volatile and small; unlike a test suite, the check cannot be
+  re-derived later from the same inputs, because the inputs are gone.
+  The counters also encouraged a second error: a regex count invites a
+  mechanism claim it cannot support, which is exactly what §6 of E04-B36
+  already forbade after two wrong root causes in the same bug.
+- fix applied: for any live hardware check, clear the device buffers and
+  start a raw `logcat -v time > <file>` per device *before* the stimulus,
+  keep the files as the run's artifact, and quote from the files in the
+  run log. Grep the files afterwards with one pattern per distinct log
+  statement, never one pattern spanning several — a count over a shared
+  pattern cannot name a mechanism. The 2026-09-18 re-run followed this and
+  produced the quotable lines the first run could not
+  (`adapter state=13, tearing down 1 link(s)` at T₀+43 ms, and the losing
+  `ACL disconnect … no registered socket, ignored` 818 ms after the read
+  loop's own `port_rfc_closed`).
+- recurrence: 1
+- status: lesson. Next rung if it recurs: a rule in `skills/implement`
+  that a task with a §8 Manual block must name the artifact path for each
+  check, checked at review the way `files:` already is.

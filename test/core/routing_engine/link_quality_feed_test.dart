@@ -75,6 +75,143 @@ void main() {
     );
   }
 
+  /// E04-B37: pushes a fake native `onConnectionStateChanged` event through
+  /// the real generated codec, exactly as a Kotlin transport would.
+  void pushConnectionState(
+    String suffix,
+    String deviceId,
+    ConnectionState state,
+  ) {
+    final ByteData eventMessage =
+        TransportEventsApi.pigeonChannelCodec.encodeMessage(
+      <Object?>[deviceId, state],
+    )!;
+    messenger.handlePlatformMessage(
+      'dev.flutter.pigeon.nexora.TransportEventsApi.onConnectionStateChanged.$suffix',
+      eventMessage,
+      (ByteData? _) {},
+    );
+  }
+
+  test('test_EARS_ROUTE_14_a_disconnect_removes_the_link_from_the_graph',
+      () async {
+    const String suffix = 'route14-disconnect';
+    final TransportService transport = TransportService(
+      binaryMessenger: messenger,
+      messageChannelSuffix: suffix,
+    );
+    addTearDown(transport.dispose);
+    final RoutingEngine routing = RoutingEngine(selfId: 'self');
+    final LinkQualityFeed feed =
+        LinkQualityFeed(transport: transport, routing: routing);
+    feed.start();
+    addTearDown(feed.stop);
+
+    pushLinkQuality(suffix, 'neighbor-1', 30, 0.0);
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      routing.computeRoute('neighbor-1', TrafficProfile.interactive),
+      isNotNull,
+      reason: 'precondition: the measurement recorded a link',
+    );
+
+    // Live repro (2026-09-18, Pixel 8 Pro): the peer's Bluetooth went off,
+    // its socket closed, DISCONNECTED reached Dart -- and `computeRoute`
+    // still returned a route, so the Dashboard read "Connected" for as long
+    // as it was watched. On `development` @ `527392b` this expectation fails.
+    pushConnectionState(suffix, 'neighbor-1', ConnectionState.disconnected);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      routing.computeRoute('neighbor-1', TrafficProfile.interactive),
+      isNull,
+    );
+  });
+
+  test('test_EARS_ROUTE_14_a_failed_connection_removes_the_link', () async {
+    const String suffix = 'route14-failed';
+    final TransportService transport = TransportService(
+      binaryMessenger: messenger,
+      messageChannelSuffix: suffix,
+    );
+    addTearDown(transport.dispose);
+    final RoutingEngine routing = RoutingEngine(selfId: 'self');
+    final LinkQualityFeed feed =
+        LinkQualityFeed(transport: transport, routing: routing);
+    feed.start();
+    addTearDown(feed.stop);
+
+    pushLinkQuality(suffix, 'neighbor-1', 30, 0.0);
+    await Future<void>.delayed(Duration.zero);
+
+    pushConnectionState(suffix, 'neighbor-1', ConnectionState.failed);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      routing.computeRoute('neighbor-1', TrafficProfile.interactive),
+      isNull,
+    );
+  });
+
+  test('test_EARS_ROUTE_14_a_live_connection_state_keeps_the_link', () async {
+    const String suffix = 'route14-live';
+    final TransportService transport = TransportService(
+      binaryMessenger: messenger,
+      messageChannelSuffix: suffix,
+    );
+    addTearDown(transport.dispose);
+    final RoutingEngine routing = RoutingEngine(selfId: 'self');
+    final LinkQualityFeed feed =
+        LinkQualityFeed(transport: transport, routing: routing);
+    feed.start();
+    addTearDown(feed.stop);
+
+    pushLinkQuality(suffix, 'neighbor-1', 30, 0.0);
+    await Future<void>.delayed(Duration.zero);
+
+    // The guard that stops the graph flapping on every ordinary connect:
+    // neither of these may remove the link.
+    pushConnectionState(suffix, 'neighbor-1', ConnectionState.connecting);
+    pushConnectionState(suffix, 'neighbor-1', ConnectionState.connected);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      routing.computeRoute('neighbor-1', TrafficProfile.interactive),
+      isNotNull,
+    );
+  });
+
+  test('test_EARS_ROUTE_14_a_different_peers_disconnect_keeps_this_link',
+      () async {
+    const String suffix = 'route14-other';
+    final TransportService transport = TransportService(
+      binaryMessenger: messenger,
+      messageChannelSuffix: suffix,
+    );
+    addTearDown(transport.dispose);
+    final RoutingEngine routing = RoutingEngine(selfId: 'self');
+    final LinkQualityFeed feed =
+        LinkQualityFeed(transport: transport, routing: routing);
+    feed.start();
+    addTearDown(feed.stop);
+
+    pushLinkQuality(suffix, 'neighbor-1', 30, 0.0);
+    pushLinkQuality(suffix, 'neighbor-2', 30, 0.0);
+    await Future<void>.delayed(Duration.zero);
+
+    pushConnectionState(suffix, 'neighbor-2', ConnectionState.disconnected);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      routing.computeRoute('neighbor-1', TrafficProfile.interactive),
+      isNotNull,
+    );
+    expect(
+      routing.computeRoute('neighbor-2', TrafficProfile.interactive),
+      isNull,
+    );
+  });
+
   test('test_EARS_ROUTE_10_measurement_reaches_the_routing_engine', () async {
     const String suffix = 'route10';
     final TransportService transport = TransportService(
