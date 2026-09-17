@@ -39,6 +39,21 @@ class LinkQualityFeed {
   final RoutingEngine routing;
   StreamSubscription<LinkQuality>? _subscription;
 
+  /// E04-B37: one `connectionState` subscription per neighbour this feed has
+  /// recorded a measurement for, so the routing graph can forget the link
+  /// when that connection ends.
+  ///
+  /// Without this, `removeLink` had no production caller on the link-down
+  /// path at all — its only other callers are `onRouteFailure` (a *route*
+  /// failure, not a link going down) and the test-only `NetworkSimulator`.
+  /// `_knownLinks` therefore kept a dead peer forever, `computeRoute` kept
+  /// returning a path over it, and every caller asking "is there a route to
+  /// this peer?" got a stale `yes`. Observed live 2026-09-18: with the peer's
+  /// Bluetooth off and its socket closed, the Dashboard still read
+  /// "Connected" 90 s later (E04-B37; evidence in E04-B36's run log).
+  final Map<String, StreamSubscription<ConnectionState>> _connectionSubs =
+      <String, StreamSubscription<ConnectionState>>{};
+
   /// Subscribes to [TransportService.linkQuality]. Idempotent: a second
   /// call while already subscribed is a no-op, so a caller that calls
   /// `start()` more than once (e.g. bindings re-running under test) never
@@ -53,6 +68,40 @@ class LinkQualityFeed {
   Future<void> stop() async {
     await _subscription?.cancel();
     _subscription = null;
+    // E04-B37: the per-neighbour connection-state subscriptions belong to
+    // this object too, and leak the same way if they are not cancelled here.
+    for (final StreamSubscription<ConnectionState> sub
+        in _connectionSubs.values) {
+      await sub.cancel();
+    }
+    _connectionSubs.clear();
+  }
+
+  /// E04-B37: starts following [deviceId]'s connection state, once, so the
+  /// routing graph learns when this link goes down. Idempotent per device: a
+  /// neighbour reporting a measurement every few seconds must not accumulate
+  /// one subscription per measurement.
+  void _watchConnectionState(String deviceId) {
+    if (_connectionSubs.containsKey(deviceId)) return;
+    _connectionSubs[deviceId] = transport
+        .connectionState(deviceId)
+        .listen((ConnectionState state) => _onConnectionState(deviceId, state));
+  }
+
+  /// E04-B37: removes the `selfId -> deviceId` link from the routing graph
+  /// when that connection ends.
+  ///
+  /// Only `disconnected` and `failed` remove. `connecting`/`connected` must
+  /// not: a link that is mid-handshake or healthy is still a link, and
+  /// removing it here would make the graph flap on every ordinary connect.
+  /// A peer that comes back re-records its link through the existing
+  /// measurement path, so nothing needs to re-add it explicitly.
+  void _onConnectionState(String deviceId, ConnectionState state) {
+    if (state != ConnectionState.disconnected &&
+        state != ConnectionState.failed) {
+      return;
+    }
+    routing.removeLink(routing.selfId, deviceId);
   }
 
   void _onMeasurement(LinkQuality quality) {
@@ -75,6 +124,9 @@ class LinkQualityFeed {
       lossRate: quality.lossRate,
       batteryDrain: kUnmeasuredBatteryDrainNeutral,
     );
+    // E04-B37: a neighbour we have recorded a link for is exactly the set
+    // whose disappearance the routing graph must hear about.
+    _watchConnectionState(quality.deviceId);
   }
 
   /// `latencyMs` must be non-negative; `lossRate` must be a `0.0-1.0` ratio
