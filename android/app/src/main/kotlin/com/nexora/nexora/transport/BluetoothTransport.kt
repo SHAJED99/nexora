@@ -1099,7 +1099,16 @@ class BluetoothTransport(
     // added defensively (it does nothing to an in-flight socket read, but
     // costs nothing and helps if the thread is ever between reads).
     readThreads.remove(deviceId)?.interrupt()
-    openSockets.remove(deviceId)?.let {
+    // E04-B36 (review finding 1): capture whether THIS call is the one that
+    // actually removed the socket. The read loop's own `finally` already
+    // guards its emission with a two-arg `openSockets.remove(deviceId, socket)`,
+    // but there was no symmetric guard here, so the emission below used to fire
+    // unconditionally. `handleAdapterDown` iterates a SNAPSHOT of
+    // `openSockets.keys`, so a link whose read loop hit EOF from the same
+    // adapter-off event — and already emitted — would be announced a second
+    // time for one teardown. Emit only when this call did the teardown.
+    val removedSocket = openSockets.remove(deviceId)
+    removedSocket?.let {
       linkLiveness.remove(it) // E04-B35
       try {
         it.close()
@@ -1110,7 +1119,9 @@ class BluetoothTransport(
     // A future reconnect under the same device id must not inherit this
     // connection's loss history — see the field's own doc comment.
     sendOutcomes.remove(deviceId)
-    eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.DISCONNECTED) }
+    if (removedSocket != null) {
+      eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.DISCONNECTED) }
+    }
   }
 
   /**
