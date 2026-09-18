@@ -108,7 +108,7 @@ automatically for matching tasks (see `index.yaml`).
   intended file list for that commit at the time. Systemic fix applied in
   this retro: added `.claude/worktrees/` to `.gitignore` — a mechanical
   control (git itself now ignores the path) rather than a rule to remember.
-- recurrence: 1
+- recurrence: **2** (2026-09-18: recurred in this session. A `git add -A` in a five-file frontmatter fix swept in ~20 unrelated paths — `.claude/skills/review/SKILL.md`, `.firebaserc`, and a pile of `.verify_shots/*.png|txt` binaries — all of which the same session had repeatedly verified as pre-existing and deliberately untouched. Caught only because the commit's CRLF warnings named files the author knew were not his. Undone with `git reset --soft HEAD~1` before push.)
 - status: promoted-to-hook(.gitignore)
 
 ## L-process-005 — a task's own `files:` fence can be individually correct and still leave a spec-level completeness gap the analyze report's cross-task-contradiction check doesn't catch
@@ -424,10 +424,24 @@ automatically for matching tasks (see `index.yaml`).
   state the exact status value (`blocked`, pending the priority gate) and
   cite `harness.yaml`'s `scheduler.statuses` list directly, the same way
   L-process-009's fix named the exact section title needed.
-- recurrence: 1 (first observed — but 4/4 bug files in the one sweep that
-  produced it, so treating this as load-bearing enough to promote now
-  rather than waiting for a second sweep to repeat it)
-- status: promoted-to-rule — `agent/skills/bug-sweep/SKILL.md` (same
+- recurrence: **2** (2026-09-18: recurred 3/3 on newly-filed bug files —
+  `E01-B01`, `E04-B38`, `E04-B39` — all written with `status: open`, all
+  caught by `--validate` exactly as in 2026-09-02. Notably the author had
+  READ this very lesson file earlier in the same session and still reached
+  for the plausible English word. **The promoted rule did not reach this
+  case**: it lives in `skills/bug-sweep`, but these bugs were filed from a
+  REVIEW GATE and from incidental discovery during live testing, not from a
+  sweep — so nothing in the path the author was actually following named
+  the enum. A rule scoped to one skill cannot cover every way a bug file
+  gets authored; that is the real finding.)
+- status: promoted-to-rule, and now a **HOOK CANDIDATE** (recurrence 2,
+  mechanically checkable — the ladder says a hook beats a rule). Concrete
+  next rung: have `scheduler.py --validate`'s existing `unknown status`
+  error also PRINT the valid vocabulary from `harness.yaml`'s
+  `scheduler.statuses`, so the fix is obvious at the point of failure
+  instead of requiring the author to know where the enum lives. Cheap, and
+  it reaches every authoring path rather than one skill.
+- original status: promoted-to-rule — `agent/skills/bug-sweep/SKILL.md` (same
   section as L-process-011), 2026-09-02 via `skills/retro`, 🧍
   `retro_promotions` ✅ approved by the human, 2026-09-02.
 
