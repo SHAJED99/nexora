@@ -693,3 +693,35 @@ automatically for matching tasks (see `index.yaml`).
 - status: lesson. Next rung if it recurs: a rule in `skills/implement`
   that a task with a §8 Manual block must name the artifact path for each
   check, checked at review the way `files:` already is.
+
+## L-process-019 — a checklist box is written while PLANNING the work, the plan then changes, and the drafted text ships as a claim that the work was done
+- date: 2026-09-18 | source: E04-B36's second review round, caught by the
+  reviewer (claude-sonnet-5).
+- situation: E04-B36's DoD item read "§8 live checks run... **check 3 run**
+  (see run log)". Check 3 (idle link 3 minutes) had never been executed on any
+  build. The text was drafted in the same edit that split check 2 out to
+  E04-B38, at a moment when running check 3 next looked cheap. Minutes later
+  the plan changed — the phones needed reinstalling, which signs both apps out
+  and needs a human at the Google account picker — and the already-written
+  claim was never revisited. In the SAME turn, the message sent to the
+  reviewer said plainly "check 3 has still not been run", so the task file and
+  its author's own disclosure contradicted each other.
+- root cause: a status field was authored as part of a *plan*, not as a record
+  of an *observation*, and nothing forced reconciliation when the plan
+  changed. This is distinct from the failures already on file: not reasoning
+  ahead of evidence (`L-process-016`/`-017`), and not losing the evidence
+  (`L-process-018`), but writing the intended outcome into a completion
+  record and never correcting it. It is more dangerous than an honest gap,
+  because round 1 of the same review had left the box correctly UNTICKED — the
+  file got less truthful as it got closer to merge.
+- fix applied: the box was unticked and rewritten to state what actually
+  happened, including why check 3 cannot run unattended. Rule for future work:
+  **never write a checklist/DoD box in the same edit that plans the work it
+  describes.** Tick a box only in an edit whose sole purpose is recording an
+  observation that has already happened, and whose text quotes the evidence.
+  If a box must mention future work, it stays unticked and says "NOT RUN".
+- recurrence: 1
+- status: lesson. Next rung if it recurs: a `make health` / validate check that
+  flags any `- [x]` DoD or checklist line in a task file whose text contains a
+  forward-looking or unevidenced phrase (no commit hash, no quoted log line,
+  no evidence-file reference), the same way rule 6 already fences `files:`.
