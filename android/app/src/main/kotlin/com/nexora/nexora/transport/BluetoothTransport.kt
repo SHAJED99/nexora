@@ -1243,21 +1243,14 @@ class BluetoothTransport(
     try {
       val nowMs = android.os.SystemClock.elapsedRealtime()
       val links = linkLiveness.entries.toList()
-      android.util.Log.i(
-          "NexoraKA", "tick links=${links.size} openSockets=${openSockets.size}")
       for ((socket, state) in links) {
         if (openSockets[state.deviceId] !== socket) continue
         val silentMs = nowMs - state.lastReceivedAtMs
         val deadlineMs =
             if (state.peerSendsKeepalive) LINK_SILENCE_TIMEOUT_MS
             else LINK_IDLE_NO_KEEPALIVE_TIMEOUT_MS
-        android.util.Log.i(
-            "NexoraKA",
-            "link ${state.deviceId} armed=${state.armed} ka=${state.peerSendsKeepalive} " +
-                "silent=${silentMs}ms deadline=${deadlineMs}ms")
         // E04-B36: armed by any received frame, not only by a keepalive.
         if (state.armed && silentMs > deadlineMs) {
-          android.util.Log.i("NexoraKA", "closing dead link ${state.deviceId} after ${silentMs}ms")
           disconnect(state.deviceId)
         }
       }
@@ -1299,7 +1292,6 @@ class BluetoothTransport(
           Thread.currentThread().interrupt()
           return
         }
-    android.util.Log.i("NexoraKA", "keepalive write $deviceId settled=$settled ok=${result.get()}")
     if ((!settled || !result.get()) && openSockets[deviceId] === socket) {
       disconnect(deviceId)
     }
@@ -1340,7 +1332,6 @@ class BluetoothTransport(
                     // E04-B35: a keepalive. Never application data, so it
                     // is not forwarded to Dart.
                     liveness.peerSendsKeepalive = true
-                    android.util.Log.i("NexoraKA", "keepalive received from $deviceId")
                     continue
                   }
                   eventsScope.launch { eventsApi.onDataReceived(deviceId, payload) }
@@ -1553,7 +1544,6 @@ class BluetoothTransport(
    */
   private fun handleAdapterDown(state: Int) {
     val deviceIds = openSockets.keys.toList()
-    android.util.Log.i("NexoraKA", "adapter state=$state, tearing down ${deviceIds.size} link(s)")
     for (deviceId in deviceIds) disconnect(deviceId)
   }
 
@@ -1565,10 +1555,8 @@ class BluetoothTransport(
    */
   private fun handleAclDisconnected(address: String) {
     if (!openSockets.containsKey(address)) {
-      android.util.Log.i("NexoraKA", "ACL disconnect for $address — no registered socket, ignored")
       return
     }
-    android.util.Log.i("NexoraKA", "ACL disconnect for $address — closing link")
     disconnect(address)
   }
 
