@@ -167,9 +167,22 @@ class BluetoothTransport(
     /** E04-B35: a peer that has proven it sends keepalives and then sends
      * nothing at all for this long is treated as gone, and its link is
      * closed with [disconnect]. Three keepalive intervals, so one or two
-     * late frames do not drop a healthy link. A peer that has never sent a
-     * keepalive (an older build) is never closed for silence. */
+     * late frames do not drop a healthy link. */
     private const val LINK_SILENCE_TIMEOUT_MS = 30_000L
+
+    /** E04-B36: the same silence rule for a peer that has sent frames but
+     * never a keepalive — either an older build, or a current one whose
+     * first keepalive had not gone out yet. Much longer than
+     * [LINK_SILENCE_TIMEOUT_MS] because an idle older peer is legitimately
+     * quiet; closing its link only costs a reconnect on the next send.
+     *
+     * E04-B36 root cause: arming used to require a RECEIVED keepalive, so a
+     * link that died young (peer's first keepalive never sent) was never
+     * armed and never closed — the exact case E04-B35 existed to fix, and
+     * it failed live on 2026-09-16. A successful keepalive WRITE proves
+     * nothing either: RFCOMM buffers a 4-byte write with no error long
+     * after the peer's radio is off. Only a silence deadline detects this. */
+    private const val LINK_IDLE_NO_KEEPALIVE_TIMEOUT_MS = 120_000L
 
     /** Bounded window of recent `send()` attempts per device, used to
      * compute `lossRate` as a real ratio (E06-T04, §6 risk: never let this
@@ -357,8 +370,15 @@ class BluetoothTransport(
     @Volatile var lastReceivedAtMs: Long = nowMs
     @Volatile var lastSentAtMs: Long = nowMs
     /** Set once this peer has sent at least one keepalive, proving it runs
-     * a build that sends them; only then may silence close the link. */
+     * a build that sends them. E04-B36: this now only SELECTS which silence
+     * deadline applies, never whether one applies at all. */
     @Volatile var peerSendsKeepalive: Boolean = false
+
+    /** E04-B36: set by ANY frame received on this link, keepalive or data.
+     * A received frame is what proves the peer was alive, so it is what
+     * starts the silence clock. Arming on keepalives alone left a young
+     * link permanently unwatched (see [LINK_IDLE_NO_KEEPALIVE_TIMEOUT_MS]). */
+    @Volatile var armed: Boolean = false
   }
 
   private val linkLiveness = ConcurrentHashMap<BluetoothSocket, LinkLiveness>()
@@ -375,6 +395,15 @@ class BluetoothTransport(
    * [registerReceiverIfNeeded]'s own lazy-registration shape for the
    * `ACTION_FOUND`/`ACTION_DISCOVERY_FINISHED` receiver. */
   private var bondStateReceiver: BroadcastReceiver? = null
+
+  /** E04-B36: `ACTION_STATE_CHANGED` + `ACTION_ACL_DISCONNECTED` receiver.
+   * Registered lazily from [startReadLoop] (there is nothing to tear down
+   * before a link exists) and cleared in [release], mirroring
+   * [bondStateReceiver]'s own lifecycle. This is the ONLY reliable signal
+   * that a link died: silence is not observable, because both stacks keep
+   * serving buffered frames on a stale socket for minutes after the peer's
+   * adapter goes off (E04-B36, live 2026-09-16). */
+  private var adapterStateReceiver: BroadcastReceiver? = null
 
   /** Device addresses [connect] is currently waiting on a bond outcome for,
    * mapped to the `connect()` continuation to run once `BOND_BONDED` fires
@@ -1070,7 +1099,16 @@ class BluetoothTransport(
     // added defensively (it does nothing to an in-flight socket read, but
     // costs nothing and helps if the thread is ever between reads).
     readThreads.remove(deviceId)?.interrupt()
-    openSockets.remove(deviceId)?.let {
+    // E04-B36 (review finding 1): capture whether THIS call is the one that
+    // actually removed the socket. The read loop's own `finally` already
+    // guards its emission with a two-arg `openSockets.remove(deviceId, socket)`,
+    // but there was no symmetric guard here, so the emission below used to fire
+    // unconditionally. `handleAdapterDown` iterates a SNAPSHOT of
+    // `openSockets.keys`, so a link whose read loop hit EOF from the same
+    // adapter-off event — and already emitted — would be announced a second
+    // time for one teardown. Emit only when this call did the teardown.
+    val removedSocket = openSockets.remove(deviceId)
+    removedSocket?.let {
       linkLiveness.remove(it) // E04-B35
       try {
         it.close()
@@ -1081,7 +1119,9 @@ class BluetoothTransport(
     // A future reconnect under the same device id must not inherit this
     // connection's loss history — see the field's own doc comment.
     sendOutcomes.remove(deviceId)
-    eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.DISCONNECTED) }
+    if (removedSocket != null) {
+      eventsScope.launch { eventsApi.onConnectionStateChanged(deviceId, ConnectionState.DISCONNECTED) }
+    }
   }
 
   /**
@@ -1216,8 +1256,12 @@ class BluetoothTransport(
       val links = linkLiveness.entries.toList()
       for ((socket, state) in links) {
         if (openSockets[state.deviceId] !== socket) continue
-        if (state.peerSendsKeepalive &&
-            nowMs - state.lastReceivedAtMs > LINK_SILENCE_TIMEOUT_MS) {
+        val silentMs = nowMs - state.lastReceivedAtMs
+        val deadlineMs =
+            if (state.peerSendsKeepalive) LINK_SILENCE_TIMEOUT_MS
+            else LINK_IDLE_NO_KEEPALIVE_TIMEOUT_MS
+        // E04-B36: armed by any received frame, not only by a keepalive.
+        if (state.armed && silentMs > deadlineMs) {
           disconnect(state.deviceId)
         }
       }
@@ -1237,6 +1281,12 @@ class BluetoothTransport(
    * lock and bounded wait as [send]. A failed or timed-out write means the
    * link is dead (or stuck mid-frame), so it is closed with [disconnect],
    * which emits DISCONNECTED.
+   *
+   * E04-B36: the converse does NOT hold. A write that SUCCEEDS proves
+   * nothing about the peer: RFCOMM accepts and buffers a 4-byte write with
+   * no error for minutes after the peer's radio is off (observed live,
+   * 2026-09-16). Detecting that peer is the silence deadline's job in
+   * [keepaliveTick], never this method's return value.
    */
   private fun sendKeepalive(deviceId: String, socket: BluetoothSocket) {
     val result = AtomicBoolean(false)
@@ -1274,6 +1324,7 @@ class BluetoothTransport(
     val liveness = LinkLiveness(deviceId, android.os.SystemClock.elapsedRealtime())
     linkLiveness[socket] = liveness
     ensureKeepaliveScheduler()
+    registerAdapterStateReceiverIfNeeded() // E04-B36
     val thread =
         Thread(
             {
@@ -1285,6 +1336,9 @@ class BluetoothTransport(
                   if (length < 0 || length > MAX_FRAME_BYTES) break // corrupt/hostile frame
                   val payload = readFully(input, length) ?: break
                   liveness.lastReceivedAtMs = android.os.SystemClock.elapsedRealtime()
+                  // E04-B36: any frame proves the peer is alive and starts
+                  // the silence clock for this link.
+                  liveness.armed = true
                   if (length == 0) {
                     // E04-B35: a keepalive. Never application data, so it
                     // is not forwarded to Dart.
@@ -1406,6 +1460,14 @@ class BluetoothTransport(
       }
     }
     bondStateReceiver = null
+    adapterStateReceiver?.let { // E04-B36
+      try {
+        activity.unregisterReceiver(it)
+      } catch (e: IllegalArgumentException) {
+        // Not registered — nothing to clean up.
+      }
+    }
+    adapterStateReceiver = null
     pendingBondConnections.clear()
     readThreads.values.forEach { it.interrupt() }
     readThreads.clear()
@@ -1440,6 +1502,73 @@ class BluetoothTransport(
     registerReceiverIfNeeded()
     cancelDiscoveryQuietly(bt)
     bt.startDiscovery()
+  }
+
+  /**
+   * E04-B36: registers the adapter-state / ACL-disconnect receiver once.
+   * `ACTION_ACL_DISCONNECTED` fires when the baseband link to one device
+   * drops; `ACTION_STATE_CHANGED` covers this device's own adapter being
+   * switched off, which drops every link at once. Both are delivered by
+   * the platform Bluetooth stack (protected broadcasts), so neither can be
+   * forged by another app.
+   */
+  private fun registerAdapterStateReceiverIfNeeded() {
+    if (adapterStateReceiver != null) return
+    val receiver =
+        object : BroadcastReceiver() {
+          override fun onReceive(context: Context?, intent: Intent?) {
+            intent ?: return
+            when (intent.action) {
+              BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                val state =
+                    intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.STATE_OFF)
+                if (state != BluetoothAdapter.STATE_ON) handleAdapterDown(state)
+              }
+              BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                val device: BluetoothDevice? =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      intent.getParcelableExtra(
+                          BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                    } else {
+                      @Suppress("DEPRECATION")
+                      intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                    }
+                device?.address?.let { handleAclDisconnected(it) }
+              }
+            }
+          }
+        }
+    val filter =
+        IntentFilter().apply {
+          addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+          addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+        }
+    ContextCompat.registerReceiver(activity, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+    adapterStateReceiver = receiver
+  }
+
+  /**
+   * E04-B36: this device's own adapter left `STATE_ON`, so every open link
+   * is gone. Each is torn down through [disconnect], which closes the
+   * socket, clears its liveness state and emits exactly one DISCONNECTED
+   * (the read loop's own two-arg removal then finds nothing left to emit).
+   */
+  private fun handleAdapterDown(state: Int) {
+    val deviceIds = openSockets.keys.toList()
+    for (deviceId in deviceIds) disconnect(deviceId)
+  }
+
+  /**
+   * E04-B36: the baseband link to [address] dropped. Only acts when this
+   * address currently has a registered socket; `resolveDeviceId` is not
+   * consulted, because `openSockets` is keyed by whatever id that link was
+   * registered under and the raw address is what the broadcast carries.
+   */
+  private fun handleAclDisconnected(address: String) {
+    if (!openSockets.containsKey(address)) {
+      return
+    }
+    disconnect(address)
   }
 
   private fun registerReceiverIfNeeded() {
