@@ -509,7 +509,7 @@ chain — can start once discovery is real, in parallel with T03c/T04.
   fully reverted — confirmed via `git diff`) captured each device's real
   `selfDeviceId` straight from logcat: Redmi `65d14b4c75d6ddf5`, Pixel
   `aecdcd6f9b32dc0f` — neither resembling either device's own Bluetooth
-  MAC address (the Pixel's is `B8:DB:38:7C:D4:BF`). Since the chat's own
+  MAC address (the Pixel's is `PHONE-A`). Since the chat's own
   `conversationId`/`RelayPacketFrame.destination` is always the peer's
   Bluetooth MAC (confirmed by every chat screenshot this session) and
   `InboundPipeline`'s `isForUs` check compares that against the
@@ -642,7 +642,7 @@ widening `E04-B23`'s own scope fence after the fact.
   Redmi's `relationships` table has no row at all for that address —
   the conversation is pure orphaned `messages` data, while the CORRECT,
   working conversation for this same peer already exists in parallel,
-  keyed by the Pixel's real address (`B8:DB:38:7C:D4:BF`), `Allowed`.
+  keyed by the Pixel's real address (`PHONE-A`), `Allowed`.
   Root cause: this specific conversation was created by a bad accept
   event before E04-B21/B22 existed — those fixes only change what a
   FUTURE accept event resolves to, with no mechanism to correct data

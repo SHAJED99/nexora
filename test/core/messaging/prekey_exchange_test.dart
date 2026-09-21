@@ -436,7 +436,7 @@ void main() {
     // `wireStacks`'s own convention above (MAC == selfDeviceId) can never
     // exercise this task's actual fix, since the two would always already
     // match. This mirrors the real-hardware shape E04-B12 confirmed live
-    // (`B8:DB:38:7C:D4:BF` vs. `aecdcd6f9b32dc0f`).
+    // (`PHONE-A` vs. `aecdcd6f9b32dc0f`).
 
     test(
       'test_E04_B13_outbound_control_frame_uses_learned_remoteSelfDeviceId',
