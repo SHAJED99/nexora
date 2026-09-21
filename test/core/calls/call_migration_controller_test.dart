@@ -204,6 +204,7 @@ class _FakeSignaling extends CallSignaling {
   @override
   Stream<String> get pathProbeEchoes => _echoController.stream;
 
+  @override
   Future<void> dispose() => _echoController.close();
 }
 
