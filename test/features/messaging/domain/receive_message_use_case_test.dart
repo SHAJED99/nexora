@@ -356,7 +356,7 @@ void main() {
   // E04-B26: each device mints a 1:1 conversation id from its OWN
   // `relationships.device_id` for the peer, and the sender puts its own id
   // into the envelope. Live hardware: Pixel's id for Redmi is
-  // `00:00:46:00:00:01`, Redmi's id for Pixel is `B8:DB:38:7C:D4:BF`, so every
+  // `00:00:46:00:00:01`, Redmi's id for Pixel is `PHONE-A`, so every
   // inbound message landed in a ghost conversation on the receiver.
   group('E04-B26 — inbound conversation id remap', () {
     late AppDatabase db;
