@@ -22,7 +22,11 @@ void main() {
     expect(relationship, isNull);
   });
 
-  test('upsert then get round-trips deviceId and state', () async {
+  // EARS-TRUST-4 (FR-TRUST-001): the write reaches the Drift table and a
+  // separate read returns it, so the relationship is persisted rather than
+  // held in memory by the repository.
+  test('test_EARS_TRUST_4_an_established_relationship_is_persisted_and_read_back',
+      () async {
     await repository.upsert('device-1', RelationshipState.allowed);
 
     final relationship = await repository.get('device-1');
@@ -32,7 +36,11 @@ void main() {
     expect(relationship.state, RelationshipState.allowed);
   });
 
-  test('upsert on an existing deviceId updates state, not a second row',
+  // EARS-TRUST-4 (FR-TRUST-001): covers the `trusted` case the requirement
+  // names, and the `rather than add a second` half of the criterion.
+  test(
+      'test_EARS_TRUST_4b_re_establishing_as_trusted_updates_the_stored_row_'
+      'not_a_second',
       () async {
     await repository.upsert('device-1', RelationshipState.unknown);
     await repository.upsert('device-1', RelationshipState.trusted);
