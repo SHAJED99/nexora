@@ -8,13 +8,15 @@ PY ?= $(shell python3 -c "" >/dev/null 2>&1 && echo python3 || echo python)
 SCHED := $(PY) agent/orchestrator/scheduler.py
 NODE := node
 LAYER ?=
+ID ?=
+CHECK ?=
 SCREEN ?=
 IMPL ?=
 STRICT ?=
 PORT ?= 8787
 OUT ?= harness-status.html
 
-.PHONY: next status review validate health metrics metrics-json hooks lessons \
+.PHONY: next status review validate health metrics metrics-json hooks lessons trace \
         design-extract design-contract design-verify design-selftest design-probe \
         dashboard dashboard-snapshot help
 
@@ -33,6 +35,8 @@ dashboard-snapshot: ## one static, self-contained HTML snapshot -> $(OUT)
 	$(PY) agent/orchestrator/dashboard.py --html $(OUT)
 health:          ## decay checks — the 7 ways the harness dies quietly; STRICT=1 fails on warnings too
 	$(PY) agent/orchestrator/health.py $(if $(STRICT),--strict,)
+trace:           ## requirement → task → test chain + orphans → docs/traceability.md; make trace ID=FR-AUTH-001 for a scoped walk
+	$(PY) agent/orchestrator/traceability.py $(if $(ID),--id $(ID),) $(if $(CHECK),--check,)
 
 # ── Design fidelity (rule 2) ──────────────────────────────────────────────────
 design-extract:  ## design source → golden screenshots + DOM/token dumps
