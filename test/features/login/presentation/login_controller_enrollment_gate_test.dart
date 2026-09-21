@@ -15,8 +15,6 @@
 // `conversations_groups_test.dart` proves its own cross-controller
 // navigation: a real `GetMaterialApp` with `getPages` recording which
 // route was actually reached, then asserting `Get.currentRoute`.
-import 'dart:async';
-
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
