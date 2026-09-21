@@ -29,6 +29,7 @@ you'd rather it live here.
 ## Acceptance criteria (epic-level, EARS)
 - **EARS-VER-1**: WHEN installed version is UPDATE_REQUIRED, the system SHALL block communication and present a non-dismissible mandatory update prompt via Google Play. (FR-VER-006)
 - **EARS-VER-2**: Mandatory updates SHALL NOT delete local messages, recordings, attachments, settings, or history. (FR-VER-009)
+- **EARS-VER-20**: WHEN a newly published `minimumSupportedBuild` is above an already-installed build, the system SHALL retroactively evaluate that build as UPDATE_REQUIRED, and SHALL NOT downgrade the verdict to the dismissible UPDATE_AVAILABLE. (FR-VER-010)
 
 ## Tasks
 6 tasks, sharded 2026-09-05 — see `tracker.md`. One (`T03`) is sharded but
