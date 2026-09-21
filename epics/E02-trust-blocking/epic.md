@@ -65,6 +65,7 @@ exact UI states (pending request, blocked-list view) are enumerated against
 - **EARS-TRUST-1**: WHEN device A sends a connection request to device B, the system SHALL let B evaluate independently into Trusted/Allowed/Unknown/Blocked. (FR-TRUST-003)
 - **EARS-TRUST-2**: WHEN B has A configured as trusted, the system SHALL auto-accept A's request without the normal authentication flow. (FR-TRUST-004)
 - **EARS-TRUST-3**: A connection SHALL be permitted only when both sides independently allow it. (FR-TRUST-005)
+- **EARS-TRUST-4**: WHEN a relationship is established with a device -- trusted included -- the system SHALL persist it, so a later read returns that device's stored state, and re-establishing it SHALL update the existing record rather than add a second. (FR-TRUST-001)
 - **EARS-BLOCK-1**: IF user A blocks user B, THEN the system SHALL prevent all direct communication between them, in both directions. (FR-BLOCK-001)
 
 ## Tasks

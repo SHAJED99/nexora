@@ -5,7 +5,7 @@
 > `files:` lists and EARS-named tests. If this report and the repo disagree,
 > the repo wins: regenerate, never patch.
 
-Generated from commit `4a51af7` (2026-09-22) by `agent/orchestrator/traceability.py`.
+Generated from commit `d256a4e` (2026-09-22) by `agent/orchestrator/traceability.py`.
 
 ## Coverage
 
@@ -15,16 +15,16 @@ Generated from commit `4a51af7` (2026-09-22) by `agent/orchestrator/traceability
 | …of which descoped (held out of orphan classes) | 1 | 0.9% |
 | …mapped to an epic | 111 | 98.2% |
 | …mapped to a task | 107 | 94.7% |
-| …owning an EARS criterion | 98 | 86.7% |
-| …reaching an EARS-named test | 97 | 85.8% |
+| …owning an EARS criterion | 99 | 87.6% |
+| …reaching an EARS-named test | 98 | 86.7% |
 
 | Artifact | Count |
 |---|---:|
 | Epics | 16 |
 | Tasks | 232 |
-| EARS criteria declared | 282 |
-| EARS ids with >=1 test | 251 |
-| Distinct EARS ids found in tests | 257 |
+| EARS criteria declared | 283 |
+| EARS ids with >=1 test | 252 |
+| Distinct EARS ids found in tests | 259 |
 | ADRs | 8 |
 | Design contracts | 26 |
 
@@ -116,7 +116,7 @@ is green is the CI gate's answer, not this file's.
 | `FR-STORE-005` | E08, E15 | E08-B02, E08-B03, E08-B05, E08-T01, E08-T02, E08-T03, E08-T04, E08-T06, E15-T09 | EARS-STORE-1, EARS-STORE-10, EARS-STORE-13, EARS-STORE-14, EARS-STORE-15, EARS-STORE-21, EARS-STORE-3, EARS-STORE-5, EARS-STORE-7, EARS-STORE-8, EARS-STORE-9 | 10 |
 | `FR-STORE-006` | E08, E15 | E08-B02, E08-B06, E08-T07, E08-T08, E15-T09 | EARS-STORE-17, EARS-STORE-19, EARS-STORE-2, EARS-STORE-22 | 2 |
 | `FR-STORE-007` | E08, E15 | E08-B01, E08-B02, E08-B04, E08-B05, E08-B06, E08-B07, E08-T01, E08-T06, E08-T07, E08-T08, E15-T09 | EARS-STORE-13, EARS-STORE-18, EARS-STORE-21, EARS-STORE-3, EARS-STORE-9 | 7 |
-| `FR-TRUST-001` | E02 | E02-T01 | — | — |
+| `FR-TRUST-001` | E02 | E02-T01 | EARS-TRUST-4 | 1 |
 | `FR-TRUST-002` | E02 | E02-T01 | — | — |
 | `FR-TRUST-003` | E02, E06 | E02-T01, E02-T02, E06-T07, E06-T09, E06-T10 | EARS-COMM-15, EARS-COMM-17, EARS-COMM-20, EARS-DEV-1, EARS-TRUST-1, EARS-TRUST-2 | 6 |
 | `FR-TRUST-004` | E02 | E02-T01, E02-T02 | EARS-TRUST-1, EARS-TRUST-2 | 2 |
@@ -159,14 +159,14 @@ Both directions. Forward gaps hide missing work; backward gaps hide
 |---|---:|---|---|---|
 | requirement with no epic | 2 | scope never planned | `skills/epic-breakdown` | no |
 | requirement with no task | 6 | epic never sharded, or sharded incompletely | `skills/epic-breakdown` | no |
-| requirement owning no EARS criterion | 15 | invisible to the join; prose cross-references do not count | `skills/task-sharding` | no |
-| requirement with no test | 15 | rule 7 breach — unproven, not done | `new test task` | **yes** |
+| requirement owning no EARS criterion | 14 | invisible to the join; prose cross-references do not count | `skills/task-sharding` | no |
+| requirement with no test | 14 | rule 7 breach — unproven, not done | `new test task` | **yes** |
 | task with empty `traces_to:` | 1 | rule 1 breach — it isn't a task | `skills/question-resolution` | no |
 | task citing a requirement not in `spec/srs.md` | 1 | building something nobody specified | `skills/change-impact` | no |
 | `done` task with no EARS test | 10 | "done" that isn't | `revalidation task` | **yes** |
 | EARS criterion with no test | 31 | criterion asserted, never proven | `new test task` | no |
 | EARS criterion citing no requirement | 5 | proves nothing traceable | `skills/task-sharding` | no |
-| test matching no declared EARS id | 6 | proves nothing traceable | `rename or delete task` | no |
+| test matching no declared EARS id | 7 | proves nothing traceable | `rename or delete task` | no |
 | ADR nothing cites | 0 | dead decision, or decisions being made in diffs | `audit or supersede` | no |
 | superseded ADR still cited | 0 | task honouring a reversed decision | `skills/change-impact` | **yes** |
 | design contract no task builds | 10 | rule 2 breach — screen unbuilt or built off-contract | `skills/design-fidelity` | no |
@@ -191,7 +191,7 @@ Route to `skills/epic-breakdown`.
 - `NFR-PERF-001`
 - `NFR-REL-001`
 
-### requirement owning no EARS criterion — 15
+### requirement owning no EARS criterion — 14
 
 Route to `skills/task-sharding`.
 
@@ -204,14 +204,13 @@ Route to `skills/task-sharding`.
 - `FR-ROUTE-008`
 - `FR-STORE-002`
 - `FR-STORE-003`
-- `FR-TRUST-001`
 - `FR-TRUST-002`
 - `FR-TRUST-006`
 - `FR-UI-003`
 - `FR-UI-005`
 - `NFR-PERF-001`
 
-### requirement with no test — 15
+### requirement with no test — 14
 
 Route to `new test task`.
 
@@ -224,7 +223,6 @@ Route to `new test task`.
 - `FR-ROUTE-008`
 - `FR-STORE-002`
 - `FR-STORE-003`
-- `FR-TRUST-001`
 - `FR-TRUST-002`
 - `FR-TRUST-006`
 - `FR-UI-003`
@@ -304,7 +302,7 @@ Route to `skills/task-sharding`.
 - `EARS-TRANSPORT-7`
 - `EARS-UI-6`
 
-### test matching no declared EARS id — 6
+### test matching no declared EARS id — 7
 
 Route to `rename or delete task`.
 
@@ -313,6 +311,7 @@ Route to `rename or delete task`.
 - `EARS-FB-21`
 - `EARS-RECOVER-6b`
 - `EARS-ROUTE-004`
+- `EARS-TRUST-4b`
 - `EARS-VER-20b`
 
 ### design contract no task builds — 10
@@ -380,10 +379,10 @@ Route to `skills/question-resolution`.
 
 | Blocking class | Count | Clear? |
 |---|---:|---|
-| requirement with no EARS-named test | 15 | ❌ |
+| requirement with no EARS-named test | 14 | ❌ |
 | `done` task with no passing EARS test | 10 | ❌ |
 | `done` task whose dependency is not done | 0 | ✅ |
 | superseded ADR still cited | 0 | ✅ |
 
-**Blocking orphans: 25.** These are release blockers. Orphans knowingly shipped belong in the changelog's Known gaps.
+**Blocking orphans: 24.** These are release blockers. Orphans knowingly shipped belong in the changelog's Known gaps.
 
