@@ -138,7 +138,7 @@ destructive-treatment fork (`GAP-035`/`GAP-039`, inherited from `GAP-021`).
 - **EARS-DIAG-4**: The Security Center screen SHALL render only device identifiers, record types and timestamps, and SHALL NOT render key material, session material, message content or location data. (FR-DIAG-003, FR-DIAG-002)
 - **EARS-DIAG-5**: The Security Center screen SHALL offer no action that changes trust, block or revocation state. (FR-DIAG-003)
 - **EARS-ROUTE-13**: The Network screen SHALL present each transport and each active route from the shipped `TransportService`/`RoutingEngine` state, and SHALL present an unmeasured signal as unmeasured rather than as a numeric value. (FR-ROUTE-010, FR-ROUTE-007)
-- **EARS-ROUTE-14**: The Network screen SHALL offer no control that changes transport selection or routing. (FR-ROUTE-010, FR-DISC-003)
+- **EARS-ROUTE-15**: The Network screen SHALL offer no control that changes transport selection or routing. (FR-ROUTE-010, FR-DISC-003)
 - **EARS-PLAT-15**: The Battery screen SHALL present whether background operation is running and which of Doze, Battery Saver and background-execution restriction are in effect, reporting an unreported restriction as unknown. (FR-PLAT-004, FR-PLAT-002)
 - **EARS-PLAT-16**: The Battery screen SHALL offer no control that purports to change an operating-system power restriction. (FR-PLAT-004)
 - **EARS-VER-18**: The About screen SHALL present the installed version and build number, the cached version policy, and the evaluated version state, all read from the shipped `E14` components. (FR-VER-012, FR-VER-005, FR-VER-008)

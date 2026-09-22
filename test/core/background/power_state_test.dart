@@ -41,8 +41,8 @@ void main() {
     );
   }
 
-  group('test_EARS_PLAT_10_state_change_emits', () {
-    // EARS-PLAT-10 (FR-PLAT-002, FR-PLAT-003): WHEN the device enters or
+  group('test_EARS_PLAT_17_state_change_emits', () {
+    // EARS-PLAT-17 (FR-PLAT-002, FR-PLAT-003): WHEN the device enters or
     // leaves Doze, Battery Saver, background restriction or screen lock,
     // the system SHALL emit a PowerState reflecting the new value. Proven
     // here per flag: a state that flips exactly one signal from the
