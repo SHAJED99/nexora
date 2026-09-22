@@ -59,7 +59,7 @@ it silently, and states what it did and did not measure.
 | E10-T06 | Group-event notifications — `GroupMembershipService` seam | backend | S | should | NOTIFY-12, 13 | todo |
 | E10-T07 | Storage-warning notifications — `StorageManager.latestPlan` observer | backend | S | should | NOTIFY-14, 15 | todo |
 | E10-T08 | Android foreground service — retained engine, persistent notification, boot restart | cross-cutting | M | must | PLAT-7, 8, 9, 10 | todo (unblocked 2026-09-04 — ADR-0007 accepted) |
-| E10-T09 | Power-state signals — Doze, Battery Saver, screen lock, restriction | cross-cutting | S | should | PLAT-10, 11 | todo |
+| E10-T09 | Power-state signals — Doze, Battery Saver, screen lock, restriction | cross-cutting | S | should | PLAT-17, 11 | todo |
 | E10-T10 | Adaptive background policy — one tick, cadence + discovery | backend | M | should | PLAT-12, 13, 14 | todo |
 
 DAG, collision matrix and the "why there is no frontend task" rationale:

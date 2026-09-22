@@ -240,8 +240,12 @@ class _MenuGroup extends StatelessWidget {
 }
 
 /// One menu row inside a `_MenuGroup` — no fill/border/radius of its own
-/// (those belong to the group). Tapping shows a "Coming soon"
-/// acknowledgement (task §3/§4 — no sub-screen exists yet for any row).
+/// (those belong to the group). Tapping navigates to the row's own
+/// sub-screen: `FR-UI-006` (`IMP-003`) requires every Settings row to
+/// navigate and forbids a non-navigating acknowledgement, and `E15` built
+/// all eight sub-screens. This comment previously described the original
+/// "Coming soon" acknowledgement, which `settings_controller.dart` no
+/// longer has.
 class _MenuRow extends StatelessWidget {
   const _MenuRow({required this.spec, required this.controller});
 
