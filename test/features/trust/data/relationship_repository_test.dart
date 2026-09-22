@@ -39,7 +39,7 @@ void main() {
   // EARS-TRUST-4 (FR-TRUST-001): covers the `trusted` case the requirement
   // names, and the `rather than add a second` half of the criterion.
   test(
-      'test_EARS_TRUST_4b_re_establishing_as_trusted_updates_the_stored_row_'
+      'test_EARS_TRUST_4_re_establishing_as_trusted_updates_the_stored_row_'
       'not_a_second',
       () async {
     await repository.upsert('device-1', RelationshipState.unknown);

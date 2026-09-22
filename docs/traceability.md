@@ -5,7 +5,7 @@
 > `files:` lists and EARS-named tests. If this report and the repo disagree,
 > the repo wins: regenerate, never patch.
 
-Generated from commit `cf93a15` (2026-09-22) by `agent/orchestrator/traceability.py`.
+Generated from commit `eaa7f66` (2026-09-23) by `agent/orchestrator/traceability.py`.
 
 ## Coverage
 
@@ -22,9 +22,9 @@ Generated from commit `cf93a15` (2026-09-22) by `agent/orchestrator/traceability
 |---|---:|
 | Epics | 16 |
 | Tasks | 232 |
-| EARS criteria declared | 283 |
-| EARS ids with >=1 test | 258 |
-| Distinct EARS ids found in tests | 265 |
+| EARS criteria declared | 286 |
+| EARS ids with >=1 test | 261 |
+| Distinct EARS ids found in tests | 262 |
 | ADRs | 8 |
 | Design contracts | 26 |
 
@@ -36,7 +36,7 @@ is green is the CI gate's answer, not this file's.
 
 | Requirement | Epics | Tasks | EARS | Tests |
 |---|---|---|---|---:|
-| `FR-ABUSE-001` | E13, E15 | E13-B01, E13-T01, E13-T02, E13-T03, E13-T04, E13-T05, E13-T07, E15-T06 | EARS-ABUSE-1, EARS-ABUSE-10, EARS-ABUSE-11, EARS-ABUSE-2, EARS-ABUSE-3, EARS-ABUSE-3b, EARS-ABUSE-4, EARS-ABUSE-5, EARS-ABUSE-6, EARS-ABUSE-7, EARS-ABUSE-8, EARS-ABUSE-9 | 11 |
+| `FR-ABUSE-001` | E13, E15 | E13-B01, E13-T01, E13-T02, E13-T03, E13-T04, E13-T05, E13-T07, E15-T06 | EARS-ABUSE-1, EARS-ABUSE-10, EARS-ABUSE-11, EARS-ABUSE-17, EARS-ABUSE-2, EARS-ABUSE-3, EARS-ABUSE-3b, EARS-ABUSE-4, EARS-ABUSE-5, EARS-ABUSE-6, EARS-ABUSE-7, EARS-ABUSE-8, EARS-ABUSE-9 | 11 |
 | `FR-AUTH-001` | E01, E12 | E01-B01, E01-T01, E12-B01 | EARS-AUTH-1, EARS-AUTH-3, EARS-AUTH-x1, EARS-AUTH-x2 | 3 |
 | `FR-AUTH-002` | E01, E15 | E01-T01, E15-T07 | EARS-AUTH-13 | 1 |
 | `FR-AUTH-003` | E01 | E01-T01 | EARS-AUTH-2 | 1 |
@@ -64,7 +64,7 @@ is green is the CI gate's answer, not this file's.
 | `FR-DISC-001` | E04, E09, E15 | E04-B04, E04-B05, E04-B06, E04-B07, E04-B08, E04-B09, E04-B10, E04-B11, E04-B12, E04-B13, E04-B15, E04-B17, E04-B18, E04-B19, E04-B21, E04-B22, E04-B28, E04-B29, E04-B30, E04-B31, E04-B32, E04-B33, E04-T03a, E04-T03b, E04-T03c, E04-T05, E04-T06, E04-T07, E09-B03, E15-T08 | EARS-DEV-3, EARS-DISC-2, EARS-TRANSPORT-2, EARS-TRANSPORT-3 | 2 |
 | `FR-DISC-002` | E04 | E04-B04, E04-B21, E04-B22, E04-T03b | EARS-DEV-5 | 1 |
 | `FR-DISC-003` | E04, E15 | E15-T08 | EARS-ROUTE-15 | 1 |
-| `FR-FB-001` | E01, E11 | E01-T02, E11-B01, E11-B02, E11-B03, E11-B04, E11-B05, E11-B06, E11-T01, E11-T02, E11-T03, E11-T04, E11-T05, E11-T06 | EARS-FB-1, EARS-FB-10, EARS-FB-13, EARS-FB-16, EARS-FB-17, EARS-FB-19, EARS-FB-2, EARS-FB-3, EARS-FB-4, EARS-FB-6, EARS-FB-7, EARS-FB-8 | 8 |
+| `FR-FB-001` | E01, E11 | E01-T02, E11-B01, E11-B02, E11-B03, E11-B04, E11-B05, E11-B06, E11-T01, E11-T02, E11-T03, E11-T04, E11-T05, E11-T06 | EARS-FB-1, EARS-FB-10, EARS-FB-13, EARS-FB-16, EARS-FB-17, EARS-FB-19, EARS-FB-2, EARS-FB-20, EARS-FB-3, EARS-FB-4, EARS-FB-6, EARS-FB-7, EARS-FB-8 | 8 |
 | `FR-FB-002` | E01, E05, E11 | E01-T02, E05-T04, E11-B02, E11-B04, E11-B05, E11-T01, E11-T02, E11-T04, E11-T06 | EARS-FB-1, EARS-FB-13, EARS-FB-17, EARS-FB-2, EARS-FB-4, EARS-FB-5, EARS-MSG-6 | 7 |
 | `FR-GROUP-001` | E07 | E07-T01, E07-T02, E07-T03, E07-T07, E07-T08, E07-T12 | EARS-GROUP-3, EARS-GROUP-4, EARS-UI-3 | 2 |
 | `FR-GROUP-002` | E07 | E07-B01, E07-B04, E07-T01, E07-T02, E07-T03, E07-T12 | EARS-COMM-34, EARS-GROUP-10, EARS-GROUP-3, EARS-GROUP-6, EARS-GROUP-8 | 5 |
@@ -135,17 +135,17 @@ is green is the CI gate's answer, not this file's.
 | `FR-VER-002` | E14 | E14-T05 | EARS-VER-13 | 1 |
 | `FR-VER-003` | E14 | E14-B04, E14-T06 | EARS-VER-15, EARS-VER-16 | 1 |
 | `FR-VER-004` | E04, E14 | E04-T01 | EARS-SIM-1, EARS-SIM-2, EARS-SIM-3 | 1 |
-| `FR-VER-005` | E14, E15 | E14-B01, E14-B03, E14-T01, E14-T02, E15-T10 | EARS-VER-18, EARS-VER-6, EARS-VER-7, EARS-VER-8, EARS-VER-9 | 2 |
+| `FR-VER-005` | E14, E15 | E14-B01, E14-B03, E14-T01, E14-T02, E15-T10 | EARS-FB-21, EARS-VER-18, EARS-VER-6, EARS-VER-7, EARS-VER-8, EARS-VER-9 | 3 |
 | `FR-VER-006` | E14 | E14-B01, E14-B02, E14-B03, E14-B05, E14-T04 | EARS-AUTH-9, EARS-VER-1, EARS-VER-10, EARS-VER-11 | 3 |
 | `FR-VER-007` | E14 | E14-B07, E14-T04 | EARS-VER-12 | 1 |
-| `FR-VER-008` | E14, E15 | E14-B01, E14-B06, E14-T01, E15-T10 | EARS-VER-18, EARS-VER-3, EARS-VER-4, EARS-VER-5, EARS-VER-9 | 4 |
+| `FR-VER-008` | E14, E15 | E14-B01, E14-B06, E14-T01, E15-T10 | EARS-FB-21, EARS-VER-18, EARS-VER-3, EARS-VER-4, EARS-VER-5, EARS-VER-9 | 5 |
 | `FR-VER-009` | E14 | E14-B04, E14-T04, E14-T06 | EARS-VER-15, EARS-VER-2 | 1 |
 | `FR-VER-010` | E14 | E14-B01, E14-B02, E14-B03, E14-T01, E14-T02 | EARS-VER-20 | 1 |
 | `FR-VER-011` | E14 | E14-T03 | EARS-VER-17 | 2 |
 | `FR-VER-012` | E15 | E15-T10 | EARS-VER-18, EARS-VER-19 | 1 |
 | `NFR-BATT-001` | E04, E06, E10 | E04-B35, E06-T06, E10-B02, E10-T10 | EARS-PLAT-12, EARS-TRANSPORT-5 | 2 |
 | `NFR-PERF-001` | — | — | EARS-COMM-17, EARS-COMM-19, EARS-COMM-36, EARS-COMM-37 | 3 |
-| `NFR-PRIV-001` | E08, E11, E15 | E08-T02, E08-T06, E11-B01, E11-B02, E11-B05, E11-B06, E11-T01, E11-T02, E11-T06, E15-T01 | EARS-FB-18, EARS-FB-5, EARS-STORE-14, EARS-STORE-6 | 5 |
+| `NFR-PRIV-001` | E08, E11, E15 | E08-T02, E08-T06, E11-B01, E11-B02, E11-B05, E11-B06, E11-T01, E11-T02, E11-T06, E15-T01 | EARS-FB-18, EARS-FB-20, EARS-FB-5, EARS-STORE-14, EARS-STORE-6 | 5 |
 | `NFR-REL-001` | — | — | EARS-FB-12, EARS-MSG-6, EARS-UI-11 | 10 |
 | `NFR-SCALE-001` | E08 | E08-T04 | EARS-STORE-10, EARS-STORE-19 | 2 |
 | `NFR-SEC-001` | E04, E05, E06, E09, E10 | E04-B02, E05-B02, E06-B04, E06-T02, E06-T03, E06-T05, E06-T06, E06-T07, E06-T08, E06-T11, E09-B11, E10-B05, E10-B07 | EARS-COMM-11, EARS-COMM-16, EARS-COMM-5, EARS-COMM-6, EARS-COMM-8, EARS-MSG-8, EARS-PLAT-14, EARS-PLAT-4 | 7 |
@@ -167,7 +167,7 @@ Both directions. Forward gaps hide missing work; backward gaps hide
 | `done` task tracing only descoped requirements | 1 | no test owed — its requirement was withdrawn; its own record must say why | `skills/change-impact` | no |
 | EARS criterion with no test | 25 | criterion asserted, never proven | `new test task` | no |
 | EARS criterion citing no requirement | 4 | proves nothing traceable | `skills/task-sharding` | no |
-| test matching no declared EARS id | 7 | proves nothing traceable | `rename or delete task` | no |
+| test matching no declared EARS id | 1 | proves nothing traceable | `rename or delete task` | no |
 | ADR nothing cites | 0 | dead decision, or decisions being made in diffs | `audit or supersede` | no |
 | superseded ADR still cited | 0 | task honouring a reversed decision | `skills/change-impact` | **yes** |
 | design contract no task builds | 10 | rule 2 breach — screen unbuilt or built off-contract | `skills/design-fidelity` | no |
@@ -287,17 +287,11 @@ Route to `skills/task-sharding`.
 - `EARS-SET-2`
 - `EARS-TRANSPORT-7`
 
-### test matching no declared EARS id — 7
+### test matching no declared EARS id — 1
 
 Route to `rename or delete task`.
 
-- `EARS-ABUSE-17`
-- `EARS-FB-20`
-- `EARS-FB-21`
-- `EARS-RECOVER-6b`
 - `EARS-ROUTE-004`
-- `EARS-TRUST-4b`
-- `EARS-VER-20b`
 
 ### design contract no task builds — 10
 
