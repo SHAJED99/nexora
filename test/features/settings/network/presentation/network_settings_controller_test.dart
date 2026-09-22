@@ -225,7 +225,7 @@ void main() {
     },
   );
 
-  test('test_EARS_ROUTE_14_transports_become_unavailable_once_lost', () async {
+  test('test_EARS_ROUTE_15_transports_become_unavailable_once_lost', () async {
     controller.onInit();
     pushDeviceDiscovered('neighbor-1');
     await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -329,7 +329,7 @@ void main() {
     Get.reset();
   });
 
-  testWidgets('test_EARS_ROUTE_14_no_control_is_rendered', (tester) async {
+  testWidgets('test_EARS_ROUTE_15_no_control_is_rendered', (tester) async {
     Get.testMode = true;
     final viewController =
         NetworkSettingsController(transport: transport, routing: routing);
@@ -346,7 +346,7 @@ void main() {
     );
 
     expect(find.text('Network'), findsOneWidget);
-    // EARS-ROUTE-14: no button, switch or tappable row anywhere on either
+    // EARS-ROUTE-15: no button, switch or tappable row anywhere on either
     // card. We walk the actual rendered element tree and count every
     // hit-testable gesture surface (`GestureDetector`, `InkWell`/
     // `InkResponse`, a raw `Listener` with a pointer callback, or a
@@ -425,7 +425,7 @@ class _CountingRoutingEngine extends RoutingEngine {
 
 /// Counts every hit-testable gesture surface living inside [scope]'s
 /// matches (and their descendants) -- see the comment at this file's own
-/// `test_EARS_ROUTE_14_no_control_is_rendered` for why this is scoped
+/// `test_EARS_ROUTE_15_no_control_is_rendered` for why this is scoped
 /// rather than counted over the whole tree.
 int _countGestureSurfacesInside(Finder scope) {
   bool isActiveGestureDetector(Widget w) =>
