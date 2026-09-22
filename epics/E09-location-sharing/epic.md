@@ -54,11 +54,11 @@ for this epic's task-sharding.
 
 | Bug | Title | Sev | Prio | Status |
 |---|---|---|---|---|
-| E09-B01 | `LocationReadModel.watch()` never re-evaluates the policy on a relationship change — a blocked peer stays visible | S2 | P2 | todo |
-| E09-B02 | Blocking a peer never deletes their stored coordinates; `E09-T04` §4 hands retention to E08, which does not own it | S2 | P2 | todo |
-| E09-B03 | `AndroidManifest.xml` comment claims an E04 Bluetooth regression check that `E09-T05` §9 records as never performed | S3 | P2 | todo |
+| E09-B01 | `LocationReadModel.watch()` never re-evaluates the policy on a relationship change — a blocked peer stays visible | S2 | P2 | done |
+| E09-B02 | Blocking a peer never deletes their stored coordinates; `E09-T04` §4 hands retention to E08, which does not own it | S2 | P2 | done |
+| E09-B03 | `AndroidManifest.xml` comment claims an E04 Bluetooth regression check that `E09-T05` §9 records as never performed | S3 | P2 | done |
 | E09-B04 | Tracker/epic status never advanced past sharding — `0/5`, all `todo`, five merges unrecorded | S3 | P2 | **done** |
-| E09-B05 | Rule 5 breach — T01/T02/T03 reviewed by the same model that implemented them | S2 | P2 | todo |
+| E09-B05 | Rule 5 breach — T01/T02/T03 reviewed by the same model that implemented them | S2 | P2 | done |
 
 **Build-complete 2026-09-04; bug sweep run the same day. P1 = 0, P2 = 5 (4
 outstanding), so the epic→`development` PR gate is CLOSED** per

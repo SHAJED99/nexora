@@ -51,16 +51,16 @@ it silently, and states what it did and did not measure.
 
 | Task | Title | Layer | Size | MoSCoW | EARS owned | Status |
 |---|---|---|---|---|---|---|
-| E10-T01 | Native notification boundary — Pigeon `NotificationApi`, Android channels, POST_NOTIFICATIONS | cross-cutting | M | must | PLAT-5, PLAT-6 | todo |
-| E10-T02 | Notification preferences — Drift migration v16 + repository | backend | M | must | NOTIFY-3, NOTIFY-4 | todo |
-| E10-T03 | Notification policy + dispatcher; new-message notifications | backend | M | must | NOTIFY-5, 6, 7 | todo |
-| E10-T04 | Incoming-call notifications — `CallSignaling` seam | backend | S | should | NOTIFY-8, 9 | todo |
-| E10-T05 | Connection-request notifications — `PrekeyExchange` seam | backend | S | should | NOTIFY-10, 11 | todo |
-| E10-T06 | Group-event notifications — `GroupMembershipService` seam | backend | S | should | NOTIFY-12, 13 | todo |
-| E10-T07 | Storage-warning notifications — `StorageManager.latestPlan` observer | backend | S | should | NOTIFY-14, 15 | todo |
-| E10-T08 | Android foreground service — retained engine, persistent notification, boot restart | cross-cutting | M | must | PLAT-7, 8, 9, 10 | todo (unblocked 2026-09-04 — ADR-0007 accepted) |
-| E10-T09 | Power-state signals — Doze, Battery Saver, screen lock, restriction | cross-cutting | S | should | PLAT-17, 11 | todo |
-| E10-T10 | Adaptive background policy — one tick, cadence + discovery | backend | M | should | PLAT-12, 13, 14 | todo |
+| E10-T01 | Native notification boundary — Pigeon `NotificationApi`, Android channels, POST_NOTIFICATIONS | cross-cutting | M | must | PLAT-5, PLAT-6 | done |
+| E10-T02 | Notification preferences — Drift migration v16 + repository | backend | M | must | NOTIFY-3, NOTIFY-4 | done |
+| E10-T03 | Notification policy + dispatcher; new-message notifications | backend | M | must | NOTIFY-5, 6, 7 | done |
+| E10-T04 | Incoming-call notifications — `CallSignaling` seam | backend | S | should | NOTIFY-8, 9 | done |
+| E10-T05 | Connection-request notifications — `PrekeyExchange` seam | backend | S | should | NOTIFY-10, 11 | done |
+| E10-T06 | Group-event notifications — `GroupMembershipService` seam | backend | S | should | NOTIFY-12, 13 | done |
+| E10-T07 | Storage-warning notifications — `StorageManager.latestPlan` observer | backend | S | should | NOTIFY-14, 15 | done |
+| E10-T08 | Android foreground service — retained engine, persistent notification, boot restart | cross-cutting | M | must | PLAT-7, 8, 9, 10 | done (unblocked 2026-09-04 — ADR-0007 accepted) |
+| E10-T09 | Power-state signals — Doze, Battery Saver, screen lock, restriction | cross-cutting | S | should | PLAT-17, 11 | done |
+| E10-T10 | Adaptive background policy — one tick, cadence + discovery | backend | M | should | PLAT-12, 13, 14 | done |
 
 DAG, collision matrix and the "why there is no frontend task" rationale:
 `tracker.md`. Background-execution architecture:
