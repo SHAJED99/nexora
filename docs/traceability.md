@@ -5,7 +5,7 @@
 > `files:` lists and EARS-named tests. If this report and the repo disagree,
 > the repo wins: regenerate, never patch.
 
-Generated from commit `29123c3` (2026-09-22) by `agent/orchestrator/traceability.py`.
+Generated from commit `f8e4bc0` (2026-09-22) by `agent/orchestrator/traceability.py`.
 
 ## Coverage
 
@@ -92,7 +92,7 @@ is green is the CI gate's answer, not this file's.
 | `FR-PLAT-002` | E04, E10, E15 | E04-T03b, E04-T03c, E10-B02, E10-T08, E10-T09, E10-T10, E15-B03, E15-T08 | EARS-DISC-1, EARS-PLAT-1, EARS-PLAT-10, EARS-PLAT-11, EARS-PLAT-12, EARS-PLAT-13, EARS-PLAT-15, EARS-PLAT-8 | 5 |
 | `FR-PLAT-003` | E04, E06, E10, E15 | E04-B03, E04-T03a, E06-B02, E10-B04, E10-B09, E10-B10, E10-T01, E10-T08, E10-T09, E15-B03 | EARS-PLAT-10, EARS-PLAT-3, EARS-PLAT-5, EARS-PLAT-6, EARS-PLAT-7, EARS-TRANSPORT-1 | 5 |
 | `FR-PLAT-004` | E15 | E15-T08 | EARS-PLAT-15, EARS-PLAT-16 | 1 |
-| `FR-RECOVER-001` | E12 | E12-B01, E12-B02, E12-B03, E12-B04, E12-B06, E12-B08, E12-B09, E12-T01, E12-T02, E12-T03 | EARS-RECOVER-1, EARS-RECOVER-10, EARS-RECOVER-3, EARS-RECOVER-4, EARS-RECOVER-5, EARS-RECOVER-6, EARS-RECOVER-7, EARS-RECOVER-8, EARS-RECOVER-9 | 6 |
+| `FR-RECOVER-001` | E12 | E12-B01, E12-B02, E12-B03, E12-B04, E12-B06, E12-B08, E12-B09, E12-B10, E12-T01, E12-T02, E12-T03 | EARS-RECOVER-1, EARS-RECOVER-10, EARS-RECOVER-3, EARS-RECOVER-4, EARS-RECOVER-5, EARS-RECOVER-6, EARS-RECOVER-7, EARS-RECOVER-8, EARS-RECOVER-9 | 6 |
 | `FR-RECOVER-002` | E12, E15 | E12-B07, E12-T03, E15-T07 | EARS-AUTH-7, EARS-RECOVER-11, EARS-RECOVER-2 | 3 |
 | `FR-ROUTE-001` | E04, E06 | E04-B03, E04-B17, E04-B24, E04-B26, E04-T02, E06-T04 | EARS-ROUTE-1, EARS-ROUTE-10, EARS-ROUTE-11 | 2 |
 | `FR-ROUTE-002` | E04, E06, E07 | E04-B03, E04-B16, E04-T02, E06-T04, E06-T05, E06-T06, E07-T10 | EARS-CALL-7, EARS-COMM-9, EARS-ROUTE-11 | 4 |
@@ -122,7 +122,7 @@ is green is the CI gate's answer, not this file's.
 | `FR-TRUST-004` | E02 | E02-T01, E02-T02 | EARS-TRUST-1, EARS-TRUST-2 | 2 |
 | `FR-TRUST-005` | E02, E06 | E02-T01, E02-T02, E06-T07 | EARS-COMM-15, EARS-COMM-25, EARS-TRUST-3 | 3 |
 | `FR-TRUST-006` | E02 | E02-T03 | — | — |
-| `FR-TRUST-007` | E02, E11, E12 | E02-T03, E11-T05, E12-B02, E12-B03, E12-B09, E12-B10, E12-B11 | EARS-FB-14 | — |
+| `FR-TRUST-007` | E02, E11, E12 | E02-T03, E11-T05, E12-B02, E12-B03, E12-B09, E12-B11 | EARS-FB-14 | — |
 | `FR-UI-001` | E06, E08, E15 | E06-T01, E06-T10, E06-T11, E06-T12, E06-T13, E08-T07, E15-T03 | EARS-COMM-28, EARS-STORE-16, EARS-UI-1, EARS-UI-2 | 1 |
 | `FR-UI-002` | E06 | E06-T01 | EARS-UI-2 | 1 |
 | `FR-UI-003` | E06 | E06-T10, E06-T12 | — | — |
@@ -163,7 +163,8 @@ Both directions. Forward gaps hide missing work; backward gaps hide
 | requirement with no test | 13 | rule 7 breach — unproven, not done | `new test task` | **yes** |
 | task with empty `traces_to:` | 1 | rule 1 breach — it isn't a task | `skills/question-resolution` | no |
 | task citing a requirement not in `spec/srs.md` | 1 | building something nobody specified | `skills/change-impact` | no |
-| `done` task with no EARS test | 10 | "done" that isn't | `revalidation task` | **yes** |
+| `done` task with no EARS test | 8 | "done" that isn't | `revalidation task` | **yes** |
+| `done` task tracing only descoped requirements | 1 | no test owed — its requirement was withdrawn; its own record must say why | `skills/change-impact` | no |
 | EARS criterion with no test | 31 | criterion asserted, never proven | `new test task` | no |
 | EARS criterion citing no requirement | 5 | proves nothing traceable | `skills/task-sharding` | no |
 | test matching no declared EARS id | 7 | proves nothing traceable | `rename or delete task` | no |
@@ -239,7 +240,7 @@ Route to `skills/change-impact`.
 
 - `NFR-OBS-001 (in E12-B08)`
 
-### `done` task with no EARS test — 10
+### `done` task with no EARS test — 8
 
 Route to `revalidation task`.
 
@@ -251,7 +252,11 @@ Route to `revalidation task`.
 - `E07-T12`
 - `E07-T13`
 - `E08-T07`
-- `E12-B10`
+
+### `done` task tracing only descoped requirements — 1
+
+Route to `skills/change-impact`.
+
 - `E12-B11`
 
 ### EARS criterion with no test — 31
@@ -378,9 +383,9 @@ Route to `skills/question-resolution`.
 | Blocking class | Count | Clear? |
 |---|---:|---|
 | requirement with no EARS-named test | 13 | ❌ |
-| `done` task with no passing EARS test | 10 | ❌ |
+| `done` task with no passing EARS test | 8 | ❌ |
 | `done` task whose dependency is not done | 0 | ✅ |
 | superseded ADR still cited | 0 | ✅ |
 
-**Blocking orphans: 23.** These are release blockers. Orphans knowingly shipped belong in the changelog's Known gaps.
+**Blocking orphans: 21.** These are release blockers. Orphans knowingly shipped belong in the changelog's Known gaps.
 
