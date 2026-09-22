@@ -5,7 +5,7 @@
 > `files:` lists and EARS-named tests. If this report and the repo disagree,
 > the repo wins: regenerate, never patch.
 
-Generated from commit `6e367ab` (2026-09-22) by `agent/orchestrator/traceability.py`.
+Generated from commit `cf93a15` (2026-09-22) by `agent/orchestrator/traceability.py`.
 
 ## Coverage
 

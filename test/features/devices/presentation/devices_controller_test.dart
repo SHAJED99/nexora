@@ -321,6 +321,16 @@ void main() {
       );
       await pumpEventQueue();
 
+      // FIRST prove the device really was discovered and surfaced. Without
+      // this, a silently-dropped discovery event would satisfy every
+      // assertion below vacuously: an ignored device also persists no row
+      // and also evaluates as unknown, while proving nothing at all about
+      // what discovery grants. (Review finding, PR #304.)
+      expect(
+        discovering.relationships.map((r) => r.deviceId),
+        contains('stranger-device-1'),
+      );
+
       // Nothing persisted -- discovery leaves no authorization record.
       final persisted = await repository.get('stranger-device-1');
       expect(persisted, isNull);
