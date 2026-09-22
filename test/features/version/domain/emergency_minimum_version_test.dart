@@ -73,7 +73,7 @@ void main() {
     );
 
     test(
-      'test_EARS_VER_20b_an_emergency_bump_outranks_the_update_available_'
+      'test_EARS_VER_20_an_emergency_bump_outranks_the_update_available_'
       'threshold',
       () async {
         // Guards the ordering inside `call()`: if the `updateAvailableBuild`

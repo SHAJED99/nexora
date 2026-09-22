@@ -164,7 +164,7 @@ void main() {
   });
 
   test(
-      'test_EARS_RECOVER_6b_own_device_id_with_existing_relationship_unaffected',
+      'test_EARS_RECOVER_5_own_device_id_with_existing_relationship_unaffected',
       () async {
     // The other half of EARS-RECOVER-5's AND: present in the own-device set
     // is not enough on its own -- an existing local relationship entry
