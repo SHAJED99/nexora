@@ -203,6 +203,18 @@ Batching rule: **≤10 per round**, grouped by area.
 
 ---
 
+### Q-FUNC-011 — "Allow/disable communication" in FR-TRUST-006 has no defined scope
+- **Priority:** important
+- **Status:** 🟡 open (raised 2026-09-22, deliberately not decided)
+- **Raised by:** `GAP-044` element scoping
+- **Question:** `FR-TRUST-006` lists "allow/disable communication" among six configurable rules. Does disabling refuse only NEW connection requests, or does it also silence EXISTING conversations?
+- **Why it matters:** The narrow reading is one toggle read by `EvaluateConnectionRequestUseCase` — a setting beside the other three. The broad reading is a messaging-layer behaviour affecting inbound delivery, notification suppression and conversation-list visibility — a much larger change with its own criteria, tests and blast radius.
+- **Options considered:** _(not pre-empted — the human declined to decide this on 2026-09-22 and asked that it be recorded as unresolved)_
+- **Blocks:** `PV28` on `design/screens/settings-privacy.md` only. PV23-PV27, PV29 and PV30 proceed without it.
+- **Answer:** _(none yet)_
+
+---
+
 ## Optional / to be closed by assumption if unanswered
 
 _(both moved to "Closed by assumption" below during the knowledge-map baseline, 2026-08-26 — optional-priority questions close via their own recommended default rather than blocking forward progress; either can be reopened any time)_
