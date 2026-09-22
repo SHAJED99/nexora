@@ -87,7 +87,7 @@ nothing and deletes nothing (`E08-T05` §2, `E08-T06` owns execution alone).
    measures the screen title as `28px` `w600` `rgb(234, 241, 255)`, but
    `rgb(234, 241, 255)` does **not** appear in settings' own measured token
    table. Using it would put a value in a derived contract that
-   `EARS-STORE-17`'s check cannot find in a source table. SS3 below uses
+   `DOC-STORE-17`'s check cannot find in a source table. SS3 below uses
    `rgb(248, 249, 255)` — which is in that table (8 uses) and is the colour of
    every `heading:3` on the parent screen. Same reasoning `group-manage.md`
    §Derivation boundary 2 applied to devices' `r4px`.
@@ -198,7 +198,7 @@ the copy below:
 
 Every row cites the parent element its styling comes from. A value that
 appears here and in no parent's measured token table is a defect
-(`EARS-STORE-17`).
+(`DOC-STORE-17`).
 
 ### Frame
 | # | role | copy / label | size | key styles (cited from the parent contracts) |

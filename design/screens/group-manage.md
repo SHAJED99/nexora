@@ -46,7 +46,7 @@ gap: GAP-019
 2. **One measured value is deliberately not copied.** `devices.md` element 31
    measures `r4px`, and `r4px` does **not** appear in devices' own measured
    token table. Using it would put a value in a derived contract that
-   `EARS-UI-6`'s check cannot find in a source table. The chips below use
+   `DOC-UI-6`'s check cannot find in a source table. The chips below use
    `r8px` — which is in that table, and which devices' own `Discover` button
    uses (element 6). Everything else about element 31 (`11px`,
    `rgb(53, 37, 205)`, the min 56×24 box) is carried over exactly.
