@@ -5,7 +5,7 @@
 > `files:` lists and EARS-named tests. If this report and the repo disagree,
 > the repo wins: regenerate, never patch.
 
-Generated from commit `8b70cd1` (2026-09-22) by `agent/orchestrator/traceability.py`.
+Generated from commit `7718373` (2026-09-22) by `agent/orchestrator/traceability.py`.
 
 ## Coverage
 
@@ -14,9 +14,9 @@ Generated from commit `8b70cd1` (2026-09-22) by `agent/orchestrator/traceability
 | Requirements in `spec/srs.md` | 113 | — |
 | …of which descoped (held out of orphan classes) | 1 | 0.9% |
 | …mapped to an epic | 111 | 98.2% |
-| …mapped to a task | 107 | 94.7% |
-| …owning an EARS criterion | 100 | 88.5% |
-| …reaching an EARS-named test | 99 | 87.6% |
+| …mapped to a task | 108 | 95.6% |
+| …owning an EARS criterion | 101 | 89.4% |
+| …reaching an EARS-named test | 100 | 88.5% |
 
 | Artifact | Count |
 |---|---:|
@@ -84,7 +84,7 @@ is green is the CI gate's answer, not this file's.
 | `FR-MSG-005` | E05, E06 | E05-T02, E06-T06 | EARS-COMM-12 | 1 |
 | `FR-MSG-006` | E05 | E05-T04 | EARS-MSG-5 | 1 |
 | `FR-MSG-007` | E05, E09, E11, E12 | E05-T05, E09-B07, E09-T02, E11-T04, E11-T05, E12-B03 | EARS-FB-11, EARS-FB-15, EARS-LOC-4, EARS-MSG-4 | 3 |
-| `FR-MSG-008` | E05 | — | — | — |
+| `FR-MSG-008` | E05, E11 | E11-T04 | EARS-FB-10 | 1 |
 | `FR-NOTIFY-001` | E10, E15 | E10-B03, E10-B09, E10-B10, E10-T01, E10-T02, E10-T03, E10-T04, E10-T05, E10-T06, E10-T07, E15-T04 | EARS-NOTIFY-1, EARS-NOTIFY-10, EARS-NOTIFY-11, EARS-NOTIFY-12, EARS-NOTIFY-13, EARS-NOTIFY-14, EARS-NOTIFY-15, EARS-NOTIFY-16, EARS-NOTIFY-3, EARS-NOTIFY-5, EARS-NOTIFY-6, EARS-NOTIFY-8, EARS-NOTIFY-9, EARS-PLAT-5 | 13 |
 | `FR-NOTIFY-002` | E10, E15 | E10-B03, E10-T02, E10-T03, E15-T04, E15-T05 | EARS-NOTIFY-17, EARS-NOTIFY-2, EARS-NOTIFY-3, EARS-NOTIFY-4, EARS-NOTIFY-6, EARS-NOTIFY-7, EARS-SEC-5 | 6 |
 | `FR-NOTIFY-003` | E15 | E15-T04 | EARS-NOTIFY-16, EARS-NOTIFY-17 | 1 |
@@ -158,9 +158,9 @@ Both directions. Forward gaps hide missing work; backward gaps hide
 | Class | Count | Means | Route to | Release blocker |
 |---|---:|---|---|---|
 | requirement with no epic | 2 | scope never planned | `skills/epic-breakdown` | no |
-| requirement with no task | 6 | epic never sharded, or sharded incompletely | `skills/epic-breakdown` | no |
-| requirement owning no EARS criterion | 13 | invisible to the join; prose cross-references do not count | `skills/task-sharding` | no |
-| requirement with no test | 13 | rule 7 breach — unproven, not done | `new test task` | **yes** |
+| requirement with no task | 5 | epic never sharded, or sharded incompletely | `skills/epic-breakdown` | no |
+| requirement owning no EARS criterion | 12 | invisible to the join; prose cross-references do not count | `skills/task-sharding` | no |
+| requirement with no test | 12 | rule 7 breach — unproven, not done | `new test task` | **yes** |
 | task with empty `traces_to:` | 1 | rule 1 breach — it isn't a task | `skills/question-resolution` | no |
 | task citing a requirement not in `spec/srs.md` | 1 | building something nobody specified | `skills/change-impact` | no |
 | `done` task with no EARS test | 8 | "done" that isn't | `revalidation task` | **yes** |
@@ -181,25 +181,23 @@ Route to `skills/epic-breakdown`.
 - `NFR-PERF-001`
 - `NFR-REL-001`
 
-### requirement with no task — 6
+### requirement with no task — 5
 
 Route to `skills/epic-breakdown`.
 
-- `FR-MSG-008`
 - `FR-ROUTE-008`
 - `FR-STORE-002`
 - `FR-STORE-003`
 - `NFR-PERF-001`
 - `NFR-REL-001`
 
-### requirement owning no EARS criterion — 13
+### requirement owning no EARS criterion — 12
 
 Route to `skills/task-sharding`.
 
 - `FR-BLOCK-002`
 - `FR-BLOCK-003`
 - `FR-DISC-002`
-- `FR-MSG-008`
 - `FR-ROUTE-005`
 - `FR-ROUTE-008`
 - `FR-STORE-002`
@@ -210,14 +208,13 @@ Route to `skills/task-sharding`.
 - `FR-UI-005`
 - `NFR-PERF-001`
 
-### requirement with no test — 13
+### requirement with no test — 12
 
 Route to `new test task`.
 
 - `FR-BLOCK-002`
 - `FR-BLOCK-003`
 - `FR-DISC-002`
-- `FR-MSG-008`
 - `FR-ROUTE-005`
 - `FR-ROUTE-008`
 - `FR-STORE-002`
@@ -382,10 +379,10 @@ Route to `skills/question-resolution`.
 
 | Blocking class | Count | Clear? |
 |---|---:|---|
-| requirement with no EARS-named test | 13 | ❌ |
+| requirement with no EARS-named test | 12 | ❌ |
 | `done` task with no passing EARS test | 8 | ❌ |
 | `done` task whose dependency is not done | 0 | ✅ |
 | superseded ADR still cited | 0 | ✅ |
 
-**Blocking orphans: 21.** These are release blockers. Orphans knowingly shipped belong in the changelog's Known gaps.
+**Blocking orphans: 20.** These are release blockers. Orphans knowingly shipped belong in the changelog's Known gaps.
 
