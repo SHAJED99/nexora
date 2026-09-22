@@ -165,7 +165,7 @@ in its §"Tokens this screen actually uses" unless the row says otherwise.
 > table lists a screen's most-used values, not all of them, so a
 > single-use measured value can be real and still absent from it. Both are
 > measured design values from a parent contract's own element table — not
-> invented — but a token-table-only check (`EARS-UI-6`) will not find them,
+> invented — but a token-table-only check (`DOC-UI-6`) will not find them,
 > so they are called out here rather than left to look like drift.
 
 | role | value | source contract | used here for |
