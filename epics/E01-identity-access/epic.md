@@ -60,7 +60,7 @@ that design-fidelity gating exists to check it (see OQ-E00-3).
 
 ## Acceptance criteria (epic-level, EARS)
 - **EARS-AUTH-1**: WHEN a user taps "Continue with Google" on first launch, the system SHALL authenticate via Firebase Auth and create/link an account identity. (FR-AUTH-001)
-- **EARS-AUTH-2**: The system SHALL generate a device-level cryptographic identity independent of account identity, on install. (FR-AUTH-003)
+- **EARS-AUTH-2**: The system SHALL generate a device-level cryptographic identity independent of account identity, on install. (FR-AUTH-002, FR-AUTH-003)
 - **EARS-AUTH-3**: IF a user signs in on a second device, THEN the system SHALL treat it as an independent device identity under the same account, not a replacement. (FR-AUTH-004)
 - **EARS-AUTH-4**: The welcome screen SHALL offer no authentication path other than Google Sign-In. (FR-AUTH-005)
 

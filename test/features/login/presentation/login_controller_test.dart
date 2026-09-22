@@ -201,6 +201,10 @@ void main() {
   group('test_E11_B06_first_sign_in_derives_device_id_from_local_identity',
       () {
     test(
+      // EARS-AUTH-2 (FR-AUTH-002): account sign-in succeeds, yet the device id
+      // is the device's OWN identity key -- device identity is independent of
+      // the account, never derived from it.
+      'test_EARS_AUTH_2_account_sign_in_derives_device_id_from_the_device_key: '
       'a genuinely first-ever sign-in (no existingDeviceId) uses this '
       'device\'s own identity public key as its device id, hex-encoded — '
       'NOT a random generateSecureDeviceId() token',
@@ -269,6 +273,9 @@ void main() {
     );
 
     test(
+      // EARS-AUTH-2 (FR-AUTH-002): a repeated account sign-in does not replace
+      // the device-level identity -- exactly one row, same id.
+      'test_EARS_AUTH_2_account_re_sign_in_never_replaces_the_device_identity: '
       'a RETURNING device (existingDeviceId present) keeps reusing its '
       'own already-registered id — the new derivation must never override '
       'an existing identity, even when a MessagingStack is available',
