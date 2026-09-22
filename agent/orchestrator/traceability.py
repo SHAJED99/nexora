@@ -380,11 +380,20 @@ def build(model_only=False):
                 if t["path"] == src:
                     task_ears[tid].add(eid)
 
+    # A descoped requirement owes no test -- it is held out of req_no_test for
+    # that reason -- so it cannot make a task owe one either. A done task that
+    # traces ONLY descoped requirements is listed under done_descoped_only
+    # instead: visible, not blocking, and never silently counted as tested.
+    descoped_ids = {r for r in reqs if reqs[r].get("descoped")}
+
+    def live_rids(t):
+        return [r for r in t["traces_to"] if r in reqs and r not in descoped_ids]
+
     def task_reaches_test(tid, t):
         own = task_ears.get(tid)
         if own:
             return any(tests.get(e) for e in own)
-        rids = [r for r in t["traces_to"] if r in reqs]
+        rids = live_rids(t)
         return any(req_tests.get(r) for r in rids) if rids else True
 
     done = {"done", "verified"}
@@ -399,6 +408,11 @@ def build(model_only=False):
         "done_no_test": sorted(
             t for t, v in tasks.items()
             if v["status"] in done and not task_reaches_test(t, v)
+        ),
+        "done_descoped_only": sorted(
+            t for t, v in tasks.items()
+            if v["status"] in done and not task_ears.get(t) and not live_rids(v)
+            and any(r in descoped_ids for r in v["traces_to"])
         ),
         "ears_no_test": sorted(e for e in ears if not tests.get(e)),
         "ears_no_req": sorted(e for e, v in ears.items() if not v["requirements"]),
@@ -452,6 +466,7 @@ ROUTES = {
     "task_no_traces": ("task with empty `traces_to:`", "rule 1 breach — it isn't a task", "skills/question-resolution"),
     "task_unknown_req": ("task citing a requirement not in `spec/srs.md`", "building something nobody specified", "skills/change-impact"),
     "done_no_test": ("`done` task with no EARS test", '"done" that isn\'t', "revalidation task"),
+    "done_descoped_only": ("`done` task tracing only descoped requirements", "no test owed — its requirement was withdrawn; its own record must say why", "skills/change-impact"),
     "ears_no_test": ("EARS criterion with no test", "criterion asserted, never proven", "new test task"),
     "ears_no_req": ("EARS criterion citing no requirement", "proves nothing traceable", "skills/task-sharding"),
     "test_no_ears": ("test matching no declared EARS id", "proves nothing traceable", "rename or delete task"),
