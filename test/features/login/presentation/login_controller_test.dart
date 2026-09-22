@@ -12,6 +12,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/abuse/rate_limiter.dart';
+import 'package:nexora/core/crypto/drift_signal_store.dart';
 import 'package:nexora/core/crypto/identity_key_hex.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
@@ -365,4 +366,99 @@ void main() {
       },
     );
   });
+
+  test(
+    'test_EARS_AUTH_13_a_different_account_signing_in_keeps_the_device_'
+    'identity_and_relinks_it',
+    () async {
+      // EARS-AUTH-13 (FR-AUTH-002): account authentication shall not
+      // replace the device-level cryptographic identity. The E11-B06
+      // returning-device test above only re-signs-in with the SAME
+      // account, so it cannot tell "independent" apart from "replaced on
+      // an account change". This drives the account change itself: the
+      // device is established under account X, then a second launch signs
+      // in as account Y through the same production path
+      // (LoginController -> SignInUseCase -> markSignedIn).
+      Get.testMode = true;
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final repository = DeviceIdentityRepository(
+        db,
+        rateLimiter: RateLimiter(db),
+      );
+      const accountX = 'firebase-uid-account-x';
+      const accountY = 'firebase-uid-account-y';
+      final messagingStack = await MessagingStack.create(
+        db: db,
+        selfDeviceId: '',
+      );
+
+      // Launch 1: signed in as account X establishes the device identity.
+      final firstController = LoginController(
+        SignInUseCase(
+          repository,
+          authService: FakeGoogleAuthService.success(accountX),
+        ),
+        messagingStack: messagingStack,
+      );
+      firstController.onInit();
+      await firstController.signingIn.stream
+          .firstWhere((signingIn) => !signingIn);
+
+      final before = await db.select(db.deviceIdentities).get();
+      expect(before, hasLength(1));
+      expect(
+        before.single.accountUid,
+        accountX,
+        reason: 'precondition: the identity must start linked to account X, '
+            'or the switch below proves nothing',
+      );
+      final keyBefore = (await DriftSignalProtocolStore(db).getIdentityKeyPair())
+          .getPublicKey()
+          .serialize();
+
+      // Launch 2: the same device, now signed in as account Y.
+      final secondController = LoginController(
+        SignInUseCase(
+          repository,
+          authService: FakeGoogleAuthService.success(accountY),
+        ),
+        messagingStack: messagingStack,
+      );
+      secondController.onInit();
+      await secondController.signingIn.stream
+          .firstWhere((signingIn) => !signingIn);
+
+      final after = await db.select(db.deviceIdentities).get();
+      expect(
+        after,
+        hasLength(1),
+        reason: 'an account change must not register a second device '
+            'identity',
+      );
+      expect(after.single.id, before.single.id);
+      expect(after.single.deviceId, before.single.deviceId);
+
+      // Read back from the database, not from the in-memory stack, so this
+      // checks the persisted keypair.
+      final keyAfter = (await DriftSignalProtocolStore(db).getIdentityKeyPair())
+          .getPublicKey()
+          .serialize();
+      expect(
+        keyAfter,
+        keyBefore,
+        reason: 'the device cryptographic identity keypair must survive an '
+            'account change untouched',
+      );
+
+      expect(
+        after.single.accountUid,
+        accountY,
+        reason: 'the account link is the only thing an account change '
+            'rewrites (ADR-0005: an account-id <-> device-id mapping)',
+      );
+
+      Get.reset();
+      await db.close();
+    },
+  );
 }

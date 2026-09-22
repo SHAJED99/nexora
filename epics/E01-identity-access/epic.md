@@ -63,6 +63,7 @@ that design-fidelity gating exists to check it (see OQ-E00-3).
 - **EARS-AUTH-2**: The system SHALL generate a device-level cryptographic identity independent of account identity, on install. (FR-AUTH-003)
 - **EARS-AUTH-3**: IF a user signs in on a second device, THEN the system SHALL treat it as an independent device identity under the same account, not a replacement. (FR-AUTH-004)
 - **EARS-AUTH-4**: The welcome screen SHALL offer no authentication path other than Google Sign-In. (FR-AUTH-005)
+- **EARS-AUTH-13**: WHEN a different account signs in on a device that already has a device-level cryptographic identity, the system SHALL keep that device identity and its keypair unchanged, relinking it to the new account rather than replacing it. (FR-AUTH-002)
 
 ## Tasks
 <sharded by `skills/task-sharding` once this epic is approved>

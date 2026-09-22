@@ -5,7 +5,7 @@
 > `files:` lists and EARS-named tests. If this report and the repo disagree,
 > the repo wins: regenerate, never patch.
 
-Generated from commit `d256a4e` (2026-09-22) by `agent/orchestrator/traceability.py`.
+Generated from commit `29123c3` (2026-09-22) by `agent/orchestrator/traceability.py`.
 
 ## Coverage
 
@@ -15,16 +15,16 @@ Generated from commit `d256a4e` (2026-09-22) by `agent/orchestrator/traceability
 | …of which descoped (held out of orphan classes) | 1 | 0.9% |
 | …mapped to an epic | 111 | 98.2% |
 | …mapped to a task | 107 | 94.7% |
-| …owning an EARS criterion | 99 | 87.6% |
-| …reaching an EARS-named test | 98 | 86.7% |
+| …owning an EARS criterion | 100 | 88.5% |
+| …reaching an EARS-named test | 99 | 87.6% |
 
 | Artifact | Count |
 |---|---:|
 | Epics | 16 |
 | Tasks | 232 |
-| EARS criteria declared | 283 |
-| EARS ids with >=1 test | 252 |
-| Distinct EARS ids found in tests | 259 |
+| EARS criteria declared | 284 |
+| EARS ids with >=1 test | 253 |
+| Distinct EARS ids found in tests | 260 |
 | ADRs | 8 |
 | Design contracts | 26 |
 
@@ -38,7 +38,7 @@ is green is the CI gate's answer, not this file's.
 |---|---|---|---|---:|
 | `FR-ABUSE-001` | E13, E15 | E13-B01, E13-T01, E13-T02, E13-T03, E13-T04, E13-T05, E13-T07, E15-T06 | EARS-ABUSE-1, EARS-ABUSE-10, EARS-ABUSE-11, EARS-ABUSE-2, EARS-ABUSE-3, EARS-ABUSE-3b, EARS-ABUSE-4, EARS-ABUSE-5, EARS-ABUSE-6, EARS-ABUSE-7, EARS-ABUSE-8, EARS-ABUSE-9 | 11 |
 | `FR-AUTH-001` | E01, E12 | E01-B01, E01-T01, E12-B01 | EARS-AUTH-1, EARS-AUTH-3, EARS-AUTH-x1, EARS-AUTH-x2 | 3 |
-| `FR-AUTH-002` | E01, E15 | E01-T01, E15-T07 | — | — |
+| `FR-AUTH-002` | E01, E15 | E01-T01, E15-T07 | EARS-AUTH-13 | 1 |
 | `FR-AUTH-003` | E01 | E01-T01 | EARS-AUTH-2 | 1 |
 | `FR-AUTH-004` | E01, E11 | E01-T01, E01-T02, E11-T03, E11-T04 | EARS-AUTH-3, EARS-FB-7, EARS-FB-8 | 4 |
 | `FR-AUTH-005` | E01 | E01-T01 | EARS-AUTH-4 | 1 |
@@ -159,8 +159,8 @@ Both directions. Forward gaps hide missing work; backward gaps hide
 |---|---:|---|---|---|
 | requirement with no epic | 2 | scope never planned | `skills/epic-breakdown` | no |
 | requirement with no task | 6 | epic never sharded, or sharded incompletely | `skills/epic-breakdown` | no |
-| requirement owning no EARS criterion | 14 | invisible to the join; prose cross-references do not count | `skills/task-sharding` | no |
-| requirement with no test | 14 | rule 7 breach — unproven, not done | `new test task` | **yes** |
+| requirement owning no EARS criterion | 13 | invisible to the join; prose cross-references do not count | `skills/task-sharding` | no |
+| requirement with no test | 13 | rule 7 breach — unproven, not done | `new test task` | **yes** |
 | task with empty `traces_to:` | 1 | rule 1 breach — it isn't a task | `skills/question-resolution` | no |
 | task citing a requirement not in `spec/srs.md` | 1 | building something nobody specified | `skills/change-impact` | no |
 | `done` task with no EARS test | 10 | "done" that isn't | `revalidation task` | **yes** |
@@ -191,11 +191,10 @@ Route to `skills/epic-breakdown`.
 - `NFR-PERF-001`
 - `NFR-REL-001`
 
-### requirement owning no EARS criterion — 14
+### requirement owning no EARS criterion — 13
 
 Route to `skills/task-sharding`.
 
-- `FR-AUTH-002`
 - `FR-BLOCK-002`
 - `FR-BLOCK-003`
 - `FR-DISC-002`
@@ -210,11 +209,10 @@ Route to `skills/task-sharding`.
 - `FR-UI-005`
 - `NFR-PERF-001`
 
-### requirement with no test — 14
+### requirement with no test — 13
 
 Route to `new test task`.
 
-- `FR-AUTH-002`
 - `FR-BLOCK-002`
 - `FR-BLOCK-003`
 - `FR-DISC-002`
@@ -379,10 +377,10 @@ Route to `skills/question-resolution`.
 
 | Blocking class | Count | Clear? |
 |---|---:|---|
-| requirement with no EARS-named test | 14 | ❌ |
+| requirement with no EARS-named test | 13 | ❌ |
 | `done` task with no passing EARS test | 10 | ❌ |
 | `done` task whose dependency is not done | 0 | ✅ |
 | superseded ADR still cited | 0 | ✅ |
 
-**Blocking orphans: 24.** These are release blockers. Orphans knowingly shipped belong in the changelog's Known gaps.
+**Blocking orphans: 23.** These are release blockers. Orphans knowingly shipped belong in the changelog's Known gaps.
 
