@@ -41,7 +41,7 @@ with, and extends, that wrapper rather than replacing it.
 - **EARS-FB-7**: WHEN a device registers for the first time, the system SHALL record `createdAt` and `lastSeenAt` in the device registry. (FR-FB-001, FR-AUTH-004)
 - **EARS-FB-8**: WHEN a device that is already registered registers again, the system SHALL refresh `lastSeenAt` and SHALL NOT overwrite `createdAt`. (FR-FB-001, FR-AUTH-004)
 - **EARS-FB-9**: IF any Firebase operation in registration fails, times out, or the device is offline, THEN the system SHALL log the failure and complete normally without throwing. (ADR-0005)
-- **EARS-FB-10**: WHEN a device is revoked, the system SHALL record the revocation locally and SHALL best-effort publish it to the account's Firebase device registry. (FR-FB-001)
+- **EARS-FB-10**: WHEN a device is revoked, the system SHALL record the revocation locally and SHALL best-effort publish it to the account's Firebase device registry. (FR-FB-001, FR-MSG-008)
 - **EARS-FB-11**: WHEN local and remote revocation state for one device disagree, the system SHALL resolve to revoked. (FR-MSG-007 — REVOKED > ACTIVE)
 - **EARS-FB-12**: IF the Firebase read or write fails or the device is offline, THEN the system SHALL keep the local revocation state unchanged and complete without throwing. (ADR-0005, NFR-REL-001)
 - **EARS-FB-13**: The revocation node SHALL carry only `revokedAt` and `revokedByDeviceId`, and the security rules SHALL reject any other field. (FR-FB-001, FR-FB-002)

@@ -68,7 +68,9 @@
   - UC: Out-of-order packets reassemble into correct message order
 - **Feature: Multi-Device Sync** — FR-MSG-005, FR-MSG-006
   - UC: A user's second device catches up on missed data
-- **Feature: Conflict Resolution** — FR-MSG-007, FR-MSG-008
+- **Feature: Conflict Resolution** — FR-MSG-007, FR-MSG-008 (✂️ `FR-MSG-008`
+  narrowed 2026-09-22 to REVOKE-DEVICE only — `IMP-004`; TRUST/BLOCK/UNBLOCK/
+  REMOVE-TRUST are not represented as synced discrete events)
   - UC: Security-state conflicts resolve toward the more restrictive state
 
 ## Module: Security & Encryption
