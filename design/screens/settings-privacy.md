@@ -6,8 +6,8 @@ derived_from: [settings-shell, settings, devices, settings-storage]
 states: [default, loading, empty, error]
 viewports: [390x844]
 golden: none yet — extract from the build once implemented
-spec: [FR-SEC-005, FR-SEC-001, FR-LOC-001, FR-LOC-002, FR-NOTIFY-002, FR-UI-006, FR-UI-007, FR-UI-008]
-gap: GAP-033
+spec: [FR-SEC-005, FR-SEC-001, FR-LOC-001, FR-LOC-002, FR-NOTIFY-002, FR-UI-006, FR-UI-007, FR-UI-008, FR-TRUST-006]
+gap: [GAP-033, GAP-044]
 ---
 # settings-privacy · derived design contract
 
@@ -67,6 +67,13 @@ Frame: SH1-SH4, with SH3 = `Privacy & Security`.
 | PV19 | row ×N | one per peer with a location setting — peer id + state | `devices.md` row shape via SH8/SH7/SH12 |
 | PV20 | `generic` | `No one has location sharing turned on yet.` | SH13 |
 | PV21 | `generic` | `Settings could not be read.` | SH13 |
+| PV23 | `generic` | section card | SH5 — `GAP-044` |
+| PV24 | `heading:3` | `Connection requests` | SH6 — `GAP-044` |
+| PV25 | row | `Auto-accept trusted devices` + state | SH7 + SH12 — `GAP-044` |
+| PV26 | row | `Require authentication for unknown senders` + state | SH7 + SH12 — `GAP-044` |
+| PV27 | row | `Auto-accept specific people` + `chevron_right` | SH7 + SH9 — `GAP-044` |
+| PV29 | row | `Blocked devices` + count + `chevron_right` — navigates to `/devices`, no action here | SH7 + SH9 + SH12 — `GAP-044` |
+| PV30 | `generic` | `Connection settings could not be read.` | SH13 — `GAP-044` |
 | PV22 | `generic` | `App lock and a permissions manager are not available in this version.` | SH7, `GAP-040`, human-approved 2026-09-09 |
 
 ## Copy — verbatim
@@ -86,6 +93,12 @@ Frame: SH1-SH4, with SH3 = `Privacy & Security`.
 - `No one has location sharing turned on yet.`
 - `Settings could not be read.`
 - `App lock and a permissions manager are not available in this version.`
+- `Connection requests`
+- `Auto-accept trusted devices`
+- `Require authentication for unknown senders`
+- `Auto-accept specific people`
+- `Blocked devices`
+- `Connection settings could not be read.`
 
 PV17 is not decoration: `FR-LOC-003` makes the global switch an **AND** over
 four conditions, and a user who does not know that will read a per-person "on"
@@ -132,5 +145,13 @@ touches it (`GAP-040`).
 5. **No block/unblock control.** Blocking lives on `devices.md` and keeps
    exactly one home (see also `settings-security-center.md`, which reports
    blocks and also offers no action).
+7. **No duplicate block control, and no PV28.** PV29 reports the blocked-device
+   count and navigates to `/devices`; it offers no action, so item 5 above
+   still holds and blocking keeps exactly one home — two writers for one list
+   is the trap `E05-B03` cost this project once. **PV28 is absent on purpose:**
+   `FR-TRUST-006`'s "allow/disable communication" has no defined scope, raised
+   as `Q-FUNC-011` and left open by human decision (2026-09-22). Drawing a
+   control for an undecided behaviour would be inventing the behaviour.
+   (`GAP-044`)
 6. **No location history and no map.** `FR-LOC-004` explicitly forbids a
    permanent location store; a history view would imply one exists.

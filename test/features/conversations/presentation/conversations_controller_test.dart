@@ -137,6 +137,32 @@ Future<void> _insertMember(
       );
 }
 
+/// Counts real `CryptoService.decrypt` calls, per remote address, while
+/// delegating to the genuine implementation (EARS-COMM-36 / NFR-PERF-001).
+///
+/// A counter, not a `fail()` inside the seam: `_resolve*`'s own graceful
+/// degrade catches everything, so a `fail()` here would be swallowed and the
+/// test would pass while proving nothing.
+class _CountingCryptoService extends CryptoService {
+  _CountingCryptoService(super.store) : super.withStore();
+
+  final List<String> decryptedAddresses = <String>[];
+
+  int decryptCallsFor(String deviceId) =>
+      decryptedAddresses.where((a) => a == deviceId).length;
+
+  int get decryptCalls => decryptedAddresses.length;
+
+  @override
+  Future<Uint8List> decrypt(
+    SignalProtocolAddress remoteAddress,
+    CiphertextMessage ciphertext,
+  ) {
+    decryptedAddresses.add(remoteAddress.getName());
+    return super.decrypt(remoteAddress, ciphertext);
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger =
@@ -406,6 +432,77 @@ void main() {
     final tile = controller.conversations.single;
     expect(tile.preview, 'Hello there');
     controller.onClose();
+  });
+
+  test('test_EARS_COMM_36_a_cached_preview_is_not_decrypted_twice', () async {
+    // NFR-PERF-001, proven the way NFR-BATT-001/NFR-SCALE-001 are: by the
+    // mechanism, not by a stopwatch. A resolved preview is cached by
+    // `lastMessageId`, so a later list emission caused by an UNRELATED
+    // conversation must not re-decrypt this one. (It is also a correctness
+    // property, not only a cost one -- E04-B18: a second Double Ratchet
+    // decrypt of the same ciphertext cannot succeed.)
+    final bob = await _RemoteParty.create();
+    addTearDown(bob.close);
+    const selfAddress = SignalProtocolAddress('self-device', 1);
+    final selfBundle = await stack.identityService.getLocalPreKeyBundle();
+    await bob.crypto.establishSession(selfAddress, selfBundle);
+
+    final envelope = MessageEnvelope(
+      id: 'm-bob-1',
+      conversationId: 'bob-device',
+      sequenceNumber: 1,
+      payload: Uint8List.fromList(utf8.encode('Hello there')),
+    );
+    final ciphertextMessage =
+        await bob.crypto.encrypt(selfAddress, envelope.serialize());
+
+    await relationships.upsert('bob-device', RelationshipState.trusted);
+    await _insertMessage(
+      db,
+      id: 'm-bob-1',
+      conversationId: 'bob-device',
+      senderDeviceId: 'bob-device',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(ciphertextMessage.serialize()),
+      createdAt: 1000,
+    );
+
+    final counting = _CountingCryptoService(stack.signalStore);
+    final controller = ConversationsController(
+      repo: repo,
+      crypto: counting,
+      stack: stack,
+    );
+    controller.onInit();
+    addTearDown(controller.onClose);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+
+    expect(controller.conversations.single.preview, 'Hello there');
+    expect(counting.decryptCallsFor('bob-device'), 1);
+
+    // An unrelated conversation arrives. The list re-emits and every tile is
+    // rebuilt -- but `m-bob-1` is already resolved, so it must not be
+    // decrypted a second time.
+    await relationships.upsert('carol-device', RelationshipState.trusted);
+    await _insertMessage(
+      db,
+      id: 'm-carol-1',
+      conversationId: 'carol-device',
+      senderDeviceId: 'carol-device',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(utf8.encode('unrelated')),
+      createdAt: 2000,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    expect(controller.conversations.length, 2);
+    expect(
+      controller.conversations
+          .firstWhere((t) => t.conversationId == 'bob-device')
+          .preview,
+      'Hello there',
+    );
+    expect(counting.decryptCallsFor('bob-device'), 1);
   });
 
   test('test_no_plaintext_is_persisted', () async {

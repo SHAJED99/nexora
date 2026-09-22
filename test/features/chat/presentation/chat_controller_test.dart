@@ -156,6 +156,32 @@ class _SlowPrekeyExchange extends PrekeyExchange {
   }
 }
 
+/// Counts real `CryptoService.decrypt` calls, per remote address, while
+/// delegating to the genuine implementation (EARS-COMM-37 / NFR-PERF-001).
+///
+/// A counter, not a `fail()` inside the seam: `_resolve*`'s own graceful
+/// degrade catches everything, so a `fail()` here would be swallowed and the
+/// test would pass while proving nothing.
+class _CountingCryptoService extends CryptoService {
+  _CountingCryptoService(super.store) : super.withStore();
+
+  final List<String> decryptedAddresses = <String>[];
+
+  int decryptCallsFor(String deviceId) =>
+      decryptedAddresses.where((a) => a == deviceId).length;
+
+  int get decryptCalls => decryptedAddresses.length;
+
+  @override
+  Future<Uint8List> decrypt(
+    SignalProtocolAddress remoteAddress,
+    CiphertextMessage ciphertext,
+  ) {
+    decryptedAddresses.add(remoteAddress.getName());
+    return super.decrypt(remoteAddress, ciphertext);
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger =
@@ -778,6 +804,89 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 200));
 
     expect(second.messages.single.text, receivedText);
+  });
+
+  test(
+      'test_EARS_COMM_37_a_resolved_plaintext_is_not_decrypted_twice',
+      () async {
+    // NFR-PERF-001, by mechanism rather than by a timing number. A resolved
+    // plaintext is cached by message id, so `loadOlder()` -- which re-renders
+    // every row it has, not just the newly paged-in page -- must not decrypt
+    // an already-resolved row again. E04-B18 makes this a correctness
+    // property too: the second decrypt could not succeed.
+    final stack = await newStack('self-device', nextSuffix());
+    addTearDown(stack.dispose);
+
+    final bob = await _RemoteParty.create();
+    addTearDown(bob.close);
+    const selfAddress = SignalProtocolAddress('self-device', 1);
+    final selfBundle = await stack.identityService.getLocalPreKeyBundle();
+    await bob.crypto.establishSession(selfAddress, selfBundle);
+
+    const incomingText = 'decrypted exactly once';
+    final envelope = MessageEnvelope(
+      id: 'm-bob-1',
+      conversationId: 'bob-device',
+      sequenceNumber: 1,
+      payload: Uint8List.fromList(utf8.encode(incomingText)),
+    );
+    final ciphertextMessage =
+        await bob.crypto.encrypt(selfAddress, envelope.serialize());
+    await _insertMessage(
+      stack.db,
+      id: 'm-bob-1',
+      conversationId: 'bob-device',
+      senderDeviceId: 'bob-device',
+      sequenceNumber: 1,
+      ciphertext: Uint8List.fromList(ciphertextMessage.serialize()),
+      createdAt: 2000,
+    );
+
+    final counting = _CountingCryptoService(stack.signalStore);
+    final controller = ChatController(
+      conversationId: 'bob-device',
+      repo: ConversationRepository(stack.db, selfDeviceId: 'self-device'),
+      send: stack.sendMessage,
+      sessions: stack.prekeyExchange,
+      crypto: counting,
+      acks: stack.deliveryAckService,
+    );
+    controller.onInit();
+    addTearDown(controller.onClose);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+
+    expect(controller.messages.single.text, incomingText);
+    expect(counting.decryptCalls, 1);
+
+    // An OLDER row for `loadOlder()` to page in. It already carries its
+    // plaintext (the E04-B18 column), so paging itself owes no decrypt --
+    // any second call the counter sees would be a re-decrypt of `m-bob-1`.
+    await _insertMessage(
+      stack.db,
+      id: 'm-bob-0',
+      conversationId: 'bob-device',
+      senderDeviceId: 'bob-device',
+      sequenceNumber: 0,
+      ciphertext: Uint8List.fromList(utf8.encode('not real ciphertext')),
+      createdAt: 1000,
+    );
+    await (stack.db.update(stack.db.messages)
+          ..where((t) => t.id.equals('m-bob-0')))
+        .write(
+      MessagesCompanion(
+        plaintextPayload: Value(Uint8List.fromList(utf8.encode('older'))),
+      ),
+    );
+
+    await controller.loadOlder();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+
+    expect(controller.messages.length, 2);
+    expect(
+      controller.messages.firstWhere((m) => m.id == 'm-bob-1').text,
+      incomingText,
+    );
+    expect(counting.decryptCalls, 1);
   });
 
   // E08-T03: access-frequency signals (FR-STORE-005). The recorder itself is

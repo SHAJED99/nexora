@@ -1900,6 +1900,55 @@ and that is the strongest single argument for this disposition.**
   silently substituted.
 - **built:** `E04-B19`, 2026-09-13.
 
+## GAP-044 — settings-privacy, FR-TRUST-006's connection-request controls have no design source
+
+- **status:** 🟡 proposed — the human approved the design pass on
+  2026-09-22; the element scope below still needs its own sign-off
+- **screen:** settings-privacy (`design/screens/settings-privacy.md`) — an
+  **extension of the built screen**, not a new one (the same shape `GAP-023`
+  used to extend `GAP-014`)
+- **spec:** `FR-TRUST-006` — of its six configurable rules, *location access*
+  is built (PV16-PV20, `LocationSettingsRepository`, `E09-T01`) and *block
+  specific users* lives on `devices.md`. The other four — auto-accept trusted
+  devices, auto-accept specific users, require authentication for unknown
+  users, and allow/disable communication — have **no surface anywhere**.
+- **design shows:** nothing. `settings.md`'s Privacy & Security row (elements
+  13-17) is a menu entry; the built screen covers encryption, notification
+  privacy and location only.
+- **derived from:** the built contract's own measured primitives only — `SH5`
+  section card, `SH6` `heading:3`, `SH7` row, `SH8` glyph, `SH12` state label,
+  `SH13` empty/error copy. **No new primitive is introduced.**
+- **proposal:** one new section, `Connection requests`, elements PV23-PV30:
+
+  | id | role | control | backing |
+  |---|---|---|---|
+  | PV23 | section card (`SH5`) | — | existing primitive |
+  | PV24 | `heading:3` — `Connection requests` | — | `SH6` |
+  | PV25 | row + toggle | **Auto-accept trusted devices** | `FR-TRUST-004`, already built and tested (`EARS-TRUST-1`) |
+  | PV26 | row + toggle | **Require authentication for unknown senders** | wires the inert `requireAuthForUnknown` flag |
+  | PV27 | row → sub-list | **Auto-accept specific people** | wires the inert `autoAcceptSpecific` flag |
+  | PV28 | ⛔ **not specified** | *allow/disable communication* | **blocked on `Q-FUNC-011`** — scope undecided, see below |
+  | PV29 | row → `/devices` | **Blocked devices** — reports the count and navigates; offers **no action** | preserves §Derivation-boundary item 5's single home for blocking |
+  | PV30 | `generic` | empty / error copy | `SH13` |
+
+- **PV28 is deliberately unspecified.** `FR-TRUST-006`'s "allow/disable
+  communication" has no defined scope — new connection requests only, or
+  existing conversations too. Raised as **`Q-FUNC-011`** and left open by
+  human decision, 2026-09-22. **PV28 is the only blocked element**; PV23-PV27,
+  PV29 and PV30 are unaffected by it.
+- **prerequisite, not a design question:** there is **no settings store**.
+  `LocationSettingsRepository` persists the location toggles; nothing persists
+  trust preferences. PV25-PV27 need one before they are more than decoration,
+  and wiring them is what finally makes `autoAcceptSpecific` /
+  `requireAuthForUnknown` live (`OQ-E02-T01-2`). **No test passes either flag
+  as `true` today**, so both branches need first-time coverage.
+- **supersedes:** `GAP-005`'s proposal, which predates this screen existing.
+  `GAP-005` asked for a Privacy & Security sub-screen for `FR-TRUST-006`;
+  `IMP-003` caused one to be built (`GAP-033`, `E15-T05`) scoped to location
+  and notification privacy instead. This entry records the remainder.
+- **approved by:** _(pending — element scope)_
+- **built:** not built — this entry is the proposal only.
+
 ## The usual suspects
 
 Checklist for the gap pass. In rough order of how often each is missed:
