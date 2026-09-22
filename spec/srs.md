@@ -132,7 +132,25 @@ sourced during intake; this is their first atomic-id rendering)
 - **FR-MSG-005**: Where a user has multiple registered devices, the system shall synchronize only missing/required information between them, not a full re-sync. *(traces_to: BRD §37)*
 - **FR-MSG-006**: The system shall continue functioning without Firebase; when connectivity returns, it shall exchange synchronization metadata, identify missing information, synchronize, and resolve conflicts. *(traces_to: BRD §38)*
 - **FR-MSG-007**: When resolving conflicts, the system shall favor the more security-restrictive state per: BLOCK > TRUST, LOCATION-OFF > LOCATION-ON, REVOKED > ACTIVE, REMOVED > MEMBER. *(traces_to: BRD §39)*
-- **FR-MSG-008**: The system shall represent security-sensitive relationship changes (TRUST, BLOCK, UNBLOCK, REMOVE-TRUST, REVOKE-DEVICE) as discrete events/operations, for predictable synchronization across devices. *(traces_to: BRD §40)*
+- **FR-MSG-008** — ✂️ **NARROWED 2026-09-22** (human decision, `IMP-004`;
+  the id is retained and the original five-change scope remains in BRD §40):
+  The system shall represent device revocation (REVOKE-DEVICE) as a discrete
+  operation, for predictable synchronization across an account's own devices.
+  *(traces_to: BRD §40)*
+  - **Why narrowed.** Of BRD §40's five changes, only REVOKE-DEVICE is built
+    this way: `device_revocations` holds one row per revoked device id,
+    published to and pulled from the account's Firebase device registry
+    (`E11-T04`, `EARS-FB-10`). **TRUST, BLOCK, UNBLOCK and REMOVE-TRUST are
+    NOT represented as synced discrete events.** They remain mutable
+    relationship state — one `relationships` row per device, overwritten in
+    place — with no event or operation log and no cross-device propagation.
+    Their cross-device synchronization was `FR-TRUST-007`, descoped
+    2026-09-06 (`IMP-002`), which left the event model for them with no
+    consumer. The SRS requirement is deliberately narrowed to the implemented
+    REVOKE-DEVICE behaviour while BRD §40 keeps the original five-change
+    scope. **Reviving event-based synchronization for the four relationship
+    changes requires a new FR id and a fresh human decision.** `FR-MSG-007`'s
+    precedence table (BLOCK > TRUST included) is untouched and still tested.
 
 ## FR-SEC — Security
 
