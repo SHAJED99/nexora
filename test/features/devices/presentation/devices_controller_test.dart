@@ -296,6 +296,43 @@ void main() {
       );
     });
 
+    test('test_EARS_DEV_5_discovery_alone_grants_no_authorization', () async {
+      // FR-DISC-002: "Discovery shall not by itself grant any authorization."
+      // `EARS-DEV-4` already proves a discovered device is SURFACED as
+      // unknown; this asserts the requirement's actual negative -- that
+      // discovery grants nothing and leaves nothing behind. Both halves
+      // matter: a persisted row would make a merely-seen device
+      // indistinguishable from one the user has decided about, and an
+      // evaluation of `allowed`/`trusted` would be authorization granted by
+      // proximity alone.
+      const String suffix = 'devices-discover-no-authz';
+      final DevicesController discovering = buildDiscoveringController(suffix);
+
+      discovering.discover();
+      await pumpEventQueue();
+
+      pushDiscoveredDevice(
+        suffix,
+        TransportDevice(
+          id: 'stranger-device-1',
+          displayName: 'Stranger Phone',
+          type: TransportType.bluetooth,
+        ),
+      );
+      await pumpEventQueue();
+
+      // Nothing persisted -- discovery leaves no authorization record.
+      final persisted = await repository.get('stranger-device-1');
+      expect(persisted, isNull);
+
+      // And the authorization decision itself refuses to upgrade it.
+      final state = await EvaluateConnectionRequestUseCase(repository)
+          .call('stranger-device-1');
+      expect(state, RelationshipState.unknown);
+      expect(state, isNot(RelationshipState.allowed));
+      expect(state, isNot(RelationshipState.trusted));
+    });
+
     test('test_discover_deduplicates_repeated_device_events', () async {
       const String suffix = 'devices-discover-dedup';
       final DevicesController discovering =
