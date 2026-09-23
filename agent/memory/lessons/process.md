@@ -108,7 +108,7 @@ automatically for matching tasks (see `index.yaml`).
   intended file list for that commit at the time. Systemic fix applied in
   this retro: added `.claude/worktrees/` to `.gitignore` — a mechanical
   control (git itself now ignores the path) rather than a rule to remember.
-- recurrence: **2** (2026-09-18: recurred in this session. A `git add -A` in a five-file frontmatter fix swept in ~20 unrelated paths — `.claude/skills/review/SKILL.md`, `.firebaserc`, and a pile of `.verify_shots/*.png|txt` binaries — all of which the same session had repeatedly verified as pre-existing and deliberately untouched. Caught only because the commit's CRLF warnings named files the author knew were not his. Undone with `git reset --soft HEAD~1` before push.)
+- recurrence: 2 (2026-09-18: recurred in this session. A `git add -A` in a five-file frontmatter fix swept in ~20 unrelated paths — `.claude/skills/review/SKILL.md`, `.firebaserc`, and a pile of `.verify_shots/*.png|txt` binaries — all of which the same session had repeatedly verified as pre-existing and deliberately untouched. Caught only because the commit's CRLF warnings named files the author knew were not his. Undone with `git reset --soft HEAD~1` before push.)
 - status: promoted-to-hook(.gitignore)
 
 ## L-process-005 — a task's own `files:` fence can be individually correct and still leave a spec-level completeness gap the analyze report's cross-task-contradiction check doesn't catch
@@ -424,7 +424,7 @@ automatically for matching tasks (see `index.yaml`).
   state the exact status value (`blocked`, pending the priority gate) and
   cite `harness.yaml`'s `scheduler.statuses` list directly, the same way
   L-process-009's fix named the exact section title needed.
-- recurrence: **2** (2026-09-18: recurred 3/3 on newly-filed bug files —
+- recurrence: 2 (2026-09-18: recurred 3/3 on newly-filed bug files —
   `E01-B01`, `E04-B38`, `E04-B39` — all written with `status: open`, all
   caught by `--validate` exactly as in 2026-09-02. Notably the author had
   READ this very lesson file earlier in the same session and still reached
@@ -639,6 +639,65 @@ automatically for matching tasks (see `index.yaml`).
   `scheduler.py --validate` check flagging a `done` task whose `reviewed_by`
   is empty or equals `executed_by`) is NOT built yet; it touches harness
   code and historical task files, so it is left as a follow-up.
+- **2026-09-24 — the unbuilt rung above is now CONFIRMED absent by direct
+  inspection, not merely proposed.** Recurrence is deliberately NOT bumped:
+  this was an authorised exception, not a violation, and `skills/retro` says
+  the recurrence count is what decides automation priority, so inflating it
+  with a non-failure would corrupt the signal. What happened: on `E00-B01`
+  the human directed (2026-09-24) that Claude Opus serve as the rule-5
+  reviewer and that Gemini not be used where Opus is available. The reviewer
+  was therefore a genuinely separate context — a dispatched subagent with no
+  access to the implementing session — but the same model as `executed_by`.
+  H5 emitted no finding for `E00-B01` at all — and the reason is subtler, and
+  more useful, than "the check does not exist".
+
+  **H5 already implements most of what this lesson proposed.** The loop at
+  `agent/orchestrator/health.py:287` runs three tests over every `done` task:
+  an empty `reviewed_by` is a hard **fail** (`:291-293`);
+  `reviewed_by == executed_by` is a hard **fail** (`:294-296`); and a
+  `reviewed_by` naming no model from `harness.yaml` `review_routing.models`
+  is a **warn** (`:297-300`). So the "empty" half of the proposed rung is
+  fully built, and the "equals" half is built too.
+
+  **What actually fails is the comparison's shape.** `:294` is
+  *whole-string*, case-insensitive equality:
+  `rv.strip().lower() == ex.strip().lower()`. `E00-B01` carries
+  `executed_by: opus (interactive session)` and
+  `reviewed_by: "opus (dispatched reviewer subagent, separate context ...)"`.
+  Same model, different strings — so the equality test passes vacuously and
+  H5 stays silent. Note that `executed_by`'s own trailing parenthetical is
+  enough to defeat `:294` on its own: even a bare `reviewed_by: opus` would
+  not be whole-string-equal to `opus (interactive session)`. Both fields
+  carry prose, and either one alone breaks the match.
+
+  **The convention that makes this routine is the project's own.**
+  `L-process-010`'s rule in `.claude/skills/review/SKILL.md` requires that
+  `reviewed_by` **lead with** a model string from `review_routing.models`,
+  and explicitly pushes full disclosure out to the Run log rather than into
+  this field. It does not mandate a parenthetical — but its own worked
+  example carries one (`claude-sonnet-5 (direct, rate-limit deviation — see
+  Run log …)`), so a trailing qualifier is normalised in practice, and
+  `executed_by` has no such rule at all. The result is that most real task
+  files have prose in at least one of the two fields, and `:294` therefore
+  almost never fires even when the models genuinely match.
+
+  The fix, if this is ever built out, is **not** a new check — it is making
+  `:294` compare the leading model token (the text before the first `(` or
+  `,`) **of both fields**, not the whole strings. That would yield `opus` vs
+  `opus` here and fire the hard fail as intended. It would still not
+  normalise a bare `opus` against a fully qualified `claude-opus-5`; that is
+  a further step, not solved by tokenising alone.
+
+  Recorded 2026-09-24 after two wrong drafts: the first asserted that H5
+  never compares the two fields at all, and the second cited every line
+  number nine lines too high (`:303` for what is `:294`). The "+3" figure in
+  that second fix's own commit message is itself wrong, and is left standing
+  as the third small instance of the same disease. Both were caught by the reviewer reading
+  `health.py` rather than the note. A lesson that misstates the code it
+  cites is worse than no lesson, which is why the errors are left visible
+  here rather than quietly overwritten — the failure mode this whole entry
+  is about is a check drifting from the thing it claims to check, and a
+  lesson drifting from the code it claims to describe is the same disease.
 
 ## L-process-017 — a new service, method or stream is built, tested and approved, but nothing in production ever calls it, so the feature silently does not exist
 - date: 2026-09-16 | source: consolidation at the 2026-09-16 gate
@@ -662,8 +721,10 @@ automatically for matching tasks (see `index.yaml`).
   tests for a real caller, or confirms the task file names the later task
   that owns wiring it as an Open Question. A dead-code analysis hook, as
   the E13 retro suggested, is the next rung and is not built.
-- recurrence: 3+ (E04-B05, E04-B03, E05-B02; further instances per the
-  E12–E14 retros)
+- recurrence: 3 (at least 3, and the true count is higher — E04-B05,
+  E04-B03, E05-B02; further instances per the E12–E14 retros. Written `3+`
+  until 2026-09-24; the bare integer is what `agent/orchestrator/lessons.py`
+  parses, and "3" is the floor, so no information is lost by the change.)
 - status: promoted-to-rule — `agent/skills/review/SKILL.md`, 2026-09-16,
   🧍 `retro_promotions` decided under the human's explicit delegation ("on
   you", 2026-09-16).
