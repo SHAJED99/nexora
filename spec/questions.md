@@ -18,10 +18,18 @@ Q-DESIGN-001; that clearance stands unchanged.
 | | Count |
 |---|---|
 | 🟡 blocking | 0 |
-| 🟡 important | 4 |
+| 🟡 important | 1 |
 | 🟡 optional | 0 |
-| 🟢 answered | 4 |
+| 🟢 answered | 8 |
 | ⚪ assumed / deferred | 2 |
+
+<!-- Recounted 2026-09-24 from the question bodies below, which are the source
+     of truth for this table. It read "important 4 / answered 4" (total 10,
+     against 11 questions on file). The four important questions -- Q-ARCH-003,
+     Q-ARCH-004, Q-FUNC-005, Q-FUNC-006 -- were all answered during 2026-09-07's
+     registry sweep and their own bodies say so, but this summary was never
+     recounted, so it kept reporting them as open. The one genuinely open
+     question is Q-FUNC-011. -->
 
 **Genesis and implementation may not proceed while any 🟡 blocking row exists.**
 
