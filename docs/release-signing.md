@@ -68,8 +68,10 @@ keytool -genkey -v \
   -alias nexora-upload
 ```
 
-`-validity 10000` (≈27 years) is Google Play's documented requirement for an
-upload key: a key that expires strands the app.
+`-validity 10000` (≈27 years) is the Android/Flutter documented
+*recommendation*. Play's actual stated requirement is narrower — the key must
+stay valid until at least **22 October 2033** — and 10000 days satisfies it
+comfortably. Either way a key that expires strands the app.
 
 ### 2. Back it up, in two places, before step 3
 

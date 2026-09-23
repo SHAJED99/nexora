@@ -53,6 +53,7 @@ inside of.
 | E00-T04 | Repo skeleton + route/data-flow maps | infra | M | ✅ done — reviewed (Opus, approve with notes) — Flutter Android skeleton scaffolded (`lib/` per docs/conventions.md), `docs/routes.md` + `docs/data-flow.md` written |
 | E00-T05 | Walking skeleton (real request, end to end, running) | cross-cutting | L | ✅ done — reviewed (Opus, approve with notes) — welcome/login built against contracts; UI → GetX controller → use case → repository → Drift wired with one real write + read; `flutter analyze`/`flutter test` green, `flutter build apk --debug` succeeded; no emulator available to confirm on-device boot |
 | E00-T06 | CI, branch protection, hooks, design self-test | infra | M | ✅ done — reviewed (Opus, approve with notes) — `.github/workflows/ci.yml` added; git hooks confirmed already installed; `design-selftest` green; **branch protection on `main`/`development` NOT done** (requires GitHub UI/API repo-admin access — open human follow-up, OQ-E00-2) and design-verify wiring for welcome/login explicitly deferred (OQ-E00-3) |
+| E00-B01 | Release builds signed with the debug key | infra | S | ✅ done — reviewed (Opus subagent, APPROVE, 4 non-blocking findings applied) — release signing now reads `android/key.properties`, falling back to the debug key when absent so CI and fresh clones are unaffected; **the keystore itself is not created here** (`secrets_or_env_change` human gate, OQ-E00-B01-1) and `docs/release-signing.md` is its runbook |
 
 ## Test strategy
 T05's walking skeleton is proven by: app builds, launches, the one wired

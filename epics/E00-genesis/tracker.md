@@ -14,6 +14,7 @@
 - [x] E00-T04 · Repo skeleton + route/data-flow maps · done (reviewed, approved) · 2026-08-26
 - [x] E00-T05 · Walking skeleton (real request, end to end, running) · done (reviewed, approved) · 2026-08-26
 - [x] E00-T06 · CI, branch protection, hooks, design self-test · done (reviewed, approved; branch protection itself remains a genuinely open human follow-up — OQ-E00-2, not silently dropped scope) · 2026-08-26
+- [x] E00-B01 · Release builds signed with the debug key · done (reviewed, approved; the keystore itself remains a genuinely open human gate — OQ-E00-B01-1, not silently dropped scope) · 2026-09-24
 
 ## Dependency graph
 ```mermaid
