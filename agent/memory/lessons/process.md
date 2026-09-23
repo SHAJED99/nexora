@@ -108,7 +108,7 @@ automatically for matching tasks (see `index.yaml`).
   intended file list for that commit at the time. Systemic fix applied in
   this retro: added `.claude/worktrees/` to `.gitignore` — a mechanical
   control (git itself now ignores the path) rather than a rule to remember.
-- recurrence: **2** (2026-09-18: recurred in this session. A `git add -A` in a five-file frontmatter fix swept in ~20 unrelated paths — `.claude/skills/review/SKILL.md`, `.firebaserc`, and a pile of `.verify_shots/*.png|txt` binaries — all of which the same session had repeatedly verified as pre-existing and deliberately untouched. Caught only because the commit's CRLF warnings named files the author knew were not his. Undone with `git reset --soft HEAD~1` before push.)
+- recurrence: 2 (2026-09-18: recurred in this session. A `git add -A` in a five-file frontmatter fix swept in ~20 unrelated paths — `.claude/skills/review/SKILL.md`, `.firebaserc`, and a pile of `.verify_shots/*.png|txt` binaries — all of which the same session had repeatedly verified as pre-existing and deliberately untouched. Caught only because the commit's CRLF warnings named files the author knew were not his. Undone with `git reset --soft HEAD~1` before push.)
 - status: promoted-to-hook(.gitignore)
 
 ## L-process-005 — a task's own `files:` fence can be individually correct and still leave a spec-level completeness gap the analyze report's cross-task-contradiction check doesn't catch
@@ -424,7 +424,7 @@ automatically for matching tasks (see `index.yaml`).
   state the exact status value (`blocked`, pending the priority gate) and
   cite `harness.yaml`'s `scheduler.statuses` list directly, the same way
   L-process-009's fix named the exact section title needed.
-- recurrence: **2** (2026-09-18: recurred 3/3 on newly-filed bug files —
+- recurrence: 2 (2026-09-18: recurred 3/3 on newly-filed bug files —
   `E01-B01`, `E04-B38`, `E04-B39` — all written with `status: open`, all
   caught by `--validate` exactly as in 2026-09-02. Notably the author had
   READ this very lesson file earlier in the same session and still reached
@@ -639,6 +639,26 @@ automatically for matching tasks (see `index.yaml`).
   `scheduler.py --validate` check flagging a `done` task whose `reviewed_by`
   is empty or equals `executed_by`) is NOT built yet; it touches harness
   code and historical task files, so it is left as a follow-up.
+- **2026-09-24 — the unbuilt rung above is now CONFIRMED absent by direct
+  inspection, not merely proposed.** Recurrence is deliberately NOT bumped:
+  this was an authorised exception, not a violation, and `skills/retro` says
+  the recurrence count is what decides automation priority, so inflating it
+  with a non-failure would corrupt the signal. What happened: on `E00-B01`
+  the human directed (2026-09-24) that Claude Opus serve as the rule-5
+  reviewer and that Gemini not be used where Opus is available. The reviewer
+  was therefore a genuinely separate context — a dispatched subagent with no
+  access to the implementing session — but the same model as `executed_by`.
+  The second review pass then checked what the harness would do about it and
+  found: **`make health` H5 tests only whether `reviewed_by` CONTAINS a model
+  name declared in `harness.yaml` `review_routing.models`. It never compares
+  `reviewed_by` against `executed_by`.** Because `opus` is in that list, H5
+  emitted no finding for `E00-B01` at all. So the half of this lesson's
+  proposed check that catches an EMPTY `reviewed_by` is partially covered by
+  H5, but the half that catches `reviewed_by == executed_by` is covered by
+  nothing whatsoever — a same-model review is mechanically indistinguishable
+  from a cross-model one, and only a hand-written Run-log note records it.
+  That is the precise gap to close if this rung is ever built, and it is now
+  evidence rather than conjecture.
 
 ## L-process-017 — a new service, method or stream is built, tested and approved, but nothing in production ever calls it, so the feature silently does not exist
 - date: 2026-09-16 | source: consolidation at the 2026-09-16 gate
@@ -662,8 +682,10 @@ automatically for matching tasks (see `index.yaml`).
   tests for a real caller, or confirms the task file names the later task
   that owns wiring it as an Open Question. A dead-code analysis hook, as
   the E13 retro suggested, is the next rung and is not built.
-- recurrence: 3+ (E04-B05, E04-B03, E05-B02; further instances per the
-  E12–E14 retros)
+- recurrence: 3 (at least 3, and the true count is higher — E04-B05,
+  E04-B03, E05-B02; further instances per the E12–E14 retros. Written `3+`
+  until 2026-09-24; the bare integer is what `agent/orchestrator/lessons.py`
+  parses, and "3" is the floor, so no information is lost by the change.)
 - status: promoted-to-rule — `agent/skills/review/SKILL.md`, 2026-09-16,
   🧍 `retro_promotions` decided under the human's explicit delegation ("on
   you", 2026-09-16).
