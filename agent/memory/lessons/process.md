@@ -651,37 +651,51 @@ automatically for matching tasks (see `index.yaml`).
   H5 emitted no finding for `E00-B01` at all — and the reason is subtler, and
   more useful, than "the check does not exist".
 
-  **H5 already implements most of what this lesson proposed.**
-  `agent/orchestrator/health.py:296-309` runs three tests over every `done`
-  task: an empty `reviewed_by` is a hard **fail** (`:300-302`);
-  `reviewed_by == executed_by` is a hard **fail** (`:303-305`); and a
+  **H5 already implements most of what this lesson proposed.** The loop at
+  `agent/orchestrator/health.py:287` runs three tests over every `done` task:
+  an empty `reviewed_by` is a hard **fail** (`:291-293`);
+  `reviewed_by == executed_by` is a hard **fail** (`:294-296`); and a
   `reviewed_by` naming no model from `harness.yaml` `review_routing.models`
-  is a **warn** (`:306-309`). So the "empty" half of the proposed rung is
+  is a **warn** (`:297-300`). So the "empty" half of the proposed rung is
   fully built, and the "equals" half is built too.
 
-  **What actually fails is the comparison's shape.** `:303` is
+  **What actually fails is the comparison's shape.** `:294` is
   *whole-string*, case-insensitive equality:
   `rv.strip().lower() == ex.strip().lower()`. `E00-B01` carries
   `executed_by: opus (interactive session)` and
   `reviewed_by: "opus (dispatched reviewer subagent, separate context ...)"`.
   Same model, different strings — so the equality test passes vacuously and
-  H5 stays silent.
+  H5 stays silent. Note that `executed_by`'s own trailing parenthetical is
+  enough to defeat `:294` on its own: even a bare `reviewed_by: opus` would
+  not be whole-string-equal to `opus (interactive session)`. Both fields
+  carry prose, and either one alone breaks the match.
 
-  **And the thing that defeats it is another promoted rule of this
-  project's own.** `L-process-010`'s rule in `.claude/skills/review/SKILL.md`
-  *requires* disclosure prose in `reviewed_by` (who reviewed, in what
-  context, under what authority). Any task that follows that rule therefore
-  has a `reviewed_by` string that cannot equal a bare `executed_by`, so the
-  more faithfully a task documents its review, the more reliably it slips
-  past `:303`. Two controls, each correct alone, cancelling each other.
+  **The convention that makes this routine is the project's own.**
+  `L-process-010`'s rule in `.claude/skills/review/SKILL.md` requires that
+  `reviewed_by` **lead with** a model string from `review_routing.models`,
+  and explicitly pushes full disclosure out to the Run log rather than into
+  this field. It does not mandate a parenthetical — but its own worked
+  example carries one (`claude-sonnet-5 (direct, rate-limit deviation — see
+  Run log …)`), so a trailing qualifier is normalised in practice, and
+  `executed_by` has no such rule at all. The result is that most real task
+  files have prose in at least one of the two fields, and `:294` therefore
+  almost never fires even when the models genuinely match.
 
   The fix, if this is ever built out, is **not** a new check — it is making
-  `:303` compare the leading model token (the text before the first `(` or
-  `,`) rather than the whole string. Recorded 2026-09-24 after a first draft
-  of this note asserted, wrongly, that H5 never compares the two fields at
-  all; the reviewer read `health.py` and corrected it. A lesson that
-  misstates the code it cites is worse than no lesson, which is why the
-  error is left visible here rather than quietly overwritten.
+  `:294` compare the leading model token (the text before the first `(` or
+  `,`) **of both fields**, not the whole strings. That would yield `opus` vs
+  `opus` here and fire the hard fail as intended. It would still not
+  normalise a bare `opus` against a fully qualified `claude-opus-5`; that is
+  a further step, not solved by tokenising alone.
+
+  Recorded 2026-09-24 after two wrong drafts: the first asserted that H5
+  never compares the two fields at all, and the second cited every line
+  number three lines too low. Both were caught by the reviewer reading
+  `health.py` rather than the note. A lesson that misstates the code it
+  cites is worse than no lesson, which is why the errors are left visible
+  here rather than quietly overwritten — the failure mode this whole entry
+  is about is a check drifting from the thing it claims to check, and a
+  lesson drifting from the code it claims to describe is the same disease.
 
 ## L-process-017 — a new service, method or stream is built, tested and approved, but nothing in production ever calls it, so the feature silently does not exist
 - date: 2026-09-16 | source: consolidation at the 2026-09-16 gate
