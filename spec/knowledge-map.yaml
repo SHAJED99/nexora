@@ -14,7 +14,7 @@
 project:
   name: NEXORA
   tagline: "Connect beyond the network"
-  lifecycle_stage: pre-genesis  # intake + question-resolution round 1 done; Epic 00 not started
+  lifecycle_stage: release  # 2026-09-24: was `pre-genesis`, which is both false (Epic 00 completed 2026-08-26 and 14 further epics have shipped since) and not a legal value -- `schemas/knowledge-map.schema.yaml:147-155` has no `pre-genesis` in its enum, and `scheduler.py:327` lints keys only, never enum values, so nothing caught it. `release` is the current stage: v0.1.0 is an annotated tag on `main`, and the live work queue is release-path (signing, CHANGELOG, release validation). Not `execution`: E01 and E04 each carry one open P2 bug, but no feature epic is in flight.
 
 vision:
   statement: >
