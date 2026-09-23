@@ -690,7 +690,9 @@ automatically for matching tasks (see `index.yaml`).
 
   Recorded 2026-09-24 after two wrong drafts: the first asserted that H5
   never compares the two fields at all, and the second cited every line
-  number three lines too low. Both were caught by the reviewer reading
+  number nine lines too high (`:303` for what is `:294`). The "+3" figure in
+  that second fix's own commit message is itself wrong, and is left standing
+  as the third small instance of the same disease. Both were caught by the reviewer reading
   `health.py` rather than the note. A lesson that misstates the code it
   cites is worse than no lesson, which is why the errors are left visible
   here rather than quietly overwritten — the failure mode this whole entry
