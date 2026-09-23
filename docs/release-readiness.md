@@ -42,6 +42,44 @@ R8/minification is **not** a risk here: `isMinifyEnabled` is never set, so AGP
 does not shrink. That was checked because it is the usual first-release
 ambush; it is not one for this project.
 
+## The review record has a hole in it, and it is large
+
+`skills/release` requires every task PR to have passed the review gate
+(rule 5, `reviewed_by` != `executed_by`). The task files are where that is
+recorded. Counted across all 230 `done`/`verified` task files on `82b803d`:
+
+| | Count |
+|---|---:|
+| carry **both** `reviewed_by` and `review_outcome` | 140 |
+| carry **neither** | **90** |
+| carry only one of the two | 0 |
+
+Of the 90, ten are inside E04 (frozen) and eighty are not. The split is clean —
+there is no task with a reviewer recorded but no outcome, or vice versa — which
+says this is a *template* gap rather than sloppy filling-in: the bug file shape
+that `skills/bug-sweep` produces has no review fields at all, so a sweep-authored
+bug can reach `done` without any slot to record a review in.
+
+**This has deliberately not been "fixed".** Writing `review_outcome: APPROVE`
+into 90 files would manufacture evidence for reviews that may never have
+happened. Spot-checking says the risk is real: `E09-B02` records a
+`## Self-review` section and "Merged into `epic_09` via PR #48" — a self-review
+is not rule 5's independent review, and stamping it APPROVE would convert an
+honest gap into a false record. `make health`'s H5 and H7 already report every
+one of these; that report is the truth and should stay legible.
+
+What it means for the release: **the project cannot currently demonstrate, from
+its own records, that 90 of its 230 completed tasks passed an independent
+review.** They may well have — PR history exists for most — but the task files
+do not say so, and reconstructing it means a per-file forensic pass against 300+
+PRs. That is real work, it is not blocked on any human decision, and it is the
+largest single piece of unowned release-gate debt in the repository.
+
+The durable fix is upstream: `skills/bug-sweep`'s bug template needs the three
+review fields, which is a skill edit and therefore the 🧍 `retro_promotions`
+gate. Compare `L-process-011` and `L-process-012`, both of which are already
+promotion candidates for template gaps in exactly this file.
+
 ## What stands between here and a signed, distributable release
 
 Ordered by who owns it.
