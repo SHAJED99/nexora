@@ -547,18 +547,34 @@ _H8_FIXTURES = (
      "q.where((t) => t.s.isIn(const ['x']) & t.id.isIn([...all]));", (1,)),
     ("a chunking marker still exempts, as it always has",
      "for (final chunk in batches) { q.where((t) => t.id.isIn(chunk)); }", ()),
-    # The three fixtures below guard H8's OTHER heuristic branches. They are
-    # outside the closed-input-space guarantee (which covers only the two
-    # exemption hatches), and a review found each could be regressed while
-    # every other fixture still passed.
+    # The fixtures below guard H8's OTHER heuristic branches. They are outside
+    # the closed-input-space guarantee (which covers only the two exemption
+    # hatches), and two review rounds found each could be regressed while every
+    # other fixture still passed.
+    #
+    # The window ones are deliberately BOUNDARY tests, not samples: each marker
+    # sits exactly one line outside the window it must not reach, so widening
+    # `i - 6` or `i + 3` by even one fails immediately. A marker parked far away
+    # would leave slack a widening could hide in — the first draft of the
+    # backward fixture put it 10 lines up, which passed under `i - 7`, `i - 8`
+    # and `i - 9`. Each fixture is written with its blank lines visible, so the
+    # distance is checkable by eye and does not have to be trusted.
     ("a trailing comment does not make a call site a comment",
      "q.where((t) => t.id.isIn(ids)); // ids come from a page scan", (1,)),
-    ("a chunking marker far above the call site does not reach it",
-     "for (final chunk in batches) {" + chr(10) * 10 +
-     "q.where((t) => t.id.isIn(everything));", (11,)),
+    ("a chunking marker 7 lines above is one line outside the backward window",
+     "for (final chunk in batches) {\n"
+     "\n" "\n" "\n" "\n" "\n" "\n"
+     "q.where((t) => t.id.isIn(everything));", (8,)),
+    ("a chunking marker 3 lines below is one line outside the forward window",
+     "q.where((t) => t.id.isIn(everything));\n"
+     "\n" "\n"
+     "for (final chunk in batches) {", (1,)),
     ("raw SQL IN found via the customSelect lookback, not on the same line",
-     "db.customSelect(" + chr(10) + "  'SELECT * FROM m'" + chr(10) +
+     "db.customSelect(\n"
+     "  'SELECT * FROM m'\n"
      "  ' WHERE id IN (${all.join(\",\")})');", (3,)),
+    ("raw SQL IN qualified by db.sql( rather than customSelect",
+     "db.sql('SELECT * FROM m WHERE id IN (${all.join(\",\")})');", (1,)),
     ("a commented-out call site is not a call site",
      "// q.where((t) => t.id.isIn(ids));", ()),
 )
@@ -567,9 +583,13 @@ _H8_FIXTURES = (
 def selftest():
     """Prove H8 still rejects every shape it has ever wrongly exempted.
 
-    Stdlib only and filesystem-free, so it adds no dependency and needs no
-    rule-3 `new_dependency` gate. `make design-verify` has `design-selftest`
-    for the same reason: a gate nobody has proven still works is not a gate.
+    Stdlib only, so it adds no dependency and needs no rule-3 `new_dependency`
+    gate. The fixtures are filesystem-free; the allowlist assertions do read
+    the files the allowlist names, because an entry that no longer describes
+    its own line is exactly what they exist to catch.
+
+    `make design-verify` has `design-selftest` for the same reason: a gate
+    nobody has proven still works is not a gate.
     """
     failures = []
     for name, src, expected in _H8_FIXTURES:
@@ -611,8 +631,14 @@ def selftest():
     print(f"\n{C['b']}H8 self-test{C['0']} — {len(_H8_FIXTURES)} fixtures + "
           f"{sum(len(e) for e in _H8_ALLOWLIST.values())} allowlist entries\n")
     for name, expected, got, src in failures:
+        # Fixture rows compare line-number tuples; allowlist rows compare text.
+        # One template for both rendered an allowlist mismatch as "expected
+        # warnings on lines t.deliveryState.isIn(...)", which is true but
+        # unreadable.
+        label = ("expected warnings on lines" if isinstance(expected, tuple)
+                 else "expected")
         print(f"{C['fail']}✗{C['0']} {name}")
-        print(f"    expected warnings on lines {expected}, got {got}")
+        print(f"    {label} {expected!r}, got {got!r}")
         print(f"{C['dim']}    {src.splitlines()[0][:96]}{C['0']}")
     if failures:
         print(f"\n{C['fail']}{len(failures)} fixture(s) failed{C['0']} — H8 no longer behaves "
