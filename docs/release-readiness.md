@@ -133,6 +133,13 @@ Ordered by who owns it.
    git push origin epic-00-done
    ```
 
+   The "7 tasks + 1 bug" in that annotation is **not** countable from
+   `epics/E00-genesis/tasks/`, which holds only `E00-B01.md` — E00 predates
+   the per-task-file convention, so its seven tasks live only as rows in
+   `epics/E00-genesis/epic.md` (`E00-T00` … `E00-T06`, all ✅ done) and in
+   `epics/E00-genesis/tracker.md`. Verify there, not in `tasks/`. A reviewer
+   flagged this as unverifiable, which it was — hence this note.
+
    Left for the human to run: tags are shared refs and part of the release
    ceremony, and this one's anchor moved because of a task filed during the
    same session that computed it. That is exactly the situation where an agent
