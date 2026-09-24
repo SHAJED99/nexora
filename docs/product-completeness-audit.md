@@ -309,10 +309,13 @@ sufficient, and the PR should say so rather than letting the percentage speak.
 | P7 | Localization + RTL (`FR-UI-005`) | **nothing — buildable now** |
 | P8 | Adaptive navigation (`FR-UI-003`) | **D2** — spec vs design |
 
-**Five of the eight need a decision from you** (P2, P3, P4, P6, P8). **Two are
-engineering work that needs nobody** — P5 is blocked by a missing location
-message kind in the messaging layer, which is a real gap but not a rule-3 call,
-and P7 needs no dependency and no decision. P1 is done.
+**Five of the eight need a decision from you** — P2, P3, P4, P6, and P8. Only
+the first four moved here because of this addendum; **P8 was already in this
+column**, placed there by the original audit as **D2**.
+
+**Two are engineering work that needs nobody.** P5 is blocked by a missing
+location message kind in the messaging layer — a real gap, but not a rule-3
+call. P7 needs no dependency and no decision. P1 is done.
 
 That correction matters more than the finding it replaces. The first draft of
 this table said *every* remaining item needed a human, which is the conclusion
