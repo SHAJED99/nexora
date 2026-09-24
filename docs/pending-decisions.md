@@ -155,10 +155,16 @@ What the freeze currently holds, all read-only:
 > $ git blame -L 241,241 lib/features/messaging/domain/receive_message_use_case.dart
 > dc0f05a  fix(E04-B26): file inbound 1:1 messages under this device's own
 >          conversation id for an already-trusted sender (#259)
-> $ grep -n receive_message_use_case epics/E04-mesh-routing/tasks/E04-B18.md
-> 23:  - lib/features/messaging/domain/receive_message_use_case.dart   # required_context
-> 38:    - lib/features/messaging/domain/receive_message_use_case.dart # files.update
 > ```
+>
+> and `grep -n receive_message_use_case epics/E04-mesh-routing/tasks/E04-B18.md`
+> returns eight hits, of which the two that establish ownership are line 23
+> (`required_context:`) and line 38 (`files.update:`); the other six are the
+> test file and prose. *(That sentence replaced a `$`-prefixed transcript which
+> had been trimmed to those two lines and annotated with comments the command
+> never printed. A trimmed transcript presented as raw output is the same
+> failure as a recalled count — if it is framed as command output it has to be
+> the command's output.)*
 >
 > Both lines are E04-authored. The original ownership claim was right; the
 > correction was an overreach — a file's directory is not its owner, and I read

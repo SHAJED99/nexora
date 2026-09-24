@@ -422,8 +422,16 @@ def _is_const_only(name, lines):
     binding, a reassignment, a same-named field -- withholds the exemption.
     Coarse in the safe direction: it declines to exempt when the name is
     reused, rather than exempting on the strength of a constant elsewhere.
+
+    A binding can also carry no `=` at all: a constructor-injected field
+    (`final List<String> xs; P(this.xs);`) is assigned by the constructor, so
+    scanning for assignments alone would see only a same-named `const` and
+    exempt a field that can be any size. `this.<name>` therefore withholds the
+    exemption on its own.
     """
     text = _NON_CODE.sub(" ", "\n".join(lines))
+    if re.search(r"\bthis\s*\.\s*" + re.escape(name) + r"\b", text):
+        return False  # constructor-injected: bound without ever being assigned
     assignments = list(re.finditer(r"\b" + re.escape(name) + r"\s*=(?!=)", text))
     if not assignments:
         return False
@@ -448,12 +456,13 @@ def check_unbounded_id_lists():
         for i, line in enumerate(lines):
             if line.strip().startswith(("//", "*", "/*")):
                 continue  # doc comments quoting the pattern aren't a live call site
-            hit = _ISIN_CALL.search(line) or (
-                _RAW_IN.search(line) and ("db.customSelect" in line or "sql(" in line
-                                           or any("customSelect" in l or ".sql(" in l
-                                                  for l in lines[max(0, i - 3):i]))
+            isin_hit = _ISIN_CALL.search(line)
+            raw_hit = bool(_RAW_IN.search(line)) and (
+                "db.customSelect" in line or "sql(" in line
+                or any("customSelect" in l or ".sql(" in l
+                       for l in lines[max(0, i - 3):i])
             )
-            if not hit:
+            if not (isin_hit or raw_hit):
                 continue
             window = "\n".join(lines[max(0, i - 6):i + 3])
             if _CHUNK_MARKERS.search(window):
@@ -461,9 +470,15 @@ def check_unbounded_id_lists():
             # Every isIn on this line must be provably constant, or none of it
             # counts. An arg shape this cannot parse leaves args shorter than
             # calls, which withholds the exemption rather than granting it.
+            #
+            # A raw-SQL `IN (...)` disqualifies the line outright: interpolated
+            # SQL has no argument this can read, so a const `.isIn(...)`
+            # elsewhere on the same line must not speak for it. Without that
+            # guard, the per-line defect this exemption was written to repair
+            # simply moves to the branch the repair did not look at.
             calls = _ISIN_CALL.findall(line)
             args = _ISIN_ARG.findall(line)
-            if calls and len(args) == len(calls) and all(
+            if calls and not raw_hit and len(args) == len(calls) and all(
                     literal or _is_const_only(name, lines) for literal, name in args):
                 continue  # bounded by construction — compile-time constant
             r.flag("warn", f"{rel}:{i + 1} — {line.strip()[:80]} "
