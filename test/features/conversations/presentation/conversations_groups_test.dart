@@ -20,6 +20,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart' hide Value;
+import 'package:nexora/app/routes.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/transport/transport_service.dart';
@@ -332,9 +333,20 @@ void main() {
     }
   });
 
-  // --- §4: never a "create group" affordance ------------------------------
+  // --- E07-T16: the create-group affordance, and the shapes it must NOT take
+  //
+  // This test used to assert that NO create-group affordance existed. That
+  // was correct while `group-create.md` §Open was undecided; the human
+  // approved the affordance on 2026-09-25, so the old assertion now protects
+  // a state the project has deliberately left -- the same way E07-B01 had to
+  // rewrite the test that asserted its own bug. What it still fences is the
+  // two shapes that were considered and REJECTED in that same §Open: a
+  // floating action button (no FAB exists in any contract -- a new
+  // primitive), and a row at the top of the `Groups` section (it would read
+  // as a group).
 
-  testWidgets('test_no_create_group_affordance_is_rendered', (tester) async {
+  testWidgets('test_create_group_affordance_is_the_approved_shape_only',
+      (tester) async {
     await _insertGroup(
       db,
       id: 'g:team',
@@ -363,15 +375,88 @@ void main() {
     await tester.pumpWidget(const GetMaterialApp(home: ConversationsView()));
     await tester.pumpAndSettle();
 
-    // No icon or copy anywhere on this screen implies a create/new-group
-    // affordance -- the design draws none on `conversations.md` (GAP-018's
-    // entry point is still unapproved, task §4).
-    expect(find.byIcon(Icons.add), findsNothing);
+    // Exactly one `add` glyph: the approved header button. More than one
+    // would mean a second affordance crept in.
+    expect(find.byIcon(Icons.add), findsOneWidget);
+
+    // The approved geometry: 48x48, the same box elements 1/4 measure.
+    final box = tester.getSize(
+      find.ancestor(
+        of: find.byIcon(Icons.add),
+        matching: find.byType(SizedBox),
+      ).first,
+    );
+    expect(box, const Size(48, 48));
+
+    // The rejected alternatives stay rejected.
+    expect(
+      find.byType(FloatingActionButton),
+      findsNothing,
+      reason: 'group-create.md §Open rejected a FAB: no FAB exists in any '
+          'of the contracts, so it would be a new primitive',
+    );
+    expect(
+      find.byIcon(Icons.group_add),
+      findsNothing,
+      reason: 'the approved glyph is `add` (an existing glyph, chat.md '
+          'element 27), not a new one',
+    );
     expect(find.byIcon(Icons.add_circle), findsNothing);
     expect(find.byIcon(Icons.add_circle_outline), findsNothing);
-    expect(find.byIcon(Icons.group_add), findsNothing);
-    expect(find.textContaining('New group'), findsNothing);
+    expect(
+      find.textContaining('New group'),
+      findsNothing,
+      reason: 'the affordance is an icon button in the header, not a labelled '
+          'row inside the Groups section -- also rejected in §Open',
+    );
     expect(find.textContaining('Create group'), findsNothing);
+  });
+
+  testWidgets(
+      'test_EARS_GROUP_21_header_add_button_reaches_the_real_groups_new_route',
+      (tester) async {
+    // E07-B05's lesson, applied: this asserts the REAL destination, not an
+    // injected seam. Two halves, because either alone is forgeable --
+    //   (1) the tap lands on `Routes.groupCreate`, and
+    //   (2) the application's own route table really registers a page under
+    //       that name. `Get.toNamed` on an unregistered route is a silent
+    //       GetX no-op, so an inert button would sail through half (1) alone
+    //       if the stub table were the only thing proving the name.
+    expect(
+      appPages.where((p) => p.name == Routes.groupCreate),
+      hasLength(1),
+      reason: 'the route this button navigates to must exist in the REAL '
+          'appPages table, not only in this test harness',
+    );
+
+    final controller = ConversationsController(
+      repo: ConversationRepository(db, selfDeviceId: 'self-device'),
+      crypto: stack.cryptoService,
+      stack: stack,
+    );
+    Get.put<ConversationsController>(controller);
+
+    await tester.pumpWidget(
+      GetMaterialApp(
+        initialRoute: '/conversations',
+        getPages: [
+          GetPage<dynamic>(
+            name: '/conversations',
+            page: () => const ConversationsView(),
+          ),
+          GetPage<dynamic>(
+            name: Routes.groupCreate,
+            page: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+
+    expect(Get.currentRoute, Routes.groupCreate);
   });
 
   // --- design-fidelity Rule 5 / L-frontend-001 ----------------------------

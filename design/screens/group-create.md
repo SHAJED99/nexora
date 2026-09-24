@@ -212,9 +212,12 @@ it generally.
 exists anywhere in seven contracts — a new primitive), and a row at the top of
 the `Groups` section (it would sit inside the list and read as a group).
 
-**Status:** ⏳ awaiting the human. Until it is approved, no build task adds any
-affordance to `conversations.md`; `/groups/new` is reachable only by direct
-navigation.
+**Status:** ✅ **approved by the human, 2026-09-25** — as proposed, with the
+explicit instruction to *"treat the resulting measured-contract delta
+honestly; do not edit the contract merely to conceal it."* Built by
+`E07-T16`. `conversations.md`'s measured element table is therefore
+**unchanged**, and `make design-verify SCREEN=conversations` reports the
+button as an extra element by design; that finding traces here.
 
 ## Derivation
 | What | Borrowed from | Serves |

@@ -143,7 +143,9 @@ class ConversationsView extends GetView<ConversationsController> {
   }
 }
 
-/// Elements 1-3: `hub` icon + "NEXORA", element 4-5: the `search` action.
+/// Elements 1-3: `hub` icon + "NEXORA", element 4-5: the `search` action,
+/// plus E07-T16's create-group button (approved 2026-09-25, not in the
+/// measured table -- see the inline note below).
 ///
 /// Built with `InkWell` (correct gesture-arena participation + semantics —
 /// see the task's Run log / Deviation notes for why an earlier `Listener`
@@ -190,6 +192,37 @@ class _Header extends StatelessWidget {
                 child: Center(
                   child: Icon(
                     Icons.search,
+                    size: 24,
+                    color: NexoraColors.welcomeHeading,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // E07-T16 — the create-group entry point. NOT in this screen's
+          // measured element table, and deliberately not added to it: the
+          // human approved the affordance on 2026-09-25 with the explicit
+          // instruction to treat the measured delta honestly rather than
+          // edit the contract to conceal it. `design-verify SCREEN=
+          // conversations` reports it as an extra element; the finding
+          // traces to `design/screens/group-create.md` §Open / GAP-018.
+          //
+          // Every value here is already in use on this screen: the 48x48
+          // r9999px button shape of elements 1/4, and the 24px
+          // `rgb(195, 192, 255)` glyph treatment of elements 2/5. `add` is
+          // an existing glyph (chat.md element 27). Appended AFTER search so
+          // elements 4-5 keep their measured positions.
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: controller.openCreateGroup,
+              borderRadius: BorderRadius.circular(9999),
+              child: const SizedBox(
+                width: 48,
+                height: 48,
+                child: Center(
+                  child: Icon(
+                    Icons.add,
                     size: 24,
                     color: NexoraColors.welcomeHeading,
                   ),
