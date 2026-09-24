@@ -5,7 +5,7 @@
 > `files:` lists and EARS-named tests. If this report and the repo disagree,
 > the repo wins: regenerate, never patch.
 
-Generated from commit `51d5460` (2026-09-24) by `agent/orchestrator/traceability.py`.
+Generated from commit `9fc0be7` (2026-09-24) by `agent/orchestrator/traceability.py`.
 
 ## Coverage
 
@@ -15,16 +15,16 @@ Generated from commit `51d5460` (2026-09-24) by `agent/orchestrator/traceability
 | …of which descoped (held out of orphan classes) | 1 | 0.9% |
 | …mapped to an epic | 111 | 98.2% |
 | …mapped to a task | 108 | 95.6% |
-| …owning an EARS criterion | 103 | 91.2% |
-| …reaching an EARS-named test | 102 | 90.3% |
+| …owning an EARS criterion | 104 | 92.0% |
+| …reaching an EARS-named test | 103 | 91.2% |
 
 | Artifact | Count |
 |---|---:|
 | Epics | 16 |
-| Tasks | 233 |
-| EARS criteria declared | 285 |
-| EARS ids with >=1 test | 261 |
-| Distinct EARS ids found in tests | 262 |
+| Tasks | 236 |
+| EARS criteria declared | 292 |
+| EARS ids with >=1 test | 268 |
+| Distinct EARS ids found in tests | 269 |
 | ADRs | 8 |
 | Design contracts | 26 |
 
@@ -57,7 +57,7 @@ is green is the CI gate's answer, not this file's.
 | `FR-CALL-002` | E07 | E07-B02, E07-T10, E07-T11 | EARS-CALL-6, EARS-CALL-7, EARS-CALL-8 | 2 |
 | `FR-CALL-003` | E07 | E07-B03, E07-T11, E07-T12 | EARS-CALL-1, EARS-CALL-10, EARS-CALL-9 | 1 |
 | `FR-COMM-001` | E04, E06, E07 | E04-B15, E06-B02, E06-B03, E06-B04, E06-T03, E06-T07, E06-T08, E06-T09, E06-T10, E06-T11, E06-T12, E06-T13, E06-T14, E07-T09, E07-T13 | EARS-COMM-1, EARS-COMM-14, EARS-COMM-17, EARS-COMM-19, EARS-COMM-20, EARS-COMM-21, EARS-COMM-22, EARS-COMM-23, EARS-COMM-25, EARS-COMM-27, EARS-COMM-36, EARS-COMM-37, EARS-COMM-7 | 9 |
-| `FR-COMM-002` | E07 | E07-B01, E07-T01, E07-T03, E07-T04, E07-T06, E07-T07, E07-T08, E07-T09, E07-T12, E07-T13, E07-T14 | EARS-COMM-29, EARS-COMM-30, EARS-COMM-33, EARS-COMM-35, EARS-UI-3 | 4 |
+| `FR-COMM-002` | E07 | E07-B01, E07-T01, E07-T03, E07-T04, E07-T06, E07-T07, E07-T08, E07-T09, E07-T12, E07-T13, E07-T14, E07-T15 | EARS-COMM-29, EARS-COMM-30, EARS-COMM-33, EARS-COMM-35, EARS-GROUP-19, EARS-UI-3 | 5 |
 | `FR-DIAG-001` | E13, E15 | E13-T06, E15-T06, E15-T10 | EARS-DIAG-2, EARS-DIAG-3 | 1 |
 | `FR-DIAG-002` | E13, E15 | E13-B02, E13-T06, E15-T06, E15-T10 | EARS-DIAG-1, EARS-DIAG-4, EARS-VER-19 | 4 |
 | `FR-DIAG-003` | E15 | E15-T06 | EARS-DIAG-4, EARS-DIAG-5 | 3 |
@@ -66,8 +66,8 @@ is green is the CI gate's answer, not this file's.
 | `FR-DISC-003` | E04, E15 | E15-T08 | EARS-ROUTE-15 | 1 |
 | `FR-FB-001` | E01, E11 | E01-T02, E11-B01, E11-B02, E11-B03, E11-B04, E11-B05, E11-B06, E11-T01, E11-T02, E11-T03, E11-T04, E11-T05, E11-T06 | EARS-FB-1, EARS-FB-10, EARS-FB-13, EARS-FB-16, EARS-FB-17, EARS-FB-19, EARS-FB-2, EARS-FB-20, EARS-FB-3, EARS-FB-4, EARS-FB-6, EARS-FB-7, EARS-FB-8, EARS-FB-9 | 8 |
 | `FR-FB-002` | E01, E05, E11 | E01-T02, E05-T04, E11-B02, E11-B04, E11-B05, E11-T01, E11-T02, E11-T04, E11-T06 | EARS-FB-1, EARS-FB-13, EARS-FB-17, EARS-FB-2, EARS-FB-4, EARS-FB-5, EARS-MSG-6 | 7 |
-| `FR-GROUP-001` | E07 | E07-T01, E07-T02, E07-T03, E07-T07, E07-T08, E07-T12 | EARS-GROUP-3, EARS-GROUP-4, EARS-UI-3 | 2 |
-| `FR-GROUP-002` | E07 | E07-B01, E07-B04, E07-T01, E07-T02, E07-T03, E07-T12 | EARS-COMM-34, EARS-GROUP-10, EARS-GROUP-3, EARS-GROUP-6, EARS-GROUP-8 | 5 |
+| `FR-GROUP-001` | E07 | E07-T01, E07-T02, E07-T03, E07-T07, E07-T08, E07-T12, E07-T15 | EARS-GROUP-18, EARS-GROUP-19, EARS-GROUP-3, EARS-GROUP-4, EARS-UI-3 | 3 |
+| `FR-GROUP-002` | E07 | E07-B01, E07-B04, E07-T01, E07-T02, E07-T03, E07-T12, E07-T15 | EARS-COMM-34, EARS-GROUP-10, EARS-GROUP-17, EARS-GROUP-18, EARS-GROUP-20, EARS-GROUP-3, EARS-GROUP-6, EARS-GROUP-8 | 6 |
 | `FR-GROUP-003` | E07 | E07-B04, E07-T02, E07-T03, E07-T12 | EARS-GROUP-7, EARS-GROUP-9 | 3 |
 | `FR-GROUP-004` | E07 | E07-T01, E07-T04, E07-T05, E07-T06 | EARS-GROUP-1, EARS-GROUP-11, EARS-GROUP-12, EARS-GROUP-16, EARS-GROUP-5 | 6 |
 | `FR-GROUP-005` | E07 | E07-T04, E07-T05, E07-T06 | EARS-COMM-31, EARS-GROUP-14, EARS-GROUP-15 | 3 |
@@ -127,7 +127,7 @@ is green is the CI gate's answer, not this file's.
 | `FR-UI-002` | E06 | E06-T01 | EARS-UI-2 | 1 |
 | `FR-UI-003` | E06 | E06-T10, E06-T12 | — | — |
 | `FR-UI-004` | E01, E04, E06, E07, E08, E12, E15 | E01-B01, E04-B25, E04-B27, E04-B28, E04-B34, E04-B35, E04-B37, E04-T05, E06-B05, E06-B06, E06-T04, E06-T12, E07-T08, E07-T12, E08-T08, E12-B05, E12-B12, E12-B13, E12-B14, E15-T08 | EARS-AUTH-x2, EARS-COMM-2, EARS-COMM-26, EARS-DEV-4, EARS-ROUTE-14, EARS-TRANSPORT-9, EARS-UI-4 | 5 |
-| `FR-UI-005` | E06, E15 | E06-T10, E06-T11, E15-T03 | — | — |
+| `FR-UI-005` | E06, E15 | E06-T10, E06-T11, E06-T15, E06-T16, E15-T03 | EARS-UI-12, EARS-UI-13, EARS-UI-14 | 1 |
 | `FR-UI-006` | E15 | E15-T03, E15-T11, E15-T13 | EARS-UI-8 | 2 |
 | `FR-UI-007` | E15 | E15-T03, E15-T04, E15-T05, E15-T06, E15-T08, E15-T09, E15-T10 | EARS-NOTIFY-17, EARS-UI-11, EARS-UI-9 | 8 |
 | `FR-UI-008` | E15 | E15-T03, E15-T11, E15-T13 | EARS-UI-10 | 2 |
@@ -159,8 +159,8 @@ Both directions. Forward gaps hide missing work; backward gaps hide
 |---|---:|---|---|---|
 | requirement with no epic | 2 | scope never planned | `skills/epic-breakdown` | no |
 | requirement with no task | 5 | epic never sharded, or sharded incompletely | `skills/epic-breakdown` | no |
-| requirement owning no EARS criterion | 10 | invisible to the join; prose cross-references do not count | `skills/task-sharding` | no |
-| requirement with no test | 10 | rule 7 breach — unproven, not done | `new test task` | **yes** |
+| requirement owning no EARS criterion | 9 | invisible to the join; prose cross-references do not count | `skills/task-sharding` | no |
+| requirement with no test | 9 | rule 7 breach — unproven, not done | `new test task` | **yes** |
 | task with empty `traces_to:` | 0 | rule 1 breach — it isn't a task | `skills/question-resolution` | no |
 | task citing a requirement not in `spec/srs.md` | 0 | building something nobody specified | `skills/change-impact` | no |
 | `done` task with no EARS test | 4 | "done" that isn't | `revalidation task` | **yes** |
@@ -170,7 +170,7 @@ Both directions. Forward gaps hide missing work; backward gaps hide
 | test matching no declared EARS id | 1 | proves nothing traceable | `rename or delete task` | no |
 | ADR nothing cites | 0 | dead decision, or decisions being made in diffs | `audit or supersede` | no |
 | superseded ADR still cited | 0 | task honouring a reversed decision | `skills/change-impact` | **yes** |
-| design contract no task builds | 10 | rule 2 breach — screen unbuilt or built off-contract | `skills/design-fidelity` | no |
+| design contract no task builds | 9 | rule 2 breach — screen unbuilt or built off-contract | `skills/design-fidelity` | no |
 | `done` task whose `depends_on` is not done | 0 | state-ordering violation; `make validate` does NOT catch this | `skills/review` | **yes** |
 | `done` task carrying a 🟡 open question | 40 | blocked in fact but not in status | `skills/question-resolution` | no |
 
@@ -191,7 +191,7 @@ Route to `skills/epic-breakdown`.
 - `NFR-PERF-001`
 - `NFR-REL-001`
 
-### requirement owning no EARS criterion — 10
+### requirement owning no EARS criterion — 9
 
 Route to `skills/task-sharding`.
 
@@ -204,9 +204,8 @@ Route to `skills/task-sharding`.
 - `FR-TRUST-002`
 - `FR-TRUST-006`
 - `FR-UI-003`
-- `FR-UI-005`
 
-### requirement with no test — 10
+### requirement with no test — 9
 
 Route to `new test task`.
 
@@ -219,7 +218,6 @@ Route to `new test task`.
 - `FR-TRUST-002`
 - `FR-TRUST-006`
 - `FR-UI-003`
-- `FR-UI-005`
 
 ### `done` task with no EARS test — 4
 
@@ -278,7 +276,7 @@ Route to `rename or delete task`.
 
 - `EARS-ROUTE-004`
 
-### design contract no task builds — 10
+### design contract no task builds — 9
 
 Route to `skills/design-fidelity`.
 
@@ -286,7 +284,6 @@ Route to `skills/design-fidelity`.
 - `design/screens/chat-attachment.md`
 - `design/screens/chat-location.md`
 - `design/screens/chat-voice.md`
-- `design/screens/group-create.md`
 - `design/screens/group-manage.md`
 - `design/screens/login.md`
 - `design/screens/settings-battery.md`
@@ -344,10 +341,10 @@ Route to `skills/question-resolution`.
 
 | Blocking class | Count | Clear? |
 |---|---:|---|
-| requirement with no EARS-named test | 10 | ❌ |
+| requirement with no EARS-named test | 9 | ❌ |
 | `done` task with no passing EARS test | 4 | ❌ |
 | `done` task whose dependency is not done | 0 | ✅ |
 | superseded ADR still cited | 0 | ✅ |
 
-**Blocking orphans: 14.** These are release blockers. Orphans knowingly shipped belong in the changelog's Known gaps.
+**Blocking orphans: 13.** These are release blockers. Orphans knowingly shipped belong in the changelog's Known gaps.
 
