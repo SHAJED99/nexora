@@ -19,9 +19,21 @@ traces_to: [FR-FB-001, FR-FB-002, FR-TRUST-005, FR-TRUST-007, FR-SEC-003, NFR-PR
 > directory), `OQ-E11-1` now reads 🟢 answered, and `E11-T06` built it. The
 > paragraph above is kept as the record of how the decision was framed, not
 > as a statement of current state — nothing in this ADR is awaiting a
-> human. (Corrected 2026-09-24: the present-tense wording made a plain
-> `grep "AWAITING HUMAN" agent/memory/decisions/*.md` report this ADR as an
-> open decision, which it is not.)
+> human.
+>
+> Corrected 2026-09-24. The present-tense wording had made this ADR read as
+> an open decision to anyone skimming the header. Note that this correction
+> did **not** make the phrase disappear from the file — the sentence above
+> still quotes it, deliberately, because how a decision was framed is worth
+> keeping. Grepping these files for that phrase was never a sound way to
+> find a pending ADR: it reads prose, and prose about a decision is not the
+> decision. The frontmatter is:
+>
+> ```
+> $ grep -n "^status:" agent/memory/decisions/ADR-000[1-9]*.md | grep -v accepted
+> ```
+>
+> No output means none is pending. See `docs/pending-decisions.md`.
 
 ## Context
 

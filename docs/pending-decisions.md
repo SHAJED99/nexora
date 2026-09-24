@@ -21,9 +21,28 @@ Before this file, answering *"what is actually waiting on me?"* meant reading
 gaps and `docs/release-readiness.md`, and then knowing which of them had gone
 stale. Two ADR headers had: `ADR-0007` and `ADR-0008` both still read
 "the **Decision** line stays `⏳ AWAITING HUMAN`" on 2026-09-24, long after
-both decisions were taken and built, so a `grep "AWAITING HUMAN"` over
-`agent/memory/decisions/` returned two decisions that were not pending at all.
-(Corrected in the same change that added this file.)
+both decisions were taken and built. A reader — or a grep for that phrase —
+came away with two pending decisions that were not pending at all. Both
+headers were rewritten into the past tense in the same change that added this
+file.
+
+**That rewrite fixed the prose, not the grep.** Both headers still quote the
+original wording, because the record of how a decision was framed is worth
+keeping, and each now carries a correction note that quotes the phrase a
+second time. So `grep "AWAITING HUMAN" agent/memory/decisions/*.md` returns
+*more* hits after the fix than before, not fewer. **That grep was never a
+sound check** — it reads prose, and prose about a decision is not the
+decision. The sound check is the frontmatter, and it is the one in the recipe
+at the bottom of this file:
+
+```
+$ grep -n "^status:" agent/memory/decisions/ADR-000[1-9]*.md | grep -v accepted
+$ echo $?
+1
+```
+
+No output means no ADR is pending, which is the state today: all eight are
+`status: accepted`.
 
 ## The register
 
@@ -129,8 +148,14 @@ What the freeze currently holds, all read-only:
 > positives: H8 is explicitly a heuristic ("cannot prove a list is unbounded,
 > only that no recognized chunking marker is nearby") and neither site carries
 > a marker its regex knows. Nothing here is a defect, and nothing here is
-> waiting on a human — it is a harness-check precision issue, tracked outside
-> this register.
+> waiting on a human — it is a precision issue in a harness check.
+>
+> **It is untracked as of this commit.** There is no lesson, bug task, open
+> question or code comment that owns it; saying otherwise would be exactly the
+> phantom-owner problem this register exists to prevent. It is named here so
+> that the next reader of `make health`'s H8 ⚠️ does not re-derive this
+> analysis from scratch, and it belongs in a harness change, not on the
+> human's list.
 
 `E04-B35` is the one worth flagging: it was closed by **supersession** rather
 than by delivering `EARS-TRANSPORT-4`, because it claims a behaviour the
@@ -158,12 +183,12 @@ It is a register, so it is worth exactly what its last reconciliation is worth.
 Re-derive it — do not edit it from memory:
 
 ```bash
-grep -n "AWAITING HUMAN" agent/memory/decisions/ADR-0[1-9]*.md  # pending ADRs
-grep -n "Status:.*🟡" spec/questions.md                          # open questions
-grep -rn "Status:.*🟡" epics/*/tasks/*.md                        # open questions inside tasks
-make trace CHECK=1                                              # blocking orphans
-make lessons                                                    # promotion candidates
-sed -n '69,115p' harness.yaml                                   # the declared gates
+grep -n "^status:" agent/memory/decisions/ADR-000[1-9]*.md | grep -v accepted
+grep -n "Status:.*🟡" spec/questions.md          # open questions
+grep -rn "Status:.*🟡" epics/*/tasks/*.md        # open questions inside tasks
+make trace CHECK=1                              # blocking orphans
+make lessons                                    # promotion candidates
+sed -n '69,115p' harness.yaml                   # the declared gates
 ```
 
 An item leaves this file when its source says it is answered — never before,
