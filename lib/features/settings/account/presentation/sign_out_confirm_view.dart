@@ -14,6 +14,7 @@
 // "unlike version-update-required.md, this screen IS dismissible").
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:nexora/core/l10n/app_strings.dart';
 import 'package:nexora/core/design/tokens.dart';
 
 import 'sign_out_confirm_controller.dart';
@@ -54,16 +55,15 @@ class SignOutConfirmView extends GetView<SignOutConfirmController> {
                     // dumper's own order-of-first-appearance heuristic
                     // reports it as `heading:1` regardless of which of
                     // welcome's two heading styles is used here).
-                    const Text(
-                      'Sign out and erase this device?',
+                    Text(
+                      context.l10n.signOutTitle,
                       textAlign: TextAlign.center,
                       style: NexoraTextStyles.welcomeSubheading,
                     ),
                     const SizedBox(height: 16),
                     // SO4 -- the loss list, `welcome.md` body treatment.
-                    const Text(
-                      'Signing out permanently deletes everything this '
-                      'app keeps on this device:',
+                    Text(
+                      context.l10n.signOutIntro,
                       textAlign: TextAlign.center,
                       style: NexoraTextStyles.welcomeBody,
                     ),
@@ -71,10 +71,8 @@ class SignOutConfirmView extends GetView<SignOutConfirmController> {
                     const _LossList(),
                     const SizedBox(height: 16),
                     // SO5 -- same body treatment.
-                    const Text(
-                      'This cannot be undone. Anything encrypted with '
-                      'these keys can never be read again, on this device '
-                      'or any other.',
+                    Text(
+                      context.l10n.signOutIrreversible,
                       textAlign: TextAlign.center,
                       style: NexoraTextStyles.welcomeBody,
                     ),
@@ -84,9 +82,8 @@ class SignOutConfirmView extends GetView<SignOutConfirmController> {
                     // assumes signing back in restores what they had,
                     // which is exactly what `FR-AUTH-008` says will not
                     // happen.
-                    const Text(
-                      'Signing back in creates a brand-new identity, as '
-                      'if the app had just been installed.',
+                    Text(
+                      context.l10n.signOutNewIdentity,
                       textAlign: TextAlign.center,
                       style: NexoraTextStyles.welcomeBody,
                     ),
@@ -96,7 +93,7 @@ class SignOutConfirmView extends GetView<SignOutConfirmController> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+              padding: const EdgeInsetsDirectional.fromSTEB(24, 0, 24, 16),
               child: Obx(
                 () => Column(
                   children: [
@@ -126,8 +123,8 @@ class SignOutConfirmView extends GetView<SignOutConfirmController> {
                             borderRadius: BorderRadius.circular(29),
                           ),
                         ),
-                        child: const Text(
-                          'Sign out and erase',
+                        child: Text(
+                          context.l10n.signOutConfirm,
                           style: NexoraTextStyles.devicesDiscoverLabel,
                         ),
                       ),
@@ -155,8 +152,8 @@ class SignOutConfirmView extends GetView<SignOutConfirmController> {
                             borderRadius: BorderRadius.circular(29),
                           ),
                         ),
-                        child: const Text(
-                          'Cancel',
+                        child: Text(
+                          context.l10n.cancel,
                           style: NexoraTextStyles.devicesDiscoverLabel,
                         ),
                       ),
@@ -180,19 +177,11 @@ class SignOutConfirmView extends GetView<SignOutConfirmController> {
 class _LossList extends StatelessWidget {
   const _LossList();
 
-  static const _lines = [
-    'Your device identity and all of its encryption keys',
-    'Every message, voice message and call recording, and all history',
-    'Every trusted device and every block you have set',
-    'Every group this device belongs to',
-    'All of your settings',
-  ];
-
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        for (final line in _lines)
+        for (final line in context.l10n.signOutLossList)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Text(
@@ -217,7 +206,7 @@ class _BackRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 20, 0),
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 20, 0),
       child: Row(
         children: [
           Material(

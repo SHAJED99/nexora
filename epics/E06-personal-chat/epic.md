@@ -1,7 +1,7 @@
 ---
 id: E06
 title: Personal Chat
-status: done
+status: in-progress  # 2026-09-24: reopened for E06-T15/T16, which implement FR-UI-005 (localization resources + logical RTL geometry). The requirement has been baselined since genesis with NO implementation at all -- no localization mechanism of any kind -- and is one of make trace's ten `requirement with no test` orphans. Found by the 2026-09-24 product-completeness audit (docs/product-completeness-audit.md). Everything closed before this date stays closed; this adds work rather than reversing any.
 type: feature
 priority: { moscow: must, wsjf: 4.2 }
 depends_on: [E02, E03, E04, E05]
