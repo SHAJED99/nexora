@@ -71,11 +71,13 @@ recording, picker or location affordance; the only `record` matches are
 `StorageAccessRecorder`, which is unrelated.
 
 **How this happened, precisely.** `E07-T12` and `E07-T13` are `layer: docs`
-tasks. They *wrote the contracts* and were correctly marked done. E07 has
-exactly **one** `layer: frontend` task — `E07-T08`, the conversations screen.
-No build task was ever created for the screens T12/T13 contracted, and E07 then
-closed as `status: done`. Nothing lied; the sharding was incomplete, and a
-`done` epic has no mechanism that notices.
+tasks. They *wrote the contracts* and were correctly marked done. E07 carries
+exactly **two** `layer: frontend` entries, and neither builds a new screen:
+`E07-T08` (the conversations screen) and `E07-B01` (a bug — a group row's tap
+landed on the 1:1 `ChatController`, fixed inside `conversations_*`). No build
+task was ever created for the screens T12/T13 contracted, and E07 then closed
+as `status: done`. Nothing lied; the sharding was incomplete, and a `done`
+epic has no mechanism that notices.
 
 ### 3. Two baselined requirements with no implementation at all
 
