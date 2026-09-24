@@ -15,7 +15,8 @@
 > than by reading the previous version. Nothing in the register moved:
 > no ADR is pending, `Q-FUNC-011` is still the one open question, the same
 > three bugs are open, `make trace` still reports 14 blocking orphans and
-> `make lessons` still 3 promotion candidates.
+> `make lessons` now reports 4 promotion candidates rather than 3 —
+> `L-process-020` was written at `recurrence: 6` and joins the list.
 > Reconcile it again after any merge that closes one of these.
 
 ## Why it exists
@@ -70,7 +71,7 @@ No output means no ADR is pending, which is the state today: all eight are
 | 5 | `Q-FUNC-011` — scope of "allow/disable communication" in `FR-TRUST-006` | rule 3 | `spec/questions.md` §Open questions | `PV28` on `design/screens/settings-privacy.md` only |
 | 6 | Lift or keep the **E04 freeze** | — *(see the note below)* | a standing human instruction, not a repository state | 6 of 14 blocking orphans; 2 of 3 open bugs |
 | 7 | Clear `dev_to_main_merge`, or descope the unmet preconditions | `dev_to_main_merge` | `harness.yaml` `human_gates`; `docs/release-readiness.md` | The release itself |
-| 8 | Approve the three lesson promotions | `retro_promotions` | `make lessons`; `agent/memory/lessons/process.md` | `L-process-011`, `L-process-012`, `L-process-014` |
+| 8 | Approve the four lesson promotions | `retro_promotions` | `make lessons`; `agent/memory/lessons/process.md` | `L-process-011`, `L-process-012`, `L-process-014`, `L-process-020` |
 
 Items 1, 2 and 7 are the release path. Items 3 and 4 are one bug. Item 5 is
 narrow. Item 6 is an epic. Item 8 is process, and is the only one of the eight
