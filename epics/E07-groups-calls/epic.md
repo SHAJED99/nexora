@@ -1,7 +1,7 @@
 ---
 id: E07
 title: Groups & Voice Calls
-status: done
+status: in-progress  # 2026-09-24: reopened for E07-T15/T16, the group screens. E07-T12 (layer: docs) wrote design/screens/group-create.md and group-manage.md and was correctly marked done; no build task ever followed, so the group backend shipped complete with nothing rendering it. Found by the 2026-09-24 product-completeness audit (docs/product-completeness-audit.md). Everything closed before this date stays closed; this reopening adds work, it does not reverse any.
 type: feature
 priority: { moscow: should, wsjf: 2.1 }
 depends_on: [E06]

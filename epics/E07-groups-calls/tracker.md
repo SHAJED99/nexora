@@ -24,6 +24,7 @@ correctly deferred, not owed)
 | E07-T12 | E07 design gap pass — derived contracts | docs | M | must | — | done · planner (opus) → reviewer (sonnet), APPROVE · merged `6f808fc` |
 | E07-T13 | PTT — resolve `OQ-E07-2` ⛔ | docs | S | could | T12 | done · planner (opus) → reviewer (sonnet) · APPROVE · squash-merged `5f6a81e` (PR #3); GAP-023 human-approved `23c88ab` |
 | E07-T14 | Compose the group send path into `MessagingStack` | backend | S | must | T06 | done · builder (sonnet) → reviewer (opus) · APPROVE · squash-merged `517a1e9` (PR #9) |
+| E07-T15 | Group create screen — build `/groups/new` against its approved contract | frontend | M | must | T03, T08 | review-requested · builder (opus) · design-verify PASS 16/16 · 1605 tests green |
 
 ⛔ = carries or is blocked by a 🧍 Open Question — see §Blocked.
 
