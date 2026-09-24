@@ -236,6 +236,26 @@ sourced during intake; this is their first atomic-id rendering)
 - **FR-UI-001**: The application shall use Material 3 exclusively as its design system, with no competing custom visual language. *(traces_to: documentation/Design.md §2.1)*
 - **FR-UI-002**: The application shall support light, dark, and system theme, generated via a seeded ColorScheme. *(traces_to: documentation/Design.md §4–5)*
 - **FR-UI-003**: Navigation shall adapt by width class — NavigationBar (compact), NavigationRail (medium), NavigationDrawer (expanded). *(traces_to: documentation/Design.md §11–13)*
+  > **⏸ DEFERRED out of v1 by human decision, 2026-09-25.** *"Treat
+  > medium/expanded responsive navigation as a tablet/foldable scope item
+  > rather than blocking phone usability. Record the deferral explicitly; do
+  > not fabricate NavigationRail/NavigationDrawer implementation."*
+  >
+  > **State when deferred, measured not estimated:** `grep` for
+  > `NavigationRail`, `NavigationDrawer`, `MediaQuery` width logic and
+  > `LayoutBuilder` across `lib/` returns **0 matches**. Four views
+  > (`dashboard`, `conversations`, `devices`, `settings`) hand-build a
+  > `_BottomNav`. So the **compact** width class is built *and* designed
+  > (`conversations.md` elements 34-45 name its four destinations); medium
+  > and expanded are **neither built nor designed** — no contract in
+  > `design/screens/` draws a rail or a drawer.
+  >
+  > v1 is Android phone only (`Q-SCOPE-002`, answered "A"), where no width
+  > class above compact is reachable. This requirement therefore remains a
+  > **blocking orphan in `make trace` on purpose**: the gap is real, it is
+  > simply not v1's. It is **not** to be closed by writing a test against
+  > the compact half and calling the requirement covered — that would be
+  > bookkeeping, not coverage.
 - **FR-UI-004**: The default view shall communicate connectivity state simply ("You're connected"); advanced technical detail (route, transport, latency) shall be available one tap away, not shown by default. *(traces_to: documentation/Design.md §100–103, §132)*
 - **FR-UI-005**: All visible strings shall come from localization resources; the UI shall support RTL layout via logical (not literal left/right) padding. *(traces_to: documentation/Design.md §111–112)*
 - **FR-UI-006**: Every row on the Settings screen shall navigate to a dedicated sub-screen; no Settings row shall respond with a non-navigating acknowledgement. *(traces_to: human product decision 2026-09-08, `IMP-003`; design/screens/settings.md elements 8/13/18/23/28/33/38/43)*

@@ -1998,3 +1998,40 @@ Checklist for the gap pass. In rough order of how often each is missed:
 | Permission variants | the same screen for a role with less access |
 | Responsive | design shows desktop; the spec promises mobile |
 | Confirmation | destructive-action dialogs |
+
+## GAP-046 — no design source draws a navigation rail or drawer (FR-UI-003's medium/expanded width classes)
+- **status:** ⏸ **deferred out of v1 by human decision, 2026-09-25** — not
+  proposed, not approved, not built. Recorded so the absence is a decision
+  with a date on it rather than an oversight nobody wrote down.
+- **screen:** all four navigation-bearing screens — `dashboard`,
+  `conversations`, `devices`, `settings`
+- **spec:** FR-UI-003
+- **design shows:** the **compact** width class only. `conversations.md`
+  elements 34-45 (and the matching rows on the other three) draw a four-
+  destination bottom bar: Dashboard, Conversations, Devices, Settings. No
+  contract in `design/screens/` draws a `NavigationRail` or a
+  `NavigationDrawer` at any viewport; every contract is measured at
+  `390x844` alone.
+- **implementation state, measured 2026-09-25:** `grep` for
+  `NavigationRail`, `NavigationDrawer`, `MediaQuery` width logic and
+  `LayoutBuilder` across `lib/` returns **0 matches**. Four views hand-build
+  a `_BottomNav`. Compact is built and designed; medium and expanded are
+  neither.
+- **derived from:** _(nothing — deferred before any derivation was
+  attempted, deliberately: deriving a rail and a drawer from a design that
+  draws neither, for form factors v1 does not ship on, is exactly the
+  invented-journey work rule 2 forbids)_
+- **human decision, 2026-09-25, verbatim:** *"Treat medium/expanded
+  responsive navigation as a tablet/foldable scope item rather than blocking
+  phone usability. Record the deferral explicitly; do not fabricate
+  NavigationRail/NavigationDrawer implementation."*
+- **approved by:** n/a — a deferral, not a derivation. Nothing here is
+  approved for build because nothing here is proposed for build.
+- **built:** _(no, and deliberately not)_
+- **consequence, stated plainly:** `FR-UI-003` stays a **blocking orphan** in
+  `make trace`. That is correct and must not be "fixed": the requirement
+  genuinely has no full implementation and no test. Writing a test against
+  the compact half and marking the requirement covered would convert a real
+  gap into bookkeeping — the precise failure `docs/product-completeness-
+  audit.md` exists to document.
+
