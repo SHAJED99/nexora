@@ -53,10 +53,11 @@ to be human-approved before it is built, so state 3 renders an **empty bubble
 body** rather than a sentence nobody approved. That satisfies all three of the
 human's rules using only the measured bubble box.
 
-Candidate words for that body are carried in **`GAP-045`**, unapproved, with
-three options. Nothing in this contract is gated on it: the group journey
-works with an empty placeholder body, and filling it later is a one-line
-change.
+Candidate words are carried in **`GAP-045`**, unapproved, with three options.
+**State 3 is gated on it** — an empty bubble body reads as a failed message,
+not as a blocked one, so there is no honest interim (see state 3). The other
+four states, and the entire create → open → send → read journey, are not
+gated on it.
 
 One **pairing** of existing tokens is new — G11's `14px` + `rgb(70, 69, 85)`
 — and it is new because GAP-020's own human-approved text specifies it. See
@@ -91,7 +92,11 @@ rather than silently dropped (rule 2):
   single person. `conversations.md`'s `Groups` section faced the identical
   problem and resolved it with the `dns` glyph at `24px` `rgb(0, 70, 102)`
   (element 22). That glyph is **G8** above: reused, not invented, and now in
-  the table rather than only in prose.
+  the table rather than only in prose. **Role adapted, and that is a
+  stretch worth naming:** in `conversations.md` the glyph sits in a *list
+  row*; here it sits in a *thread header*. The glyph, size and colour are
+  measured; the placement is derived. Disclosed rather than presented as a
+  clean reuse.
 - **chat 7-8, the `more_vert` overflow button** — the 1:1 thread's overflow
   menu. A group thread's overflow actions are membership management, which is
   `group-manage.md`'s scope and is explicitly out of this contract (§
@@ -116,7 +121,7 @@ The human's 2026-09-25 `OQ-E07-13` answer.
 
 | id | role | copy / label | source |
 |---|---|---|---|
-| G10 | `generic` | *(no body text — see below)* | the inbound bubble box, chat 12/15/20, unchanged |
+| G10 | `generic` | *(copy undecided — `GAP-045`, three candidates, one human answer)* | the inbound bubble box, chat 12/15/20, unchanged |
 
 Rules, all three from the human's answer:
 - the message **is** represented — never silently dropped from the thread;
@@ -127,12 +132,20 @@ Rules, all three from the human's answer:
 **No copy is invented here, and that is deliberate.** The human decided the
 *behaviour*; nothing in the design or in the answer supplies *words*, and
 rule 2 requires a derived element to be human-approved before it is built.
-So the bubble renders with its attribution, its timestamp and an **empty
-body** — which satisfies all three rules using only the measured bubble box.
 
-Proposed copy to fill that body is carried in **`GAP-045`**, unapproved, with
-three candidate strings. When the human picks one, it is a one-line change in
-one file. The journey works without it, so it does not gate the build.
+**But an empty body is not a placeholder, and this contract will not pretend
+otherwise.** The measured inbound bubble is a filled, rounded surface
+(`chat.md` 12/20/23). Rendered with a name, a timestamp and nothing inside,
+it reads as *a message that failed to load* — which is a different claim
+about the app than "this sender is blocked", and arguably a worse one than
+the `(unable to decrypt this message)` string this contract already rejects
+as false.
+
+So **state 3 is blocked on `GAP-045`**, and says so rather than shipping an
+ambiguous surface. `GAP-045` names three candidate strings and needs one
+human answer. States 1, 2, 4 and 5 — the whole create → open → send → read
+journey, attribution and event lines included — do **not** depend on it and
+are buildable now.
 
 **Why the existing placeholder is not reused:** `chat_view.dart:355` renders
 `(unable to decrypt this message)` for a null plaintext. Here that would be
@@ -155,6 +168,10 @@ per `group_events` row."*
 > **The exact pair `14px` + `rgb(70, 69, 85)` is not measured anywhere.** It
 > is written here because the human approved GAP-020 with those words in it,
 > not because the parent table contains it — and saying so is the point.
+> **The weight differs too, and GAP-020 does not mention it:** every measured
+> use of `rgb(70, 69, 85)` in `chat.md` is `w500` (elements 11, 13, 18, 19,
+> 21, 24). G11 states no weight, so it renders at the `w400` default. Neither
+> `14px` nor `w400` is measured with this colour anywhere.
 > Raised as an open item in `E07-T17` §5b rather than silently normalised
 > to 12px, which would contradict an approved gap.
 
@@ -175,7 +192,7 @@ illustration or copy anywhere in seven contracts and none is invented here.
 | sender attribution | `14px` `w500` `rgb(11, 28, 48)` | conversations 26 |
 | bubble box | 270-272×48 | chat 12/15/20 |
 | outgoing bubble fill | `rgb(53, 37, 205)` | chat 30 |
-| secondary text | `rgb(70, 69, 85)` | chat 18 |
+| secondary text | `12px` `w500` `rgb(70, 69, 85)` | chat 18 |
 | timestamp | `12px` `w500` `rgb(70, 69, 85)` | chat 11/13 |
 | composer send | 48×48 `r9999px` bg `rgb(53, 37, 205)` | chat 30 |
 

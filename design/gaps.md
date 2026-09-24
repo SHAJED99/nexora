@@ -1952,8 +1952,11 @@ and that is the strongest single argument for this disposition.**
 - **built:** not built — this entry is the proposal only.
 
 ## GAP-045 — a blocked member's message in a group thread has no words
-- **status:** 🟡 proposed — **not built.** `E07-T18` renders the placeholder
-  with an **empty** bubble body precisely so that no unapproved copy ships.
+- **status:** 🟡 proposed — **not built, and BLOCKING state 3 of
+  `chat-group.md`.** There is no honest interim: an empty bubble body renders
+  as *a message that failed to load*, which is a different and worse claim
+  than "this sender is blocked". One human answer unblocks it. The rest of
+  the group thread does not depend on it.
 - **screen:** chat-group (`design/screens/chat-group.md`, state 3) — element
   `G10`
 - **spec:** FR-COMM-002, FR-TRUST-004
@@ -1978,8 +1981,8 @@ and that is the strongest single argument for this disposition.**
   - (c) `Blocked` — matches the one-word register `devices.md` uses for its
     status chips, but reads as a label on the *message* rather than its sender.
 - **approved by:** _(pending — which of (a)/(b)/(c), or none)_
-- **built:** _(not yet — the bubble body is deliberately empty until this is
-  answered; the journey does not depend on it)_
+- **built:** _(not yet — `E07-T18` builds states 1, 2, 4 and 5 and leaves
+  state 3 for whichever string is chosen)_
 
 ## The usual suspects
 
