@@ -27,13 +27,23 @@ headers were rewritten into the past tense in the same change that added this
 file.
 
 **That rewrite fixed the prose, not the grep.** Both headers still quote the
-original wording, because the record of how a decision was framed is worth
-keeping, and each now carries a correction note that quotes the phrase a
-second time. So `grep "AWAITING HUMAN" agent/memory/decisions/*.md` returns
-*more* hits after the fix than before, not fewer. **That grep was never a
-sound check** — it reads prose, and prose about a decision is not the
-decision. The sound check is the frontmatter, and it is the one in the recipe
-at the bottom of this file:
+original wording once, because the record of how a decision was framed is
+worth keeping — so the phrase count did not move, and could not have been
+made to move without deleting the record:
+
+```
+$ grep -c "AWAITING HUMAN" agent/memory/decisions/ADR-0007-background-execution.md
+1      # and 1 before the rewrite, too
+```
+
+**That grep was never a sound check.** It reads prose, and prose about a
+decision is not the decision. The clearest evidence is that three of its five
+hits across this directory are permanent boilerplate — `ADR-0000-template.md`
+twice and `README.md` once — which no decision will ever clear, because they
+are describing the convention rather than using it.
+
+The sound check is the frontmatter, and it is the one in the recipe at the
+bottom of this file:
 
 ```
 $ grep -n "^status:" agent/memory/decisions/ADR-000[1-9]*.md | grep -v accepted
