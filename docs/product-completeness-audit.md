@@ -229,7 +229,23 @@ So P3 (`chat-voice`), P4 (`chat-attachment`) and P6 (`call`) each require a
 `docs/conventions.md` records a consistent procedure for. The audit's table
 above said "no decision needed" for all three. **That was wrong** — it checked
 the design contracts for open questions and did not check what the code would
-have to import. Three of the eight items move to the decision column.
+have to import.
+
+**The same shallow check also mis-cleared P2.** `group-manage.md` has no
+`## Open` section, so the audit called it unblocked; finding 2 below shows it
+is blocked for a different reason the contract could not state. So **four**
+items move to the decision column, not three — P2, P3, P4 and P6 — and the
+root cause is one mistake, not two: reading a contract's open questions and
+treating their absence as proof that nothing else stands in the way.
+
+**`FR-UI-005` is *not* one of them.** An earlier draft of this addendum listed
+P7 as needing `intl`. That was over-gating, caught in review. FR-UI-005's text
+is *"All visible strings shall come from localization resources; the UI shall
+support RTL layout via logical (not literal left/right) padding"* — no
+pluralization, no date or number formatting, which are the only things `intl`
+adds over the SDK. A string table plus `Directionality` and
+`EdgeInsetsDirectional`, both core Flutter, satisfy it with **no new package
+at all**. P7 is buildable now.
 
 Precedent for how these get decided: every dependency in `pubspec.yaml` carries
 an inline comment naming the task, the question id, the human approval date,
@@ -288,13 +304,18 @@ sufficient, and the PR should say so rather than letting the percentage speak.
 | P4 | Attachments in chat | **`new_dependency`** — file/image picker |
 | P5 | Location sharing in chat | a location message kind in the messaging layer |
 | P6 | Call screen | **`new_dependency`** + D3's three cosmetic items |
-| P7 | Localization + RTL (`FR-UI-005`) | **`new_dependency`** — `intl` |
+| P7 | Localization + RTL (`FR-UI-005`) | **nothing — buildable now** |
 | P8 | Adaptive navigation (`FR-UI-003`) | **D2** — spec vs design |
 
-**Every remaining product item now needs a decision.** That is the honest
-state, and it arrived by doing the work rather than by planning it: P1 was the
-only one of the eight that could be finished without asking, and finishing it
-is what revealed why.
+**Five of the eight need a decision from you** (P2, P3, P4, P6, P8). **Two are
+engineering work that needs nobody** — P5 is blocked by a missing location
+message kind in the messaging layer, which is a real gap but not a rule-3 call,
+and P7 needs no dependency and no decision. P1 is done.
+
+That correction matters more than the finding it replaces. The first draft of
+this table said *every* remaining item needed a human, which is the conclusion
+that costs an agent the least work — and two of the eight did not survive
+review of that claim.
 
 D1 also grew: approving the `conversations.md` header affordance is now what
 makes an *already-built and merged* screen reachable, rather than what unblocks
