@@ -77,7 +77,9 @@ E07" written into it.)
 > **as the human set it** — it is not re-opened by an agent and it is not
 > re-cleared by one. Four things remain genuinely undecided and are listed in
 > their own entries rather than assumed: GAP-018's **entry point** (which
-> GAP-018 itself deferred into the contract), and GAP-021's **destructive
+> GAP-018 itself deferred into the contract — **since decided: ✅ approved by
+> the human 2026-09-25, built by `E07-T16`; see
+> `design/screens/group-create.md` §Open**), and GAP-021's **destructive
 > treatment**, **three glyph names** and **two copy strings**. None of them is
 > approved below; every `approved by:` line written by `E07-T12` is
 > deliberately absent (`L-process-002`).

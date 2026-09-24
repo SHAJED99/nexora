@@ -41,6 +41,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:nexora/app/routes.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 import 'package:nexora/core/crypto/crypto_stub.dart';
 import 'package:nexora/core/design/tokens.dart';
@@ -391,6 +392,14 @@ class ConversationsController extends GetxController {
   /// handler and must never call this.
   void openConversation(String conversationId) {
     Get.toNamed('/chat/$conversationId');
+  }
+
+  /// Header create-group tap (E07-T16). Navigates to the real, registered
+  /// `/groups/new` route — the screen `E07-T15` built and nothing linked to
+  /// until this task. The entry point itself is the human's 2026-09-25
+  /// decision on `design/screens/group-create.md` §Open.
+  void openCreateGroup() {
+    Get.toNamed(Routes.groupCreate);
   }
 
   /// Groups-section row tap (E07-B01, human-chosen fix direction (a): gate
