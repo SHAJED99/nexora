@@ -181,7 +181,14 @@ What the freeze currently holds, all read-only:
 >
 > Because both are false positives, the fix was to **H8 itself**, not to either
 > E04 file: no E04 implementation was touched and the freeze was not crossed.
-> H8 now reads the `isIn` argument rather than the surrounding line.
+> H8 now exempts a call site only when the exemption can be checked without
+> reading a character outside the flagged line: either the argument is
+> syntactically `const [...]` on that line, or the exact line is recorded in an
+> allowlist with a written reason. `receive_message_use_case.dart:241` clears
+> on the first rule; `relay_engine.dart:488` is the allowlist's single entry,
+> because the `// h8:bounded <why>` marker that belongs at the call site cannot
+> be added while E04 is frozen — move it there when the freeze lifts. Editing
+> an allowlisted line lapses its exemption and H8 warns again.
 >
 > It was untracked when this register was written, and is now closed by that
 > harness change. Kept here rather than deleted because the reasoning is the

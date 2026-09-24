@@ -380,65 +380,52 @@ _CHUNK_MARKERS = re.compile(r"chunk|_pageSize|pageSize|batchSize|take\(", re.I)
 _ISIN_CALL = re.compile(r"\.isIn\(")
 _RAW_IN = re.compile(r"\bIN\s*\(", re.I)
 
-# A Dart `const` collection is fixed at compile time, so its length cannot grow
-# with how much history a device has accumulated — the failure L-backend-004
-# describes is unreachable through one. Two shapes are recognised as bounded:
+# Two escape hatches, and the boundary between them is the whole design.
 #
-#     .isIn(const ['a', 'b'])                 the literal, inline
-#     const xs = [...];  .isIn(xs.map(...))   a const list declared in the file
+# H8's own `fix` text promises that a call site may be "already provably
+# bounded ... and note why", but a note could never clear the warning, so two
+# genuinely-bounded sites warned permanently. A check whose only findings are
+# known-benign trains its reader to skim it, so the hatch is worth having.
 #
-# This is a soundness-preserving exemption, not a loosened threshold. It can
-# only quiet an `isIn` ARGUMENT that is provably compile-time constant, and a
-# list built by enumeration is never `const`, so the shape the lesson is
-# actually about still warns. Both shapes were live false positives on
-# 2026-09-24 (relay_engine.dart:488, receive_message_use_case.dart:241), and a
-# check whose only two findings are known-benign trains its reader to skim it.
+# It is NOT worth having in a form that infers boundedness. An earlier attempt
+# did, and a planner adjudication (2026-09-24, after two blocking review
+# rounds) named why that kept failing: "exempt provably-bounded call sites" is
+# an open-world safety obligation over every Dart expression that can appear
+# as an isIn argument, in a file this check never parses. Three successive
+# probe corpora each missed the shape the next reader found -- per-line
+# suppression, then the raw-SQL branch, then `.isIn(kSeed.followedBy(allIds))`,
+# where only the head identifier is read and the tail supplies the cardinality.
+# A corpus demonstrates coverage; it can never demonstrate absence of holes.
 #
-# The exemption is per CALL, never per line. A first attempt tested the whole
-# physical line and `continue`d past it, which silenced every other `isIn` on
-# that line -- so an idiomatic `&`-chained Drift where clause carrying one
-# const `isIn` and one enumeration-built `isIn` went quiet. That is the exact
-# defect this check exists to catch, introduced by the fix for its own false
-# positives. A line is skipped only when EVERY `isIn` on it is exempt.
-_ISIN_ARG = re.compile(r"\.isIn\(\s*(?:(const\s*[\[{])|([A-Za-z_]\w*))")
-# Comments and string bodies are not code: a `const rows = [...]` inside a ///
-# doc comment must not grant a real `rows` an exemption.
-_NON_CODE = re.compile(r"//[^\n]*|/\*.*?\*/|'(?:\\.|[^'\\\n])*'|\"(?:\\.|[^\"\\\n])*\"", re.S)
+# So the input space is closed by construction. An exemption may not read a
+# single character outside the flagged line or outside the table below:
+#
+#   1. `.isIn(const [...])` / `.isIn(const {...})` -- syntactically constant ON
+#      the flagged line. Provable by looking at that line and nothing else.
+#   2. _H8_ALLOWLIST -- an exact recorded line, with a written reason. It can
+#      silence nothing but the line it records; edit the line and the exemption
+#      lapses and H8 warns again, which is the correct fail direction.
+#
+# Anything else warns. That is a decision procedure a reviewer finishes in ten
+# seconds, not a safety proof over an open world.
+_ISIN_CONST = re.compile(r"\.isIn\(\s*const\s*[\[{]")
+
+# path -> ((exact line, why), ...). Whitespace-normalised before comparison;
+# nothing else about the line may differ.
+_H8_ALLOWLIST = {
+    "lib/core/routing_engine/relay_engine.dart": (
+        ("t.deliveryState.isIn(terminalStates.map((s) => s.name)) &",
+         "terminalStates is `const [forwarding, delivered, expired]` declared at "
+         "relay_engine.dart:481-485, and .map is length-preserving, so the "
+         "argument is 3 elements at compile time. E04-authored and E04 is "
+         "frozen, so the `// h8:bounded <why>` marker that belongs at the call "
+         "site cannot be added yet; move this there when the freeze lifts."),
+    ),
+}
 
 
-def _is_const_only(name, lines):
-    """True when every assignment to `name` in this file is a `const` declaration.
-
-    Matching one `const <name> =` is not enough: a function's
-    `const states = [...]` would then exempt a *different* function's
-    `final states = await enumerateEverything()`, which is precisely the
-    unbounded shape L-backend-004 is about. Nor is it enough to look only for
-    `final`/`var`/`late`, because neither a bare typed declaration
-    (`List<String> ids = ...`) nor a plain reassignment (`ids = ...`) carries
-    one of those keywords.
-
-    So this inverts the test: find every `<name> =` in the file's code, and
-    require each one to be preceded by `const`. Anything else -- a runtime
-    binding, a reassignment, a same-named field -- withholds the exemption.
-    Coarse in the safe direction: it declines to exempt when the name is
-    reused, rather than exempting on the strength of a constant elsewhere.
-
-    A binding can also carry no `=` at all: a constructor-injected field
-    (`final List<String> xs; P(this.xs);`) is assigned by the constructor, so
-    scanning for assignments alone would see only a same-named `const` and
-    exempt a field that can be any size. `this.<name>` therefore withholds the
-    exemption on its own.
-    """
-    text = _NON_CODE.sub(" ", "\n".join(lines))
-    if re.search(r"\bthis\s*\.\s*" + re.escape(name) + r"\b", text):
-        return False  # constructor-injected: bound without ever being assigned
-    assignments = list(re.finditer(r"\b" + re.escape(name) + r"\s*=(?!=)", text))
-    if not assignments:
-        return False
-    # `const`, then optionally a type (possibly generic: `const List<String> x =`)
-    declared_const = re.compile(r"\bconst\s+(?:[\w<>,\s]*\s+)?$")
-    return all(declared_const.search(text[max(0, m.start() - 120):m.start()])
-               for m in assignments)
+def _normalise(line):
+    return " ".join(line.split())
 
 
 def check_unbounded_id_lists():
@@ -467,20 +454,24 @@ def check_unbounded_id_lists():
             window = "\n".join(lines[max(0, i - 6):i + 3])
             if _CHUNK_MARKERS.search(window):
                 continue
-            # Every isIn on this line must be provably constant, or none of it
-            # counts. An arg shape this cannot parse leaves args shorter than
-            # calls, which withholds the exemption rather than granting it.
+            if any(_normalise(line) == _normalise(recorded)
+                   for recorded, _why in _H8_ALLOWLIST.get(rel, ())):
+                continue  # exactly this line, with a recorded reason
+
+            # Every isIn on this line must itself be a const literal, or none
+            # of it counts. Both guards below came from review rounds and both
+            # remain load-bearing:
             #
-            # A raw-SQL `IN (...)` disqualifies the line outright: interpolated
-            # SQL has no argument this can read, so a const `.isIn(...)`
-            # elsewhere on the same line must not speak for it. Without that
-            # guard, the per-line defect this exemption was written to repair
-            # simply moves to the branch the repair did not look at.
+            #   - per CALL, never per line. A first attempt tested the whole
+            #     line and `continue`d, so an idiomatic `&`-chained Drift where
+            #     clause carrying one const isIn and one enumeration-built isIn
+            #     went quiet -- the exact defect this check exists to catch.
+            #   - a raw-SQL `IN (...)` disqualifies the line outright.
+            #     Interpolated SQL has no argument to read, so a const
+            #     `.isIn(...)` elsewhere on the line must not speak for it.
             calls = _ISIN_CALL.findall(line)
-            args = _ISIN_ARG.findall(line)
-            if calls and not raw_hit and len(args) == len(calls) and all(
-                    literal or _is_const_only(name, lines) for literal, name in args):
-                continue  # bounded by construction — compile-time constant
+            if calls and not raw_hit and len(_ISIN_CONST.findall(line)) == len(calls):
+                continue  # every isIn on this line is a compile-time literal
             r.flag("warn", f"{rel}:{i + 1} — {line.strip()[:80]} "
                            f"(no chunking marker within 6 lines)")
     return r
