@@ -19,6 +19,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/design/tokens.dart';
+import 'package:nexora/core/l10n/app_strings.dart';
 import 'settings_controller.dart';
 
 class SettingsView extends GetView<SettingsController> {
@@ -34,13 +35,13 @@ class SettingsView extends GetView<SettingsController> {
             _Header(),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                padding: const EdgeInsetsDirectional.fromSTEB(20, 16, 20, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _TitleBlock(),
                     const SizedBox(height: 16),
-                    for (final group in _groups) ...[
+                    for (final group in _groupsFor(context.l10n)) ...[
                       _MenuGroup(rows: group, controller: controller),
                       const SizedBox(height: 24),
                     ],
@@ -70,7 +71,8 @@ class _Header extends StatelessWidget {
         children: [
           const Icon(Icons.hub, size: 24, color: NexoraColors.welcomeHeading),
           const SizedBox(width: 8),
-          const Text('NEXORA', style: NexoraTextStyles.settingsBrandTitle),
+          Text(context.l10n.brandName,
+              style: NexoraTextStyles.settingsBrandTitle),
           const Spacer(),
           const Icon(Icons.lock, size: 24, color: NexoraColors.welcomeHeading),
         ],
@@ -87,11 +89,11 @@ class _TitleBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
-        Text('Settings', style: NexoraTextStyles.settingsHeading),
-        SizedBox(height: 4),
+      children: [
+        Text(context.l10n.settings, style: NexoraTextStyles.settingsHeading),
+        const SizedBox(height: 4),
         Text(
-          'Manage your secure connection preferences and device configurations.',
+          context.l10n.settingsSubtitle,
           style: NexoraTextStyles.settingsSubtitle,
         ),
       ],
@@ -123,68 +125,68 @@ class _RowSpec {
 /// The eight menu rows, in the design contract's order (elements 8-11,
 /// 12-15, ... 43-46). Icon/backdrop colors read from probe.json elements
 /// 12/19/25/32/38/45/51/57 — not reproduced in the printed contract table.
-final _rows = <_RowSpec>[
+List<_RowSpec> _rowsFor(AppStrings s) => <_RowSpec>[
   _RowSpec(
     row: SettingsRow.account,
     icon: Icons.account_circle,
-    title: 'Account',
-    description: 'Profile, identity keys, linked devices',
+    title: s.settingsAccount,
+    description: s.settingsAccountDescription,
     iconColor: NexoraColors.devicesAllowedBlue,
     iconBackdrop: NexoraColors.settingsIconBackdropBlue,
   ),
   _RowSpec(
     row: SettingsRow.privacy,
     icon: Icons.security,
-    title: 'Privacy & Security',
-    description: 'Encryption protocols, app lock, permissions',
+    title: s.settingsPrivacy,
+    description: s.settingsPrivacyDescription,
     iconColor: NexoraColors.settingsIconGreen,
     iconBackdrop: NexoraColors.settingsIconBackdropGreen,
   ),
   _RowSpec(
     row: SettingsRow.securityCenter,
     icon: Icons.policy,
-    title: 'Security Center',
-    description: 'Threat logs, network audits, certificates',
+    title: s.settingsSecurityCenter,
+    description: s.settingsSecurityCenterDescription,
     iconColor: NexoraColors.settingsIconGreen,
     iconBackdrop: NexoraColors.settingsIconBackdropGreen,
   ),
   _RowSpec(
     row: SettingsRow.network,
     icon: Icons.wifi_tethering,
-    title: 'Network',
-    description: 'Data usage, mesh routing, proxy',
+    title: s.settingsNetwork,
+    description: s.settingsNetworkDescription,
     iconColor: NexoraColors.welcomeHeading,
     iconBackdrop: NexoraColors.settingsIconBackdropViolet,
   ),
   _RowSpec(
     row: SettingsRow.storage,
     icon: Icons.sd_storage,
-    title: 'Storage',
-    description: 'Local cache, message retention, export',
+    title: s.settingsStorage,
+    description: s.settingsStorageDescription,
     iconColor: NexoraColors.welcomeHeading,
     iconBackdrop: NexoraColors.settingsIconBackdropViolet,
   ),
   _RowSpec(
     row: SettingsRow.battery,
     icon: Icons.battery_full, // design glyph: battery_full_alt — see file header deviation note
-    title: 'Battery',
-    description: 'Background execution, power saving modes',
+    title: s.settingsBattery,
+    description: s.settingsBatteryDescription,
     iconColor: NexoraColors.settingsIconLightBlue,
     iconBackdrop: NexoraColors.devicesHeaderBg, // rgb(33,49,69) — identical value
   ),
   _RowSpec(
     row: SettingsRow.notifications,
     icon: Icons.notifications,
-    title: 'Notifications',
-    description: 'Alerts, silent modes, LED behaviors',
+    title: s.settingsNotifications,
+    description: s.settingsNotificationsDescription,
     iconColor: NexoraColors.settingsIconLightBlue,
     iconBackdrop: NexoraColors.devicesHeaderBg, // rgb(33,49,69) — identical value
   ),
   _RowSpec(
     row: SettingsRow.about,
     icon: Icons.info,
-    title: 'About / Updates',
-    description: 'Version 2.4.1, release notes, diagnostic logs',
+    title: s.settingsAbout,
+    description: s.settingsAboutDescription,
     iconColor: NexoraColors.settingsIconLightBlue,
     iconBackdrop: NexoraColors.devicesHeaderBg, // rgb(33,49,69) — identical value
   ),
@@ -197,12 +199,15 @@ final _rows = <_RowSpec>[
 /// pass (review finding, E02-T03): the printed contract table lists each
 /// row as its own numbered element, which reads as "8 separate cards" until
 /// probe.json's untexted wrapper `generic`s are checked directly.
-final _groups = <List<_RowSpec>>[
-  [_rows[0]],
-  [_rows[1], _rows[2]],
-  [_rows[3], _rows[4]],
-  [_rows[5], _rows[6], _rows[7]],
-];
+List<List<_RowSpec>> _groupsFor(AppStrings s) {
+  final rows = _rowsFor(s);
+  return <List<_RowSpec>>[
+    [rows[0]],
+    [rows[1], rows[2]],
+    [rows[3], rows[4]],
+    [rows[5], rows[6], rows[7]],
+  ];
+}
 
 /// One grouped panel — fill/border/radius on the group (probe elements
 /// 9/16/29/42), a hairline divider between rows within the group, rows
@@ -346,16 +351,16 @@ class _BottomNav extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
-            child: _NavItem(icon: Icons.dashboard, label: 'Dashboard', active: false, onTap: () => Get.toNamed('/dashboard')),
+            child: _NavItem(icon: Icons.dashboard, label: context.l10n.navDashboard, active: false, onTap: () => Get.toNamed('/dashboard')),
           ),
           Expanded(
-            child: _NavItem(icon: Icons.chat, label: 'Conversations', active: false, onTap: () => Get.toNamed('/conversations')),
+            child: _NavItem(icon: Icons.chat, label: context.l10n.navConversations, active: false, onTap: () => Get.toNamed('/conversations')),
           ),
           Expanded(
-            child: _NavItem(icon: Icons.router, label: 'Devices', active: false, onTap: () => Get.toNamed('/devices')),
+            child: _NavItem(icon: Icons.router, label: context.l10n.navDevices, active: false, onTap: () => Get.toNamed('/devices')),
           ),
           Expanded(
-            child: _NavItem(icon: Icons.settings, label: 'Settings', active: true, onTap: () {}),
+            child: _NavItem(icon: Icons.settings, label: context.l10n.settings, active: true, onTap: () {}),
           ),
         ],
       ),
