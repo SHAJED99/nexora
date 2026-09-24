@@ -15,7 +15,7 @@ Versions are the annotated tags on `main`.
 ## [Unreleased]
 
 Everything below is merged into `development` and has **not** been released.
-`development` is 190 commits ahead of `main` as of `82b803d` (2026-09-24).
+`development` is 195 commits ahead of `main` as of `f689ebf` (2026-09-24).
 
 ### Added
 - **Session lifecycle and settings sub-screens (E15, whole epic).** Sign-out
@@ -54,6 +54,27 @@ Everything below is merged into `development` and has **not** been released.
 - Traceability and documentation hygiene: stale epic-table status cells synced
   with their task files, invalid traceability records repaired, and previously
   untested criteria made visible to the gate (PRs #303–#307).
+- Three stale project-state fields corrected (PR #310): `lifecycle_stage` read
+  `pre-genesis`, which was both false and absent from its own schema enum; E10
+  advertised a merge that had already happened; E15 claimed a retro that
+  existed. All three are mirror fields the validator never checked.
+- Five epic `status:` values made machine-readable (PR #313). E10–E14 carried
+  their summary as a parenthetical, so `yaml.safe_load` returned the whole
+  string and `scheduler.py:235`'s membership test read them as **not done** —
+  silently blocking any future task that depended on them. Moved behind a `#`,
+  as E15 already did. No summary text lost.
+- `spec/questions.md`'s summary table recounted (PR #311): it reported four open
+  important questions against eleven on file, totalling ten. One is open.
+
+### Fixed (tooling)
+- **`make lessons` ran on nothing** — it crashed on every invocation, because
+  `lessons.py:49` calls `int()` on `recurrence:` and three lessons carried
+  `**2**` or `3+` (PR #309). Fixed in the data; all other lessons already used a
+  bare integer.
+- **`make health` H4 reported a false negative** — its regex accepted a scope
+  fence numbered `4.` or unnumbered, but five task files number theirs `3.`, so
+  a present, properly filled fence read as absent (PR #312).
+- **Release signing is wired but unkeyed** — see Known gaps.
 
 ---
 

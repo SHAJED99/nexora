@@ -109,8 +109,44 @@ Ordered by who owns it.
    substantive and its review latency is outside anyone's control.
 7. **Walking-skeleton smoke check on hardware**, per `skills/release` step 4.
    Requires two physical Android devices. Cannot be done in CI.
-8. **`epic-00-done` tag** — E00 is complete, retro'd and merged; only the tag
-   is absent. E01/E04's tags wait on their open P2s.
+8. **`epic-00-done` tag — computed, ready to create, deliberately not created
+   by an agent.** The other thirteen `epic-<n>-done` tags were **back-filled on
+   2026-09-22** under a documented rule, quoted from `epic-02-done`'s own
+   annotation: *"the commit from which every task in the epic is `done` and
+   stays done through to `development` HEAD (computed, not asserted) … The
+   epic's original merge predates this commit where a later bug re-opened work;
+   this anchor is the honest 'complete and stayed complete' point."*
+
+   Applying that rule to E00 gives an answer that is **not** the 2026-08-26
+   close-out (`84535cb`). E00 acquired a bug after that date — `E00-B01`, the
+   debug-signing defect — and the rule anchors on when the epic became and
+   stayed complete. `E00-B01` reached `done` when PR #308 merged, so:
+
+   ```bash
+   git tag -a epic-00-done 82b803d -m "E00 Genesis complete -- 7 tasks + 1 bug, all done, P1/P2=0.
+
+   Back-filled 2026-09-24 under the same computed rule as epic-02..15-done:
+   the commit from which every task in the epic is done and stays done through
+   to development HEAD. E00's original close-out (84535cb, 2026-08-26) predates
+   E00-B01, a later bug that re-opened work; 82b803d is the honest
+   'complete and stayed complete' point. Retro: epics/E00-genesis/retro.md."
+   git push origin epic-00-done
+   ```
+
+   The "7 tasks + 1 bug" in that annotation is **not** countable from
+   `epics/E00-genesis/tasks/`, which holds only `E00-B01.md` — E00 predates
+   the per-task-file convention, so its seven tasks live only as rows in
+   `epics/E00-genesis/epic.md` (`E00-T00` … `E00-T06`, all ✅ done) and in
+   `epics/E00-genesis/tracker.md`. Verify there, not in `tasks/`. A reviewer
+   flagged this as unverifiable, which it was — hence this note.
+
+   Left for the human to run: tags are shared refs and part of the release
+   ceremony, and this one's anchor moved because of a task filed during the
+   same session that computed it. That is exactly the situation where an agent
+   should show its work rather than push the ref.
+
+   `epic-01-done` and `epic-04-done` cannot be computed yet — both epics have
+   an open bug, so neither has a "stayed complete" point.
 
 ### Deliberately out of scope
 
