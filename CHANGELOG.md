@@ -76,7 +76,8 @@ Re-derive rather than trust it: `git rev-list --count origin/main..development`.
   all. It decides nothing and duplicates nothing; where it and a source
   disagree, the source wins (PR #315).
 - **Harness checks in CI** — a `harness` job runs `make validate`,
-  `make lessons`, `make health-selftest` and `make trace` on every push and PR.
+  `make lessons`, `make health-selftest` and `make trace` on every pull request
+  and on pushes to `main` and `development`.
   Until now CI ran only Flutter steps and no harness check at all, which is why
   every harness defect this project has found was found by a human typing the
   command. `make health` and `make trace CHECK=1` are deliberately excluded and
@@ -106,7 +107,7 @@ Re-derive rather than trust it: `git rev-list --count origin/main..development`.
   turned `make trace` red for a reason unrelated to traceability. It does not warn
   on Python 3.10, so it had been firing only in CI; the review of #320 read it out
   of the runner's log on the first run after `make trace` was wired in (PR #321).
-- **`docs/traceability.md` was six merges stale** — regenerated, not patched, per
+- **`docs/traceability.md` was 14 merges stale** — regenerated, not patched, per
   the file's own instruction. Three facts moved and no blocking count was among
   them; the one new row is `E00-B01`, `done` but carrying the still-open keystore
   question (PR #321).
