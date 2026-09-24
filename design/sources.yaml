@@ -258,6 +258,17 @@ screens:
     viewports: [390x844]
     states: [{ name: default }]
 
+  # E07-T17/T18: the group thread. `design/screens/chat-group.md` (GAP-020,
+  # approved 2026-08-31; its `OQ-E07-13` precondition answered by the human
+  # 2026-09-25). A screen must be registered before its own task can run the
+  # rule-2 gate -- the same reason group-create above is registered.
+  - id: chat-group
+    source: derived
+    design_path: n/a - derived, design/screens/chat-group.md (GAP-020)
+    impl_path: /groups/:id
+    viewports: [390x844]
+    states: [{ name: default }]
+
 # - id: login
 #   source: ui
 #   design_path: /login.html      # the path inside the design source

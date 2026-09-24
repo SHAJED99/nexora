@@ -1951,6 +1951,39 @@ and that is the strongest single argument for this disposition.**
 - **approved by:** _(pending — element scope)_
 - **built:** not built — this entry is the proposal only.
 
+## GAP-045 — a blocked member's message in a group thread has no words
+- **status:** 🟡 proposed — **not built, and BLOCKING state 3 of
+  `chat-group.md`.** There is no honest interim: an empty bubble body renders
+  as *a message that failed to load*, which is a different and worse claim
+  than "this sender is blocked". One human answer unblocks it. The rest of
+  the group thread does not depend on it.
+- **screen:** chat-group (`design/screens/chat-group.md`, state 3) — element
+  `G10`
+- **spec:** FR-COMM-002, FR-TRUST-004
+- **design shows:** nothing. The design source draws a 1:1 thread only, and
+  neither GAP-020 nor the human's 2026-09-25 `OQ-E07-13` answer supplies copy.
+  The answer fixes the **behaviour** — *"a blocked member's messages should
+  remain represented as placeholders rather than being silently dropped or
+  rendered as normal readable messages"* — and behaviour is not words.
+- **why the existing placeholder cannot be reused:** `chat_view.dart:355`
+  already renders `(unable to decrypt this message)` for a null plaintext.
+  For a blocked member that sentence is **false**: a blocked member is still a
+  group member holding a valid sender key, so the message usually decrypts
+  without difficulty. It is withheld by **policy**, not by failure. Reusing
+  that string would make the app misreport its own reason.
+- **derived from:** nothing yet — that is the gap. Whichever string is chosen
+  renders in the measured inbound bubble box (`chat.md` 12/15/20); no new
+  colour or size is proposed for it.
+- **options, none chosen:**
+  - (a) `Message from a blocked contact`
+  - (b) `Message hidden — contact is blocked` — says *why*, at the cost of
+    being longer than any other bubble string in the app.
+  - (c) `Blocked` — matches the one-word register `devices.md` uses for its
+    status chips, but reads as a label on the *message* rather than its sender.
+- **approved by:** _(pending — which of (a)/(b)/(c), or none)_
+- **built:** _(not yet — `E07-T18` builds states 1, 2, 4 and 5 and leaves
+  state 3 for whichever string is chosen)_
+
 ## The usual suspects
 
 Checklist for the gap pass. In rough order of how often each is missed:
