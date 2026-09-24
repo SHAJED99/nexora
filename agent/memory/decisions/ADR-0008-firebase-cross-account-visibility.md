@@ -8,11 +8,32 @@ traces_to: [FR-FB-001, FR-FB-002, FR-TRUST-005, FR-TRUST-007, FR-SEC-003, NFR-PR
 
 # ADR-0008 — Firebase cross-account visibility boundary
 
-> DECISION OWNERSHIP: this document presents options, trade-offs and an
-> advisory recommendation. The **Decision** line stays `⏳ AWAITING HUMAN`
-> until the human picks. Nothing in E11 that requires a cross-account read
-> is sharded until then — see `epics/E11-firebase-sync/epic.md`
-> §Open Questions `OQ-E11-1`.
+> DECISION OWNERSHIP (as proposed, 2026-09-04): this document presented
+> options, trade-offs and an advisory recommendation. The **Decision** line
+> was to stay `⏳ AWAITING HUMAN` until the human picked, with nothing
+> in E11 that requires a cross-account read sharded until then — see
+> `epics/E11-firebase-sync/epic.md` §Open Questions `OQ-E11-1`.
+>
+> **That gate has since been cleared.** This ADR is `status: accepted`; the
+> decision is recorded in §Decision below (option 2, public device
+> directory), `OQ-E11-1` now reads 🟢 answered, and `E11-T06` built it. The
+> paragraph above is kept as the record of how the decision was framed, not
+> as a statement of current state — nothing in this ADR is awaiting a
+> human.
+>
+> Corrected 2026-09-24. The present-tense wording had made this ADR read as
+> an open decision to anyone skimming the header. Note that this correction
+> did **not** make the phrase disappear from the file — the sentence above
+> still quotes it, deliberately, because how a decision was framed is worth
+> keeping. Grepping these files for that phrase was never a sound way to
+> find a pending ADR: it reads prose, and prose about a decision is not the
+> decision. The frontmatter is:
+>
+> ```
+> $ grep -n "^status:" agent/memory/decisions/ADR-000[1-9]*.md | grep -v accepted
+> ```
+>
+> No output means none is pending. See `docs/pending-decisions.md`.
 
 ## Context
 
