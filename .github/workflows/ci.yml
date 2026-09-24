@@ -30,3 +30,44 @@ jobs:
 
       - name: flutter build apk --debug
         run: flutter build apk --debug
+
+  harness:
+    name: harness checks (DAG, lessons, H8 self-test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # Each of these guards a harness file that has silently broken before,
+      # and each was found by a human running the command by hand rather than
+      # by CI. `make lessons` crashed on EVERY invocation for weeks because
+      # `lessons.py` called int() on a `recurrence:` value written `**2**`;
+      # H4 reported a false negative on five task files; H8 shipped three
+      # separate unsafe-direction regressions in one day.
+      #
+      # All three exit 0 on `development` today, so they gate honestly from
+      # the moment they land.
+      - name: make validate  # epic/task DAG, traces_to, statuses
+        run: make validate
+
+      - name: make lessons  # the lesson ledger parses and totals
+        run: make lessons
+
+      - name: make health-selftest  # H8 still rejects every shape it wrongly exempted
+        run: make health-selftest
+
+      # NOT wired, deliberately, because both exit non-zero on `development`
+      # today and a red-from-birth job is a job everyone learns to ignore:
+      #
+      #   make health         H5/H6/H7 fail -- a same-model review, an
+      #                       unpromoted recurring lesson, a skipped merge
+      #                       gate. All three are human-gated, not defects.
+      #   make trace CHECK=1  14 blocking orphans, every one decision- or
+      #                       freeze-bound. See CHANGELOG.md, Known gaps.
+      #
+      # `docs/ARCHITECTURE.md` already names `make health STRICT=1` as the
+      # intended end state. It becomes wireable when those gates clear -- not
+      # by loosening the checks to make a green badge.
