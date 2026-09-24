@@ -434,13 +434,38 @@ self-referential, and the four real comparisons are the only independent
 measurements in the table.
 
 **These percentages are not completeness scores, and must not be read as
-"the dashboard is 35% built."** Much of each delta is *approved* deviation:
-the probe seeds real device ids and undecryptable previews where the design
-draws `Family` / `See you at 7pm!` (`GAP-003`, and the dashboard probe's own
-comment calls this "a real, expected finding"), the Local Storage card has no
-data source until E08 (`GAP-011`), and the degraded network variants are
-`GAP-013`. `design-fidelity` §6 requires a reviewer to trace each delta to a
-gaps entry; the gate does not self-clear, and it reports raw deltas by design.
+"the dashboard is 35% built."** An independent review of the raw probe JSON
+and the two failing reports found **no missing section or heading — nothing
+that should render regardless of data is absent.** Every structurally-absent-
+looking element resolves to one of three things:
+
+1. **Real content merged into one accessibility node.** The whole Network
+   Status card (`heading`, `Connected`, `Encryption`, `Secure`, `Latency`,
+   `24ms`) renders — `dashboard_view.dart:305` builds `Text('Network Status')`
+   as a real widget — but **`GAP-012`'s approved card-wide `InkWell` tap
+   target** merges the card into a single `button` node, which the probe then
+   reports as one element instead of nine. Same mechanism for Local Storage
+   (`GAP-011`). ~16 of dashboard's 41 "missing" elements are this.
+2. **A probe classification artifact.** The four nav labels land in the
+   `button`'s own `text` field rather than as sibling `generic` nodes. The
+   labels render; the probe classifies them differently from the DOM golden.
+   A measurement blind spot, not lost UI.
+3. **Mock-versus-real data.** The design's example rows (`Family`, `Rahim`,
+   `Ahmed`, `See you at 7pm!`) against the probe's real device ids and
+   undecryptable previews.
+
+**On (3), one precision the first draft of this correction got wrong:** it
+cited `GAP-003` as covering this for dashboard and conversations. It does not.
+`GAP-003` is scoped in its own text to **`screen: devices`**, its status field
+still reads `🟡 proposed`, and its clearance is an `approved by: orchestrator`
+line under a standing grant. The dashboard and conversations mock-data
+substitution is *the same shape* as GAP-003 and is **covered by no gap entry
+at all**. That is a real bookkeeping hole, and it makes **P9 larger than
+"check the existing three gaps"** — part of P9 is writing the gap entries
+that should already exist, or extending GAP-003's scope explicitly.
+
+`design-fidelity` §6 requires a reviewer to trace each delta to a gaps entry;
+the gate does not self-clear, and it reports raw deltas by design.
 
 **What is genuinely actionable here is not the number — it is that nobody
 could have seen it.** `make design-verify` is absent from CI and could not run
@@ -451,5 +476,5 @@ decision from anyone.
 
 | # | Work | Blocked by |
 |---|---|---|
-| P9 | Triage the four failing screens' deltas against `design/gaps.md`; split approved deviation from real drift | **nothing — buildable now** |
+| P9 | Triage the four failing screens' deltas against `design/gaps.md`, and **write the gap entries that do not yet exist** (dashboard/conversations mock-data substitution is covered by none) | **nothing — buildable now** |
 | P10 | Make the design gate visible: wire `design-verify` into CI, or add a preflight that fails loudly when `node_modules` is empty | **nothing — buildable now** |
