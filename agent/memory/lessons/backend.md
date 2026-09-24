@@ -222,6 +222,64 @@ automatically for matching tasks (see `index.yaml`).
 - recurrence: 1
 - status: lesson
 
+## L-backend-006 — a live Drift `.watch()` stream subscribed inside a composition root's construction (e.g. `MessagingStack.create()`) hangs `flutter_test`'s `pumpAndSettle()` in ANY widget test that constructs that composition root — confirmed even with a no-op callback, and confirmed that cancelling the subscription in the composition root's own `dispose()` does not help
+- date: 2026-09-04 | source: E09-B08 (reactive location-privacy-sweep
+  trigger, attempted then reverted)
+- situation: `E09-B08`'s fix direction was implemented exactly as
+  specified — a table-wide `RelationshipRepository.watchAnyChange()`
+  (`.select(table).watch()`), subscribed inside `MessagingStack.create()`
+  to re-run a privacy sweep reactively. Both of the fix's own regression
+  tests passed. Running the FULL suite afterward revealed the fix hung
+  four unrelated widget tests (`chat_view_test.dart`,
+  `conversations_view_test.dart`, `conversations_groups_test.dart`,
+  `dashboard_view_test.dart` — each to the runner's 10-minute cap on
+  `tester.pumpAndSettle()`), because each of those tests constructs a
+  real `MessagingStack` via GetX bindings. Reduced the subscription's
+  callback to a no-op `(_) {}` and reproduced the identical hang,
+  ruling out the fix's own callback logic as the cause. Also tried
+  cancelling the subscription explicitly in `MessagingStack.dispose()`
+  (rather than relying on the database closing alone) — did not help,
+  because the hang occurs INSIDE the test body's own `pumpAndSettle()`
+  call, before `dispose()`/`tearDown` is ever reached.
+- root cause: not a project-code gap in the traditional sense — a
+  genuine, project-specific interaction between Drift's reactive query
+  machinery and `flutter_test`'s pump-until-idle detection that this
+  project had not previously exercised (every existing `.watch()` stream
+  before this fix was consumed by a *narrower*-scoped subscriber, never
+  held open unconditionally for a whole composition root's lifetime from
+  inside `create()` itself). Nothing in `skills/implement` or
+  `skills/review` currently prompts "does this new stream subscription
+  get exercised by any widget test that builds this composition root,
+  and does `pumpAndSettle()` actually settle with it live?" before a
+  reactive-trigger fix is considered done.
+- fix applied: the fix was reverted rather than shipped (a P3, bounded,
+  workaround-able bug does not justify risking an unbounded number of
+  present and future widget test hangs). No project-code fix exists yet
+  — this needs either a different reactive-trigger mechanism that
+  doesn't hold a live Drift `.watch()` open across a composition root's
+  lifetime, or deeper Drift/`flutter_test` internals knowledge this
+  session did not have. Recorded so the next attempt starts from "this
+  exact shape is known to hang `pumpAndSettle()`," not from zero.
+- addendum (2026-09-24, on landing this lesson): **the root cause above is
+  narrower than the one finally established.** This lesson was written
+  2026-09-04, after the first implementation attempt. A second attempt, in a
+  separate session, bisected it further and `E09-B08`'s own §Resolution
+  (2026-09-07) records the broader finding: **any unawaited real query against
+  this codebase's `NativeDatabase.memory()`-backed `AppDatabase`, fired
+  synchronously before `pumpWidget`/`pumpAndSettle` in a widget test, hangs
+  `pumpAndSettle` — regardless of what triggers it or what it queries.** It is
+  not specific to Drift's `.watch()` machinery and not specific to holding a
+  subscription open, so the title's framing above should be read as the
+  symptom first seen, not the boundary of the hazard. `E09-B08` was closed
+  **won't-fix** on 2026-09-07 with both attempts fully reverted; `grep -rn
+  "watchAnyChange" lib/` returns nothing today, so "no project-code fix
+  exists yet" still holds. Read `OQ-E09-B08-1` for the three-variant
+  bisection before a third attempt — it rules out two plausible guesses
+  (subscription lifetime, unawaited-Future-in-general) that would otherwise
+  cost another cycle to re-discover.
+- recurrence: 1
+- status: lesson
+
 > Deliberately empty, like every area here. A lesson is evidence from *this*
 > codebase, and its recurrence count is what decides which trap gets automated
 > next — seeding it with another project's findings would put fiction in that

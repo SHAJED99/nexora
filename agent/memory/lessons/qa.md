@@ -66,3 +66,40 @@ automatically for matching tasks (see `index.yaml`).
   signature before being restored. Not incremented (no new occurrence of a
   miss the practice caused to be caught) — recorded because the rule paid
   for itself at real production-scale stakes this time, not toy fixtures.
+
+## L-qa-002 — a truth-table sweep that asserts one field of a multi-field result (e.g. `isVisible`) but not another (e.g. `reason`) leaves the untested field's own precedence order unguarded, and this exact shape survived two independent review passes on the same test file before a third caught it
+- date: 2026-09-04 | source: E09-B07 (delegation-proof test proved
+  nothing) → its own fix's sweep test → E09-B12 (found by a later,
+  separately-dispatched cross-model re-review of the same function)
+- situation: `E09-B07`'s fix added a truth-table sweep over all four
+  `(globalEnabled, peerEnabled)` input combinations, correctly comparing
+  the policy's `isVisible` output against an independent resolver's
+  verdict on the same inputs — closing the exact gap `E09-B07` itself
+  found. But `isVisible` cannot distinguish `globalOff` from `peerOff`;
+  both make it `false`. A later, independently-dispatched cross-model
+  review of the *same function* (`E09-B05`'s re-review of `E09-T02`)
+  found that no test anywhere asserted `result.reason` for the
+  `(false, false)` combination — a mutant inverting the `globalOff >
+  peerOff` precedence order survived the sweep `E09-B07` had just added,
+  survived every other test in the file, and survived all 914 tests in
+  the suite. Filed and fixed as `E09-B12` by extending the same sweep to
+  also assert `reason`, not adding a fifth standalone test.
+- root cause: a sweep loop that asserts *some* property across every
+  input combination reads as "this combination is covered" even when
+  the asserted property is coarser than the actual behavior being
+  guarded. Nothing about `skills/review`'s falsification discipline
+  (`L-qa-001`) distinguishes "this test executes the code path" from
+  "this test's assertion is precise enough to catch the specific bug
+  shape the reviewer is worried about" — both look identical in a
+  passing test run, and only a reviewer who mutates the *specific
+  precedence line* (not just the pass/fail of the wrapping condition)
+  finds the gap.
+- fix applied: none in project code beyond `E09-B12`'s own fix. Recorded
+  as its own lesson because the pattern is a specific refinement of
+  `L-qa-001`, not a duplicate: falsify not just "does some assertion in
+  this test fail," but "does the assertion fail for a mutation of the
+  EXACT line the test claims to guard" — a sweep over one field of a
+  multi-field result needs a matching sweep (or an explicit companion
+  assertion) over every other field the underlying decision produces.
+- recurrence: 1
+- status: lesson

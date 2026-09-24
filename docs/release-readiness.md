@@ -40,7 +40,7 @@ option. It is not the same as being ready.
 | `flutter analyze` | ✅ | `No issues found!` (53.2s) |
 | `flutter test` | ✅ | `1593/1593`, 153 test files |
 | `make validate` | ✅ | `16 epics, 233 tasks — DAG OK` |
-| `make lessons` | ✅ | `30 lessons · 16 promoted · 3 awaiting promotion` (was crashing before 2026-09-24) **re-verified on `da4459b`** — the third candidate is `L-process-014`, written later the same day |
+| `make lessons` | ✅ | `33 lessons · 16 promoted · 3 awaiting promotion` (was crashing before 2026-09-24). Was 30 until `L-backend-006`, `L-infra-003` and `L-qa-002` were recovered from an uncommitted retro worktree; all three are `recurrence: 1`, so the promotion candidates are unchanged. The third candidate is `L-process-014`, written on 2026-09-24. |
 | `flutter build apk --release` | ✅ | `app-release.apk (62.5MB)`, exit 0, 147.6s cold |
 | `flutter build appbundle --release` | ✅ | `app-release.aab (60.8MB)`, exit 0, 67.5s — **first ever run, 2026-09-24** |
 | Release artifact is **distributable** | ❌ **no** | `apksigner` reports `CN=Android Debug`. No keystore exists. |
