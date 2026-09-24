@@ -15,7 +15,8 @@ Versions are the annotated tags on `main`.
 ## [Unreleased]
 
 Everything below is merged into `development` and has **not** been released.
-`development` is 200 commits ahead of `main` as of `cc87871` (2026-09-24).
+`development` is 203 commits ahead of `main` as of `171f1c4` (2026-09-24).
+Re-derive rather than trust it: `git rev-list --count origin/main..development`.
 
 ### Added
 - **Session lifecycle and settings sub-screens (E15, whole epic).** Sign-out
@@ -74,6 +75,13 @@ Everything below is merged into `development` and has **not** been released.
   freeze by a standing instruction that the repository does not declare at
   all. It decides nothing and duplicates nothing; where it and a source
   disagree, the source wins (PR #315).
+- **Harness checks in CI** — a `harness` job runs `make validate`,
+  `make lessons`, `make health-selftest` and `make trace` on every push and PR.
+  Until now CI ran only Flutter steps and no harness check at all, which is why
+  every harness defect this project has found was found by a human typing the
+  command. `make health` and `make trace CHECK=1` are deliberately excluded and
+  the workflow says why: both exit non-zero on human-gated state, and a
+  red-from-birth job is one everyone learns to ignore (PR #320).
 - **`make health-selftest`** — 20 executable fixtures proving H8 still rejects
   every shape it has ever wrongly exempted, plus both directions on each
   allowlist entry. Stdlib-only, so no new dependency (PR #318).
@@ -93,6 +101,15 @@ Everything below is merged into `development` and has **not** been released.
   *head* with an unbounded tail. Escalated to the planner per
   `skills/review:120` and fixed by closing the exemption's input space rather
   than widening it (PR #316). The episode is `L-infra-004`.
+- **`traceability.py` passed `maxsplit` positionally to `re.split()`** —
+  deprecated in CPython 3.13 and scheduled for removal, which would one day have
+  turned `make trace` red for a reason unrelated to traceability. It does not warn
+  on Python 3.10, so it had been firing only in CI; the review of #320 read it out
+  of the runner's log on the first run after `make trace` was wired in (PR #321).
+- **`docs/traceability.md` was six merges stale** — regenerated, not patched, per
+  the file's own instruction. Three facts moved and no blocking count was among
+  them; the one new row is `E00-B01`, `done` but carrying the still-open keystore
+  question (PR #321).
 - **Three lessons were written and never committed** — `L-backend-006`,
   `L-infra-003` and `L-qa-002` sat uncommitted in a retro worktree from
   2026-09-04 while the same session's process lessons landed. Recovered
