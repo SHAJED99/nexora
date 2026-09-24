@@ -883,17 +883,23 @@ automatically for matching tasks (see `index.yaml`).
   four instances from a single sweep as `recurrence: 4`.
 - status: lesson
 
-## L-process-021 — a negative claim is only as good as the search designed to falsify it. Three times in one session a command ran, its output was real, and the sentence built on it asserted something the command had not measured. This is `L-process-020`'s mirror image: there the evidence was recalled; here it was freshly produced and genuinely true, and still did not support the proposition
-- date: 2026-09-24 | source: PRs #324-#329, one session — `#324`/`#327`
-  (case 1), `#327` (case 2, caught pre-commit), `#327`/`#329` (case 3)
-- situation: three confident negatives, each false, each produced by a real
-  command whose output was accurate:
+## L-process-021 — a real observation, over-extended into a claim it does not support. Four times in one session a command or a file was read, the output was accurate, and the sentence built on it asserted something that reading had not established. This is `L-process-020`'s mirror image: there the evidence was recalled or copied; here it was freshly produced and genuinely true, and still did not support the proposition
+- date: 2026-09-24 | source: PRs #324-#330, one session — `#324`/`#327`
+  (case 1), `#327` (case 2, caught pre-commit), `#327`/`#329` (case 3),
+  `#327` (case 4, self-disclosed in the same document)
+- situation: four claims, each false, each produced by a real command or a
+  real file read whose output was accurate. They split into two shapes,
+  and naming both is what makes the lesson checkable rather than a slogan:
+  **(a)** a negative or novelty claim from a search that cannot establish
+  absence, and **(b)** a claim from a *partial* read of a complete
+  construct — the reading stopped before the disqualifying part:
 
   | # | Claim written | Command actually run | What that command could not see |
   |---|---|---|---|
   | 1 | "There is no navigation chrome of any kind" | `grep -rln "NavigationBar\|NavigationRail\|TabBar\|IndexedStack" lib` → no matches | a bottom nav hand-built from `Container`+`Row`+`_NavItem`, present in **four** views, and drawn by `dashboard.md` elements 37/40/43/46 |
-  | 2 | "three nav items" | read `dashboard_view.dart` as far as the third `Expanded` | the fourth `Expanded` (Settings), 8 lines further down |
+  | 2 *(shape b)* | "three nav items" | read `dashboard_view.dart` as far as the third `Expanded` | the fourth `Expanded` (Settings), 8 lines further down |
   | 3 | "the first full design-gate baseline"; the screens had been "reporting FAIL into a void" | ran `design-verify` across all 17 probe-backed screens | `epics/E06-personal-chat/tracker.md`, which records the same 16-screen run on **2026-09-12**, twelve days earlier, with three of the four numbers character-identical and all 32 independently reproduced by that reviewer |
+  | 4 *(shape b)* | "`GAP-003` covers the dashboard and conversations mock-data substitution" | read `design/gaps.md` and found `GAP-003` | `GAP-003`'s own `screen:` field, which scopes it to **`devices`** alone — so those two screens are covered by no gap entry at all |
 
   Case 1 names the trap exactly. A grep for three class names establishes
   that those three class names are absent from `lib/`. It says nothing
@@ -904,6 +910,17 @@ automatically for matching tasks (see `index.yaml`).
   Case 3 is the expensive one, because the falsifying evidence was in the
   repository, written by a previous agent, in the obvious place: the epic's
   own tracker. Nothing was hidden. The search was simply never aimed there.
+- relation to `L-process-020`, stated because the two are easy to merge and
+  `skills/retro` warns that a duplicate lesson is worse than none: `L-020`
+  is *the claim was never sourced from a command* (recalled, or copied out
+  of a commit body). This one is *the command ran and was right, and the
+  sentence reached past it*. The fixes differ, which is the test for whether
+  two lessons are really one: `L-020`'s is source discipline — run the
+  command at write time. This one's is **search design** — aim the command
+  at what would falsify the sentence. A document in this repository
+  (`docs/product-completeness-audit.md`) originally attributed cases 1-2 to
+  `L-020`; that cross-reference was wrong and has been corrected to point
+  here.
 - root cause: **an existential claim and a universal claim need opposite
   searches, and grep only ever supports the existential one.** `grep X` finding
   a hit proves "X exists" — sound. `grep X` finding nothing proves "this
@@ -936,7 +953,17 @@ automatically for matching tasks (see `index.yaml`).
   reviewer's job is to spend one search trying to falsify it. That is what
   caught cases 1 and 3 here — both were found by a reviewer checking a claim
   in a *different* PR, not by the document re-reading itself.
-- recurrence: 3 ("no navigation chrome of any kind", "three nav items", "the
-  first full design-gate baseline"). Counted per instance, following
-  `L-process-011` and `L-process-020`.
+- recurrence: 4 ("no navigation chrome of any kind", "three nav items", "the
+  first full design-gate baseline", "`GAP-003` covers dashboard/conversations").
+  Counted per instance, following `L-process-011` and `L-process-020`.
+
+  Two counting decisions, stated so the number audits itself. Case 2 was
+  caught before it was committed; it is counted anyway, because it was
+  written down as a fact before it was caught, and a lesson that only counts
+  the errors that escaped teaches nothing about the ones that nearly did.
+  Case 4 was **added in review of this very lesson** — it is disclosed a few
+  hundred lines above in `docs/product-completeness-audit.md`, was the same
+  shape, and I had omitted it while writing the lesson about omitting things.
+  Undercounting matters specifically because `make lessons` reads this field
+  to decide the promotion rung.
 - status: lesson

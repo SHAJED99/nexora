@@ -385,11 +385,18 @@ Two greps, neither of which measured the thing being claimed.
    its element table. The table names all three nav items; the word does not
    appear near them.
 
-This is the same failure already recorded as
+This is a failure of the same family as
 `feedback_review_package_raw_output_only` and `L-process-020`: a command was
 run, its output was real, and it was presented as evidence for a proposition
 it does not address. The grep was honest. The sentence built on it was not
 earned.
+
+> **Cross-reference corrected 2026-09-24 (see Correction 2).** This paragraph
+> originally read "the same failure already recorded as … `L-process-020`".
+> That attribution was wrong, and left a reader following it at the wrong
+> lesson. `L-process-020` is about a claim sourced from something *other than*
+> a command. The failure described here is its inverse — a real command, real
+> output, wrong proposition — and is now `L-process-021`.
 
 ## What survives, and what D2 actually is now
 
@@ -503,6 +510,7 @@ earlier:
 improved (dashboard 19%->34.9%, conversations 21.1%->38.6%, chat 79.1%->86%,
 devices 65.6%->78.7%), every screen already at 100% stayed at 100% -- **no
 screen regressed**, all 32 numbers independently reproduced by the reviewer
+in both directions.
 ```
 
 A full 16-screen run. **Three of the four numbers I reported as a new baseline
@@ -555,4 +563,22 @@ trackers, the retros and the merge notes — not only the code.
 This correction was found by a reviewer checking a claim in an unrelated PR
 (#329), not by the audit re-reading itself. That is the second time the review
 gate has caught this specific pattern, and the reason the lesson is written at
-`recurrence: 3` rather than as a one-off.
+`recurrence: 4` rather than as a one-off.
+
+**A fourth case was added during review of this very correction**, and it is
+the one most worth reading: the `GAP-003` scope error disclosed a few hundred
+lines above. I checked that `GAP-003` existed and cited it as covering the
+dashboard and conversations mock-data substitution; its own `screen:` field
+scopes it to `devices` alone. Same shape — a real artifact read, a claim
+reaching past what the reading established — sitting in this same document,
+omitted while I was writing the lesson about omissions. The table in
+`L-process-021` now carries it.
+
+**One reproducibility note, since this document's subject is measurement.**
+The reviewer re-ran the gate independently and reproduced all four
+percentages, but observed `devices` reading **83.6% (51/61)** on the first two
+runs immediately after a cold `npm install`, then a stable **82% (50/61)** on
+eleven subsequent probe-and-verify cycles. Judged a cold-start artifact rather
+than real non-determinism, and recorded rather than smoothed over: a gate
+whose first run disagrees with its next eleven is worth someone confirming
+before any of these numbers is treated as a fixed baseline.
