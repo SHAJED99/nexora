@@ -68,9 +68,12 @@ Everything below is merged into `development` and has **not** been released.
 
 ### Added (tooling)
 - **`docs/pending-decisions.md`** — one register naming every decision, gate
-  and manual action waiting on the human, each with its `harness.yaml` gate key
-  and the authoritative file that holds it. It decides nothing and duplicates
-  nothing; where it and a source disagree, the source wins (PR #315).
+  and manual action waiting on the human, each with the authoritative file that
+  holds it and, where one applies, its `harness.yaml` gate key. Four of the
+  eight items are held by a declared gate; three by a rule; and the E04
+  freeze by a standing instruction that the repository does not declare at
+  all. It decides nothing and duplicates nothing; where it and a source
+  disagree, the source wins (PR #315).
 - **`make health-selftest`** — 20 executable fixtures proving H8 still rejects
   every shape it has ever wrongly exempted, plus both directions on each
   allowlist entry. Stdlib-only, so no new dependency (PR #318).

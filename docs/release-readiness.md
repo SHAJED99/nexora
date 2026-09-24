@@ -5,8 +5,9 @@
 >
 > The ten merges in between — `b9206b2`, `533ed09`, `4dd1fe2`, `b5fc966`,
 > `f689ebf`, `da4459b`, `6930843`, `091ee4e`, `d193ddd`, `cc87871` — touched
-> documentation, lessons, task/epic metadata and one harness check
-> (`agent/orchestrator/health.py`). `git diff --name-only 82b803d cc87871`
+> documentation, lessons, task/epic metadata and the harness itself
+> (`agent/orchestrator/health.py` and `Makefile`).
+> `git diff --name-only 82b803d cc87871`
 > lists **no file under `lib/` or `test/`**, which is why the build, test
 > and artifact rows below still describe this tree without being re-run.
 >
