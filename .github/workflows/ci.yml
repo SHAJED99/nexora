@@ -86,6 +86,25 @@ jobs:
       #                       gate. All three are human-gated, not defects.
       #   make trace CHECK=1  14 blocking orphans, every one decision- or
       #                       freeze-bound. See CHANGELOG.md, Known gaps.
+      #   make design-verify  4 of 17 screens FAIL today -- chat 86%, devices
+      #                       82%, conversations 38.6%, dashboard 34.9%. A
+      #                       2026-09-24 review re-derived the deltas from the
+      #                       raw probe JSON and found NO missing section or
+      #                       heading: they are GAP-012's approved card-wide
+      #                       tap target merging a card into one accessibility
+      #                       node, a probe classification artifact for the nav
+      #                       labels, and mock-vs-real data. Wiring it now
+      #                       would ship exactly the red-from-birth job this
+      #                       comment block exists to refuse. It becomes
+      #                       wireable after P9 triages those deltas and writes
+      #                       the gap entries that do not yet exist -- see
+      #                       docs/product-completeness-audit.md.
+      #
+      #                       Note the gate ALSO needs `npm install`, which no
+      #                       CI job here runs. `make design-deps` now fails
+      #                       loudly rather than letting an unrunnable gate
+      #                       look identical to a gate nobody ran -- which is
+      #                       the state it was actually in until 2026-09-24.
       #
       # `docs/ARCHITECTURE.md` already names `make health STRICT=1` as the
       # intended end state. It becomes wireable when those gates clear -- not

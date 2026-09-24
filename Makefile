@@ -19,6 +19,7 @@ OUT ?= harness-status.html
 .PHONY: next status review validate health metrics metrics-json hooks lessons trace \
         health-selftest \
         design-extract design-contract design-verify design-selftest design-probe \
+        design-deps \
         dashboard dashboard-snapshot help
 
 # ── Work queue ────────────────────────────────────────────────────────────────
@@ -42,13 +43,48 @@ trace:           ## requirement → task → test chain + orphans → docs/trace
 	$(PY) agent/orchestrator/traceability.py $(if $(ID),--id $(ID),) $(if $(CHECK),--check,)
 
 # ── Design fidelity (rule 2) ──────────────────────────────────────────────────
-design-extract:  ## design source → golden screenshots + DOM/token dumps
+# The design tools are Node programs with real dependencies declared in
+# package.json. `node_modules/` is gitignored, so a fresh clone -- or any
+# `git worktree` created from one -- has none, and every target below then
+# dies with a raw ERR_MODULE_NOT_FOUND stack trace naming `yaml`, which reads
+# like a broken tool rather than a missing `npm install`.
+#
+# This matters more than an error message usually does. `make design-verify`
+# is NOT in CI, so an UNRUNNABLE gate and a gate nobody ran look exactly the
+# same from outside: both are simply an absence. On 2026-09-24 the rule-2
+# gate had been in that state, and four screens were reporting FAIL into a
+# void (docs/product-completeness-audit.md). This preflight makes the
+# difference visible at the moment someone tries to run it.
+#
+# Two checks rather than one, and rather than a list of every package (which
+# would drift): `.package-lock.json` proves an install actually resolved a
+# tree, and `playwright` proves the devDependencies came with it. The second
+# is not belt-and-braces -- design/tools/lib/browser.mjs and pixel.mjs import
+# playwright, pixelmatch and pngjs at MODULE level, so every design target
+# needs them even on the `--impl flutter` path that never opens a browser.
+# An earlier draft checked only `node_modules/yaml` and would have passed a
+# prod-only install straight into the crash it exists to prevent.
+design-deps:     ## rule-2 gate preflight: are the design tools' Node deps installed?
+	@test -f node_modules/.package-lock.json || { \
+	  echo "design: Node dependencies are NOT installed -- the rule-2 gate cannot run."; \
+	  echo "design: that is NOT the same as the gate passing. It has not run at all."; \
+	  echo "design: fix with ->  npm install"; \
+	  exit 2; }
+	@test -d node_modules/playwright || { \
+	  echo "design: devDependencies are missing (no node_modules/playwright)."; \
+	  echo "design: every design target imports playwright/pixelmatch/pngjs at"; \
+	  echo "design: module level -- see design/tools/lib/browser.mjs and pixel.mjs --"; \
+	  echo "design: so a prod-only install (npm ci --omit=dev) cannot run the gate."; \
+	  echo "design: fix with ->  npm install"; \
+	  exit 2; }
+	@echo "design: Node dependencies present."
+design-extract:  design-deps ## design source → golden screenshots + DOM/token dumps
 	$(NODE) design/tools/extract.mjs $(if $(SCREEN),--screen $(SCREEN),)
-design-contract: ## golden dumps → design/screens/<id>.md contracts
+design-contract: design-deps ## golden dumps → design/screens/<id>.md contracts
 	$(NODE) design/tools/contract.mjs $(if $(SCREEN),--screen $(SCREEN),)
-design-verify:   ## THE GATE: built UI vs contract → pass/fail + delta report
+design-verify:   design-deps ## THE GATE: built UI vs contract → pass/fail + delta report
 	$(NODE) design/tools/verify.mjs $(if $(SCREEN),--screen $(SCREEN),) $(if $(IMPL),--impl $(IMPL),)
-design-selftest: ## prove the gate works (faithful impl passes, drifted impl fails)
+design-selftest: design-deps ## prove the gate works (faithful impl passes, drifted impl fails)
 	$(NODE) design/tools/selftest.mjs
 design-probe:     ## build/design-probe/<screen>.json dumps from flutter_test (E06-T01)
 	flutter test test/design/design_probe_test.dart
