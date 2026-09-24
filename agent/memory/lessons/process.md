@@ -921,18 +921,41 @@ automatically for matching tasks (see `index.yaml`).
   (`docs/product-completeness-audit.md`) originally attributed cases 1-2 to
   `L-020`; that cross-reference was wrong and has been corrected to point
   here.
-- root cause: **an existential claim and a universal claim need opposite
-  searches, and grep only ever supports the existential one.** `grep X` finding
-  a hit proves "X exists" — sound. `grep X` finding nothing proves "this
-  spelling of X is absent", which is not "no X exists" unless the search
-  enumerated every spelling an X could have. Every case above is that
+- root cause, shape (a) — **an existential claim and a universal claim need
+  opposite searches, and grep only ever supports the existential one.**
+  `grep X` finding a hit proves "X exists" — sound. `grep X` finding nothing
+  proves "this *spelling* of X is absent", which is not "no X exists" unless
+  the search enumerated every spelling an X could have. Cases 1 and 3 are that
   substitution, made silently.
 
-  The second-order cause is *where* the search ran. All three searched `lib/`
-  or the current tree. This repository keeps its own history of what was
-  measured — `epics/*/tracker.md`, `retro.md`, merge notes, `design/gaps.md` —
-  and a claim of novelty ("first", "nobody has", "never been") is a claim
-  about that record, not about the code. None of the three searched it.
+  The second-order cause for shape (a) is *where* the search ran. Cases 1 and
+  3 searched `lib/` or the current tree. This repository keeps its own history
+  of what was measured — `epics/*/tracker.md`, `retro.md`, merge notes,
+  `design/gaps.md` — and a claim of novelty ("first", "nobody has", "never
+  been") is a claim about that record, not about the code. Neither searched it.
+- root cause, shape (b) — **the right document was opened and not read to the
+  point that disqualifies the claim.** Cases 2 and 4 are *not* search failures
+  and the paragraph above does not explain them: case 4 searched
+  `design/gaps.md`, found `GAP-003`, and was still wrong, because the
+  disqualifying fact was `GAP-003`'s own `screen:` field two lines down.
+  Searching the record is necessary and is not sufficient — which is precisely
+  why this shape is listed separately instead of being folded into shape (a)'s
+  tidier story.
+
+  **An honest tension, since the test used above cuts here too.** This lesson
+  argues it is distinct from `L-process-020` because their *fixes* differ. By
+  that same test, shape (a)'s fix (items 1-3 below) and shape (b)'s (item 4)
+  are also two fixes in one lesson. They stay together only because both are
+  still thin — four cases across one session, against the six `L-020` carried
+  when it earned its own entry. If shape (b) recurs on its own, it should be
+  split out rather than left sheltering here.
+
+  **The pattern is older than this session.** `design/gaps.md` records a
+  `chat_view.dart:130` comment citing a "GAP-003 precedent" for chat's avatar
+  — the identical error to case 4 — caught in `E06-B07`'s review on
+  2026-09-12. It is deliberately **not** counted in the recurrence below,
+  because this entry declares its scope as PRs #324-#330; it is noted because
+  it means the pattern is not an artifact of one session's fatigue.
 - fix: before writing any sentence containing *no*, *none*, *never*, *nobody*,
   *first* or *only*:
   1. Name what an instance would look like **if it existed**, and search for
@@ -946,8 +969,12 @@ automatically for matching tasks (see `index.yaml`).
   3. For any claim of novelty, grep the **record** as well as the code:
      `epics/*/tracker.md`, `epics/*/retro.md`, `design/gaps.md`. If a previous
      agent measured it, they wrote it down.
-  4. Read to the end of the construct before counting it. Case 2 was four
-     items reported as three because the fourth was below the visible window.
+  4. Read to the end of the construct before counting it, and read a record
+     entry's own scope fields before citing it. Case 2 was four items reported
+     as three because the fourth sat below the visible window; case 4 cited
+     `GAP-003` without reading its `screen:` field, which scopes it to
+     `devices` alone. Items 1-3 would have prevented neither: both documents
+     were found.
 - prevention: a reviewer instruction, since this is not mechanically
   checkable: when a PR body or document asserts a negative or a novelty, the
   reviewer's job is to spend one search trying to falsify it. That is what
