@@ -17,6 +17,7 @@ PORT ?= 8787
 OUT ?= harness-status.html
 
 .PHONY: next status review validate health metrics metrics-json hooks lessons trace \
+        health-selftest \
         design-extract design-contract design-verify design-selftest design-probe \
         dashboard dashboard-snapshot help
 
@@ -35,6 +36,8 @@ dashboard-snapshot: ## one static, self-contained HTML snapshot -> $(OUT)
 	$(PY) agent/orchestrator/dashboard.py --html $(OUT)
 health:          ## decay checks — the 7 ways the harness dies quietly; STRICT=1 fails on warnings too
 	$(PY) agent/orchestrator/health.py $(if $(STRICT),--strict,)
+health-selftest: ## prove H8 still rejects every shape it has wrongly exempted
+	$(PY) agent/orchestrator/health.py --selftest
 trace:           ## requirement → task → test chain + orphans → docs/traceability.md; make trace ID=FR-AUTH-001 for a scoped walk
 	$(PY) agent/orchestrator/traceability.py $(if $(ID),--id $(ID),) $(if $(CHECK),--check,)
 
