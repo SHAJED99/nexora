@@ -124,6 +124,19 @@ flutter build appbundle --release
 Play requires an `.aab`. The APK path above stays useful for sideloading and
 for the walking-skeleton smoke check on real hardware.
 
+**Verified working on `82b803d`, 2026-09-24** — this path had never been
+exercised before, so it is recorded rather than assumed:
+
+```
+Running Gradle task 'bundleRelease'...                             67.5s
+√ Built build/app/outputs/bundle/release/app-release.aab (60.8MB)   [exit 0]
+```
+
+The bundle builds clean. Like the APK, it is signed with whatever the release
+`signingConfig` resolves to — so today, with no `key.properties`, it carries
+the debug certificate and **cannot be uploaded**. Step 4's `apksigner` check
+applies to the `.aab` too; run it before any upload attempt.
+
 ## What is NOT covered here
 
 - **Play Console setup, the store listing, the privacy policy and the
