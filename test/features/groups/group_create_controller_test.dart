@@ -5,7 +5,9 @@
 // the real enum<->text conversion, not against a hand-rolled fake that could
 // agree with a wrong implementation.
 import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:nexora/core/auth/google_auth_service.dart' show AppFailure;
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/features/groups/presentation/group_create_controller.dart';
@@ -244,6 +246,79 @@ void main() {
       c.selected,
       isEmpty,
       reason: 'a selection may not outlive the trust that justified the row',
+    );
+  });
+
+  group('EARS-GROUP-19b — the DEFAULT destination is not the 1:1 chat', () {
+    // E07-B05. Every other test in this file injects `openThread` and then
+    // asserts against the spy, so the route a real user reaches was never
+    // exercised — which is exactly how `/groups/new` shipped navigating to
+    // `/chat/<groupId>`, the destination the human closed to group ids at
+    // E07-B01's `bug_priorities` gate (2026-09-02, P1, direction (a)).
+    // This test omits the seam on purpose.
+    testWidgets(
+      'test_EARS_GROUP_19b_successful_create_does_not_open_the_1to1_chat',
+      (tester) async {
+        await relationships.upsert('aa:trusted', RelationshipState.trusted);
+
+        final c = GroupCreateController(
+          relationships: relationships,
+          createGroup: ({required name, required memberDeviceIds}) async =>
+              'g:team',
+          // `openThread` deliberately NOT injected — the default is the SUT.
+        );
+
+        await tester.pumpWidget(
+          GetMaterialApp(
+            initialRoute: '/groups/new',
+            getPages: <GetPage<dynamic>>[
+              GetPage<dynamic>(
+                name: '/groups/new',
+                page: () => const Scaffold(body: Text('create')),
+              ),
+              GetPage<dynamic>(
+                name: '/conversations',
+                page: () => const Scaffold(body: Text('conversations')),
+              ),
+              GetPage<dynamic>(
+                name: '/chat/:id',
+                page: () => const Scaffold(body: Text('chat')),
+              ),
+            ],
+          ),
+        );
+
+        await c.load();
+        c.setName('Team');
+        c.toggle('aa:trusted');
+        await c.create();
+        await tester.pumpAndSettle();
+
+        expect(
+          c.submitting.value,
+          isFalse,
+          reason: 'E07-B05 second finding: Get.offNamed/toNamed complete only '
+              'when the pushed route is POPPED. Awaiting one suspends '
+              'create() forever, so its finally never runs and the button '
+              'stays disabled for the life of the screen.',
+        );
+
+        expect(
+          Get.currentRoute,
+          isNot(startsWith('/chat/')),
+          reason: 'ChatController treats its id as a Signal PEER DEVICE id '
+              'and runs X3DH against it; a group id there gives '
+              'undecryptable bubbles in and a non-retryable send failure '
+              'out (E07-B01, measured). Creating a group must not end there.',
+        );
+        expect(
+          Get.currentRoute,
+          GroupCreateController.successRoute,
+          reason: 'the group exists, so the honest landing is the screen that '
+              'renders it — the Groups section of Conversations. The real group '
+              'thread is GAP-020, gated on OQ-E07-13.',
+        );
+      },
     );
   });
 }

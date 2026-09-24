@@ -6,6 +6,8 @@
 // and never assigned; whether a blocked peer may be added is `E07-T03`'s
 // composition of `GroupPermissions` with `RelationshipRepository`, never a
 // rule re-decided in a widget (contract §Notes).
+import 'dart:async';
+
 import 'package:get/get.dart';
 import 'package:nexora/core/auth/google_auth_service.dart' show AppFailure;
 import 'package:nexora/core/messaging/messaging_stack.dart';
@@ -93,10 +95,45 @@ class GroupCreateController extends GetxController {
 
   /// Navigation is injected so the controller is testable without a
   /// `GetMaterialApp` — the same seam `DeviceEnrollmentController` uses.
+  ///
+  /// The seam is a convenience, not the contract: `E07-B05` shipped because
+  /// every test asserted against an injected spy and nothing ever exercised
+  /// [_defaultOpenThread], which is the route a real user takes. The default
+  /// now has its own test.
   final Future<void> Function(String groupId) _openThread;
 
+  /// Where a successful create actually lands.
+  ///
+  /// **Not `/chat/<groupId>`** (`E07-B05`). `ChatController` is built
+  /// exclusively for a 1:1 conversation — it treats `conversationId` as a
+  /// Signal *peer device id* and runs an X3DH handshake against it, so a
+  /// group id there yields undecryptable bubbles in and a non-retryable send
+  /// failure out. `E07-B01` measured exactly that, and the human closed that
+  /// door at the `bug_priorities` gate on 2026-09-02 (P1, fix direction (a)).
+  /// This is the same door, reached from the other side.
+  ///
+  /// The real group thread is `GAP-020`, still gated on `OQ-E07-13`. Until it
+  /// exists there is no group destination to navigate to, so the create
+  /// screen is *replaced* by Conversations, whose `Groups` section renders
+  /// the group that was just created. `Get.offNamed`, not `Get.back()`:
+  /// `/groups/new` is reachable only by direct navigation today
+  /// (`routes.dart` `groupCreate`), so there is not always a page beneath it.
+  ///
+  /// `design/screens/group-create.md` still says "Leads to `/chat/:id`" — it
+  /// was written 2026-08-31, two days before the decision that closed that
+  /// route to group ids. Correcting a measured contract is not an agent's
+  /// call (rule 2); the conflict is carried to the human with `GAP-020`.
+  static const successRoute = '/conversations';
+
+  /// **Not awaited** (`E07-B05`, second finding). `Get.offNamed` returns a
+  /// future that completes when the route it pushes is *popped*, not when the
+  /// navigation happens. Awaiting it suspends [create] indefinitely, so its
+  /// `finally` never runs and `submitting` never returns to false — the
+  /// create button stays disabled for the life of the screen. The shipped
+  /// `Get.toNamed` had the same shape; no test noticed, because every test
+  /// injected a seam that completed immediately.
   static Future<void> _defaultOpenThread(String groupId) async {
-    await Get.toNamed<dynamic>('/chat/$groupId');
+    unawaited(Get.offNamed<dynamic>(successRoute));
   }
 
   /// Every trusted relationship, as selectable rows (GC8-GC14).
