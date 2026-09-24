@@ -8,11 +8,20 @@ traces_to: [FR-FB-001, FR-FB-002, FR-TRUST-005, FR-TRUST-007, FR-SEC-003, NFR-PR
 
 # ADR-0008 — Firebase cross-account visibility boundary
 
-> DECISION OWNERSHIP: this document presents options, trade-offs and an
-> advisory recommendation. The **Decision** line stays `⏳ AWAITING HUMAN`
-> until the human picks. Nothing in E11 that requires a cross-account read
-> is sharded until then — see `epics/E11-firebase-sync/epic.md`
-> §Open Questions `OQ-E11-1`.
+> DECISION OWNERSHIP (as proposed, 2026-09-04): this document presented
+> options, trade-offs and an advisory recommendation. The **Decision** line
+> was to stay `⏳ AWAITING HUMAN` until the human picked, with nothing
+> in E11 that requires a cross-account read sharded until then — see
+> `epics/E11-firebase-sync/epic.md` §Open Questions `OQ-E11-1`.
+>
+> **That gate has since been cleared.** This ADR is `status: accepted`; the
+> decision is recorded in §Decision below (option 2, public device
+> directory), `OQ-E11-1` now reads 🟢 answered, and `E11-T06` built it. The
+> paragraph above is kept as the record of how the decision was framed, not
+> as a statement of current state — nothing in this ADR is awaiting a
+> human. (Corrected 2026-09-24: the present-tense wording made a plain
+> `grep "AWAITING HUMAN" agent/memory/decisions/*.md` report this ADR as an
+> open decision, which it is not.)
 
 ## Context
 
