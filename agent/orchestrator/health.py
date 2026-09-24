@@ -380,6 +380,40 @@ _CHUNK_MARKERS = re.compile(r"chunk|_pageSize|pageSize|batchSize|take\(", re.I)
 _ISIN_CALL = re.compile(r"\.isIn\(")
 _RAW_IN = re.compile(r"\bIN\s*\(", re.I)
 
+# A Dart `const` collection is fixed at compile time, so its length cannot grow
+# with how much history a device has accumulated — the failure L-backend-004
+# describes is unreachable through one. Two shapes are recognised as bounded:
+#
+#     .isIn(const ['a', 'b'])                 the literal, inline
+#     const xs = [...];  .isIn(xs.map(...))   a const list declared in the file
+#
+# This is a soundness-preserving exemption, not a loosened threshold. It can
+# only quiet a call site whose argument is provably compile-time constant, and
+# a list built by enumeration is never `const`, so the shape the lesson is
+# actually about still warns. Both shapes were live false positives on
+# 2026-09-24 (relay_engine.dart:488, receive_message_use_case.dart:241), and a
+# check whose only two findings are known-benign trains its reader to skim it.
+_ISIN_CONST_LITERAL = re.compile(r"\.isIn\(\s*const\s*[\[{]")
+_ISIN_IDENT = re.compile(r"\.isIn\(\s*([A-Za-z_][A-Za-z0-9_]*)\b")
+
+
+def _is_const_only(name, lines):
+    """True when `name` is declared `const` in this file and never non-const.
+
+    Matching a `const <name> =` anywhere in the file is not enough on its own:
+    one function's `const states = [...]` would then exempt a *different*
+    function's `final states = await enumerateEverything()`, which is precisely
+    the unbounded shape L-backend-004 is about. Requiring that no runtime
+    binding of the name exists anywhere in the file is coarse in the safe
+    direction -- it declines to exempt when the name is reused, rather than
+    exempting on the strength of a same-named constant somewhere else.
+    """
+    text = "\n".join(lines)
+    if not re.search(r"\bconst\s+(?:\w+\s+)?" + re.escape(name) + r"\s*=", text):
+        return False
+    runtime = re.search(r"\b(?:final|var|late)\s+(?:\w+\s+)?" + re.escape(name) + r"\s*=", text)
+    return runtime is None
+
 
 def check_unbounded_id_lists():
     r = Result("H8", "no unbounded id list feeds isIn(...)/IN (...) (L-backend-004)")
@@ -404,9 +438,15 @@ def check_unbounded_id_lists():
             if not hit:
                 continue
             window = "\n".join(lines[max(0, i - 6):i + 3])
-            if not _CHUNK_MARKERS.search(window):
-                r.flag("warn", f"{rel}:{i + 1} — {line.strip()[:80]} "
-                                f"(no chunking marker within 6 lines)")
+            if _CHUNK_MARKERS.search(window):
+                continue
+            if _ISIN_CONST_LITERAL.search(line):
+                continue  # inline compile-time constant — bounded by construction
+            ident = _ISIN_IDENT.search(line)
+            if ident and _is_const_only(ident.group(1), lines):
+                continue  # names a const list declared in this file — same reasoning
+            r.flag("warn", f"{rel}:{i + 1} — {line.strip()[:80]} "
+                           f"(no chunking marker within 6 lines)")
     return r
 
 
