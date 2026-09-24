@@ -862,6 +862,12 @@ automatically for matching tasks (see `index.yaml`).
   turns the gate against a correct document, because a toolless reviewer
   cannot re-derive anything and the package IS its reality.
 
+  Evidence limit, stated so the entry audits itself: five of the six
+  attributions are itemised in a merged commit body. Case 5's is not —
+  `#315` records "round 2 REQUEST CHANGES (1x S3)" without naming which
+  finding that S3 was, so the link rests on the session record. It is the
+  one claim here that a future reader cannot re-derive from the repo alone.
+
   Two habits that did work and should stay:
   1. Build the evidence block by RUNNING the commands in the same tool call
      that writes the prose (`{ ... } > file`), and paste the output, rather
