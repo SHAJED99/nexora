@@ -5,7 +5,7 @@
 > `files:` lists and EARS-named tests. If this report and the repo disagree,
 > the repo wins: regenerate, never patch.
 
-Generated from commit `8c9ec40` (2026-09-23) by `agent/orchestrator/traceability.py`.
+Generated from commit `51d5460` (2026-09-24) by `agent/orchestrator/traceability.py`.
 
 ## Coverage
 
@@ -21,7 +21,7 @@ Generated from commit `8c9ec40` (2026-09-23) by `agent/orchestrator/traceability
 | Artifact | Count |
 |---|---:|
 | Epics | 16 |
-| Tasks | 232 |
+| Tasks | 233 |
 | EARS criteria declared | 285 |
 | EARS ids with >=1 test | 261 |
 | Distinct EARS ids found in tests | 262 |
@@ -172,7 +172,7 @@ Both directions. Forward gaps hide missing work; backward gaps hide
 | superseded ADR still cited | 0 | task honouring a reversed decision | `skills/change-impact` | **yes** |
 | design contract no task builds | 10 | rule 2 breach — screen unbuilt or built off-contract | `skills/design-fidelity` | no |
 | `done` task whose `depends_on` is not done | 0 | state-ordering violation; `make validate` does NOT catch this | `skills/review` | **yes** |
-| `done` task carrying a 🟡 open question | 39 | blocked in fact but not in status | `skills/question-resolution` | no |
+| `done` task carrying a 🟡 open question | 40 | blocked in fact but not in status | `skills/question-resolution` | no |
 
 ### requirement with no epic — 2
 
@@ -293,10 +293,11 @@ Route to `skills/design-fidelity`.
 - `design/screens/sign-out-confirm.md`
 - `design/screens/welcome.md`
 
-### `done` task carrying a 🟡 open question — 39
+### `done` task carrying a 🟡 open question — 40
 
 Route to `skills/question-resolution`.
 
+- `E00-B01`
 - `E02-T02`
 - `E02-T03`
 - `E04-B37`
