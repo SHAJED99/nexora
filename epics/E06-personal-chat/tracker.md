@@ -18,6 +18,8 @@
 - [x] E06-T11 · Chat screen (text-only) — **the wedge** · **done** · frontend · builder-ui · must/P1 · M · design: `chat` · merged `812cb59` · gate 76.7% (33/43, known causes) · real end-to-end send/receive/encrypt/decrypt loop
 - [x] E06-T12 · Dashboard screen · done · frontend · builder-ui · should/P2 · M · design: `dashboard` · merged `e93281e` · gate 28.6% (18/63, known causes) · **all 13 tasks complete**
 - [x] E06-T13 · Design gap pass for voice/PTT/attachments/location · done · docs · planner · could/P3 · S · merged `f49cc2d` · GAP-014..017 written, all 🟡 awaiting 🧍 human, PTT deliberately left as a question not a contract
+- [x] E06-T15 - Localization resources + logical RTL geometry (FR-UI-005) - review-requested - cross-cutting - builder-ui - should/P3 - M - `settings` 100% (30/30), `sign-out-confirm` 100% (13/13), 9 new tests
+- [ ] E06-T16 - Finish FR-UI-005: migrate the remaining eight settings views - todo - cross-cutting - builder-ui - should/P3 - M - depends on T15
 
 ## Dependency graph
 ```mermaid
