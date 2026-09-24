@@ -882,3 +882,61 @@ automatically for matching tasks (see `index.yaml`).
   session). Counted per instance, following `L-process-011`, which recorded
   four instances from a single sweep as `recurrence: 4`.
 - status: lesson
+
+## L-process-021 — a negative claim is only as good as the search designed to falsify it. Three times in one session a command ran, its output was real, and the sentence built on it asserted something the command had not measured. This is `L-process-020`'s mirror image: there the evidence was recalled; here it was freshly produced and genuinely true, and still did not support the proposition
+- date: 2026-09-24 | source: PRs #324-#329, one session — `#324`/`#327`
+  (case 1), `#327` (case 2, caught pre-commit), `#327`/`#329` (case 3)
+- situation: three confident negatives, each false, each produced by a real
+  command whose output was accurate:
+
+  | # | Claim written | Command actually run | What that command could not see |
+  |---|---|---|---|
+  | 1 | "There is no navigation chrome of any kind" | `grep -rln "NavigationBar\|NavigationRail\|TabBar\|IndexedStack" lib` → no matches | a bottom nav hand-built from `Container`+`Row`+`_NavItem`, present in **four** views, and drawn by `dashboard.md` elements 37/40/43/46 |
+  | 2 | "three nav items" | read `dashboard_view.dart` as far as the third `Expanded` | the fourth `Expanded` (Settings), 8 lines further down |
+  | 3 | "the first full design-gate baseline"; the screens had been "reporting FAIL into a void" | ran `design-verify` across all 17 probe-backed screens | `epics/E06-personal-chat/tracker.md`, which records the same 16-screen run on **2026-09-12**, twelve days earlier, with three of the four numbers character-identical and all 32 independently reproduced by that reviewer |
+
+  Case 1 names the trap exactly. A grep for three class names establishes
+  that those three class names are absent from `lib/`. It says nothing
+  whatever about whether the application has navigation — and the gap between
+  those two propositions is invisible at the moment of writing, because the
+  command *did* run and its output *was* true.
+
+  Case 3 is the expensive one, because the falsifying evidence was in the
+  repository, written by a previous agent, in the obvious place: the epic's
+  own tracker. Nothing was hidden. The search was simply never aimed there.
+- root cause: **an existential claim and a universal claim need opposite
+  searches, and grep only ever supports the existential one.** `grep X` finding
+  a hit proves "X exists" — sound. `grep X` finding nothing proves "this
+  spelling of X is absent", which is not "no X exists" unless the search
+  enumerated every spelling an X could have. Every case above is that
+  substitution, made silently.
+
+  The second-order cause is *where* the search ran. All three searched `lib/`
+  or the current tree. This repository keeps its own history of what was
+  measured — `epics/*/tracker.md`, `retro.md`, merge notes, `design/gaps.md` —
+  and a claim of novelty ("first", "nobody has", "never been") is a claim
+  about that record, not about the code. None of the three searched it.
+- fix: before writing any sentence containing *no*, *none*, *never*, *nobody*,
+  *first* or *only*:
+  1. Name what an instance would look like **if it existed**, and search for
+     that, not for the absence. For "no navigation": search for what the screen
+     renders at the bottom, or read the design contract's element table — not
+     for framework class names.
+  2. Enumerate the spellings. A hand-rolled equivalent of a framework widget
+     is the default outcome in a codebase with a measured design, not an edge
+     case — three of this project's four "missing" UI findings were hand-built
+     equivalents.
+  3. For any claim of novelty, grep the **record** as well as the code:
+     `epics/*/tracker.md`, `epics/*/retro.md`, `design/gaps.md`. If a previous
+     agent measured it, they wrote it down.
+  4. Read to the end of the construct before counting it. Case 2 was four
+     items reported as three because the fourth was below the visible window.
+- prevention: a reviewer instruction, since this is not mechanically
+  checkable: when a PR body or document asserts a negative or a novelty, the
+  reviewer's job is to spend one search trying to falsify it. That is what
+  caught cases 1 and 3 here — both were found by a reviewer checking a claim
+  in a *different* PR, not by the document re-reading itself.
+- recurrence: 3 ("no navigation chrome of any kind", "three nav items", "the
+  first full design-gate baseline"). Counted per instance, following
+  `L-process-011` and `L-process-020`.
+- status: lesson

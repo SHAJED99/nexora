@@ -478,3 +478,81 @@ decision from anyone.
 |---|---|---|
 | P9 | Triage the four failing screens' deltas against `design/gaps.md`, and **write the gap entries that do not yet exist** (dashboard/conversations mock-data substitution is covered by none) | **nothing — buildable now** |
 | P10 | Make the design gate visible: wire `design-verify` into CI, or add a preflight that fails loudly when `node_modules` is empty | **nothing — buildable now** |
+
+---
+
+# Correction 2 — 2026-09-24. "The first full design-gate baseline" was not.
+
+> Corrects the **Correction** section above (PR #327), which is itself a
+> correction. Appended rather than edited, for the same reason as before: #327
+> is merged and this file is read to make decisions.
+
+## The claim
+
+#327 introduced its gate run as *"the first full design-gate baseline"*, said
+the four failing screens had been *"reporting FAIL into a void"*, and concluded
+*"nobody could have seen any of it."*
+
+## What the repository actually says
+
+`epics/E06-personal-chat/tracker.md`, dated **2026-09-12** — twelve days
+earlier:
+
+```
+…re-run across all 16 screens the dumper serves: every screen below 100%
+improved (dashboard 19%->34.9%, conversations 21.1%->38.6%, chat 79.1%->86%,
+devices 65.6%->78.7%), every screen already at 100% stayed at 100% -- **no
+screen regressed**, all 32 numbers independently reproduced by the reviewer
+```
+
+A full 16-screen run. **Three of the four numbers I reported as a new baseline
+are character-for-character the ones already on record** — dashboard 34.9%,
+conversations 38.6%, chat 86%. The fourth has moved since (devices 78.7% →
+82%). All 32 figures had been independently reproduced by a reviewer at the
+time.
+
+So: not the first, not a void, and seen by at least two agents who wrote the
+numbers down.
+
+## What survives
+
+Narrower, and still worth having:
+
+- **There is no aggregated, current view.** The numbers lived in one epic's
+  tracker as part of a bug's merge note. Nothing surfaces them as a standing
+  fact about the project, which is why an audit written twelve days later did
+  not find them before asserting novelty.
+- **The gate could not be re-run** (empty `node_modules`), which PR #328 fixed.
+- **It is still not in CI**, for the reason recorded in `ci.yml`.
+- The earlier claim that **no missing section or heading** exists on those
+  screens is unaffected — that was re-derived from the raw probe JSON.
+
+## The pattern, which is the actual finding
+
+This is the **third** time in one session that a confident negative turned out
+to be false, and all three have the same shape: *a command was run, its output
+was real, and the sentence built on it asserted something the command had not
+measured.*
+
+| # | The claim | The command actually run | What it could not see |
+|---|---|---|---|
+| 1 | "no navigation chrome of any kind" | `grep` for `NavigationBar\|NavigationRail\|TabBar` in `lib/` | a nav hand-built from `Container`+`Row`, in four views |
+| 2 | "three nav items" | read `dashboard_view.dart` as far as the third `Expanded` | the fourth `Expanded` |
+| 3 | "the first full design-gate baseline" | ran the gate across 17 screens | `epics/E06-personal-chat/tracker.md`, where the same run was recorded 12 days earlier |
+
+None of these was a recalled number — that failure is already
+`L-process-020`, and this is its mirror image. Here the evidence was freshly
+produced and genuinely true; the *proposition* was simply not the one the
+evidence supported. A grep for three class names establishes that those three
+class names are absent. It says nothing whatever about whether the app has
+navigation.
+
+The generalisation, recorded as `L-process-021`: **a negative claim is only as
+good as the search designed to falsify it.** "There is no X" requires looking
+where an X would be *if it existed*, which for this repository means the
+trackers, the retros and the merge notes — not only the code.
+
+This correction was found by a reviewer checking a claim in an unrelated PR
+(#329), not by the audit re-reading itself. That is the second time the review
+gate has caught this specific pattern, and the reason the lesson is written at
+`recurrence: 3` rather than as a one-off.
