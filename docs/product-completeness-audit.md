@@ -325,3 +325,131 @@ review of that claim.
 D1 also grew: approving the `conversations.md` header affordance is now what
 makes an *already-built and merged* screen reachable, rather than what unblocks
 a future one.
+
+---
+
+# Correction — 2026-09-24. The `FR-UI-003` finding was wrong.
+
+> This corrects a **factual error in the audit above**, which is a document
+> written to be acted on. It is placed here rather than edited into §3,
+> because the original claim was already merged and a decision (**D2**) was
+> raised on top of it.
+
+## What I claimed, and why it is false
+
+§3 says, of `FR-UI-003`:
+
+> *"There is no navigation chrome of any kind. `dashboard_view.dart` navigates
+> by `Get.toNamed` from tapped rows."*
+
+Both halves are wrong, and the second is wrong about a file I had open.
+
+```
+$ grep -rn "_BottomNav" lib --include=*.dart
+lib/features/conversations/presentation/conversations_view.dart:138,556
+lib/features/dashboard/presentation/dashboard_view.dart:208,803
+lib/features/devices/presentation/devices_view.dart:74,564
+lib/features/settings/presentation/settings_view.dart:51
+```
+
+**Four views render a bottom navigation bar.** `dashboard_view.dart:803`
+builds it from a `Container` + `Row` + **four** `_NavItem`s — Dashboard,
+Conversations, Devices, Settings, with the active one flagged — and every
+inactive one is wired: `Get.toNamed('/conversations')`,
+`Get.toNamed('/devices')`, `Get.toNamed('/settings')`.
+
+And the design does draw it. `design/screens/dashboard.md` elements **37, 40,
+43 and 46** are the four nav labels, with measured sizes and colours:
+
+```
+| 37 | `generic` | Dashboard     | 69×16  | 12px · w500 · rgb(218, 215, 255) |
+| 40 | `generic` | Conversations | 100×16 | 12px · w500 · rgb(70, 69, 85)    |
+| 43 | `generic` | Devices       | 54×16  | 12px · w500 · rgb(70, 69, 85)    |
+```
+
+(The first draft of this correction said *three* nav items and named only
+elements 37/40/43 — I had read `dashboard_view.dart` only as far as the third
+`Expanded`, and stopped. Caught by re-reading the element table before
+committing. A correction written about unearned claims is the worst possible
+place to make one, which is why it is recorded here instead of quietly fixed.)
+
+## How the error was made
+
+Two greps, neither of which measured the thing being claimed.
+
+1. I searched `lib/` for `NavigationBar|NavigationRail|NavigationDrawer|TabBar|IndexedStack`
+   — Flutter's *class names*. The nav here is hand-built from primitives, so
+   zero hits. I reported zero hits as "no navigation chrome of any kind",
+   which is a claim about the rendered UI, not about which classes appear.
+2. I searched `dashboard.md` for the *word* "navigation" instead of reading
+   its element table. The table names all three nav items; the word does not
+   appear near them.
+
+This is the same failure already recorded as
+`feedback_review_package_raw_output_only` and `L-process-020`: a command was
+run, its output was real, and it was presented as evidence for a proposition
+it does not address. The grep was honest. The sentence built on it was not
+earned.
+
+## What survives, and what D2 actually is now
+
+`FR-UI-003` reads: *"Navigation shall adapt by width class — NavigationBar
+(compact), NavigationRail (medium), NavigationDrawer (expanded)."* Taking it
+in three parts:
+
+| Width class | State |
+|---|---|
+| **compact** — NavigationBar | **Built** (hand-rolled, not Material's `NavigationBar`) and **designed** (dashboard 37/40/43) |
+| **medium** — NavigationRail | Not built, and no contract measures it |
+| **expanded** — NavigationDrawer | Not built, and no contract measures it |
+
+So the requirement is **partially implemented**, not unimplemented. All 26
+contracts still declare `viewports: [390x844]`, so the two wider classes still
+have no design source — which is the real content of **D2**, and it stands.
+
+**D2, restated honestly:** two of three width classes are unbuilt and
+undesigned. Descope those two (as `FR-TRUST-007` was descoped via `IMP-002`,
+id retained), or commission medium/expanded contracts. A third option the
+original framing hid: decide whether a hand-built bottom bar *satisfies*
+"NavigationBar", or whether the requirement means the Material component
+specifically. That is a product call and I am not making it.
+
+## A second finding, from running the gate across every screen
+
+Having made `make design-verify` runnable, I ran it for all 17 screens that
+have a Flutter probe dump. (`welcome` and `login` are registered but have no
+dump — they are design-sourced and verify through the browser path, which
+needs a running app.)
+
+| Result | Screens |
+|---|---|
+| ✅ PASS 100% | `group-create`, `settings`, `settings-about`, `settings-account`, `settings-battery`, `settings-network`, `settings-notifications`, `settings-privacy`, `settings-security-center`, `settings-storage`, `sign-out-confirm`, `device-enrollment`, `device-enrollment-approval` |
+| ❌ FAIL | `chat` 86% (37/43) · `devices` 82% (50/61) · `conversations` 38.6% (22/57) · `dashboard` 34.9% (22/63) |
+
+**The split is not random: every failing screen is one whose golden came from
+the real design export, and every passing screen is `source: derived`, whose
+golden is its own build dump.** That is the tautology finding from the
+addendum, seen across the whole set — the derived screens' 100% is
+self-referential, and the four real comparisons are the only independent
+measurements in the table.
+
+**These percentages are not completeness scores, and must not be read as
+"the dashboard is 35% built."** Much of each delta is *approved* deviation:
+the probe seeds real device ids and undecryptable previews where the design
+draws `Family` / `See you at 7pm!` (`GAP-003`, and the dashboard probe's own
+comment calls this "a real, expected finding"), the Local Storage card has no
+data source until E08 (`GAP-011`), and the degraded network variants are
+`GAP-013`. `design-fidelity` §6 requires a reviewer to trace each delta to a
+gaps entry; the gate does not self-clear, and it reports raw deltas by design.
+
+**What is genuinely actionable here is not the number — it is that nobody
+could have seen it.** `make design-verify` is absent from CI and could not run
+locally (empty `node_modules`), so four screens have been reporting FAIL into
+a void. Whether each delta is an approved gap or real drift is currently
+unknown for all four, and answering it is a real piece of work that needs no
+decision from anyone.
+
+| # | Work | Blocked by |
+|---|---|---|
+| P9 | Triage the four failing screens' deltas against `design/gaps.md`; split approved deviation from real drift | **nothing — buildable now** |
+| P10 | Make the design gate visible: wire `design-verify` into CI, or add a preflight that fails loudly when `node_modules` is empty | **nothing — buildable now** |
