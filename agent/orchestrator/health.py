@@ -400,21 +400,33 @@ _RAW_IN = re.compile(r"\bIN\s*\(", re.I)
 # So the input space is closed by construction. An exemption may not read a
 # single character outside the flagged line or outside the table below:
 #
-#   1. `.isIn(const [...])` / `.isIn(const {...})` -- syntactically constant ON
-#      the flagged line. Provable by looking at that line and nothing else.
-#   2. _H8_ALLOWLIST -- an exact recorded line, with a written reason. It can
-#      silence nothing but the line it records; edit the line and the exemption
-#      lapses and H8 warns again, which is the correct fail direction.
+#   1. `.isIn(const [...])` / `.isIn(const {...})` where the literal is the
+#      WHOLE argument, on the flagged line. Matching only the argument's head
+#      is not enough and was a live hole: `.isIn(const ['a'].followedBy(ids))`
+#      begins with a const literal and is unbounded. That is the planner's own
+#      shape -- head read, tail supplies the cardinality -- with a literal head
+#      instead of an identifier head. The closing `)` is what makes it a proof.
+#   2. _H8_ALLOWLIST -- an exact recorded file, line number and line text, with
+#      a written reason. Edit the line and the exemption lapses and H8 warns
+#      again, which is the correct fail direction.
 #
 # Anything else warns. That is a decision procedure a reviewer finishes in ten
 # seconds, not a safety proof over an open world.
-_ISIN_CONST = re.compile(r"\.isIn\(\s*const\s*[\[{]")
+#
+# Note what this does NOT claim: H8's pre-existing `_CHUNK_MARKERS` heuristic
+# still reads a ~6-line window, so H8 as a whole does look outside the flagged
+# line. The closed-input-space rule governs these two hatches, which are the
+# ones added here.
+_ISIN_CONST = re.compile(
+    r"\.isIn\(\s*const\s*(?:\[[^()\[\]{}]*\]|\{[^()\[\]{}]*\})\s*\)")
 
-# path -> ((exact line, why), ...). Whitespace-normalised before comparison;
-# nothing else about the line may differ.
+# path -> ((1-based line number, exact line, why), ...). The line number is
+# part of the key: without it, any other line in the same file with the same
+# normalised text would be silenced too.
 _H8_ALLOWLIST = {
     "lib/core/routing_engine/relay_engine.dart": (
-        ("t.deliveryState.isIn(terminalStates.map((s) => s.name)) &",
+        (488,
+         "t.deliveryState.isIn(terminalStates.map((s) => s.name)) &",
          "terminalStates is `const [forwarding, delivered, expired]` declared at "
          "relay_engine.dart:481-485, and .map is length-preserving, so the "
          "argument is 3 elements at compile time. E04-authored and E04 is "
@@ -454,9 +466,9 @@ def check_unbounded_id_lists():
             window = "\n".join(lines[max(0, i - 6):i + 3])
             if _CHUNK_MARKERS.search(window):
                 continue
-            if any(_normalise(line) == _normalise(recorded)
-                   for recorded, _why in _H8_ALLOWLIST.get(rel, ())):
-                continue  # exactly this line, with a recorded reason
+            if any(lineno == i + 1 and _normalise(line) == _normalise(recorded)
+                   for lineno, recorded, _why in _H8_ALLOWLIST.get(rel, ())):
+                continue  # exactly this file, line and text, with a recorded reason
 
             # Every isIn on this line must itself be a const literal, or none
             # of it counts. Both guards below came from review rounds and both

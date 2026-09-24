@@ -181,14 +181,22 @@ What the freeze currently holds, all read-only:
 >
 > Because both are false positives, the fix was to **H8 itself**, not to either
 > E04 file: no E04 implementation was touched and the freeze was not crossed.
-> H8 now exempts a call site only when the exemption can be checked without
-> reading a character outside the flagged line: either the argument is
-> syntactically `const [...]` on that line, or the exact line is recorded in an
-> allowlist with a written reason. `receive_message_use_case.dart:241` clears
-> on the first rule; `relay_engine.dart:488` is the allowlist's single entry,
-> because the `// h8:bounded <why>` marker that belongs at the call site cannot
-> be added while E04 is frozen — move it there when the freeze lifts. Editing
-> an allowlisted line lapses its exemption and H8 warns again.
+> H8's two new exemptions are checkable without reading a character outside
+> the flagged line. Either the argument — **whole**, not just its head — is
+> syntactically `const [...]` on that line, or the file, line number and line
+> text are recorded in an allowlist with a written reason. Matching only the
+> head is not enough, and was a live hole caught in review:
+> `isIn(const ['a'].followedBy(ids))` starts with a literal and is unbounded.
+>
+> `receive_message_use_case.dart:241` clears on the first rule.
+> `relay_engine.dart:488` is the allowlist's single entry, because the
+> `// h8:bounded <why>` marker that belongs at the call site cannot be added
+> while E04 is frozen — move it there when the freeze lifts. Editing an
+> allowlisted line lapses its exemption and H8 warns again.
+>
+> This says nothing about H8 as a whole: its pre-existing chunking-marker
+> heuristic still reads a ~6-line window. The closed-input-space rule governs
+> the two hatches added here.
 >
 > It was untracked when this register was written, and is now closed by that
 > harness change. Kept here rather than deleted because the reasoning is the
