@@ -1951,6 +1951,40 @@ and that is the strongest single argument for this disposition.**
 - **approved by:** _(pending — element scope)_
 - **built:** not built — this entry is the proposal only.
 
+## GAP-045 — a blocked member's message in a group thread has no words
+- **status:** 🟡 proposed
+- **screen:** chat-group (`design/screens/chat-group.md`, state 3) — element
+  `G9`
+- **spec:** FR-COMM-002, FR-TRUST-004
+- **design shows:** nothing. The design source draws a 1:1 thread only, and
+  neither GAP-020 nor the human's 2026-09-25 `OQ-E07-13` answer supplies copy.
+  The answer fixes the **behaviour** — *"a blocked member's messages should
+  remain represented as placeholders rather than being silently dropped or
+  rendered as normal readable messages"* — and behaviour is not words.
+- **why the existing placeholder cannot be reused:** `chat_view.dart:355`
+  already renders `(unable to decrypt this message)` for a null plaintext.
+  For a blocked member that sentence is **false**: a blocked member is still a
+  group member holding a valid sender key, so the message usually decrypts
+  without difficulty. It is withheld by **policy**, not by failure. Reusing
+  that string would make the app misreport its own reason, which is worse than
+  proposing a new one.
+- **derived from:** treatment only — the bubble box (`chat.md` 12/15/20) and
+  the secondary-text colour `rgb(70, 69, 85)` (`chat.md` 18). No new token.
+- **proposal:** `Message from a blocked contact`
+- **alternatives named, not chosen:**
+  - (b) `Message hidden — contact is blocked` — says *why* it is hidden, at
+    the cost of being longer than any other bubble string in the app.
+  - (c) `Blocked` — matches the one-word `Trusted Node` / status-chip register
+    `devices.md` uses, but reads as a label on the *message* rather than on
+    its sender.
+- **approved by:**
+- **built:** `E07-T18` builds it **as proposed** rather than blocking the
+  whole group journey on one string — the human's 2026-09-25 instruction was
+  to *"proceed to build the complete group-thread journey"*. Swapping the
+  string is a one-line change in one file if the human picks (b) or (c).
+  This entry is 🟡 **not approved**, and the `approved by:` line above is
+  deliberately bare (`L-process-002`).
+
 ## The usual suspects
 
 Checklist for the gap pass. In rough order of how often each is missed:
