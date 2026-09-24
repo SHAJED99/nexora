@@ -2034,8 +2034,7 @@ Checklist for the gap pass. In rough order of how often each is missed:
   audit.md` exists to document.
 
 ## GAP-047 — the send affordance has no glyph, on any screen
-- **status:** 🟡 proposed — **not built.** `E07-T18` ships the group
-  composer with no send button at all rather than invent one.
+- **status:** 🟢 **approved — option (c), human, 2026-09-25.**
 - **screen:** chat-group (`design/screens/chat-group.md`, G7) — and, in
   passing, `chat.md` itself
 - **spec:** FR-COMM-001, FR-COMM-002
@@ -2057,11 +2056,18 @@ Checklist for the gap pass. In rough order of how often each is missed:
   - (a) `send` — the Material Symbols paper-plane, the near-universal
     convention. A new glyph identity in this app.
   - (b) `arrow_upward` — also new, but a weaker convention.
-  - (c) keep the composer button-less on every screen and send only from
-    the keyboard, and change `chat.md`'s `mic` to something honest when
-    GAP-014's voice work lands. Invents nothing; leaves the round button on
-    the 1:1 screen still reading as "send" until then.
-- **approved by:** _(pending — which of (a)/(b)/(c))_
-- **built:** _(no. `E07-T18`'s composer submits from the keyboard's send
-  key, which is exactly what the shipped 1:1 composer already does, so no
-  new behaviour and no new glyph enters the app.)_
+  - **(c) ✅ CHOSEN** — keep the composer button-less and send only from the
+    keyboard. Invents nothing; leaves the round button on the 1:1 screen
+    still reading as "send" until GAP-014's voice work makes the `mic`
+    honest.
+- **approved by:** ✅ human, 2026-09-25 — option (c), with the binding
+  instruction: *"Keep the group composer consistent with the already-shipped
+  1:1 behavior. Do not introduce `send` or `arrow_upward`, and do not create
+  a new glyph contract."*
+- **built:** `E07-T18`, as approved — the group composer has no send button
+  and submits from the keyboard's send key. **No new glyph contract was
+  created**, and `chat.md` is untouched.
+- **note:** the 1:1 screen's `mic`-as-send confusion is NOT fixed by this
+  decision and is not a defect introduced by any build — it is `chat.md`'s
+  own measured element 31, followed faithfully. It becomes honest when
+  GAP-014 (voice messages, approved 2026-08-30) is built.

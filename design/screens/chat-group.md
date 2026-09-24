@@ -60,13 +60,14 @@ said so; that prose was wrong about its own source, and the human reconciled
 it to the measured `12px` `w500`. Both readings and the reconciliation are
 recorded under state 4 — `GAP-020` itself is left byte-unchanged.
 
-**One element is specified but not built:** G7's send button. Its geometry,
-fill and glyph size are all measured; only the glyph **identity** is missing,
-and `send` appears in no contract and nowhere in this app. That is the same
-shape `GAP-014` handled for record-stop/play/pause, so it is carried as
-**`GAP-047`** rather than invented. Until it is answered the composer submits
-from the keyboard's own send key — which is exactly what the shipped 1:1
-composer does, so no new behaviour enters the app either.
+**One element is specified and deliberately NOT built:** G7's send button.
+Its geometry and fill are measured, but its glyph **identity** was not —
+`send` appears in no contract and nowhere in this app, the same shape
+`GAP-014` handled for record-stop/play/pause. Carried as **`GAP-047`** and
+resolved by the human on 2026-09-25 as **option (c): no send button on any
+screen.** The composer submits from the keyboard's own send key, which is
+exactly what the shipped 1:1 composer does. No new glyph, no new glyph
+contract, and `chat.md` untouched.
 
 **One derivation remains, and it is placement, not value:** G8's `dns` glyph
 has a measured glyph, size and colour (`conversations.md` element 22) but is
@@ -93,7 +94,7 @@ rather than silently dropped (rule 2):
 | G4 | `generic` | `lock` 14×14 · `14px` `rgb(53, 37, 205)` | chat 5 |
 | G5 | `generic` | `End-to-end encrypted` `12px` · `w500` · `rgb(53, 37, 205)` | chat 6 — verbatim, unchanged |
 | G6 | `textbox:multiline` | placeholder: `Secure message...` | chat 28 — verbatim |
-| G7 | `button` | — 48×48 · bg `rgb(53, 37, 205)` · `r9999px` · **glyph undecided, `GAP-047` — not built** | chat 30 (geometry and fill); chat 31 gives the glyph *size and colour* but its identity there is `mic` |
+| ~~G7~~ | ~~`button`~~ | **NOT BUILT — `GAP-047` resolved as option (c), human, 2026-09-25: no send button on any screen; the composer submits from the keyboard's own send key, exactly as the shipped 1:1 composer does** | — |
 | G8 | `generic` | `dns` 24×24 · `24px` `rgb(0, 70, 102)` | conversations 22 |
 
 **Two parent elements are deliberately not carried over:**
