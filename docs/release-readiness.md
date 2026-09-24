@@ -14,6 +14,7 @@
 |---|---|---|
 | Target epics merged to `development` | ⚠️ partial | 14 of 16 epics fully closed. E01 and E04 each carry one open `P2 must` bug. |
 | P1/P2 bugs at **zero** | ❌ **no** | Two open: `E01-B01` (P2, Rule-3 blocked) and `E04-B39` (P2, E04 freeze). |
+| *(all open bugs, for completeness)* | — | Three, not two: the two P2s above plus `E04-B38` (P3 / should / S3, E04 freeze). `E04-B38` does not affect this gate, which counts P1/P2 only — listed so the snapshot is a complete statement of open work rather than only of blocking work. |
 | Each epic has its sweep + retro | ✅ yes | All 16 retros exist (`make health` H3 passes). |
 | Each epic has an `epic-<n>-done` tag | ❌ **no** | 13 of 16. Missing: `epic-00-done`, `epic-01-done`, `epic-04-done`. |
 | `make trace` blocking orphan classes **empty** | ❌ **no** | 14 blocking orphans. All decision- or freeze-bound — see `CHANGELOG.md` §Known gaps. |

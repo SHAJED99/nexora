@@ -129,7 +129,7 @@ exercised before, so it is recorded rather than assumed:
 
 ```
 Running Gradle task 'bundleRelease'...                             67.5s
-√ Built buildpp\outputsundleeleasepp-release.aab (60.8MB)   [exit 0]
+√ Built build/app/outputs/bundle/release/app-release.aab (60.8MB)   [exit 0]
 ```
 
 The bundle builds clean. Like the APK, it is signed with whatever the release
