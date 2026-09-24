@@ -41,15 +41,28 @@ jobs:
         with:
           python-version: '3.x'
 
-      # Each of these guards a harness file that has silently broken before,
-      # and each was found by a human running the command by hand rather than
-      # by CI. `make lessons` crashed on EVERY invocation for weeks because
-      # `lessons.py` called int() on a `recurrence:` value written `**2**`;
-      # H4 reported a false negative on five task files; H8 shipped three
-      # separate unsafe-direction regressions in one day.
+      # scheduler.py and health.py defer `import yaml` inside a try/except
+      # that exits with "pip install pyyaml", so they are NOT stdlib-only --
+      # a first version of this job asserted they were, having read only the
+      # top-level import lines, and went red on the runner at once.
+      # requirements.txt already pins pyyaml, so this installs an
+      # already-accepted dependency and is not a rule-3 new_dependency call.
+      - name: pip install -r requirements.txt
+        run: pip install -r requirements.txt
+
+      # Each step below guards a harness file that has silently broken before,
+      # and each break was found by a human running the command by hand rather
+      # than by CI. `make lessons` crashed on EVERY invocation for weeks,
+      # because `lessons.py` called int() on a `recurrence:` written `**2**`;
+      # H8 shipped three separate unsafe-direction regressions in one day.
       #
-      # All three exit 0 on `development` today, so they gate honestly from
-      # the moment they land.
+      # All four exit 0 on `development` today, so they gate honestly from the
+      # moment they land.
+      #
+      # What these do NOT cover: H1-H7. `--selftest` short-circuits before the
+      # CHECKS list, so it exercises H8's classifier against fixtures and
+      # nothing else. H4's false negative (#312) would still not be caught
+      # here -- that needs `make health`, which is excluded below.
       - name: make validate  # epic/task DAG, traces_to, statuses
         run: make validate
 
@@ -58,6 +71,12 @@ jobs:
 
       - name: make health-selftest  # H8 still rejects every shape it wrongly exempted
         run: make health-selftest
+
+      # Without CHECK=1 this asserts nothing about orphan counts -- it just
+      # proves traceability.py still parses the tree and produces its matrix.
+      # The tool was otherwise gated by nothing at all.
+      - name: make trace  # the traceability generator still runs
+        run: make trace
 
       # NOT wired, deliberately, because both exit non-zero on `development`
       # today and a red-from-birth job is a job everyone learns to ignore:
