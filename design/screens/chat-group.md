@@ -3,7 +3,13 @@ id: chat-group
 impl_path: /groups/[id]
 source: derived
 derived_from: [chat, conversations]
-states: [thread, bubble-incoming-attributed, event-line, bubble-blocked-placeholder, empty]
+states: [thread, bubble-incoming-attributed, event-line, empty]
+blocked_states:
+  # State 3 is specified below but NOT buildable: its copy is GAP-045,
+  # unapproved. Listed here rather than in `states[]` so the frontmatter does
+  # not declare a state this same contract says does not exist.
+  - name: bubble-blocked-placeholder
+    blocked_by: GAP-045
 viewports: [390x844]
 golden: none yet — extract from the build once implemented
 spec: [FR-COMM-002, FR-GROUP-002, FR-GROUP-003]
@@ -143,9 +149,24 @@ as false.
 
 So **state 3 is blocked on `GAP-045`**, and says so rather than shipping an
 ambiguous surface. `GAP-045` names three candidate strings and needs one
-human answer. States 1, 2, 4 and 5 — the whole create → open → send → read
-journey, attribution and event lines included — do **not** depend on it and
-are buildable now.
+human answer.
+
+### What the app does in the meantime — the interim behaviour, stated
+
+"Not built" is not a runtime behaviour, so this contract names one.
+
+A group thread that rendered states 1, 2, 4 and 5 but had no state 3 would
+show a blocked member's message **as an ordinary readable bubble** — exactly
+the outcome the human's 2026-09-25 answer forbids. Shipping the other four
+states is therefore not a partial win; it is a regression against a decision
+already taken.
+
+**So the whole thread build (`E07-T18`) is gated on `GAP-045`, not just state
+3.** Until then the app keeps the behaviour it already ships: a group row tap
+is non-navigating and acknowledges itself honestly
+(`ConversationsController.openGroup`, `E07-B01`'s human-chosen fix direction
+(a), merged 2026-09-02). That is a real, deliberate, already-reviewed
+behaviour — not a gap — and it stays until one string is chosen.
 
 **Why the existing placeholder is not reused:** `chat_view.dart:355` renders
 `(unable to decrypt this message)` for a null plaintext. Here that would be
@@ -187,7 +208,7 @@ illustration or copy anywhere in seven contracts and none is invented here.
 |---|---|---|
 | header glyph | `rgb(70, 69, 85)` `24px` | chat 2 |
 | group title | `22px` `w500` `rgb(53, 37, 205)` | chat 4 |
-| encryption notice | `12px` `w500` `rgb(53, 37, 205)` | chat 5-6 |
+| encryption notice | `12px` `w500` `rgb(53, 37, 205)` | chat 6 (element 5 is the `lock` glyph at `14px`, cited separately as G4) |
 | group glyph | `dns` `24px` `rgb(0, 70, 102)` | conversations 22 |
 | sender attribution | `14px` `w500` `rgb(11, 28, 48)` | conversations 26 |
 | bubble box | 270-272×48 | chat 12/15/20 |
