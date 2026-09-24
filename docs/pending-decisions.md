@@ -10,7 +10,12 @@
 > substitute for `spec/questions.md`, the ADRs or the task files — each item
 > below links to the one place its answer belongs.
 >
-> Last reconciled against the tree on `development` = `da4459b`, 2026-09-24.
+> Last reconciled against the tree on `development` = `cc87871`, 2026-09-24,
+> by re-running every check in the recipe at the bottom of this file rather
+> than by reading the previous version. Nothing in the register moved:
+> no ADR is pending, `Q-FUNC-011` is still the one open question, the same
+> three bugs are open, `make trace` still reports 14 blocking orphans and
+> `make lessons` still 3 promotion candidates.
 > Reconcile it again after any merge that closes one of these.
 
 ## Why it exists
@@ -128,8 +133,10 @@ than summarising. In brief:
 documentation — `CHANGELOG.md` §Known gaps and `docs/release-readiness.md`
 both reason from it — but it is **not declared anywhere in the repository**.
 `epics/E04-mesh-routing/epic.md` reads `status: in-progress`, and
-`harness.yaml` has no gate key for it. It exists as a standing human
-instruction given in session.
+`harness.yaml` declares no gate for it. (`grep freeze harness.yaml` does
+return three hits, but all three are `freeze_threshold_pct` — the
+rate-limit budget — and none is under `human_gates`.) The E04 freeze
+exists as a standing human instruction given in session.
 
 Nothing about that is wrong, and this file does **not** propose changing it:
 declaring a freeze is the human's call, not an agent's. It is recorded here so

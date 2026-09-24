@@ -1,15 +1,19 @@
 # Release readiness — what is verified, and what is left
 
-> Snapshot first taken on `development` = `82b803d`, 2026-09-24; the counts
-> marked **re-verified** below were re-run on `da4459b` the same day. The
-> six merges in between (`b9206b2`, `533ed09`, `f689ebf`, `4dd1fe2`,
-> `b5fc966`, `da4459b`) touched documentation, task/epic metadata and one
-> harness check (`agent/orchestrator/health.py`) — `git diff --name-only
-> 82b803d da4459b` lists no file under `lib/` or `test/`, so the build and
-> test evidence below still describes this tree. Every ✅ below was
-> executed, not reasoned about; the command and its output are quoted. Every ❌
-> names the gate that owns it. Nothing here is a plan — it is the current
-> state of `skills/release`'s own preconditions.
+> Snapshot first taken on `development` = `82b803d`, 2026-09-24, and
+> **re-verified on `cc87871`** later the same day. No count below moved.
+>
+> The ten merges in between — `b9206b2`, `533ed09`, `4dd1fe2`, `b5fc966`,
+> `f689ebf`, `da4459b`, `6930843`, `091ee4e`, `d193ddd`, `cc87871` — touched
+> documentation, lessons, task/epic metadata and the harness itself
+> (`agent/orchestrator/health.py` and `Makefile`).
+> `git diff --name-only 82b803d cc87871`
+> lists **no file under `lib/` or `test/`**, which is why the build, test
+> and artifact rows below still describe this tree without being re-run.
+>
+> Every ✅ below was executed, not reasoned about; the command and its
+> output are quoted. Every ❌ names the gate that owns it. Nothing here is
+> a plan — it is the current state of `skills/release`'s own preconditions.
 >
 > Re-run the checks rather than trusting this file: a readiness snapshot is
 > stale the moment anything merges.

@@ -15,7 +15,7 @@ Versions are the annotated tags on `main`.
 ## [Unreleased]
 
 Everything below is merged into `development` and has **not** been released.
-`development` is 195 commits ahead of `main` as of `f689ebf` (2026-09-24).
+`development` is 200 commits ahead of `main` as of `cc87871` (2026-09-24).
 
 ### Added
 - **Session lifecycle and settings sub-screens (E15, whole epic).** Sign-out
@@ -66,6 +66,18 @@ Everything below is merged into `development` and has **not** been released.
 - `spec/questions.md`'s summary table recounted (PR #311): it reported four open
   important questions against eleven on file, totalling ten. One is open.
 
+### Added (tooling)
+- **`docs/pending-decisions.md`** — one register naming every decision, gate
+  and manual action waiting on the human, each with the authoritative file that
+  holds it and, where one applies, its `harness.yaml` gate key. Four of the
+  eight items are held by a declared gate; three by a rule; and the E04
+  freeze by a standing instruction that the repository does not declare at
+  all. It decides nothing and duplicates nothing; where it and a source
+  disagree, the source wins (PR #315).
+- **`make health-selftest`** — 20 executable fixtures proving H8 still rejects
+  every shape it has ever wrongly exempted, plus both directions on each
+  allowlist entry. Stdlib-only, so no new dependency (PR #318).
+
 ### Fixed (tooling)
 - **`make lessons` ran on nothing** — it crashed on every invocation, because
   `lessons.py:49` calls `int()` on `recurrence:` and three lessons carried
@@ -74,6 +86,20 @@ Everything below is merged into `development` and has **not** been released.
 - **`make health` H4 reported a false negative** — its regex accepted a scope
   fence numbered `4.` or unnumbered, but five task files number theirs `3.`, so
   a present, properly filled fence read as absent (PR #312).
+- **`make health` H8 exempted unbounded lists while repairing its own false
+  positives** — two provably bounded `const` call sites warned permanently, and
+  three successive attempts to exempt them each silenced a genuinely unbounded
+  one: a per-line exemption, then the raw-SQL branch, then a `const` literal
+  *head* with an unbounded tail. Escalated to the planner per
+  `skills/review:120` and fixed by closing the exemption's input space rather
+  than widening it (PR #316). The episode is `L-infra-004`.
+- **Three lessons were written and never committed** — `L-backend-006`,
+  `L-infra-003` and `L-qa-002` sat uncommitted in a retro worktree from
+  2026-09-04 while the same session's process lessons landed. Recovered
+  verbatim (PR #317).
+- **Two ADR headers still read `AWAITING HUMAN`** — `ADR-0007` and `ADR-0008`
+  were both `status: accepted` with a chosen option and shipped tasks, but
+  their proposal-time blockquotes had never been rewritten (PR #315).
 - **Release signing is wired but unkeyed** — see Known gaps.
 
 ---
