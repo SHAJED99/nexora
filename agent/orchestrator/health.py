@@ -526,11 +526,11 @@ _H8_FIXTURES = (
      "q.where((t) => t.a.isIn(const []) & t.b.isIn(const ['a', 'b',]));", ()),
     ("plain unbounded argument",
      "q.where((t) => t.id.isIn(ids));", (1,)),
-    ("const literal beside an unbounded ident (round 1: per-line suppression)",
+    ("const literal beside an unbounded ident (round 0: per-line suppression)",
      "q.where((t) => t.s.isIn(const ['a']) & t.id.isIn(ids));", (1,)),
-    ("const ident head, unbounded tail (round 2 -> planner)",
+    ("const ident head, unbounded tail (round 2)",
      "const seed = ['s'];\nq.where((t) => t.id.isIn(seed.followedBy(all).toList()));", (2,)),
-    ("const LITERAL head, unbounded tail (round 3)",
+    ("const LITERAL head, unbounded tail (round 3 -- the re-scope)",
      "q.where((t) => t.id.isIn(const ['a'].followedBy(all).toList()));", (1,)),
     ("const literal head, cascade tail",
      "q.where((t) => t.id.isIn(const ['a'].toList()..addAll(all)));", (1,)),
@@ -541,12 +541,24 @@ _H8_FIXTURES = (
      "  f(db) { q.where((t) => t.id.isIn(xs)); } }", (3,)),
     ("raw SQL IN alone",
      "db.customSelect('SELECT * FROM m WHERE id IN (${all.join(\",\")})');", (1,)),
-    ("raw SQL IN beside a const isIn (round 2)",
+    ("raw SQL IN beside a const isIn (round 1)",
      "db.customSelect('... IN (${all.join(\",\")})', w: db.x.isIn(const ['a']));", (1,)),
     ("argument shape the regex cannot parse withholds the exemption",
      "q.where((t) => t.s.isIn(const ['x']) & t.id.isIn([...all]));", (1,)),
     ("a chunking marker still exempts, as it always has",
      "for (final chunk in batches) { q.where((t) => t.id.isIn(chunk)); }", ()),
+    # The three fixtures below guard H8's OTHER heuristic branches. They are
+    # outside the closed-input-space guarantee (which covers only the two
+    # exemption hatches), and a review found each could be regressed while
+    # every other fixture still passed.
+    ("a trailing comment does not make a call site a comment",
+     "q.where((t) => t.id.isIn(ids)); // ids come from a page scan", (1,)),
+    ("a chunking marker far above the call site does not reach it",
+     "for (final chunk in batches) {" + chr(10) * 10 +
+     "q.where((t) => t.id.isIn(everything));", (11,)),
+    ("raw SQL IN found via the customSelect lookback, not on the same line",
+     "db.customSelect(" + chr(10) + "  'SELECT * FROM m'" + chr(10) +
+     "  ' WHERE id IN (${all.join(\",\")})');", (3,)),
     ("a commented-out call site is not a call site",
      "// q.where((t) => t.id.isIn(ids));", ()),
 )
@@ -580,6 +592,21 @@ def selftest():
             if not tuple(n for n, _l in _h8_scan(rel, shifted)):
                 failures.append((f"allowlist {rel}:{lineno} still matches one line lower",
                                  "warns", "silent", text))
+
+            # The two assertions above are built FROM the entry, so a stale
+            # entry passes them. Check the record against the real file too:
+            # `make health` would catch a drifted entry (it warns), but only
+            # after someone runs it and reads the warning.
+            try:
+                real = open(os.path.join(ROOT, rel), encoding="utf-8").read().splitlines()
+            except OSError:
+                failures.append((f"allowlist names a file that does not exist: {rel}",
+                                 "the file", "missing", text))
+                continue
+            if lineno > len(real) or _normalise(real[lineno - 1]) != _normalise(text):
+                found = _normalise(real[lineno - 1]) if lineno <= len(real) else "<past EOF>"
+                failures.append((f"allowlist {rel}:{lineno} no longer describes that line",
+                                 _normalise(text), found, text))
 
     print(f"\n{C['b']}H8 self-test{C['0']} — {len(_H8_FIXTURES)} fixtures + "
           f"{sum(len(e) for e in _H8_ALLOWLIST.values())} allowlist entries\n")

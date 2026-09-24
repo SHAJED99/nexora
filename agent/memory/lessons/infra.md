@@ -137,6 +137,12 @@ automatically for matching tasks (see `index.yaml`).
   Attempt 3 is the sharpest data point: it was written specifically to close
   the identifier-head hole the planner had just named, and it reopened the
   same hole with a literal head, in the same commit that claimed to close it.
+
+  Note on provenance: all four attempts were squashed into one merge commit,
+  so this history is not recoverable from `git log` — it survives only here
+  and in `make health-selftest`'s fixture table. That is the point of the
+  fixtures: the same squash is what erased the previous three rounds'
+  knowledge and left each round blind to the next.
 - root cause: the requirement was stated as an outcome, not a decision
   procedure. "Exempt provably-bounded call sites" silently takes on an
   **open-world** obligation: be safe over every expression that can appear as
@@ -153,8 +159,8 @@ automatically for matching tasks (see `index.yaml`).
   so all of that risk was spent to remove two lines from an advisory report.
   Checking what an exemption actually buys, before building it, would have
   reframed the whole exercise.
-- fix applied: the input space was **closed** rather than widened (net -68
-  lines). Whole-file inference was deleted. Two hatches remain, each checkable
+- fix applied: the input space was **closed** rather than widened, and the
+  whole-file inference was deleted outright. Two hatches remain, each checkable
   without reading a character outside the flagged line: the argument is
   syntactically `const [...]` *in its entirety* (the closing `)` is what makes
   it a proof rather than a head-match), or the file, line number and exact
