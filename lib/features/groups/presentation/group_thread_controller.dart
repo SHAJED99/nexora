@@ -173,6 +173,20 @@ class GroupThreadController extends GetxController {
   /// `ConversationsController` keeps its own group-preview cache.
   final Map<String, String?> _bodyCache = <String, String?>{};
 
+  /// Monotonic render generation. [render] is async — it awaits the group
+  /// row, the blocked set and every body — so two renders can be in flight
+  /// at once, and the one that STARTED first can FINISH last.
+  ///
+  /// Found by the `chat-group` design probe, not by reasoning: a
+  /// subscription created before the database was seeded emitted an empty
+  /// list, that render's awaits resolved after the seeded one had already
+  /// published four rows, and it overwrote them with one. In the app the
+  /// same shape is reachable whenever a message arrives while an earlier
+  /// render is still resolving bodies — the thread would flicker back to a
+  /// stale list. A generation check is the fix; cancelling the subscription
+  /// is not, because the in-flight render is not part of the subscription.
+  int _renderGeneration = 0;
+
   @override
   void onInit() {
     super.onInit();
@@ -209,6 +223,7 @@ class GroupThreadController extends GetxController {
   /// without racing a Drift stream.
   @visibleForTesting
   Future<void> render(List<Message> messages) async {
+    final generation = ++_renderGeneration;
     final group = await _groups.groupRow(groupId);
     final epoch = group?.membershipEpoch;
     final blocked = await _blockedDeviceIds();
@@ -242,6 +257,13 @@ class GroupThreadController extends GetxController {
           sentence: eventSentence(e),
         ),
       );
+    }
+
+    if (generation != _renderGeneration) {
+      // A newer render started while this one was resolving bodies. Its
+      // result is the current one; publishing this would visibly regress
+      // the thread to older data.
+      return;
     }
 
     built.sort((a, b) => a.timestamp.compareTo(b.timestamp));

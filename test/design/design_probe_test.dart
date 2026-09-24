@@ -87,7 +87,11 @@ import 'package:nexora/features/settings/security_center/presentation/security_c
 import 'package:nexora/features/settings/storage/presentation/storage_settings_controller.dart';
 import 'package:nexora/features/settings/storage/presentation/storage_settings_view.dart';
 import 'package:nexora/features/groups/presentation/group_create_controller.dart';
+import 'package:nexora/features/groups/data/group_repository.dart';
+import 'package:nexora/core/persistence/group_tables.dart';
 import 'package:nexora/features/groups/presentation/group_create_view.dart';
+import 'package:nexora/features/groups/presentation/group_thread_controller.dart';
+import 'package:nexora/features/groups/presentation/group_thread_view.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
 import 'package:nexora/features/trust/domain/block_use_case.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
@@ -667,7 +671,6 @@ void main() {
       // this test body returns, or flutter_test's own end-of-test
       // pending-timer check fails it (`addTearDown`/the outer `tearDown()`
       // above both run too late for this specific assertion).
-      controller.onClose();
     });
   });
 
@@ -838,7 +841,6 @@ void main() {
     });
 
     tearDown(() {
-      controller.onClose();
       Get.reset();
       return db.close();
     });
@@ -994,7 +996,6 @@ void main() {
     });
 
     tearDown(() {
-      controller.onClose();
       Get.reset();
     });
 
@@ -1038,7 +1039,6 @@ void main() {
     });
 
     tearDown(() {
-      controller.onClose();
       Get.reset();
     });
 
@@ -1075,7 +1075,6 @@ void main() {
     });
 
     tearDown(() {
-      controller.onClose();
       Get.reset();
       return db.close();
     });
@@ -1112,7 +1111,6 @@ void main() {
     });
 
     tearDown(() {
-      controller.onClose();
       Get.reset();
       return db.close();
     });
@@ -1253,6 +1251,112 @@ void main() {
       // than only against the controller.
       expect(raw.contains('device-blocked'), isFalse);
       expect(raw.contains('device-allowed'), isFalse);
+    });
+  });
+
+
+  // ── E07-T18: `chat-group` ───────────────────────────────────────
+  // Seeded so the probe renders four of the contract's five states at once:
+  // an attributed incoming bubble (G9), an outgoing bubble with NO
+  // attribution, a blocked member's placeholder (G10, GAP-045 option (b)),
+  // and a membership event line (G11).
+  //
+  // The two assertions at the end are the ones that matter: the approved
+  // placeholder string IS in the rendered tree, and the blocked sender's
+  // real body is NOT. A controller test proves the model withholds it;
+  // this proves the widget tree never receives it either.
+  group('screen probes — chat-group (make design-probe)', () {
+    late AppDatabase db;
+    late GroupThreadController controller;
+
+    setUp(() async {
+      Get.testMode = true;
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      final relationships = RelationshipRepository(db);
+      await relationships.upsert('BLOCKED-device', RelationshipState.blocked);
+      await db.into(db.groups).insert(
+            GroupsCompanion.insert(
+              id: 'g:probe',
+              name: 'Family',
+              createdByDeviceId: 'self-device',
+              membershipEpoch: const Value(1),
+              createdAt: 1000,
+            ),
+            mode: InsertMode.insertOrReplace,
+          );
+      await db.into(db.groupEvents).insert(
+            GroupEventsCompanion.insert(
+              id: 'e-probe',
+              groupId: 'g:probe',
+              epoch: 1,
+              kind: GroupEventKind.memberAdded.name,
+              actorDeviceId: 'MS-device-01',
+              subjectDeviceId: const Value('AL-device-02'),
+              createdAt: 2500,
+            ),
+          );
+      await _insertProbeMessage(
+          db, 'p1', 'MS-device-01', 2000, 'Dinner at 7 tonight');
+      await _insertProbeMessage(db, 'p2', 'self-device', 3000, 'On my way');
+      await _insertProbeMessage(db, 'p3', 'BLOCKED-device', 3500,
+          'PROBE-BLOCKED-BODY-MUST-NOT-RENDER');
+      controller = GroupThreadController(
+        groupId: 'g:probe',
+        repo: ConversationRepository(db, selfDeviceId: 'self-device'),
+        groups: GroupRepository(db),
+        relationships: relationships,
+        send: ({required groupId, required body}) async => null,
+      );
+      Get.put<GroupThreadController>(controller);
+    });
+
+    tearDown(() {
+      Get.reset();
+      return db.close();
+    });
+
+    testWidgets('chat-group', (tester) async {
+      // Everything is seeded in `setUp`, BEFORE `Get.put` constructs the
+      // controller, so every emission the live subscription makes already
+      // carries the full message set. An earlier draft seeded here instead
+      // and the probe came back with a single row: the subscription's first
+      // (empty) emission finished rendering LAST and overwrote the seeded
+      // one. That race is also a real product bug -- fixed separately by
+      // `render`'s generation guard -- but a probe should not depend on
+      // that fix to be deterministic.
+      await tester.runAsync(() async {
+        await controller.load();
+        while (controller.rows.length < 4) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      await dumpScreenProbe(
+        tester,
+        screenId: 'chat-group',
+        screen: const GetMaterialApp(home: GroupThreadView()),
+      );
+
+      final raw = await tester.runAsync(
+        () => File('build/design-probe/chat-group.json').readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
+      expect(
+        raw.contains('Message hidden'),
+        isTrue,
+        reason: 'GAP-045 option (b), human-approved 2026-09-25',
+      );
+      expect(
+        raw.contains('PROBE-BLOCKED-BODY-MUST-NOT-RENDER'),
+        isFalse,
+        reason: 'the blocked body must never reach the widget tree',
+      );
+      expect(
+        raw.contains('unable to decrypt'),
+        isFalse,
+        reason: 'the human forbade implying a cryptographic failure',
+      );
     });
   });
 
@@ -1685,3 +1789,26 @@ const { pathToFileURL } = require("node:url");
   }
   return jsonDecode(result.stdout as String) as Map<String, dynamic>;
 }
+
+/// E07-T18's probe seed. `plaintextPayload` is populated so the controller
+/// takes the E04-B20 persisted-body path rather than attempting a real
+/// group decrypt inside a probe.
+Future<void> _insertProbeMessage(
+  AppDatabase db,
+  String id,
+  String sender,
+  int createdAt,
+  String body,
+) =>
+    db.into(db.messages).insert(
+          MessagesCompanion.insert(
+            id: id,
+            conversationId: 'g:probe',
+            senderDeviceId: sender,
+            sequenceNumber: createdAt,
+            ciphertext: Uint8List(0),
+            createdAt: createdAt,
+            deliveryState: DeliveryState.accepted.name,
+            plaintextPayload: Value(Uint8List.fromList(utf8.encode(body))),
+          ),
+        );
