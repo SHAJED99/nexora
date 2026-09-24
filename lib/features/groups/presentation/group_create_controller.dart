@@ -8,6 +8,7 @@
 // rule re-decided in a widget (contract §Notes).
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/auth/google_auth_service.dart' show AppFailure;
 import 'package:nexora/core/messaging/messaging_stack.dart';
@@ -132,8 +133,45 @@ class GroupCreateController extends GetxController {
   /// create button stays disabled for the life of the screen. The shipped
   /// `Get.toNamed` had the same shape; no test noticed, because every test
   /// injected a seam that completed immediately.
+  ///
+  /// `groupId` is unused: [successRoute] is a fixed screen, not a per-group
+  /// destination, precisely because no per-group destination exists yet. The
+  /// parameter stays because it is the seam's type, and because the day
+  /// `GAP-020` ships this function is where the group id starts mattering.
+  ///
+  /// The error handler is not decoration. `unawaited` on its own discards a
+  /// navigation failure entirely; routing it through [FlutterError.reportError]
+  /// puts it on the framework's own error channel instead. Be honest about
+  /// what that buys: nothing in this app currently forwards
+  /// `FlutterError.onError` to `ObservabilityService`, so in release this is
+  /// still only a non-silent failure, not a reported one. Wiring that channel
+  /// is its own task and is out of this bug's `files:` fence.
   static Future<void> _defaultOpenThread(String groupId) async {
-    unawaited(Get.offNamed<dynamic>(successRoute));
+    // `offNamed` returns a NULLABLE future -- GetX hands back null when it
+    // declines to navigate at all. That is a third outcome, distinct from
+    // success and from a thrown error, and it is silent either way.
+    final navigation = Get.offNamed<dynamic>(successRoute);
+    if (navigation == null) {
+      return;
+    }
+    unawaited(
+      navigation.catchError((
+        Object error,
+        StackTrace stack,
+      ) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stack,
+            library: 'group_create_controller',
+            context: ErrorDescription(
+              'navigating to $successRoute after a successful group create',
+            ),
+          ),
+        );
+        return null;
+      }),
+    );
   }
 
   /// Every trusted relationship, as selectable rows (GC8-GC14).
