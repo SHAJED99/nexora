@@ -240,11 +240,20 @@ def check_fences():
              "  judgement, and its judgement is not the plan.")
     # A feature task's fence is titled "## 4. What this task does NOT do";
     # a bug task's is "## What this fix does NOT do" (skills/bug-sweep's own
-    # convention, established by L-process-009's fix) — no "4." numeral,
-    # "fix" not "task". The original regex only matched the first form, so
-    # every correctly-written bug-file fence read as absent. Found while
+    # convention, established by L-process-009's fix) — "fix" not "task".
+    # The original regex only matched the first form, so every
+    # correctly-written bug-file fence read as absent. Found while
     # investigating an E07-B02/B03 false positive during the E07 retro.
-    HEAD = re.compile(r"^##\s*(?:4\.\s*)?What this (?:task|fix) does NOT do.*$", re.M | re.I)
+    #
+    # 2026-09-24: the SECOND time this regex has been too narrow, and the same
+    # root cause both times — it enumerated the exact heading forms it had
+    # seen instead of accepting the shape. It hard-coded the numeral "4", so a
+    # bug file that numbers its fence "## 3." (E00-B01, E01-B01, E04-B13,
+    # E04-B15, E06-B01 all do — §1 Goal, §2 Findings, §3 fence, §4 Risks)
+    # still read as "no scope-fence section at all". Any leading section
+    # number is now accepted; the section's POSITION was never what made it a
+    # fence. See L-process-014.
+    HEAD = re.compile(r"^##\s*(?:\d+\.\s*)?What this (?:task|fix) does NOT do.*$", re.M | re.I)
     for fm, body in tasks():
         if str(fm.get("status")) in ("done", "verified"):
             continue

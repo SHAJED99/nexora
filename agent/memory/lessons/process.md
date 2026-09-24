@@ -527,7 +527,23 @@ automatically for matching tasks (see `index.yaml`).
   `^##\s*(?:4\.\s*)?What this (?:task|fix) does NOT do` and re-run —
   confirmed 4/4 previously-flagged bug files now correctly pass. No task
   file needed to change; only the check was wrong.
-- recurrence: 1
+- recurrence: 2
+- **2026-09-24, third instance of the same root cause — and the second time
+  in THIS regex.** The widened form above still hard-coded the numeral `4`
+  (`(?:4\.\s*)?`), so a bug file numbering its fence `## 3. What this task
+  does NOT do` read as "no scope-fence section at all". Five files use that
+  numbering — `E00-B01`, `E01-B01`, `E04-B13`, `E04-B15`, `E06-B01` (§1 Goal,
+  §2 Findings, §3 fence, §4 Risks) — and `E01-B01` was the one open task
+  among them, so H4 failed the whole run on a fence that was present and
+  properly filled. Fixed by accepting any leading section number,
+  `(?:\d+\.\s*)?`; H4 now passes. The position of the section was never
+  what made it a fence.
+  The root cause is identical all three times: **the regex enumerates the
+  exact heading forms someone has already seen, instead of matching the
+  shape.** Each fix added one more observed form rather than removing the
+  assumption, which is why it keeps recurring. Recurrence bumped 1 -> 2 for
+  this reason (the H6 instance below was already recorded as the same
+  pattern, one file down).
 - status: fixed directly (mechanical, no ladder needed — a check
   verifying its own stated rule against its own stated example output is
   not a judgement call). Worth remembering for future rule/hook pairs
