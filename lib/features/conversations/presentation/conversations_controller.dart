@@ -402,24 +402,20 @@ class ConversationsController extends GetxController {
     Get.toNamed(Routes.groupCreate);
   }
 
-  /// Groups-section row tap (E07-B01, human-chosen fix direction (a): gate
-  /// the tap rather than route a group id into the 1:1-only
-  /// `ChatController`).
+  /// Groups-section row tap. **Now navigates** (E07-T18).
   ///
-  /// The real group thread view is GAP-020, still gated on `OQ-E07-13`
-  /// (whether a blocked member's messages are dropped, hidden or
-  /// placeholdered inside a group thread — a product decision this bug does
-  /// not make). Until GAP-020 ships, a group row stays non-navigating and
-  /// acknowledges the tap honestly instead of failing silently or
-  /// misrouting — the SAME "no built destination yet" SnackBar primitive
-  /// `SettingsController.openRow` already established for exactly this
-  /// situation, reused rather than inventing a second affordance.
-  void openGroup(String name) {
-    Get.snackbar(
-      name,
-      'Coming soon',
-      snackPosition: SnackPosition.BOTTOM,
-    );
+  /// `E07-B01` made this inert on purpose: the only thread screen was
+  /// `/chat/:id`, which is 1:1-only, and the human chose "gate the tap"
+  /// (2026-09-02, P1, direction (a)) until `GAP-020` shipped. `GAP-020`'s
+  /// build precondition `OQ-E07-13` was answered by the human on
+  /// 2026-09-25, `E07-T17` wrote the contract and `E07-T18` built the
+  /// screen, so the gate has served its purpose and comes off.
+  ///
+  /// It goes to `/groups/:id`, **not** `/chat/:id` — the invariant
+  /// `E07-B01` and `E07-B05` both exist to protect is unchanged: a group id
+  /// still never reaches `ChatController`.
+  void openGroup(String conversationId) {
+    Get.toNamed(Routes.groupThread.replaceFirst(':id', conversationId));
   }
 
   /// Decrypts [summary]'s last message for display only (task §2). Returns

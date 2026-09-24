@@ -3,13 +3,10 @@ id: chat-group
 impl_path: /groups/[id]
 source: derived
 derived_from: [chat, conversations]
-states: [thread, bubble-incoming-attributed, event-line, empty]
-blocked_states:
-  # State 3 is specified below but NOT buildable: its copy is GAP-045,
-  # unapproved. Listed here rather than in `states[]` so the frontmatter does
-  # not declare a state this same contract says does not exist.
-  - name: bubble-blocked-placeholder
-    blocked_by: GAP-045
+states: [thread, bubble-incoming-attributed, event-line, bubble-blocked-placeholder, empty]
+# GAP-045 answered by the human 2026-09-25 (option (b)), so state 3 is no
+# longer blocked and returns to `states[]`. The `blocked_states` key this
+# file briefly carried is gone with it.
 viewports: [390x844]
 golden: none yet — extract from the build once implemented
 spec: [FR-COMM-002, FR-GROUP-002, FR-GROUP-003]
@@ -51,28 +48,35 @@ gap: GAP-020
 
 ## Derivation boundary — what is NOT derived
 
-**No copy is invented in this contract.** The human decided on 2026-09-25 that
-a blocked member's messages are *"represented as placeholders rather than
-being silently dropped or rendered as normal readable messages"* — that is a
-**behaviour**, and behaviour is not words. Rule 2 requires a derived element
-to be human-approved before it is built, so state 3 renders an **empty bubble
-body** rather than a sentence nobody approved. That satisfies all three of the
-human's rules using only the measured bubble box.
+**No copy is invented in this contract.** One string had no source — the
+blocked-member placeholder — and it was carried as `GAP-045` until the human
+chose option **(b)** on 2026-09-25: `Message hidden — contact is blocked`.
+It is approved, not proposed, and it is the only copy here that is not
+already measured on a parent screen.
 
-Candidate words are carried in **`GAP-045`**, unapproved, with three options.
-**State 3 is gated on it** — an empty bubble body reads as a failed message,
-not as a blocked one, so there is no honest interim (see state 3). The other
-four states, and the entire create → open → send → read journey, are not
-gated on it.
+**No token pairing is invented either, as of 2026-09-25.** G11's event line
+briefly carried `14px` + `rgb(70, 69, 85)` because `GAP-020`'s approved prose
+said so; that prose was wrong about its own source, and the human reconciled
+it to the measured `12px` `w500`. Both readings and the reconciliation are
+recorded under state 4 — `GAP-020` itself is left byte-unchanged.
 
-One **pairing** of existing tokens is new — G11's `14px` + `rgb(70, 69, 85)`
-— and it is new because GAP-020's own human-approved text specifies it. See
-the disclosure under state 4; it is disclosed rather than quietly normalised.
+**One element is specified but not built:** G7's send button. Its geometry,
+fill and glyph size are all measured; only the glyph **identity** is missing,
+and `send` appears in no contract and nowhere in this app. That is the same
+shape `GAP-014` handled for record-stop/play/pause, so it is carried as
+**`GAP-047`** rather than invented. Until it is answered the composer submits
+from the keyboard's own send key — which is exactly what the shipped 1:1
+composer does, so no new behaviour enters the app either.
+
+**One derivation remains, and it is placement, not value:** G8's `dns` glyph
+has a measured glyph, size and colour (`conversations.md` element 22) but is
+measured in a *list row* and used here in a *thread header*.
 
 Also explicitly out of this contract: attachments, voice, PTT and location
 inside a group thread (their own contracts, each with its own gap), group
-calls, the `more_vert` overflow menu, and any membership-management
-affordance (`group-manage.md`).
+calls, delivery ticks (`chat.md`'s tick elements belong to the 1:1 contract;
+GAP-020 derives none for groups), the `more_vert` overflow menu, and any
+membership-management affordance (`group-manage.md`).
 
 ## States
 
@@ -89,7 +93,7 @@ rather than silently dropped (rule 2):
 | G4 | `generic` | `lock` 14×14 · `14px` `rgb(53, 37, 205)` | chat 5 |
 | G5 | `generic` | `End-to-end encrypted` `12px` · `w500` · `rgb(53, 37, 205)` | chat 6 — verbatim, unchanged |
 | G6 | `textbox:multiline` | placeholder: `Secure message...` | chat 28 — verbatim |
-| G7 | `button` | — 48×48 · bg `rgb(53, 37, 205)` · `r9999px` | chat 30 |
+| G7 | `button` | — 48×48 · bg `rgb(53, 37, 205)` · `r9999px` · **glyph undecided, `GAP-047` — not built** | chat 30 (geometry and fill); chat 31 gives the glyph *size and colour* but its identity there is `mic` |
 | G8 | `generic` | `dns` 24×24 · `24px` `rgb(0, 70, 102)` | conversations 22 |
 
 **Two parent elements are deliberately not carried over:**
@@ -127,7 +131,7 @@ The human's 2026-09-25 `OQ-E07-13` answer.
 
 | id | role | copy / label | source |
 |---|---|---|---|
-| G10 | `generic` | *(copy undecided — `GAP-045`, three candidates, one human answer)* | the inbound bubble box, chat 12/15/20, unchanged |
+| G10 | `generic` | `Message hidden — contact is blocked` — **✅ GAP-045 option (b), human-approved 2026-09-25** | the inbound bubble box, chat 12/15/20, unchanged |
 
 Rules, all three from the human's answer:
 - the message **is** represented — never silently dropped from the thread;
@@ -135,43 +139,26 @@ Rules, all three from the human's answer:
 - it keeps G9's sender attribution, because hiding *who* it was from would be
   a second, undecided product behaviour.
 
-**No copy is invented here, and that is deliberate.** The human decided the
-*behaviour*; nothing in the design or in the answer supplies *words*, and
-rule 2 requires a derived element to be human-approved before it is built.
+**✅ `GAP-045` answered by the human, 2026-09-25: option (b),
+`Message hidden — contact is blocked`**, with the instruction *"Do not
+describe it as undecryptable, failed to load, or otherwise imply a
+cryptographic/decryption failure."*
 
-**But an empty body is not a placeholder, and this contract will not pretend
-otherwise.** The measured inbound bubble is a filled, rounded surface
-(`chat.md` 12/20/23). Rendered with a name, a timestamp and nothing inside,
-it reads as *a message that failed to load* — which is a different claim
-about the app than "this sender is blocked", and arguably a worse one than
-the `(unable to decrypt this message)` string this contract already rejects
-as false.
+That instruction is the whole point of the string, and it is why the three
+rejected readings are recorded here rather than forgotten:
 
-So **state 3 is blocked on `GAP-045`**, and says so rather than shipping an
-ambiguous surface. `GAP-045` names three candidate strings and needs one
-human answer.
+- `(unable to decrypt this message)` — the existing primitive
+  (`chat_view.dart:355`). **False here**: a blocked member still holds a
+  valid sender key, so the message decrypts. It is withheld by **policy**.
+- an **empty** bubble body — the measured inbound bubble is a filled
+  surface, so a name and a timestamp over nothing reads as *a message that
+  failed to load*. Also a decryption-failure implication, just an implicit
+  one.
+- **dropping** the message — explicitly forbidden by the human's
+  `OQ-E07-13` answer.
 
-### What the app does in the meantime — the interim behaviour, stated
-
-"Not built" is not a runtime behaviour, so this contract names one.
-
-A group thread that rendered states 1, 2, 4 and 5 but had no state 3 would
-show a blocked member's message **as an ordinary readable bubble** — exactly
-the outcome the human's 2026-09-25 answer forbids. Shipping the other four
-states is therefore not a partial win; it is a regression against a decision
-already taken.
-
-**So the whole thread build (`E07-T18`) is gated on `GAP-045`, not just state
-3.** Until then the app keeps the behaviour it already ships: a group row tap
-is non-navigating and acknowledges itself honestly
-(`ConversationsController.openGroup`, `E07-B01`'s human-chosen fix direction
-(a), merged 2026-09-02). That is a real, deliberate, already-reviewed
-behaviour — not a gap — and it stays until one string is chosen.
-
-**Why the existing placeholder is not reused:** `chat_view.dart:355` renders
-`(unable to decrypt this message)` for a null plaintext. Here that would be
-**false** — a blocked member still holds a valid sender key, so the message
-decrypts; it is withheld by policy, not by failure.
+Option (b) says *hidden*, names *blocked* as the reason, and makes no claim
+about cryptography. The word "hidden" is load-bearing.
 
 ### 4. `event-line`
 GAP-020's approved rule, verbatim: *"Membership changes render as centred,
@@ -180,21 +167,25 @@ per `group_events` row."*
 
 | id | role | copy / label | source |
 |---|---|---|---|
-| G11 | `generic` | *(event sentence)* `14px` · `rgb(70, 69, 85)`, centred, **no bubble surface** | **GAP-020, human-approved 2026-08-31**, verbatim |
+| G11 | `generic` | *(event sentence)* `12px` · `w500` · `rgb(70, 69, 85)`, centred, **no bubble surface** | chat 18 — measured, exactly |
 
-> **Disclosure (rule 2, and it matters).** GAP-020 describes this pairing as
-> *"`chat.md`'s own secondary-text treatment (14px `rgb(70, 69, 85)`)"*. In
-> `chat.md`'s measured table that colour appears **only at 12px** (elements
-> 11, 13, 18, 19, 21, 24); 14px appears at `rgb(11, 28, 48)` (element 15).
-> **The exact pair `14px` + `rgb(70, 69, 85)` is not measured anywhere.** It
-> is written here because the human approved GAP-020 with those words in it,
-> not because the parent table contains it — and saying so is the point.
-> **The weight differs too, and GAP-020 does not mention it:** every measured
-> use of `rgb(70, 69, 85)` in `chat.md` is `w500` (elements 11, 13, 18, 19,
-> 21, 24). G11 states no weight, so it renders at the `w400` default. Neither
-> `14px` nor `w400` is measured with this colour anywhere.
-> Raised as an open item in `E07-T17` §5b rather than silently normalised
-> to 12px, which would contradict an approved gap.
+> **Reconciliation, recorded rather than concealed (human decision,
+> 2026-09-25).** `GAP-020`'s approved prose described the event line as
+> *"`chat.md`'s own secondary-text treatment (14px `rgb(70, 69, 85)`)"*.
+> That description was **wrong about its own source**: in `chat.md`'s
+> measured table `rgb(70, 69, 85)` appears only at `12px` `w500` (elements
+> 11, 13, 18, 19, 21, 24). `14px` appears once, at `rgb(11, 28, 48)`
+> (element 15). The pair GAP-020 named exists nowhere.
+>
+> The human resolved it on 2026-09-25: *"Match the existing measured
+> contract: **12px, w500** rather than the contradictory approved 14px
+> wording. Record the reconciliation honestly; do not alter measurements to
+> conceal it."*
+>
+> So G11 is `12px` `w500`, and **`GAP-020`'s text is left byte-unchanged** in
+> `design/gaps.md` — it records what a human approved on 2026-08-31, and
+> editing it to agree with today would destroy that record. The
+> contradiction lives here, with both readings and the date that settled it.
 
 ### 5. `empty`
 A group with no messages yet — the state a user reaches immediately after
@@ -213,12 +204,13 @@ illustration or copy anywhere in seven contracts and none is invented here.
 | sender attribution | `14px` `w500` `rgb(11, 28, 48)` | conversations 26 |
 | bubble box | 270-272×48 | chat 12/15/20 |
 | outgoing bubble fill | `rgb(53, 37, 205)` | chat 30 |
-| secondary text | `12px` `w500` `rgb(70, 69, 85)` | chat 18 |
+| secondary text / event line | `12px` `w500` `rgb(70, 69, 85)` | chat 18 |
 | timestamp | `12px` `w500` `rgb(70, 69, 85)` | chat 11/13 |
 | composer send | 48×48 `r9999px` bg `rgb(53, 37, 205)` | chat 30 |
 
 **No new colour, size, radius, font or glyph enters the app through this
-contract.** One *pairing* of two existing tokens is new — `14px` +
-`rgb(70, 69, 85)` on G11 — and it is new because GAP-020's approved text
-specifies it; see the disclosure under state 4. No blanket “nothing is new”
-claim is made here, because that claim would be false.
+contract, and as of the 2026-09-25 reconciliation no new token *pairing*
+either** — G11 now uses `chat.md` element 18's measured `12px` `w500`
+`rgb(70, 69, 85)` exactly. The one remaining derivation is **placement**, not
+value: G8's `dns` glyph is measured in a `conversations.md` list row and is
+used here in a thread header.
