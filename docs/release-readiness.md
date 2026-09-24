@@ -1,6 +1,12 @@
 # Release readiness — what is verified, and what is left
 
-> Snapshot taken on `development` = `82b803d`, 2026-09-24. Every ✅ below was
+> Snapshot first taken on `development` = `82b803d`, 2026-09-24; the counts
+> marked **re-verified** below were re-run on `da4459b` the same day. The
+> six merges in between (`b9206b2`, `533ed09`, `f689ebf`, `4dd1fe2`,
+> `b5fc966`, `da4459b`) touched documentation, task/epic metadata and one
+> harness check (`agent/orchestrator/health.py`) — `git diff --name-only
+> 82b803d da4459b` lists no file under `lib/` or `test/`, so the build and
+> test evidence below still describes this tree. Every ✅ below was
 > executed, not reasoned about; the command and its output are quoted. Every ❌
 > names the gate that owns it. Nothing here is a plan — it is the current
 > state of `skills/release`'s own preconditions.
@@ -34,7 +40,7 @@ option. It is not the same as being ready.
 | `flutter analyze` | ✅ | `No issues found!` (53.2s) |
 | `flutter test` | ✅ | `1593/1593`, 153 test files |
 | `make validate` | ✅ | `16 epics, 233 tasks — DAG OK` |
-| `make lessons` | ✅ | `30 lessons · 16 promoted · 2 awaiting` (was crashing before 2026-09-24) |
+| `make lessons` | ✅ | `30 lessons · 16 promoted · 3 awaiting promotion` (was crashing before 2026-09-24) **re-verified on `da4459b`** — the third candidate is `L-process-014`, written later the same day |
 | `flutter build apk --release` | ✅ | `app-release.apk (62.5MB)`, exit 0, 147.6s cold |
 | `flutter build appbundle --release` | ✅ | `app-release.aab (60.8MB)`, exit 0, 67.5s — **first ever run, 2026-09-24** |
 | Release artifact is **distributable** | ❌ **no** | `apksigner` reports `CN=Android Debug`. No keystore exists. |
@@ -47,13 +53,20 @@ ambush; it is not one for this project.
 
 `skills/release` requires every task PR to have passed the review gate
 (rule 5, `reviewed_by` != `executed_by`). The task files are where that is
-recorded. Counted across all 230 `done`/`verified` task files on `82b803d`:
+recorded. Counted across all 230 `done`/`verified` task files, **re-verified**
+on `da4459b`:
 
 | | Count |
 |---|---:|
-| carry **both** `reviewed_by` and `review_outcome` | 140 |
-| carry **neither** | **90** |
-| carry only one of the two | 0 |
+| both `reviewed_by` and `review_outcome` carry a **value** | 140 |
+| **neither carries a value** | **90** |
+| — of those, the two keys are **absent entirely** | 67 |
+| — of those, the two keys are **present but empty** | 23 |
+| only one of the two carries a value | 0 |
+
+Count the *values*, not the keys: a bare `reviewed_by:` with nothing after
+it records nothing, and 23 files are in exactly that state. A scan that
+tests only for key presence reports 163/67 and understates the hole by 23.
 
 Of the 90, ten are inside E04 (frozen) and eighty are not. The split is clean —
 there is no task with a reviewer recorded but no outcome, or vice versa — which
@@ -82,6 +95,10 @@ gate. Compare `L-process-011` and `L-process-012`, both of which are already
 promotion candidates for template gaps in exactly this file.
 
 ## What stands between here and a signed, distributable release
+
+> Every item below that needs a human is also listed, with its owning gate
+> and its authoritative source, in **`docs/pending-decisions.md`**. That file
+> is the register; this section is the release-shaped view of it.
 
 Ordered by who owns it.
 

@@ -8,12 +8,33 @@ traces_to: [FR-PLAT-001, FR-PLAT-002, FR-PLAT-003, NFR-BATT-001, NFR-SEC-001, E0
 
 # ADR-0007 — Background execution architecture (Android)
 
-> DECISION OWNERSHIP: this document presents options, trade-offs and an
-> advisory recommendation. The **Decision** line stays `⏳ AWAITING HUMAN`
-> until the human picks. `E10-T08` (and transitively `E10-T09`/`E10-T10`)
-> is `blocked` until then — this is the gate `E06-T06.md:128-133` demanded
-> in writing ("that answer names a new dependency and a new manifest
-> permission, which is itself a 🧍 gate … must be re-presented before code").
+> DECISION OWNERSHIP (as proposed, 2026-09-04): this document presented
+> options, trade-offs and an advisory recommendation. The **Decision** line
+> was to stay `⏳ AWAITING HUMAN` until the human picked, with `E10-T08`
+> (and transitively `E10-T09`/`E10-T10`) `blocked` until then — the gate
+> `E06-T06.md:128-133` demanded in writing ("that answer names a new
+> dependency and a new manifest permission, which is itself a 🧍 gate
+> … must be re-presented before code").
+>
+> **That gate has since been cleared.** This ADR is `status: accepted`; the
+> decision is recorded in §Decision below (option 1, foreground service),
+> and `E10-T08`/`E10-T09`/`E10-T10` are all `status: done`. The paragraph
+> above is kept as the record of how the decision was framed, not as a
+> statement of current state — nothing in this ADR is awaiting a human.
+>
+> Corrected 2026-09-24. The present-tense wording had made this ADR read as
+> an open decision to anyone skimming the header. Note that this correction
+> did **not** make the phrase disappear from the file — the sentence above
+> still quotes it, deliberately, because how a decision was framed is worth
+> keeping. Grepping these files for that phrase was never a sound way to
+> find a pending ADR: it reads prose, and prose about a decision is not the
+> decision. The frontmatter is:
+>
+> ```
+> $ grep -n "^status:" agent/memory/decisions/ADR-000[1-9]*.md | grep -v accepted
+> ```
+>
+> No output means none is pending. See `docs/pending-decisions.md`.
 
 ## Context
 
