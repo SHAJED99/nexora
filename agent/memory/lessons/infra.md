@@ -110,3 +110,71 @@ automatically for matching tasks (see `index.yaml`).
   progressively more indirect tool paths.
 - recurrence: 1
 - status: lesson
+
+## L-infra-004 — an exemption carved into a heuristic safety check must have a CLOSED input space and must not read outside the flagged construct; four successive probe corpora on `make health`'s H8 each missed the hole the next reader found, because a corpus proves coverage and can never prove absence of holes
+- date: 2026-09-24 | source: PR #316 — two blocking review rounds, a planner
+  adjudication under `skills/review:120`, a re-scope, then a third blocking
+  finding on the re-scope
+- situation: H8 warns when an `isIn(...)`/raw-SQL `IN (...)` call site has no
+  chunking marker nearby (`L-backend-004`: unbounded id lists blow SQLite's
+  ~32,766-bind-variable ceiling; it recurred at four call sites in one epic).
+  Two real call sites were warning although both feed compile-time `const`
+  lists, so H8's only two findings were known-benign — which trains a reader
+  to skim the whole report. H8's own `fix` text already promised the escape
+  hatch ("or confirm at the call site the list is already provably bounded
+  ... and note why"), but no note could clear the warning.
+
+  Implementing that hatch took four attempts, and each of the first three
+  shipped an **unsafe-direction** regression against base — a shape that
+  warned before the fix and was silent after it:
+
+  | attempt | corpus blind spot | what slipped through |
+  |---|---|---|
+  | 1 | every case had one `isIn` per line | a per-line exemption silenced a neighbouring unbounded `isIn` |
+  | 2 | every case had a parseable argument | a line flagged via the raw-SQL branch was silenced by a const `isIn` on it |
+  | 3 | every unbounded case had an identifier head | `isIn(const ['a'].followedBy(ids))` — a const *literal* head with an unbounded tail |
+
+  Attempt 3 is the sharpest data point: it was written specifically to close
+  the identifier-head hole the planner had just named, and it reopened the
+  same hole with a literal head, in the same commit that claimed to close it.
+
+  Note on provenance: all four attempts were squashed into one merge commit,
+  so this history is not recoverable from `git log` — it survives only here
+  and in `make health-selftest`'s fixture table. That is the point of the
+  fixtures: the same squash is what erased the previous three rounds'
+  knowledge and left each round blind to the next.
+- root cause: the requirement was stated as an outcome, not a decision
+  procedure. "Exempt provably-bounded call sites" silently takes on an
+  **open-world** obligation: be safe over every expression that can appear as
+  an argument, in a file the check never parses. A textual heuristic cannot
+  discharge that, and no probe corpus can audit it — each corpus was built
+  from the defect its round had just learned about, so each was blind to the
+  next. Three rounds of competent implementation against an unbounded
+  requirement produced three holes; that is a specification failure, not an
+  implementation one, which is exactly what `skills/review:120` predicts when
+  it routes a second rejection to the planner.
+
+  Worth recording alongside it: the exemption bought **nothing operational**.
+  `Makefile` only fails on warnings under `STRICT`, and no caller passes it,
+  so all of that risk was spent to remove two lines from an advisory report.
+  Checking what an exemption actually buys, before building it, would have
+  reframed the whole exercise.
+- fix applied: the input space was **closed** rather than widened, and the
+  whole-file inference was deleted outright. Two hatches remain, each checkable
+  without reading a character outside the flagged line: the argument is
+  syntactically `const [...]` *in its entirety* (the closing `)` is what makes
+  it a proof rather than a head-match), or the file, line number and exact
+  line text are recorded in an allowlist with a written reason. The acceptance
+  criterion became structural — *does any exemption path read outside the
+  flagged construct?* — which a reviewer settles by reading instead of by
+  guessing which probe is missing.
+
+  The corpus was then made executable as `make health-selftest`
+  (`health.py --selftest`, stdlib-only so no rule-3 `new_dependency` gate),
+  seeded with every shape all four rounds produced. It was falsified by
+  reintroducing each of the three historical regressions in turn and
+  confirming it fails on each. Its standing rule: **any change that widens an
+  H8 exemption lands with a fixture for the shape it newly permits and for the
+  nearest shape it must still reject.**
+- recurrence: 1
+- status: lesson

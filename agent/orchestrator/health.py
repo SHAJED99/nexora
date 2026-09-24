@@ -440,6 +440,48 @@ def _normalise(line):
     return " ".join(line.split())
 
 
+def _h8_scan(rel, lines):
+    """Yield (1-based line number, line) for each H8 finding in one file.
+
+    Split out from the filesystem walk so `--selftest` can drive it over
+    in-memory fixtures. Nothing in here touches disk, so a fixture is exactly
+    the input a real file would produce.
+    """
+    for i, line in enumerate(lines):
+        if line.strip().startswith(("//", "*", "/*")):
+            continue  # doc comments quoting the pattern aren't a live call site
+        isin_hit = _ISIN_CALL.search(line)
+        raw_hit = bool(_RAW_IN.search(line)) and (
+            "db.customSelect" in line or "sql(" in line
+            or any("customSelect" in l or ".sql(" in l
+                   for l in lines[max(0, i - 3):i])
+        )
+        if not (isin_hit or raw_hit):
+            continue
+        window = "\n".join(lines[max(0, i - 6):i + 3])
+        if _CHUNK_MARKERS.search(window):
+            continue
+        if any(lineno == i + 1 and _normalise(line) == _normalise(recorded)
+               for lineno, recorded, _why in _H8_ALLOWLIST.get(rel, ())):
+            continue  # exactly this file, line and text, with a recorded reason
+
+        # Every isIn on this line must itself be a const literal, or none of
+        # it counts. Both guards below came from review rounds and both remain
+        # load-bearing:
+        #
+        #   - per CALL, never per line. A first attempt tested the whole line
+        #     and `continue`d, so an idiomatic `&`-chained Drift where clause
+        #     carrying one const isIn and one enumeration-built isIn went
+        #     quiet -- the exact defect this check exists to catch.
+        #   - a raw-SQL `IN (...)` disqualifies the line outright.
+        #     Interpolated SQL has no argument to read, so a const
+        #     `.isIn(...)` elsewhere on the line must not speak for it.
+        calls = _ISIN_CALL.findall(line)
+        if calls and not raw_hit and len(_ISIN_CONST.findall(line)) == len(calls):
+            continue  # every isIn on this line is a compile-time literal
+        yield i + 1, line
+
+
 def check_unbounded_id_lists():
     r = Result("H8", "no unbounded id list feeds isIn(...)/IN (...) (L-backend-004)")
     r.fix = ("Chunk the id list into bounded batches (<=500 ids) before the query runs, or\n"
@@ -452,41 +494,159 @@ def check_unbounded_id_lists():
         except OSError:
             continue
         rel = os.path.relpath(path, ROOT).replace("\\", "/")
-        for i, line in enumerate(lines):
-            if line.strip().startswith(("//", "*", "/*")):
-                continue  # doc comments quoting the pattern aren't a live call site
-            isin_hit = _ISIN_CALL.search(line)
-            raw_hit = bool(_RAW_IN.search(line)) and (
-                "db.customSelect" in line or "sql(" in line
-                or any("customSelect" in l or ".sql(" in l
-                       for l in lines[max(0, i - 3):i])
-            )
-            if not (isin_hit or raw_hit):
-                continue
-            window = "\n".join(lines[max(0, i - 6):i + 3])
-            if _CHUNK_MARKERS.search(window):
-                continue
-            if any(lineno == i + 1 and _normalise(line) == _normalise(recorded)
-                   for lineno, recorded, _why in _H8_ALLOWLIST.get(rel, ())):
-                continue  # exactly this file, line and text, with a recorded reason
-
-            # Every isIn on this line must itself be a const literal, or none
-            # of it counts. Both guards below came from review rounds and both
-            # remain load-bearing:
-            #
-            #   - per CALL, never per line. A first attempt tested the whole
-            #     line and `continue`d, so an idiomatic `&`-chained Drift where
-            #     clause carrying one const isIn and one enumeration-built isIn
-            #     went quiet -- the exact defect this check exists to catch.
-            #   - a raw-SQL `IN (...)` disqualifies the line outright.
-            #     Interpolated SQL has no argument to read, so a const
-            #     `.isIn(...)` elsewhere on the line must not speak for it.
-            calls = _ISIN_CALL.findall(line)
-            if calls and not raw_hit and len(_ISIN_CONST.findall(line)) == len(calls):
-                continue  # every isIn on this line is a compile-time literal
-            r.flag("warn", f"{rel}:{i + 1} — {line.strip()[:80]} "
+        for lineno, line in _h8_scan(rel, lines):
+            r.flag("warn", f"{rel}:{lineno} — {line.strip()[:80]} "
                            f"(no chunking marker within 6 lines)")
     return r
+
+
+# ── H8 self-test ──────────────────────────────────────────────────────────────
+# Every fixture below is a shape that was live at some point, or the nearest
+# shape the check must still reject. Four separate probe corpora were written
+# for H8 on 2026-09-24 and each one missed the hole the next reader found:
+#
+#   round 0  every case had one isIn per line          -> missed per-line suppression
+#   round 1  every case had a parseable argument       -> missed the raw-SQL branch
+#   round 2  every unbounded case had an ident head    -> missed a const-literal head
+#   round 3  (planner) named the class, not the shape
+#
+# A corpus proves coverage; it never proves absence of holes. What it can do is
+# stop a known hole from reopening, which is the job here: each round's
+# knowledge died with its commit message until this table existed.
+#
+# RULE: any change that widens an H8 exemption lands with a fixture for the
+# shape it newly permits AND for the nearest shape it must still reject.
+_H8_FIXTURES = (
+    # (name, dart source, expected warning line numbers)
+    ("inline const literal is bounded",
+     "q.where((t) => t.s.isIn(const ['t', 'u']));", ()),
+    ("two inline const literals on one line",
+     "q.where((t) => t.a.isIn(const ['x']) & t.b.isIn(const ['y']));", ()),
+    ("empty and trailing-comma const literals",
+     "q.where((t) => t.a.isIn(const []) & t.b.isIn(const ['a', 'b',]));", ()),
+    ("plain unbounded argument",
+     "q.where((t) => t.id.isIn(ids));", (1,)),
+    ("const literal beside an unbounded ident (round 0: per-line suppression)",
+     "q.where((t) => t.s.isIn(const ['a']) & t.id.isIn(ids));", (1,)),
+    ("const ident head, unbounded tail (round 2)",
+     "const seed = ['s'];\nq.where((t) => t.id.isIn(seed.followedBy(all).toList()));", (2,)),
+    ("const LITERAL head, unbounded tail (round 3 -- the re-scope)",
+     "q.where((t) => t.id.isIn(const ['a'].followedBy(all).toList()));", (1,)),
+    ("const literal head, cascade tail",
+     "q.where((t) => t.id.isIn(const ['a'].toList()..addAll(all)));", (1,)),
+    ("const identifier alone is NOT exempt (deliberate narrowing)",
+     "const kA = ['a'];\nq.where((t) => t.s.isIn(kA));", (2,)),
+    ("constructor-injected field",
+     "const xs = ['s'];\nclass P { final List<String> xs; P(this.xs);\n"
+     "  f(db) { q.where((t) => t.id.isIn(xs)); } }", (3,)),
+    ("raw SQL IN alone",
+     "db.customSelect('SELECT * FROM m WHERE id IN (${all.join(\",\")})');", (1,)),
+    ("raw SQL IN beside a const isIn (round 1)",
+     "db.customSelect('... IN (${all.join(\",\")})', w: db.x.isIn(const ['a']));", (1,)),
+    ("argument shape the regex cannot parse withholds the exemption",
+     "q.where((t) => t.s.isIn(const ['x']) & t.id.isIn([...all]));", (1,)),
+    ("a chunking marker still exempts, as it always has",
+     "for (final chunk in batches) { q.where((t) => t.id.isIn(chunk)); }", ()),
+    # The fixtures below guard H8's OTHER heuristic branches. They are outside
+    # the closed-input-space guarantee (which covers only the two exemption
+    # hatches), and two review rounds found each could be regressed while every
+    # other fixture still passed.
+    #
+    # The window ones are deliberately BOUNDARY tests, not samples: each marker
+    # sits exactly one line outside the window it must not reach, so widening
+    # `i - 6` or `i + 3` by even one fails immediately. A marker parked far away
+    # would leave slack a widening could hide in — the first draft of the
+    # backward fixture put it 10 lines up, which passed under `i - 7`, `i - 8`
+    # and `i - 9`. Each fixture is written with its blank lines visible, so the
+    # distance is checkable by eye and does not have to be trusted.
+    ("a trailing comment does not make a call site a comment",
+     "q.where((t) => t.id.isIn(ids)); // ids come from a page scan", (1,)),
+    ("a chunking marker 7 lines above is one line outside the backward window",
+     "for (final chunk in batches) {\n"
+     "\n" "\n" "\n" "\n" "\n" "\n"
+     "q.where((t) => t.id.isIn(everything));", (8,)),
+    ("a chunking marker 3 lines below is one line outside the forward window",
+     "q.where((t) => t.id.isIn(everything));\n"
+     "\n" "\n"
+     "for (final chunk in batches) {", (1,)),
+    ("raw SQL IN found via the customSelect lookback, not on the same line",
+     "db.customSelect(\n"
+     "  'SELECT * FROM m'\n"
+     "  ' WHERE id IN (${all.join(\",\")})');", (3,)),
+    ("raw SQL IN qualified by db.sql( rather than customSelect",
+     "db.sql('SELECT * FROM m WHERE id IN (${all.join(\",\")})');", (1,)),
+    ("a commented-out call site is not a call site",
+     "// q.where((t) => t.id.isIn(ids));", ()),
+)
+
+
+def selftest():
+    """Prove H8 still rejects every shape it has ever wrongly exempted.
+
+    Stdlib only, so it adds no dependency and needs no rule-3 `new_dependency`
+    gate. The fixtures are filesystem-free; the allowlist assertions do read
+    the files the allowlist names, because an entry that no longer describes
+    its own line is exactly what they exist to catch.
+
+    `make design-verify` has `design-selftest` for the same reason: a gate
+    nobody has proven still works is not a gate.
+    """
+    failures = []
+    for name, src, expected in _H8_FIXTURES:
+        got = tuple(lineno for lineno, _line in _h8_scan("lib/_fixture.dart", src.splitlines()))
+        if got != expected:
+            failures.append((name, expected, got, src))
+
+    # The allowlist is an exact record, so prove both directions on the real
+    # entry rather than on a fixture: it must match where it is recorded, and
+    # must not match the same text anywhere else.
+    for rel, entries in _H8_ALLOWLIST.items():
+        for lineno, text, why in entries:
+            if not why.strip():
+                failures.append((f"allowlist {rel}:{lineno} has no reason", "a reason", "", text))
+            padded = [""] * (lineno - 1) + [text]
+            if tuple(n for n, _l in _h8_scan(rel, padded)):
+                failures.append((f"allowlist {rel}:{lineno} does not match where recorded",
+                                 (), "warned", text))
+            shifted = [""] * lineno + [text]
+            if not tuple(n for n, _l in _h8_scan(rel, shifted)):
+                failures.append((f"allowlist {rel}:{lineno} still matches one line lower",
+                                 "warns", "silent", text))
+
+            # The two assertions above are built FROM the entry, so a stale
+            # entry passes them. Check the record against the real file too:
+            # `make health` would catch a drifted entry (it warns), but only
+            # after someone runs it and reads the warning.
+            try:
+                real = open(os.path.join(ROOT, rel), encoding="utf-8").read().splitlines()
+            except OSError:
+                failures.append((f"allowlist names a file that does not exist: {rel}",
+                                 "the file", "missing", text))
+                continue
+            if lineno > len(real) or _normalise(real[lineno - 1]) != _normalise(text):
+                found = _normalise(real[lineno - 1]) if lineno <= len(real) else "<past EOF>"
+                failures.append((f"allowlist {rel}:{lineno} no longer describes that line",
+                                 _normalise(text), found, text))
+
+    print(f"\n{C['b']}H8 self-test{C['0']} — {len(_H8_FIXTURES)} fixtures + "
+          f"{sum(len(e) for e in _H8_ALLOWLIST.values())} allowlist entries\n")
+    for name, expected, got, src in failures:
+        # Fixture rows compare line-number tuples; allowlist rows compare text.
+        # One template for both rendered an allowlist mismatch as "expected
+        # warnings on lines t.deliveryState.isIn(...)", which is true but
+        # unreadable.
+        label = ("expected warnings on lines" if isinstance(expected, tuple)
+                 else "expected")
+        print(f"{C['fail']}✗{C['0']} {name}")
+        print(f"    {label} {expected!r}, got {got!r}")
+        print(f"{C['dim']}    {src.splitlines()[0][:96]}{C['0']}")
+    if failures:
+        print(f"\n{C['fail']}{len(failures)} fixture(s) failed{C['0']} — H8 no longer behaves "
+              "as its own record says. Fix the check, or, if the change is\n"
+              "deliberate, change the fixture in the same commit and say why.")
+        return 1
+    print(f"{C['pass']}all pass{C['0']} — every shape H8 has wrongly exempted is still rejected.")
+    return 0
 
 
 CHECKS = [check_thresholds, check_masks, check_retros, check_fences,
@@ -498,7 +658,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--strict", action="store_true", help="warnings fail too (CI)")
+    ap.add_argument("--selftest", action="store_true",
+                    help="prove H8 still rejects every shape it has wrongly exempted")
     a = ap.parse_args()
+
+    if a.selftest:
+        sys.exit(selftest())
 
     results = [c() for c in CHECKS]
 
