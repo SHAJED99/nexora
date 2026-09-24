@@ -1,7 +1,7 @@
 ---
 id: E11
 title: Firebase Metadata Sync
-status: done (2026-09-08; 6/6 tasks, 6/6 bugs closed, P1/P2=0 — merged into development)
+status: done  # 2026-09-08; 6/6 tasks, 6/6 bugs closed, P1/P2=0 — merged into development
 type: feature
 priority: { moscow: should, wsjf: 3.5 }
 depends_on: [E01, E02]

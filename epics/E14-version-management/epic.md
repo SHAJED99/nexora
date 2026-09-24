@@ -1,7 +1,7 @@
 ---
 id: E14
 title: Version & Update Management
-status: done (2026-09-07; 6/6 tasks done, 8/8 bugs closed, P1/P2=0 — merged into development)
+status: done  # 2026-09-07; 6/6 tasks done, 8/8 bugs closed, P1/P2=0 — merged into development
 type: feature
 priority: { moscow: should, wsjf: 2.75 }
 depends_on: []

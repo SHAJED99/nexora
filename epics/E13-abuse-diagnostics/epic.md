@@ -1,7 +1,7 @@
 ---
 id: E13
 title: Abuse Prevention & Diagnostics
-status: done (2026-09-07; 7/7 tasks done, 3/3 bugs closed, P1/P2=0 — merged into development)
+status: done  # 2026-09-07; 7/7 tasks done, 3/3 bugs closed, P1/P2=0 — merged into development
 type: feature
 priority: { moscow: should, wsjf: 4.0 }
 depends_on: [E06]

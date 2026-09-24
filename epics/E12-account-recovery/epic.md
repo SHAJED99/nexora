@@ -1,7 +1,7 @@
 ---
 id: E12
 title: Account Recovery & Device Enrollment
-status: done (2026-09-07; 3/3 tasks + 14/14 bugs closed, P1/P2/P3=0 — merged into development)
+status: done  # 2026-09-07; 3/3 tasks + 14/14 bugs closed, P1/P2/P3=0 — merged into development
 type: feature
 priority: { moscow: should, wsjf: 3.5 }
 depends_on: [E01, E03]
