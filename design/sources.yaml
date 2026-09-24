@@ -246,6 +246,18 @@ screens:
     viewports: [390x844]
     states: [{ name: default }]
 
+  # E07-T15: the group-create screen. `design/screens/group-create.md`
+  # (GAP-018, approved 2026-08-31) was written by E07-T12 and no build task
+  # ever followed, so this id was never registered. Registered here for the
+  # same reason E15-T07/T09's blocks above say: a screen must be registered
+  # before its own task can run its gate.
+  - id: group-create
+    source: derived
+    design_path: n/a - derived, design/screens/group-create.md (GAP-018)
+    impl_path: /groups/new
+    viewports: [390x844]
+    states: [{ name: default }]
+
 # - id: login
 #   source: ui
 #   design_path: /login.html      # the path inside the design source

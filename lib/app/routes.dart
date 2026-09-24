@@ -11,6 +11,8 @@ import 'package:nexora/features/dashboard/presentation/dashboard_binding.dart';
 import 'package:nexora/features/dashboard/presentation/dashboard_view.dart';
 import 'package:nexora/features/devices/presentation/devices_binding.dart';
 import 'package:nexora/features/devices/presentation/devices_view.dart';
+import 'package:nexora/features/groups/presentation/group_create_binding.dart';
+import 'package:nexora/features/groups/presentation/group_create_view.dart';
 import 'package:nexora/features/home/presentation/home_view.dart';
 import 'package:nexora/features/login/presentation/login_view.dart';
 import 'package:nexora/features/recovery/presentation/device_enrollment_controller.dart';
@@ -84,6 +86,13 @@ abstract final class Routes {
   /// design/screens/chat.md (E06-T11). `id` = `conversationId` =
   /// peer device id (T09 §2).
   static const chat = '/chat/:id';
+
+  /// design/screens/group-create.md (E07-T15, GAP-018). **No screen links
+  /// here yet.** The create-group entry point is that contract's Open
+  /// section, explicitly awaiting the human and not covered by GAP-018's
+  /// clearance, so this route is reachable only by direct navigation until
+  /// that decision is taken (E07-T15 section 4).
+  static const groupCreate = '/groups/new';
 
   /// design/screens/version-update-required.md (E14-T04, FR-VER-006/007).
   /// Reached at launch when `EvaluateVersionStateUseCase` (E14-T02)
@@ -209,6 +218,11 @@ final appPages = <GetPage<dynamic>>[
     name: Routes.chat,
     page: () => const ChatView(),
     binding: ChatBinding(),
+  ),
+  GetPage<dynamic>(
+    name: Routes.groupCreate,
+    page: () => const GroupCreateView(),
+    binding: GroupCreateBinding(),
   ),
   GetPage<dynamic>(
     name: Routes.versionUpdateRequired,

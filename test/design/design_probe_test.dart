@@ -86,6 +86,8 @@ import 'package:nexora/features/settings/security_center/presentation/security_c
 import 'package:nexora/features/settings/security_center/presentation/security_center_view.dart';
 import 'package:nexora/features/settings/storage/presentation/storage_settings_controller.dart';
 import 'package:nexora/features/settings/storage/presentation/storage_settings_view.dart';
+import 'package:nexora/features/groups/presentation/group_create_controller.dart';
+import 'package:nexora/features/groups/presentation/group_create_view.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
 import 'package:nexora/features/trust/domain/block_use_case.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
@@ -1194,6 +1196,63 @@ void main() {
       );
       final dump = jsonDecode(raw!) as Map<String, dynamic>;
       expect(dump['renderError'], isNull);
+    });
+  });
+
+  // ── E07-T15: `group-create` ─────────────────────────────────────
+  // Seeded with two TRUSTED relationships so the contract's `default` state
+  // renders (a populated member list). The other three relationship states
+  // are seeded too, and must NOT appear -- the same filter EARS-GROUP-17
+  // asserts in the controller test, re-proved here against the real widget.
+  group('screen probes — group-create (make design-probe)', () {
+    late AppDatabase db;
+    late GroupCreateController controller;
+
+    setUp(() async {
+      Get.testMode = true;
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      final repository = RelationshipRepository(db);
+      await repository.upsert('MS-device-01', RelationshipState.trusted);
+      await repository.upsert('AL-device-02', RelationshipState.trusted);
+      await repository.upsert('device-allowed', RelationshipState.allowed);
+      await repository.upsert('device-unknown', RelationshipState.unknown);
+      await repository.upsert('device-blocked', RelationshipState.blocked);
+      controller = GroupCreateController(
+        relationships: repository,
+        createGroup: ({required name, required memberDeviceIds}) async =>
+            'probe-group',
+        openThread: (_) async {},
+      );
+      Get.put<GroupCreateController>(controller);
+    });
+
+    tearDown(() {
+      Get.reset();
+      return db.close();
+    });
+
+    testWidgets('group-create', (tester) async {
+      await tester.runAsync(() async {
+        while (controller.state.value == GroupCreateState.loading) {
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+        }
+      });
+
+      await dumpScreenProbe(
+        tester,
+        screenId: 'group-create',
+        screen: const GetMaterialApp(home: GroupCreateView()),
+      );
+
+      final raw = await tester.runAsync(
+        () => File('build/design-probe/group-create.json').readAsString(),
+      );
+      final dump = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(dump['renderError'], isNull);
+      // The trusted-only filter, proved against the rendered tree rather
+      // than only against the controller.
+      expect(raw.contains('device-blocked'), isFalse);
+      expect(raw.contains('device-allowed'), isFalse);
     });
   });
 
