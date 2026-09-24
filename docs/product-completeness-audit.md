@@ -197,3 +197,131 @@ built against the fallbacks meanwhile.
 - The release-track documents (`docs/release-readiness.md`,
   `docs/release-signing.md`) are left intact and simply no longer the
   critical path.
+
+---
+
+# Addendum — 2026-09-24, after building P1
+
+> Written after `E07-T15` shipped `/groups/new` (PR #325). Building the first
+> item taught four things the audit above could not know, and they **move four
+> of the eight work items into the "needs a decision" column** — P2, P3, P4 and
+> P6. Recorded here rather than silently revising the table, so the change is
+> visible. One item moved the other way: P7 was over-gated in this addendum's
+> own first draft and is buildable now.
+
+## P1 is done
+
+`/groups/new` exists: controller, view, binding, route, 11 EARS-named tests
+against a real in-memory database, and a green design gate. `flutter analyze`
+clean, 1605 tests pass. Reviewed on a different model (rule 5), no findings.
+
+**It is not reachable from anywhere in the app.** That is deliberate and is
+decision **D1** — see below, which now blocks more than it did.
+
+## The four new findings
+
+### 1. Voice, attachments and calls need **new dependencies** — rule 3
+
+`pubspec.yaml` has `geolocator`, `cryptography`, `libsignal_protocol_dart`,
+`sentry_flutter`, `in_app_update` and `package_info_plus` — and **no audio
+capture/playback package and no file or image picker.**
+
+So P3 (`chat-voice`), P4 (`chat-attachment`) and P6 (`call`) each require a
+`new_dependency` decision, which rule 3 reserves to the human and
+`docs/conventions.md` records a consistent procedure for. The audit's table
+above said "no decision needed" for all three. **That was wrong** — it checked
+the design contracts for open questions and did not check what the code would
+have to import.
+
+**The same shallow check also mis-cleared P2.** `group-manage.md` has no
+`## Open` section, so the audit called it unblocked; finding 2 below shows it
+is blocked for a different reason the contract could not state. So **four**
+items move to the decision column, not three — P2, P3, P4 and P6 — and the
+root cause is one mistake, not two: reading a contract's open questions and
+treating their absence as proof that nothing else stands in the way.
+
+**`FR-UI-005` is *not* one of them.** An earlier draft of this addendum listed
+P7 as needing `intl`. That was over-gating, caught in review. FR-UI-005's text
+is *"All visible strings shall come from localization resources; the UI shall
+support RTL layout via logical (not literal left/right) padding"* — no
+pluralization, no date or number formatting, which are the only things `intl`
+adds over the SDK. A string table plus `Directionality` and
+`EdgeInsetsDirectional`, both core Flutter, satisfy it with **no new package
+at all**. P7 is buildable now.
+
+Precedent for how these get decided: every dependency in `pubspec.yaml` carries
+an inline comment naming the task, the question id, the human approval date,
+and why it is pinned exactly rather than by caret range.
+
+### 2. `group-manage` has no entry point — and unlike `group-create`, nobody has proposed one
+
+`design/screens/group-manage.md` has **no `## Open` section and no
+"Reached from" line.** It is fully specified and fully buildable, and building
+it would produce a *second* screen reachable only by direct navigation.
+
+`group-create` at least has a proposal on the table (D1). `group-manage` has
+nothing: the natural entry — a group conversation's header in `chat.md` —
+is not drawn, not derived, and not in `design/gaps.md`. It needs a new gap
+entry before it has an approved way in.
+
+**This is why P2 was not built next.** It is not blocked as *code*; it is
+blocked as *product*, and building it would have converted a real gap into a
+hidden one.
+
+### 3. The rule-2 gate could not run at all
+
+`node_modules/` existed in this checkout and was **empty**. Every
+`make design-verify` invocation failed with
+`Cannot find package 'yaml' imported from design/tools/lib/config.mjs` before
+reaching a single comparison. Installing the already-declared `yaml` package
+fixed it.
+
+The gate that enforces rule 2 was silently unrunnable, and nothing reports
+that: `make design-verify` is not in CI (the `harness` job runs `validate`,
+`lessons`, `health-selftest` and `trace`), so an unrunnable design gate looks
+exactly like a design gate nobody happened to run. Worth a checked-in fix —
+either a CI step or a preflight in the Makefile target.
+
+### 4. A derived screen's first design gate proves less than it appears to
+
+For a screen with `source: derived` there is no design source to extract a
+golden from, so `design-fidelity` §3's instruction is to extract the golden
+**from the build**. `make design-verify` then compares the build against a
+golden taken from that same build, and reports `match 100%`.
+
+That number is a **regression baseline for future changes**, not evidence that
+the first build honours its contract. On `E07-T15` the actual fidelity check
+was the reviewer reading `group-create.md` against the code and grepping all
+nine colour constants back to the parent contract that measures each one. Any
+future derived screen should expect the same: the green is necessary and not
+sufficient, and the PR should say so rather than letting the percentage speak.
+
+## The decision table, corrected
+
+| # | Work | Blocked by |
+|---|---|---|
+| ~~P1~~ | ~~Group create screen~~ | **done** — PR #325 |
+| P2 | Group manage screen | a gap entry + entry-point approval (new) |
+| P3 | Voice notes in chat | **`new_dependency`** — audio capture/playback |
+| P4 | Attachments in chat | **`new_dependency`** — file/image picker |
+| P5 | Location sharing in chat | a location message kind in the messaging layer |
+| P6 | Call screen | **`new_dependency`** + D3's three cosmetic items |
+| P7 | Localization + RTL (`FR-UI-005`) | **nothing — buildable now** |
+| P8 | Adaptive navigation (`FR-UI-003`) | **D2** — spec vs design |
+
+**Five of the eight need a decision from you** — P2, P3, P4, P6, and P8. Only
+the first four moved here because of this addendum; **P8 was already in this
+column**, placed there by the original audit as **D2**.
+
+**Two are engineering work that needs nobody.** P5 is blocked by a missing
+location message kind in the messaging layer — a real gap, but not a rule-3
+call. P7 needs no dependency and no decision. P1 is done.
+
+That correction matters more than the finding it replaces. The first draft of
+this table said *every* remaining item needed a human, which is the conclusion
+that costs an agent the least work — and two of the eight did not survive
+review of that claim.
+
+D1 also grew: approving the `conversations.md` header affordance is now what
+makes an *already-built and merged* screen reachable, rather than what unblocks
+a future one.
