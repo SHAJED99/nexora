@@ -151,6 +151,54 @@ automatically for matching tasks (see `index.yaml`).
 - recurrence: 1
 - status: lesson
 
+## L-process-020 — a merged commit message is testimony, not measurement: it sits in the repository and so reads as repo state, but it records what someone believed when they wrote it. Six factual errors in one session came from sourcing a number anywhere other than command output, and the last one was copied out of my own earlier commit body
+- date: 2026-09-24 | source: PRs #315-#322, one session. Caught by six
+  separate Rule-5 reviews, never by the author.
+- situation: every one of these was a number or state asserted in prose, and
+  every one was wrong in a way a one-line command would have shown:
+
+  | # | Claim | Truth | Source of the error |
+  |---|---|---|---|
+  | 1 | `(12 tags)` hand-typed into a reviewer's evidence package | 13 | recalled |
+  | 2 | line citations in a lesson file | off by +9, then mis-described | counted in a printed `sed` window |
+  | 3 | "18 transcribable reviewers" | 0 | a `\s*` regex crossing newlines |
+  | 4 | "both H8 sites are E04-owned" -> "corrected" to not-E04 | both ARE E04-authored; the original was right | read the directory, not `git blame` |
+  | 5 | "the grep count doubled" | unchanged, 1 per file | written from intent, then left stale after the fix |
+  | 6 | "six merges stale" | **14** | copied from my own merged #321 commit body |
+
+  Case 6 is the sharpest. "Six" was not invented: it is the count in #306's
+  subject line, "repair six stale or invalid traceability records" — an
+  adjacent, unrelated fact about the same file, which reached the changelog by
+  way of a commit message I had written myself a few hours earlier.
+- root cause: not carelessness with arithmetic. Writing a claim and verifying
+  it feel like one act and are two, and the gap between them is where all six
+  landed. Case 6 adds the specific trap: **a merged commit message is inside
+  the repository, so it wears the costume of repo state.** It is not. It is a
+  claim that was true, or was not, at the moment it was written, and it is
+  never re-checked afterwards. It is also the source least likely to trip
+  suspicion, because it is one's own prior reasoning.
+
+  The only things that count as sources are **command output** and **file
+  contents at a named ref**. A commit body, a PR description, an earlier
+  paragraph of the document being edited, and a previous agent's report are
+  all testimony.
+- fix applied: none mechanical, and that is the honest state — this is a
+  discipline, not a check. What did work, every time, was the Rule-5 review
+  gate: six for six, and three of the six were caught only because the
+  reviewer re-derived a number instead of reading it. What did NOT work was
+  the author re-reading their own draft.
+
+  Two habits this session adopted and should keep:
+  1. Build an evidence block by *running* the commands in the same tool call
+     that writes the prose, and paste the output (`{ ... } > file`), rather
+     than narrating from what the tree is about to become.
+  2. When a change makes something a document says untrue, re-run that
+     document's own claims against the post-change tree before pushing. Twice
+     this session a fix left the prose describing the pre-fix state, and once
+     the commit correcting a miscount introduced a fresh one.
+- recurrence: 1
+- status: lesson
+
 ## L-process-006 — a task file can describe *another* task's obligation in prose, and nothing checks that the other task's own contract agrees, so the obligation ends up owned by nobody
 - date: 2026-08-29 | source: E05-B01 (end-of-epic bug sweep)
 - situation: `E05-T03.md` §3 defined the wire envelope and stated plainly
