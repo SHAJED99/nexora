@@ -13,6 +13,8 @@ import 'package:nexora/features/devices/presentation/devices_binding.dart';
 import 'package:nexora/features/devices/presentation/devices_view.dart';
 import 'package:nexora/features/groups/presentation/group_create_binding.dart';
 import 'package:nexora/features/groups/presentation/group_create_view.dart';
+import 'package:nexora/features/groups/presentation/group_thread_binding.dart';
+import 'package:nexora/features/groups/presentation/group_thread_view.dart';
 import 'package:nexora/features/home/presentation/home_view.dart';
 import 'package:nexora/features/login/presentation/login_view.dart';
 import 'package:nexora/features/recovery/presentation/device_enrollment_controller.dart';
@@ -93,6 +95,14 @@ abstract final class Routes {
   /// clearance, so this route is reachable only by direct navigation until
   /// that decision is taken (E07-T15 section 4).
   static const groupCreate = '/groups/new';
+
+  /// design/screens/chat-group.md (E07-T18, GAP-020). The group thread.
+  /// **Deliberately NOT `/chat/:id`**: `ChatController` treats its id as a
+  /// Signal peer device id and runs X3DH against it, so a group id there
+  /// produces undecryptable bubbles and a non-retryable send failure
+  /// (`E07-B01`, measured; human decision 2026-09-02 closed that route to
+  /// group ids, and `E07-B05` re-closed a second door into it).
+  static const groupThread = '/groups/:id';
 
   /// design/screens/version-update-required.md (E14-T04, FR-VER-006/007).
   /// Reached at launch when `EvaluateVersionStateUseCase` (E14-T02)
@@ -223,6 +233,11 @@ final appPages = <GetPage<dynamic>>[
     name: Routes.groupCreate,
     page: () => const GroupCreateView(),
     binding: GroupCreateBinding(),
+  ),
+  GetPage<dynamic>(
+    name: Routes.groupThread,
+    page: () => const GroupThreadView(),
+    binding: GroupThreadBinding(),
   ),
   GetPage<dynamic>(
     name: Routes.versionUpdateRequired,

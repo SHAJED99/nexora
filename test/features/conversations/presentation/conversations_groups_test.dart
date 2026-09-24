@@ -195,7 +195,7 @@ void main() {
   // acknowledge the tap honestly instead of silently misrouting.
 
   testWidgets(
-      'test_EARS_UI_3_group_row_tap_does_not_navigate_to_the_1to1_chat_screen',
+      'test_EARS_GROUP_22_group_row_tap_opens_the_group_thread_not_the_1to1_chat',
       (tester) async {
     await _insertGroup(
       db,
@@ -238,6 +238,10 @@ void main() {
               return const SizedBox.shrink();
             },
           ),
+          GetPage<dynamic>(
+            name: Routes.groupThread,
+            page: () => const SizedBox.shrink(),
+          ),
         ],
       ),
     );
@@ -245,24 +249,38 @@ void main() {
 
     expect(find.text('Team'), findsOneWidget);
     await tester.tap(find.text('Team'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300)); // let the GetX snackbar overlay animate in.
+    await tester.pumpAndSettle();
 
-    // Still on /conversations -- `ChatController` (1:1-only) was never
-    // reached with a group id.
-    expect(navigated, isEmpty);
-    expect(Get.currentRoute, '/conversations');
-    expect(find.byType(ConversationsView), findsOneWidget);
+    // The invariant E07-B01 and E07-B05 both exist to protect: a group id
+    // NEVER reaches the 1:1-only `ChatController`. This assertion is
+    // unchanged by E07-T18 and must stay unchanged forever.
+    expect(
+      navigated,
+      isEmpty,
+      reason: '`ChatController` treats its id as a Signal PEER DEVICE id and '
+          'runs X3DH against it (E07-B01, measured)',
+    );
 
-    // The tap is acknowledged honestly (the same "not built yet" SnackBar
-    // primitive `SettingsController.openRow` already uses), not silently
-    // swallowed.
-    expect(find.text('Team'), findsWidgets);
-    expect(find.text('Coming soon'), findsOneWidget);
+    // E07-T18: the tap now NAVIGATES, to the group thread. Before this task
+    // it was deliberately inert (E07-B01, human direction (a), 2026-09-02)
+    // because the only thread screen was the 1:1 one.
+    expect(Get.currentRoute, '/groups/g:team');
+    expect(
+      find.text('Coming soon'),
+      findsNothing,
+      reason: 'the interim acknowledgement is gone: there is a real '
+          'destination now',
+    );
 
-    // Let the snackbar's own auto-dismiss timer finish before the test
-    // ends, so no pending timer trips the framework's teardown check.
-    await tester.pumpAndSettle(const Duration(seconds: 4));
+    // #332's lesson: prove the destination is REAL, not just a name this
+    // harness happens to register. `Get.toNamed` on an unregistered route
+    // is a silent GetX no-op.
+    expect(
+      appPages.where((p) => p.name == Routes.groupThread),
+      hasLength(1),
+      reason: 'the group thread route must exist in the application own '
+          'route table',
+    );
   });
 
   // --- The shared delivery-glyph mapping (GAP-009), not a local switch ----

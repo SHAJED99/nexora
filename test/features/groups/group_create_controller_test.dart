@@ -8,6 +8,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:nexora/app/routes.dart';
 import 'package:nexora/core/auth/google_auth_service.dart' show AppFailure;
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/features/groups/presentation/group_create_controller.dart';
@@ -281,6 +282,10 @@ void main() {
                 page: () => const Scaffold(body: Text('conversations')),
               ),
               GetPage<dynamic>(
+                name: '/groups/:id',
+                page: () => const Scaffold(body: Text('thread')),
+              ),
+              GetPage<dynamic>(
                 name: '/chat/:id',
                 page: () => const Scaffold(body: Text('chat')),
               ),
@@ -313,10 +318,17 @@ void main() {
         );
         expect(
           Get.currentRoute,
-          GroupCreateController.successRoute,
-          reason: 'the group exists, so the honest landing is the screen that '
-              'renders it — the Groups section of Conversations. The real group '
-              'thread is GAP-020, gated on OQ-E07-13.',
+          '/groups/g:team',
+          reason: 'E07-T18: the group thread now exists (GAP-020 built after '
+              'the human answered OQ-E07-13 on 2026-09-25), so a successful '
+              'create lands in the new group thread -- and the group id is '
+              'substituted into the route, not left as the literal `:id`',
+        );
+        expect(
+          appPages.where((p) => p.name == GroupCreateController.successRoute),
+          hasLength(1),
+          reason: '#332: the destination must exist in the REAL appPages '
+              'table, not only in this harness',
         );
       },
     );

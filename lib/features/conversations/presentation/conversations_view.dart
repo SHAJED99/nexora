@@ -478,12 +478,16 @@ class _GroupsSection extends StatelessWidget {
 /// (design-fidelity Rule 5 / L-frontend-001: never a raw `Listener` to score
 /// better against the probe).
 ///
-/// **Non-navigating (E07-B01).** `controller.openGroup` acknowledges the tap
-/// with a SnackBar instead of routing to `/chat/:id` — the destination
-/// screen's `ChatController` is 1:1-only (E06-T11) and cannot render or send
-/// a group conversation (GAP-020, gated on `OQ-E07-13`). The row itself is
-/// unchanged from the design contract — same fill, border, icon, text — only
-/// the tap's destination differs, so no design element is added or removed.
+/// **Navigates to `/groups/:id` (E07-T18).** It did not, between `E07-B01`
+/// and this task: the only thread screen was `/chat/:id`, which is 1:1-only
+/// (`ChatController` runs X3DH against its id), so the human chose to gate
+/// the tap on 2026-09-02 until `GAP-020` shipped. It has now shipped.
+///
+/// Note what changed at this call site: `openGroup` is passed
+/// **`row.conversationId`**, not `row.name`. The SnackBar version took the
+/// name because a name was all it displayed; a route needs the id. The row
+/// itself is unchanged from the design contract — same fill, border, icon,
+/// text — so no design element is added or removed.
 class _GroupRow extends StatelessWidget {
   const _GroupRow({required this.row, required this.controller});
 
@@ -495,7 +499,7 @@ class _GroupRow extends StatelessWidget {
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
-        onTap: () => controller.openGroup(row.name),
+        onTap: () => controller.openGroup(row.conversationId),
         borderRadius: BorderRadius.circular(8),
         child: Container(
           padding: const EdgeInsets.all(12),

@@ -31,7 +31,17 @@ gap: GAP-018
   search field, row content) · `design/screens/devices.md` (the per-row
   trailing action slot and the row state-label pair)
 - **Reached from:** `/conversations` — see §Open below.
-- **Leads to:** `/chat/:id` for the new group's thread on success.
+- **Leads to:** `/groups/:id` for the new group's thread on success.
+  > **Corrected 2026-09-25.** This line read `/chat/:id` from 2026-08-31
+  > until today. Two days after it was written, the human closed `/chat/:id`
+  > to group ids (`E07-B01`, P1, direction (a)) because `ChatController`
+  > treats its id as a Signal peer device id. The line was therefore
+  > specifying a destination the project had decided against — and
+  > `E07-T15` followed it faithfully, which is how `E07-B05` shipped.
+  > `E07-B05` deliberately did **not** edit this line (an agent does not
+  > rewrite a contract to match its code) and carried it to the human as
+  > **D5**. D5 was answered on 2026-09-25; `E07-T18` built `/groups/:id`;
+  > the line is corrected here to the destination that now exists.
 
 ## Derivation boundary — what is NOT derived
 

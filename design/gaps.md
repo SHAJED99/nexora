@@ -1952,11 +1952,9 @@ and that is the strongest single argument for this disposition.**
 - **built:** not built — this entry is the proposal only.
 
 ## GAP-045 — a blocked member's message in a group thread has no words
-- **status:** 🟡 proposed — **not built, and BLOCKING state 3 of
-  `chat-group.md`.** There is no honest interim: an empty bubble body renders
-  as *a message that failed to load*, which is a different and worse claim
-  than "this sender is blocked". One human answer unblocks it. The rest of
-  the group thread does not depend on it.
+- **status:** 🟢 **approved — option (b), human, 2026-09-25.** Was
+  🟡 proposed and blocking the whole `E07-T18` build; unblocked by that
+  answer.
 - **screen:** chat-group (`design/screens/chat-group.md`, state 3) — element
   `G10`
 - **spec:** FR-COMM-002, FR-TRUST-004
@@ -2035,3 +2033,41 @@ Checklist for the gap pass. In rough order of how often each is missed:
   gap into bookkeeping — the precise failure `docs/product-completeness-
   audit.md` exists to document.
 
+## GAP-047 — the send affordance has no glyph, on any screen
+- **status:** 🟢 **approved — option (c), human, 2026-09-25.**
+- **screen:** chat-group (`design/screens/chat-group.md`, G7) — and, in
+  passing, `chat.md` itself
+- **spec:** FR-COMM-001, FR-COMM-002
+- **design shows:** a 48×48 `r9999px` button on the accent fill
+  `rgb(53, 37, 205)` carrying the glyph **`mic`** (`chat.md` elements
+  30-31). The design source draws **no send glyph anywhere**, and
+  `grep` confirms none of the other contracts does either.
+- **the consequence, already shipping:** `chat_view.dart:479` renders that
+  `mic` faithfully, so the 1:1 chat screen's only round accent button is a
+  microphone that does not record (voice is GAP-014, unbuilt). Messages are
+  sent from the **keyboard's own send key**. That is the designed behaviour
+  being followed, not a defect introduced by a build — but it is worth
+  naming, because a user reasonably reads a prominent round button next to
+  a text field as "send".
+- **derived from:** _(nothing — that is the gap. The button's geometry,
+  fill and glyph size are all measured; only the glyph IDENTITY is missing,
+  exactly the shape GAP-014 handled for record-stop/play/pause.)_
+- **options, none chosen:**
+  - (a) `send` — the Material Symbols paper-plane, the near-universal
+    convention. A new glyph identity in this app.
+  - (b) `arrow_upward` — also new, but a weaker convention.
+  - **(c) ✅ CHOSEN** — keep the composer button-less and send only from the
+    keyboard. Invents nothing; leaves the round button on the 1:1 screen
+    still reading as "send" until GAP-014's voice work makes the `mic`
+    honest.
+- **approved by:** ✅ human, 2026-09-25 — option (c), with the binding
+  instruction: *"Keep the group composer consistent with the already-shipped
+  1:1 behavior. Do not introduce `send` or `arrow_upward`, and do not create
+  a new glyph contract."*
+- **built:** `E07-T18`, as approved — the group composer has no send button
+  and submits from the keyboard's send key. **No new glyph contract was
+  created**, and `chat.md` is untouched.
+- **note:** the 1:1 screen's `mic`-as-send confusion is NOT fixed by this
+  decision and is not a defect introduced by any build — it is `chat.md`'s
+  own measured element 31, followed faithfully. It becomes honest when
+  GAP-014 (voice messages, approved 2026-08-30) is built.

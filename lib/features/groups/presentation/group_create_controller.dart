@@ -113,18 +113,18 @@ class GroupCreateController extends GetxController {
   /// door at the `bug_priorities` gate on 2026-09-02 (P1, fix direction (a)).
   /// This is the same door, reached from the other side.
   ///
-  /// The real group thread is `GAP-020`, still gated on `OQ-E07-13`. Until it
-  /// exists there is no group destination to navigate to, so the create
-  /// screen is *replaced* by Conversations, whose `Groups` section renders
-  /// the group that was just created. `Get.offNamed`, not `Get.back()`:
-  /// `/groups/new` is reachable only by direct navigation today
-  /// (`routes.dart` `groupCreate`), so there is not always a page beneath it.
+  /// **`/groups/:id` as of `E07-T18`.** When `E07-B05` was fixed the group
+  /// thread did not exist (`GAP-020` was gated on `OQ-E07-13`), so the
+  /// honest destination was Conversations — the screen that at least showed
+  /// the group that had just been created. The human answered `OQ-E07-13` on
+  /// 2026-09-25 and the thread now exists, so a successful create lands
+  /// where `group-create.md` always said it should: in the new group's own
+  /// thread.
   ///
-  /// `design/screens/group-create.md` still says "Leads to `/chat/:id`" — it
-  /// was written 2026-08-31, two days before the decision that closed that
-  /// route to group ids. Correcting a measured contract is not an agent's
-  /// call (rule 2); the conflict is carried to the human with `GAP-020`.
-  static const successRoute = '/conversations';
+  /// `Get.offNamed`, not `Get.toNamed`: the create screen is *replaced*, so
+  /// backing out of the thread does not return the user to a form for a
+  /// group they have already made.
+  static const successRoute = '/groups/:id';
 
   /// **Not awaited** (`E07-B05`, second finding). `Get.offNamed` returns a
   /// future that completes when the route it pushes is *popped*, not when the
@@ -134,10 +134,9 @@ class GroupCreateController extends GetxController {
   /// `Get.toNamed` had the same shape; no test noticed, because every test
   /// injected a seam that completed immediately.
   ///
-  /// `groupId` is unused: [successRoute] is a fixed screen, not a per-group
-  /// destination, precisely because no per-group destination exists yet. The
-  /// parameter stays because it is the seam's type, and because the day
-  /// `GAP-020` ships this function is where the group id starts mattering.
+  /// `groupId` is substituted into [successRoute]. It was unused between
+  /// `E07-B05` and `E07-T18`, when there was no per-group destination to
+  /// carry it to; that day has arrived, and this is where it mattered.
   ///
   /// The error handler is not decoration. `unawaited` on its own discards a
   /// navigation failure entirely; routing it through [FlutterError.reportError]
@@ -150,7 +149,8 @@ class GroupCreateController extends GetxController {
     // `offNamed` returns a NULLABLE future -- GetX hands back null when it
     // declines to navigate at all. That is a third outcome, distinct from
     // success and from a thrown error, and it is silent either way.
-    final navigation = Get.offNamed<dynamic>(successRoute);
+    final navigation =
+        Get.offNamed<dynamic>(successRoute.replaceFirst(':id', groupId));
     if (navigation == null) {
       return;
     }
@@ -165,7 +165,8 @@ class GroupCreateController extends GetxController {
             stack: stack,
             library: 'group_create_controller',
             context: ErrorDescription(
-              'navigating to $successRoute after a successful group create',
+              'navigating to the thread for $groupId after a successful '
+              'group create',
             ),
           ),
         );
