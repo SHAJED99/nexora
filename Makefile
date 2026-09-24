@@ -55,10 +55,26 @@ trace:           ## requirement → task → test chain + orphans → docs/trace
 # gate had been in that state, and four screens were reporting FAIL into a
 # void (docs/product-completeness-audit.md). This preflight makes the
 # difference visible at the moment someone tries to run it.
+#
+# Two checks rather than one, and rather than a list of every package (which
+# would drift): `.package-lock.json` proves an install actually resolved a
+# tree, and `playwright` proves the devDependencies came with it. The second
+# is not belt-and-braces -- design/tools/lib/browser.mjs and pixel.mjs import
+# playwright, pixelmatch and pngjs at MODULE level, so every design target
+# needs them even on the `--impl flutter` path that never opens a browser.
+# An earlier draft checked only `node_modules/yaml` and would have passed a
+# prod-only install straight into the crash it exists to prevent.
 design-deps:     ## rule-2 gate preflight: are the design tools' Node deps installed?
-	@test -d node_modules/yaml || { \
+	@test -f node_modules/.package-lock.json || { \
 	  echo "design: Node dependencies are NOT installed -- the rule-2 gate cannot run."; \
 	  echo "design: that is NOT the same as the gate passing. It has not run at all."; \
+	  echo "design: fix with ->  npm install"; \
+	  exit 2; }
+	@test -d node_modules/playwright || { \
+	  echo "design: devDependencies are missing (no node_modules/playwright)."; \
+	  echo "design: every design target imports playwright/pixelmatch/pngjs at"; \
+	  echo "design: module level -- see design/tools/lib/browser.mjs and pixel.mjs --"; \
+	  echo "design: so a prod-only install (npm ci --omit=dev) cannot run the gate."; \
 	  echo "design: fix with ->  npm install"; \
 	  exit 2; }
 	@echo "design: Node dependencies present."
