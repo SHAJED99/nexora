@@ -819,8 +819,8 @@ automatically for matching tasks (see `index.yaml`).
 
 ## L-process-020 — a merged commit message is testimony, not measurement: it lives in the repository and so reads as repo state, but it records only what someone believed when they wrote it, and is never re-checked. Six factual errors in one session came from sourcing a claim from anywhere other than command output; the last was copied out of my own earlier commit body
 - date: 2026-09-24 | source: PRs #309-#322, one session — `#311`/`#314`
-  (case 1), `#309` (case 2), `#319` (cases 3 and 5), `#315`/`#318` (case 4),
-  `#321`/`#322` (case 6)
+  (case 1), `#309` (case 2), `#319` (case 3), `#315`/`#316` (case 4),
+  `#315` (case 5), `#321`/`#322` (case 6)
 - situation: six claims asserted in prose, each wrong, each correctable by a
   one-line command:
 
