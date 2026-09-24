@@ -816,3 +816,69 @@ automatically for matching tasks (see `index.yaml`).
   flags any `- [x]` DoD or checklist line in a task file whose text contains a
   forward-looking or unevidenced phrase (no commit hash, no quoted log line,
   no evidence-file reference), the same way rule 6 already fences `files:`.
+
+## L-process-020 — a merged commit message is testimony, not measurement: it lives in the repository and so reads as repo state, but it records only what someone believed when they wrote it, and is never re-checked. Six factual errors in one session came from sourcing a claim from anywhere other than command output; the last was copied out of my own earlier commit body
+- date: 2026-09-24 | source: PRs #309-#322, one session — `#311`/`#314`
+  (case 1), `#309` (case 2), `#319` (case 3), `#315`/`#316` (case 4),
+  `#315` (case 5), `#321`/`#322` (case 6)
+- situation: six claims asserted in prose, each wrong, each correctable by a
+  one-line command:
+
+  | # | Claim | Truth | Where the wrong value came from |
+  |---|---|---|---|
+  | 1 | `(12 tags)` typed into a reviewer's evidence package | 13 | recalled |
+  | 2 | line citations in a lesson file | off by +9, then mis-described as +3 | counted in a printed `sed` window, whose display position is not the file offset |
+  | 3 | "18 transcribable reviewers" | 0 | `\s*` in `^reviewed_by:\s*(.*)$` crosses newlines under `re.M`, so the capture took the NEXT field's line |
+  | 4 | "both H8 sites are E04-owned", then "corrected" to not-E04 | both ARE E04-authored; the original was right | read the directory path, not `git blame` |
+  | 5 | "the grep count doubled" | unchanged, 1 per file | written from intent, then left stale after the fix removed the cause |
+  | 6 | "six merges stale" | **14** | copied from my own merged `#321` commit body |
+
+  Case 6 is the one that names the trap. "Six" was not invented: it is the
+  count in `#306`'s subject line, `chore(E06-B01): repair six stale or invalid
+  traceability records` — an adjacent, unrelated fact about the same file,
+  which reached the changelog through a commit message I had written myself a
+  few hours earlier.
+- root cause: writing a claim and verifying it feel like one act and are two.
+  Case 6 adds the specific trap: **a merged commit message is inside the
+  repository, so it wears the costume of repo state.** It is not. It is a
+  claim that was true, or was not, when it was written, and nothing re-checks
+  it afterwards. It is also the source least likely to trip suspicion,
+  because it is one's own prior reasoning.
+
+  The only things that count as sources are **command output** and **file
+  contents at a named ref**. A commit body, a PR description, an earlier
+  paragraph of the document being edited, and a previous agent's report are
+  all testimony.
+- fix applied: none mechanical — this is a discipline, not a check, and
+  saying otherwise would be its own instance of the failure.
+
+  What the record actually shows about the Rule-5 gate, counted rather than
+  asserted: **four of the six** (cases 2, 4, 5, 6) were caught by an
+  independent review. **Case 3 the author caught** on re-count, before it
+  became a 90-file backfill. **Case 1 the review got backwards** — it raised
+  S2/BLOCKING against a document that was correct, because the author's
+  hand-typed evidence package said 12; the author re-derived 13 and rejected
+  the finding. That last one is the useful shape: a poisoned evidence package
+  turns the gate against a correct document, because a toolless reviewer
+  cannot re-derive anything and the package IS its reality.
+
+  Evidence limit, stated so the entry audits itself: five of the six
+  attributions are itemised in a merged commit body. Case 5's is not —
+  `#315` records "round 2 REQUEST CHANGES (1x S3)" without naming which
+  finding that S3 was, so the link rests on the session record. It is the
+  one claim here that a future reader cannot re-derive from the repo alone.
+
+  Two habits that did work and should stay:
+  1. Build the evidence block by RUNNING the commands in the same tool call
+     that writes the prose (`{ ... } > file`), and paste the output, rather
+     than narrating what the tree is about to become.
+  2. When a change makes something a document says untrue, re-run that
+     document's own claims against the post-change tree before pushing. Twice
+     this session a fix left the prose describing the pre-fix state, and once
+     the commit correcting a miscount introduced a fresh one.
+- recurrence: 6 (`(12 tags)`, the +9 citations, "18 reviewers", the H8
+  ownership over-correction, the doubled-grep claim, "six merges stale" —
+  every factual claim I sourced from something other than a command this
+  session). Counted per instance, following `L-process-011`, which recorded
+  four instances from a single sweep as `recurrence: 4`.
+- status: lesson
