@@ -388,31 +388,49 @@ _RAW_IN = re.compile(r"\bIN\s*\(", re.I)
 #     const xs = [...];  .isIn(xs.map(...))   a const list declared in the file
 #
 # This is a soundness-preserving exemption, not a loosened threshold. It can
-# only quiet a call site whose argument is provably compile-time constant, and
-# a list built by enumeration is never `const`, so the shape the lesson is
+# only quiet an `isIn` ARGUMENT that is provably compile-time constant, and a
+# list built by enumeration is never `const`, so the shape the lesson is
 # actually about still warns. Both shapes were live false positives on
 # 2026-09-24 (relay_engine.dart:488, receive_message_use_case.dart:241), and a
 # check whose only two findings are known-benign trains its reader to skim it.
-_ISIN_CONST_LITERAL = re.compile(r"\.isIn\(\s*const\s*[\[{]")
-_ISIN_IDENT = re.compile(r"\.isIn\(\s*([A-Za-z_][A-Za-z0-9_]*)\b")
+#
+# The exemption is per CALL, never per line. A first attempt tested the whole
+# physical line and `continue`d past it, which silenced every other `isIn` on
+# that line -- so an idiomatic `&`-chained Drift where clause carrying one
+# const `isIn` and one enumeration-built `isIn` went quiet. That is the exact
+# defect this check exists to catch, introduced by the fix for its own false
+# positives. A line is skipped only when EVERY `isIn` on it is exempt.
+_ISIN_ARG = re.compile(r"\.isIn\(\s*(?:(const\s*[\[{])|([A-Za-z_]\w*))")
+# Comments and string bodies are not code: a `const rows = [...]` inside a ///
+# doc comment must not grant a real `rows` an exemption.
+_NON_CODE = re.compile(r"//[^\n]*|/\*.*?\*/|'(?:\\.|[^'\\\n])*'|\"(?:\\.|[^\"\\\n])*\"", re.S)
 
 
 def _is_const_only(name, lines):
-    """True when `name` is declared `const` in this file and never non-const.
+    """True when every assignment to `name` in this file is a `const` declaration.
 
-    Matching a `const <name> =` anywhere in the file is not enough on its own:
-    one function's `const states = [...]` would then exempt a *different*
-    function's `final states = await enumerateEverything()`, which is precisely
-    the unbounded shape L-backend-004 is about. Requiring that no runtime
-    binding of the name exists anywhere in the file is coarse in the safe
-    direction -- it declines to exempt when the name is reused, rather than
-    exempting on the strength of a same-named constant somewhere else.
+    Matching one `const <name> =` is not enough: a function's
+    `const states = [...]` would then exempt a *different* function's
+    `final states = await enumerateEverything()`, which is precisely the
+    unbounded shape L-backend-004 is about. Nor is it enough to look only for
+    `final`/`var`/`late`, because neither a bare typed declaration
+    (`List<String> ids = ...`) nor a plain reassignment (`ids = ...`) carries
+    one of those keywords.
+
+    So this inverts the test: find every `<name> =` in the file's code, and
+    require each one to be preceded by `const`. Anything else -- a runtime
+    binding, a reassignment, a same-named field -- withholds the exemption.
+    Coarse in the safe direction: it declines to exempt when the name is
+    reused, rather than exempting on the strength of a constant elsewhere.
     """
-    text = "\n".join(lines)
-    if not re.search(r"\bconst\s+(?:\w+\s+)?" + re.escape(name) + r"\s*=", text):
+    text = _NON_CODE.sub(" ", "\n".join(lines))
+    assignments = list(re.finditer(r"\b" + re.escape(name) + r"\s*=(?!=)", text))
+    if not assignments:
         return False
-    runtime = re.search(r"\b(?:final|var|late)\s+(?:\w+\s+)?" + re.escape(name) + r"\s*=", text)
-    return runtime is None
+    # `const`, then optionally a type (possibly generic: `const List<String> x =`)
+    declared_const = re.compile(r"\bconst\s+(?:[\w<>,\s]*\s+)?$")
+    return all(declared_const.search(text[max(0, m.start() - 120):m.start()])
+               for m in assignments)
 
 
 def check_unbounded_id_lists():
@@ -440,11 +458,14 @@ def check_unbounded_id_lists():
             window = "\n".join(lines[max(0, i - 6):i + 3])
             if _CHUNK_MARKERS.search(window):
                 continue
-            if _ISIN_CONST_LITERAL.search(line):
-                continue  # inline compile-time constant — bounded by construction
-            ident = _ISIN_IDENT.search(line)
-            if ident and _is_const_only(ident.group(1), lines):
-                continue  # names a const list declared in this file — same reasoning
+            # Every isIn on this line must be provably constant, or none of it
+            # counts. An arg shape this cannot parse leaves args shorter than
+            # calls, which withholds the exemption rather than granting it.
+            calls = _ISIN_CALL.findall(line)
+            args = _ISIN_ARG.findall(line)
+            if calls and len(args) == len(calls) and all(
+                    literal or _is_const_only(name, lines) for literal, name in args):
+                continue  # bounded by construction — compile-time constant
             r.flag("warn", f"{rel}:{i + 1} — {line.strip()[:80]} "
                            f"(no chunking marker within 6 lines)")
     return r

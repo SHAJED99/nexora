@@ -143,29 +143,44 @@ What the freeze currently holds, all read-only:
 | Blocking orphans | **6** | `E04-T03b`, `E04-T03c`, `E04-B35`, `E04-B36` (`done` tasks with no EARS test) plus `FR-ROUTE-005` and `FR-ROUTE-008` (requirements with no test) |
 | Open bugs | 2 of 3 | `E04-B39` (**P2/must/S2**) and `E04-B38` (P3/should/S3) |
 | `done` task files with no review recorded | 10 of 90 | see `docs/release-readiness.md` §The review record |
-| `make health` H8 ⚠️ sites | 1 of 2 | `lib/core/routing_engine/relay_engine.dart:488` is in E04's implementation area. The other H8 site is **not** in E04 — see the note below |
+| `make health` H8 ⚠️ sites | 0 of 2 remain | both were E04-authored, and both were **false positives**; H8 itself was fixed rather than either file — see the note below |
 | `EARS-ROUTE-004` test-name mismatch | 1 | the `make trace` "test matching no declared EARS id" orphan |
 
-> **Correction, 2026-09-24.** An earlier summary of this repository said both
-> H8 warnings were in E04-owned files and were therefore frozen. That is
-> wrong twice over. Only `relay_engine.dart:488` is in the routing area; the
-> other site is
-> `lib/features/messaging/domain/receive_message_use_case.dart:241`, which E04
-> does not own. And on inspection **neither is an unbounded id list at all** —
-> `relay_engine.dart:488` feeds a `const` list of three enum values declared
-> seven lines above it, and `receive_message_use_case.dart:241` feeds the
-> literal `const ['trusted', 'allowed']` on the same line. Both are H8 false
-> positives: H8 is explicitly a heuristic ("cannot prove a list is unbounded,
-> only that no recognized chunking marker is nearby") and neither site carries
-> a marker its regex knows. Nothing here is a defect, and nothing here is
-> waiting on a human — it is a precision issue in a harness check.
+> **Correction, 2026-09-24 — and a correction of the correction.** This entry
+> first said both H8 warnings were E04-owned and therefore frozen. It was then
+> "corrected" to say `receive_message_use_case.dart:241` is *not* E04's. **That
+> second claim was the wrong one**, and an independent review caught it:
 >
-> **It is untracked as of this commit.** There is no lesson, bug task, open
-> question or code comment that owns it; saying otherwise would be exactly the
-> phantom-owner problem this register exists to prevent. It is named here so
-> that the next reader of `make health`'s H8 ⚠️ does not re-derive this
-> analysis from scratch, and it belongs in a harness change, not on the
-> human's list.
+> ```
+> $ git blame -L 241,241 lib/features/messaging/domain/receive_message_use_case.dart
+> dc0f05a  fix(E04-B26): file inbound 1:1 messages under this device's own
+>          conversation id for an already-trusted sender (#259)
+> $ grep -n receive_message_use_case epics/E04-mesh-routing/tasks/E04-B18.md
+> 23:  - lib/features/messaging/domain/receive_message_use_case.dart   # required_context
+> 38:    - lib/features/messaging/domain/receive_message_use_case.dart # files.update
+> ```
+>
+> Both lines are E04-authored. The original ownership claim was right; the
+> correction was an overreach — a file's directory is not its owner, and I read
+> `lib/features/messaging/` and stopped there.
+>
+> What *was* genuinely wrong in the original is the part that mattered:
+> **neither site is an unbounded id list.** `relay_engine.dart:488` feeds a
+> `const` list of three enum values declared seven lines above it, and
+> `receive_message_use_case.dart:241` feeds the literal
+> `const ['trusted', 'allowed']` on the same line. Both were H8 false
+> positives — H8 is explicitly a heuristic ("cannot prove a list is unbounded,
+> only that no recognized chunking marker is nearby") and neither site carried
+> a marker its regex knew.
+>
+> Because both are false positives, the fix was to **H8 itself**, not to either
+> E04 file: no E04 implementation was touched and the freeze was not crossed.
+> H8 now reads the `isIn` argument rather than the surrounding line.
+>
+> It was untracked when this register was written, and is now closed by that
+> harness change. Kept here rather than deleted because the reasoning is the
+> only record of *why* two warnings a reader might have acted on were safe to
+> quiet — and because the ownership mistake above is worth leaving visible.
 
 `E04-B35` is the one worth flagging: it was closed by **supersession** rather
 than by delivering `EARS-TRANSPORT-4`, because it claims a behaviour the
