@@ -385,11 +385,18 @@ Two greps, neither of which measured the thing being claimed.
    its element table. The table names all three nav items; the word does not
    appear near them.
 
-This is the same failure already recorded as
+This is a failure of the same family as
 `feedback_review_package_raw_output_only` and `L-process-020`: a command was
 run, its output was real, and it was presented as evidence for a proposition
 it does not address. The grep was honest. The sentence built on it was not
 earned.
+
+> **Cross-reference corrected 2026-09-24 (see Correction 2).** This paragraph
+> originally read "the same failure already recorded as … `L-process-020`".
+> That attribution was wrong, and left a reader following it at the wrong
+> lesson. `L-process-020` is about a claim sourced from something *other than*
+> a command. The failure described here is its inverse — a real command, real
+> output, wrong proposition — and is now `L-process-021`.
 
 ## What survives, and what D2 actually is now
 
@@ -478,3 +485,100 @@ decision from anyone.
 |---|---|---|
 | P9 | Triage the four failing screens' deltas against `design/gaps.md`, and **write the gap entries that do not yet exist** (dashboard/conversations mock-data substitution is covered by none) | **nothing — buildable now** |
 | P10 | Make the design gate visible: wire `design-verify` into CI, or add a preflight that fails loudly when `node_modules` is empty | **nothing — buildable now** |
+
+---
+
+# Correction 2 — 2026-09-24. "The first full design-gate baseline" was not.
+
+> Corrects the **Correction** section above (PR #327), which is itself a
+> correction. Appended rather than edited, for the same reason as before: #327
+> is merged and this file is read to make decisions.
+
+## The claim
+
+#327 introduced its gate run as *"the first full design-gate baseline"*, said
+the four failing screens had been *"reporting FAIL into a void"*, and concluded
+*"nobody could have seen any of it."*
+
+## What the repository actually says
+
+`epics/E06-personal-chat/tracker.md`, dated **2026-09-12** — twelve days
+earlier:
+
+```
+…re-run across all 16 screens the dumper serves: every screen below 100%
+improved (dashboard 19%->34.9%, conversations 21.1%->38.6%, chat 79.1%->86%,
+devices 65.6%->78.7%), every screen already at 100% stayed at 100% -- **no
+screen regressed**, all 32 numbers independently reproduced by the reviewer
+in both directions.
+```
+
+A full 16-screen run. **Three of the four numbers I reported as a new baseline
+are character-for-character the ones already on record** — dashboard 34.9%,
+conversations 38.6%, chat 86%. The fourth has moved since (devices 78.7% →
+82%). All 32 figures had been independently reproduced by a reviewer at the
+time.
+
+So: not the first, not a void, and seen by at least two agents who wrote the
+numbers down.
+
+## What survives
+
+Narrower, and still worth having:
+
+- **There is no aggregated, current view.** The numbers lived in one epic's
+  tracker as part of a bug's merge note. Nothing surfaces them as a standing
+  fact about the project, which is why an audit written twelve days later did
+  not find them before asserting novelty.
+- **The gate could not be re-run** (empty `node_modules`), which PR #328 fixed.
+- **It is still not in CI**, for the reason recorded in `ci.yml`.
+- The earlier claim that **no missing section or heading** exists on those
+  screens is unaffected — that was re-derived from the raw probe JSON.
+
+## The pattern, which is the actual finding
+
+This is the **third** time in one session that a confident negative turned out
+to be false, and all three have the same shape: *a command was run, its output
+was real, and the sentence built on it asserted something the command had not
+measured.*
+
+| # | The claim | The command actually run | What it could not see |
+|---|---|---|---|
+| 1 | "no navigation chrome of any kind" | `grep` for `NavigationBar\|NavigationRail\|TabBar` in `lib/` | a nav hand-built from `Container`+`Row`, in four views |
+| 2 | "three nav items" | read `dashboard_view.dart` as far as the third `Expanded` | the fourth `Expanded` |
+| 3 | "the first full design-gate baseline" | ran the gate across 17 screens | `epics/E06-personal-chat/tracker.md`, where the same run was recorded 12 days earlier |
+
+None of these was a recalled number — that failure is already
+`L-process-020`, and this is its mirror image. Here the evidence was freshly
+produced and genuinely true; the *proposition* was simply not the one the
+evidence supported. A grep for three class names establishes that those three
+class names are absent. It says nothing whatever about whether the app has
+navigation.
+
+The generalisation, recorded as `L-process-021`: **a negative claim is only as
+good as the search designed to falsify it.** "There is no X" requires looking
+where an X would be *if it existed*, which for this repository means the
+trackers, the retros and the merge notes — not only the code.
+
+This correction was found by a reviewer checking a claim in an unrelated PR
+(#329), not by the audit re-reading itself. That is the second time the review
+gate has caught this specific pattern, and the reason the lesson is written at
+`recurrence: 4` rather than as a one-off.
+
+**A fourth case was added during review of this very correction**, and it is
+the one most worth reading: the `GAP-003` scope error disclosed a few hundred
+lines above. I checked that `GAP-003` existed and cited it as covering the
+dashboard and conversations mock-data substitution; its own `screen:` field
+scopes it to `devices` alone. Same shape — a real artifact read, a claim
+reaching past what the reading established — sitting in this same document,
+omitted while I was writing the lesson about omissions. The table in
+`L-process-021` now carries it.
+
+**One reproducibility note, since this document's subject is measurement.**
+The reviewer re-ran the gate independently and reproduced all four
+percentages, but observed `devices` reading **83.6% (51/61)** on the first two
+runs immediately after a cold `npm install`, then a stable **82% (50/61)** on
+eleven subsequent probe-and-verify cycles. Judged a cold-start artifact rather
+than real non-determinism, and recorded rather than smoothed over: a gate
+whose first run disagrees with its next eleven is worth someone confirming
+before any of these numbers is treated as a fixed baseline.

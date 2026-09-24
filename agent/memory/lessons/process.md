@@ -882,3 +882,130 @@ automatically for matching tasks (see `index.yaml`).
   session). Counted per instance, following `L-process-011`, which recorded
   four instances from a single sweep as `recurrence: 4`.
 - status: lesson
+
+## L-process-021 — a real observation, over-extended into a claim it does not support. Four times in one session a command or a file was read, the output was accurate, and the sentence built on it asserted something that reading had not established. This is `L-process-020`'s mirror image: there the evidence was recalled or copied; here it was freshly produced and genuinely true, and still did not support the proposition
+- date: 2026-09-24 | source: PRs #324-#330, one session — `#324`/`#327`
+  (case 1), `#327` (case 2, caught pre-commit), `#327`/`#329` (case 3),
+  `#327` (case 4, self-disclosed in the same document)
+- situation: four claims, each false, each produced by a real command or a
+  real file read whose output was accurate. They split into two shapes,
+  and naming both is what makes the lesson checkable rather than a slogan:
+  **(a)** a negative or novelty claim from a search that cannot establish
+  absence, and **(b)** a claim from a *partial* read of a complete
+  construct — the reading stopped before the disqualifying part:
+
+  | # | Claim written | Command actually run | What that command could not see |
+  |---|---|---|---|
+  | 1 | "There is no navigation chrome of any kind" | `grep -rln "NavigationBar\|NavigationRail\|TabBar\|IndexedStack" lib` → no matches | a bottom nav hand-built from `Container`+`Row`+`_NavItem`, present in **four** views, and drawn by `dashboard.md` elements 37/40/43/46 |
+  | 2 *(shape b)* | "three nav items" | read `dashboard_view.dart` as far as the third `Expanded` | the fourth `Expanded` (Settings), 8 lines further down |
+  | 3 | "the first full design-gate baseline"; the screens had been "reporting FAIL into a void" | ran `design-verify` across all 17 probe-backed screens | `epics/E06-personal-chat/tracker.md`, which records the same 16-screen run on **2026-09-12**, twelve days earlier, with three of the four numbers character-identical and all 32 independently reproduced by that reviewer |
+  | 4 *(shape b)* | "`GAP-003` covers the dashboard and conversations mock-data substitution" | read `design/gaps.md` and found `GAP-003` | `GAP-003`'s own `screen:` field, which scopes it to **`devices`** alone — so those two screens are covered by no gap entry at all |
+
+  Case 1 names the trap exactly. A grep for three class names establishes
+  that those three class names are absent from `lib/`. It says nothing
+  whatever about whether the application has navigation — and the gap between
+  those two propositions is invisible at the moment of writing, because the
+  command *did* run and its output *was* true.
+
+  Case 3 is the expensive one, because the falsifying evidence was in the
+  repository, written by a previous agent, in the obvious place: the epic's
+  own tracker. Nothing was hidden. The search was simply never aimed there.
+- relation to `L-process-020`, stated because the two are easy to merge and
+  `skills/retro` warns that a duplicate lesson is worse than none: `L-020`
+  is *the claim was never sourced from a command* (recalled, or copied out
+  of a commit body). This one is *the command ran and was right, and the
+  sentence reached past it*. The fixes differ, which is the test for whether
+  two lessons are really one: `L-020`'s is source discipline — run the
+  command at write time. This one's is **search design** — aim the command
+  at what would falsify the sentence. A document in this repository
+  (`docs/product-completeness-audit.md`) originally attributed cases 1-2 to
+  `L-020`; that cross-reference was wrong and has been corrected to point
+  here.
+- root cause, shape (a) — **an existential claim and a universal claim need
+  opposite searches, and grep only ever supports the existential one.**
+  `grep X` finding a hit proves "X exists" — sound. `grep X` finding nothing
+  proves "this *spelling* of X is absent", which is not "no X exists" unless
+  the search enumerated every spelling an X could have. Cases 1 and 3 are that
+  substitution, made silently.
+
+  The second-order cause for shape (a) is *where* the search ran. Cases 1 and
+  3 searched `lib/` or the current tree. This repository keeps its own history
+  of what was measured — `epics/*/tracker.md`, `retro.md`, merge notes,
+  `design/gaps.md` — and a claim of novelty ("first", "nobody has", "never
+  been") is a claim about that record, not about the code. Neither searched it.
+- root cause, shape (b) — **the right document was opened and not read to the
+  point that disqualifies the claim.** Cases 2 and 4 are *not* search failures
+  and the paragraph above does not explain them: case 4 searched
+  `design/gaps.md`, found `GAP-003`, and was still wrong, because the
+  disqualifying fact was `GAP-003`'s own `screen:` field two lines down.
+  Searching the record is necessary and is not sufficient — which is precisely
+  why this shape is listed separately instead of being folded into shape (a)'s
+  tidier story.
+
+  **An honest tension, since the test used above cuts here too.** This lesson
+  argues it is distinct from `L-process-020` because their *fixes* differ. By
+  that same test, shape (a)'s fix (items 1-3 below) and shape (b)'s (item 4)
+  are also two fixes in one lesson.
+
+  A first draft of this paragraph justified keeping them together by saying
+  shape (b) was "still thin" against the six cases `L-020` carried. **That
+  yardstick is wrong**, and a reviewer said so: `L-020` was *written* with six
+  cases in hand, it did not grow into them, so it sets no threshold. The bar
+  this repository actually uses is the one `make lessons` prints —
+  **`recurrence >= 2`** — and shape (b) already has two cases (2 and 4)
+  standing entirely on its own. By the project's own convention it qualifies
+  as a separate entry **today**.
+
+  It is kept here anyway, deliberately and as a judgement call rather than a
+  correct answer: splitting it would be the fourth structural change to this
+  entry in three review rounds, each of which introduced the defect the next
+  round found, and the marginal value of a second id is smaller than the risk
+  of that. **This is flagged for the human alongside the promotion decision**
+  — skills and lessons are code (`skills/retro` rule 2), and whether shape (b)
+  earns its own id is the same kind of call as whether either gets promoted.
+  If it recurs again, split it rather than re-deciding this.
+
+  **The pattern is older than this session.** `design/gaps.md` records a
+  `chat_view.dart:130` comment citing a "GAP-003 precedent" for chat's avatar
+  — the identical error to case 4 — caught in `E06-B07`'s review on
+  2026-09-12. It is deliberately **not** counted in the recurrence below,
+  because this entry declares its scope as PRs #324-#330; it is noted because
+  it means the pattern is not an artifact of one session's fatigue.
+- fix: before writing any sentence containing *no*, *none*, *never*, *nobody*,
+  *first* or *only*:
+  1. Name what an instance would look like **if it existed**, and search for
+     that, not for the absence. For "no navigation": search for what the screen
+     renders at the bottom, or read the design contract's element table — not
+     for framework class names.
+  2. Enumerate the spellings. A hand-rolled equivalent of a framework widget
+     is the default outcome in a codebase with a measured design, not an edge
+     case — three of this project's four "missing" UI findings were hand-built
+     equivalents.
+  3. For any claim of novelty, grep the **record** as well as the code:
+     `epics/*/tracker.md`, `epics/*/retro.md`, `design/gaps.md`. If a previous
+     agent measured it, they wrote it down.
+  4. Read to the end of the construct before counting it, and read a record
+     entry's own scope fields before citing it. Case 2 was four items reported
+     as three because the fourth sat below the visible window; case 4 cited
+     `GAP-003` without reading its `screen:` field, which scopes it to
+     `devices` alone. Items 1-3 would have prevented neither: both documents
+     were found.
+- prevention: a reviewer instruction, since this is not mechanically
+  checkable: when a PR body or document asserts a negative or a novelty, the
+  reviewer's job is to spend one search trying to falsify it. That is what
+  caught cases 1 and 3 here — both were found by a reviewer checking a claim
+  in a *different* PR, not by the document re-reading itself.
+- recurrence: 4 ("no navigation chrome of any kind", "three nav items", "the
+  first full design-gate baseline", "`GAP-003` covers dashboard/conversations").
+  Counted per instance, following `L-process-011` and `L-process-020`.
+
+  Two counting decisions, stated so the number audits itself. Case 2 was
+  caught before it was committed; it is counted anyway, because it was
+  written down as a fact before it was caught, and a lesson that only counts
+  the errors that escaped teaches nothing about the ones that nearly did.
+  Case 4 was **added in review of this very lesson** — it is disclosed a few
+  hundred lines above in `docs/product-completeness-audit.md`, was the same
+  shape, and I had omitted it while writing the lesson about omitting things.
+  Undercounting matters specifically because `make lessons` reads this field
+  to decide the promotion rung.
+- status: lesson
