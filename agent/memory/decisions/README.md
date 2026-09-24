@@ -30,8 +30,8 @@ agent's to make freely.
 Accepted ADRs are not documentation — they're binding. `skills/implement` step 3
 is "read the ADRs your files touch", and every decision your task touches gets
 implemented or gets a §Deviation naming it. Silently dropping an accepted
-decision is a review failure; it happened twice in v1, which is why it's
-`memory/lessons/backend.md` L-backend-006.
+decision is a review failure; it happened twice in v1, which is why it is
+written down in `memory/lessons/backend.md` at all.
 
 ## Genesis fills 0001–00NN
 
