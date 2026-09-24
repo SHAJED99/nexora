@@ -87,13 +87,13 @@ import 'package:nexora/features/settings/security_center/presentation/security_c
 import 'package:nexora/features/settings/storage/presentation/storage_settings_controller.dart';
 import 'package:nexora/features/settings/storage/presentation/storage_settings_view.dart';
 import 'package:nexora/features/groups/presentation/group_create_controller.dart';
-import 'package:nexora/features/groups/data/group_repository.dart';
-import 'package:nexora/core/persistence/group_tables.dart';
 import 'package:nexora/features/groups/presentation/group_create_view.dart';
-import 'package:nexora/features/groups/presentation/group_thread_controller.dart';
-import 'package:nexora/features/groups/presentation/group_thread_view.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
 import 'package:nexora/features/trust/domain/block_use_case.dart';
+import 'package:nexora/features/groups/data/group_repository.dart';
+import 'package:nexora/core/persistence/group_tables.dart';
+import 'package:nexora/features/groups/presentation/group_thread_controller.dart';
+import 'package:nexora/features/groups/presentation/group_thread_view.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
 import 'package:on_process_button_widget/on_process_button_widget.dart';
 import 'package:path/path.dart' as p;
@@ -671,6 +671,7 @@ void main() {
       // this test body returns, or flutter_test's own end-of-test
       // pending-timer check fails it (`addTearDown`/the outer `tearDown()`
       // above both run too late for this specific assertion).
+      controller.onClose();
     });
   });
 
@@ -841,6 +842,7 @@ void main() {
     });
 
     tearDown(() {
+      controller.onClose();
       Get.reset();
       return db.close();
     });
@@ -996,6 +998,7 @@ void main() {
     });
 
     tearDown(() {
+      controller.onClose();
       Get.reset();
     });
 
@@ -1039,6 +1042,7 @@ void main() {
     });
 
     tearDown(() {
+      controller.onClose();
       Get.reset();
     });
 
@@ -1075,6 +1079,7 @@ void main() {
     });
 
     tearDown(() {
+      controller.onClose();
       Get.reset();
       return db.close();
     });
@@ -1111,6 +1116,7 @@ void main() {
     });
 
     tearDown(() {
+      controller.onClose();
       Get.reset();
       return db.close();
     });
@@ -1254,7 +1260,6 @@ void main() {
     });
   });
 
-
   // ── E07-T18: `chat-group` ───────────────────────────────────────
   // Seeded so the probe renders four of the contract's five states at once:
   // an attributed incoming bubble (G9), an outgoing bubble with NO
@@ -1330,6 +1335,11 @@ void main() {
           await Future<void>.delayed(const Duration(milliseconds: 10));
         }
       });
+
+      // Close the live Drift subscription before the dump. Leaving it open
+      // leaks a pending timer past this widget tree's disposal, and
+      // flutter_test reports that against the NEXT test in the file.
+      controller.onClose();
 
       await dumpScreenProbe(
         tester,
