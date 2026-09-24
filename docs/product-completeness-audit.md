@@ -203,9 +203,11 @@ built against the fallbacks meanwhile.
 # Addendum — 2026-09-24, after building P1
 
 > Written after `E07-T15` shipped `/groups/new` (PR #325). Building the first
-> item taught four things the audit above could not know, and three of them
-> **move work out of the "no decision needed" column**. Recorded here rather
-> than silently revising the table, so the change is visible.
+> item taught four things the audit above could not know, and they **move four
+> of the eight work items into the "needs a decision" column** — P2, P3, P4 and
+> P6. Recorded here rather than silently revising the table, so the change is
+> visible. One item moved the other way: P7 was over-gated in this addendum's
+> own first draft and is buildable now.
 
 ## P1 is done
 
