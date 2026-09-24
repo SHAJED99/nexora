@@ -83,7 +83,7 @@ def parse_frontmatter(text):
         return {}
 
     def scalar(val):
-        val = re.split(r"\s+#", val, 1)[0].strip()
+        val = re.split(r"\s+#", val, maxsplit=1)[0].strip()
         if val.startswith("[") and val.endswith("]"):
             inner = val[1:-1].strip()
             return [v.strip().strip("'\"") for v in inner.split(",") if v.strip()]
