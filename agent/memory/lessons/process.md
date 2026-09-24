@@ -945,10 +945,25 @@ automatically for matching tasks (see `index.yaml`).
   **An honest tension, since the test used above cuts here too.** This lesson
   argues it is distinct from `L-process-020` because their *fixes* differ. By
   that same test, shape (a)'s fix (items 1-3 below) and shape (b)'s (item 4)
-  are also two fixes in one lesson. They stay together only because both are
-  still thin — four cases across one session, against the six `L-020` carried
-  when it earned its own entry. If shape (b) recurs on its own, it should be
-  split out rather than left sheltering here.
+  are also two fixes in one lesson.
+
+  A first draft of this paragraph justified keeping them together by saying
+  shape (b) was "still thin" against the six cases `L-020` carried. **That
+  yardstick is wrong**, and a reviewer said so: `L-020` was *written* with six
+  cases in hand, it did not grow into them, so it sets no threshold. The bar
+  this repository actually uses is the one `make lessons` prints —
+  **`recurrence >= 2`** — and shape (b) already has two cases (2 and 4)
+  standing entirely on its own. By the project's own convention it qualifies
+  as a separate entry **today**.
+
+  It is kept here anyway, deliberately and as a judgement call rather than a
+  correct answer: splitting it would be the fourth structural change to this
+  entry in three review rounds, each of which introduced the defect the next
+  round found, and the marginal value of a second id is smaller than the risk
+  of that. **This is flagged for the human alongside the promotion decision**
+  — skills and lessons are code (`skills/retro` rule 2), and whether shape (b)
+  earns its own id is the same kind of call as whether either gets promoted.
+  If it recurs again, split it rather than re-deciding this.
 
   **The pattern is older than this session.** `design/gaps.md` records a
   `chat_view.dart:130` comment citing a "GAP-003 precedent" for chat's avatar
