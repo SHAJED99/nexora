@@ -29,6 +29,7 @@ navigates to it.
 | `/settings` | `settings` | `design/screens/settings.md` | `lib/features/settings/` (E02-T03) |
 | `/conversations` | `conversations` | `design/screens/conversations.md` | `lib/features/conversations/` (E06-T10) |
 | `/chat/:id` | `chat` | `design/screens/chat.md` | `lib/features/chat/` (E06-T11) |
+| `/groups/new` | `group-create` | `design/screens/group-create.md` | `lib/features/groups/presentation/` (E07-T15) - no screen links here yet; the entry point is that contract's Open section, awaiting the human, so it is reachable only by direct navigation |
 | `/version-update-required` | `version-update-required` | `design/screens/version-update-required.md` | `lib/features/version/` (E14-T04) |
 | `/device-enrollment` | `device-enrollment` | `design/screens/device-enrollment.md` | `lib/features/recovery/` (E12-T03) |
 | `/settings/account` | `settings-account` | `design/screens/settings-account.md` | `lib/features/settings/account/` (E15-T07) |

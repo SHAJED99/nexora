@@ -8,9 +8,9 @@
 // rule re-decided in a widget (contract §Notes).
 import 'package:get/get.dart';
 import 'package:nexora/core/auth/google_auth_service.dart' show AppFailure;
+import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/features/conversations/presentation/conversations_controller.dart'
     show initialsOf;
-import 'package:nexora/features/groups/domain/group_membership_service.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
 
@@ -77,14 +77,18 @@ class GroupCreateController extends GetxController {
   /// exactly as a direct dependency would have been.
   final CreateGroup _createGroup;
 
+  /// `GroupMembershipService` is **not** separately registered in Get — it is
+  /// owned by `MessagingStack` (`messaging_stack.dart:375`, exposed at :565),
+  /// and `bindings.dart:159` is what puts the stack itself. Resolving the
+  /// service directly would throw at runtime while compiling perfectly.
   static Future<String> _defaultCreateGroup({
     required String name,
     required List<String> memberDeviceIds,
   }) {
-    return Get.find<GroupMembershipService>().createGroup(
-      name: name,
-      memberDeviceIds: memberDeviceIds,
-    );
+    return Get.find<MessagingStack>().groupMembershipService.createGroup(
+          name: name,
+          memberDeviceIds: memberDeviceIds,
+        );
   }
 
   /// Navigation is injected so the controller is testable without a
