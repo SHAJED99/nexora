@@ -143,6 +143,18 @@ class MessagingReadiness {
       // registration would leave `Get.find<SendMessageUseCase>()` still
       // addressed from the empty id — an app that looks fixed and cannot
       // send, which is the outcome option (a) was chosen to avoid.
+      // `blockCommunication: false` is correct here, and the reason is an
+      // invariant worth writing down rather than leaving to be rediscovered
+      // (review round 2, S4). `AppBinding.blockCommunication` is fixed once
+      // at launch from `VersionState.updateRequired`; when it is true,
+      // `main.dart` routes straight to the mandatory-update screen and
+      // `VersionReconnectWatcher` only pushes further INTO it. So
+      // `LoginController._signIn` -- the only caller that reaches this code
+      // -- can never run while communication is blocked.
+      //
+      // If a future task ever adds another route to sign-in, this line is
+      // the one that has to be revisited: it would start communication on a
+      // device the version gate had deliberately silenced.
       registerStackDerivedSingletons(
         replacement,
         blockCommunication: false,

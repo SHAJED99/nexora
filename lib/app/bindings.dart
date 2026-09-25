@@ -668,9 +668,17 @@ void registerStackDerivedSingletons(
 
   // A replaced `LinkQualityFeed` must stop the old one first, or its
   // subscription keeps feeding the previous `RoutingEngine`.
-  if (Get.isRegistered<LinkQualityFeed>()) {
-    unawaited(Get.find<LinkQualityFeed>().stop());
-  }
+  //
+  // Captured here and awaited AFTER the new feed is built (see the end of
+  // this function) rather than fired and forgotten. `stop()` is async, so
+  // `unawaited` left a window in which both feeds were subscribed to the
+  // same broadcast `transport.linkQuality` stream -- harmless (the old
+  // `RoutingEngine` is already orphaned from `Get`, so it is wasted work
+  // rather than corruption), but pointless, and a window nobody documented
+  // is a window someone later has to re-derive. Review round 2, S4.
+  final previousFeed = Get.isRegistered<LinkQualityFeed>()
+      ? Get.find<LinkQualityFeed>()
+      : null;
   replace(messagingStack.sendMessage);
   replace(messagingStack.receiveMessage);
   replace(messagingStack.syncCursors);
@@ -706,4 +714,5 @@ void registerStackDerivedSingletons(
   if (!blockCommunication) {
     linkQualityFeed.start();
   }
+  unawaited(previousFeed?.stop() ?? Future<void>.value());
 }
