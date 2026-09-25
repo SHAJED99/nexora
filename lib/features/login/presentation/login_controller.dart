@@ -72,6 +72,7 @@ import 'dart:math';
 import 'package:get/get.dart';
 import 'package:nexora/core/auth/google_auth_service.dart';
 import 'package:nexora/core/crypto/identity_key_hex.dart';
+import 'package:nexora/core/messaging/messaging_readiness.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/services/firebase_metadata_service.dart';
@@ -300,6 +301,25 @@ class LoginController extends GetxController {
           await _deriveDeviceIdFromLocalIdentity() ??
           generateSecureDeviceId();
       await _signInUseCase(deviceId);
+
+      // E01-B01 findings 2+3. `SignInUseCase` has just written this
+      // device's identity row -- the exact moment the app transitions from
+      // "no local device identity yet" to having one. `lib/app/main.dart`
+      // read that identity ONCE, before `runApp()`, and built
+      // `MessagingStack` with an EMPTY `selfDeviceId`; eight collaborators
+      // inside it captured that empty id at construction and none re-reads
+      // it. Left alone, the app shows "Messaging is unavailable: no local
+      // device identity yet (sign in required)" until a force-stop --
+      // which is exactly what a real user saw on hardware.
+      //
+      // Best-effort, deliberately: it is awaited so the dashboard is not
+      // reached before the replacement stack is registered, but a failure
+      // is logged and swallowed rather than reported as a sign-in failure.
+      // Sign-in itself succeeded; messaging readiness is a separate
+      // concern, and `MessagingReadiness` leaves `status` unavailable if
+      // the re-create fails rather than claiming otherwise.
+      await _notifyIdentityProvisioned(deviceId);
+
       signingIn.value = false;
 
       // E12-T03: the one new branch point. `SignInUseCase.call` already
@@ -353,6 +373,27 @@ class LoginController extends GetxController {
       signingIn.value = false;
       ObservabilityService.instance.logError(
         e is AppFailure ? e.code : 'auth.google_sign_in_failed',
+        cause: e,
+      );
+    }
+  }
+
+  /// E01-B01: hands the freshly-written device id to [MessagingReadiness],
+  /// the one place allowed to re-create `MessagingStack` with it.
+  ///
+  /// Resolved by lookup with the same best-effort try/catch shape every
+  /// other collaborator in this file uses -- a test that never registers
+  /// the service, or an app whose launch sequence failed before it could,
+  /// must not turn a successful sign-in into a failure.
+  Future<void> _notifyIdentityProvisioned(String deviceId) async {
+    try {
+      if (Get.isRegistered<MessagingReadiness>()) {
+        await Get.find<MessagingReadiness>()
+            .onLocalIdentityProvisioned(deviceId);
+      }
+    } catch (e) {
+      ObservabilityService.instance.logError(
+        'session.messaging_readiness_notify_failed',
         cause: e,
       );
     }

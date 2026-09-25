@@ -13,6 +13,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:nexora/core/messaging/messaging_readiness.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/observability/observability_service.dart';
 import 'package:nexora/core/persistence/database.dart';
@@ -108,6 +109,18 @@ Future<void> main() async {
   final messagingStack = await MessagingStack.create(
     db: db,
     selfDeviceId: selfDeviceId,
+  );
+
+  // E01-B01 findings 2+3: `selfDeviceId` above is read ONCE, and on a fresh
+  // sign-in it is empty here and written moments later. `MessagingStackStatus`
+  // is a sealed immutable value on a `permanent: true` singleton, so nothing
+  // could ever notice it change -- which is why the app used to sit on
+  // "Messaging is unavailable" until a force-stop. This is the observable the
+  // screens bind to instead, and the one thing allowed to re-create the stack
+  // when the identity finally arrives (human decision 2026-09-25, option (a)).
+  Get.put<MessagingReadiness>(
+    MessagingReadiness(initialStatus: messagingStack.status),
+    permanent: true,
   );
 
   // E14-T04 (FR-VER-006/FR-VER-007, EARS-VER-10): a launch-time-only check
