@@ -10,6 +10,7 @@ import 'package:nexora/core/messaging/messaging_readiness.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/persistence/database.dart';
 import 'package:nexora/core/transport/transport_service.dart';
+import 'package:nexora/features/messaging/domain/send_message_use_case.dart';
 
 const _realDeviceId = 'device-after-sign-in';
 
@@ -57,7 +58,7 @@ void main() {
       MessagingReadiness(
         initialStatus: launchStack.status,
         createStack: createStack ??
-            ({required db, required selfDeviceId}) async {
+            ({required db, required selfDeviceId, transport}) async {
               createdWith?.add(selfDeviceId);
               return MessagingStack.create(
                 db: db,
@@ -104,7 +105,7 @@ void main() {
     late String registeredIdAtCreateTime;
 
     final readiness = build(
-      createStack: ({required db, required selfDeviceId}) async {
+      createStack: ({required db, required selfDeviceId, transport}) async {
         // Sampled at the one instant the old stack has been deleted and the
         // new one does not exist yet. If `status` had been flipped to ready
         // optimistically -- ahead of a successful re-create -- this is where
@@ -137,7 +138,7 @@ void main() {
 
   test('test_E01_B01_a_failed_recreate_leaves_status_unavailable', () async {
     final readiness = build(
-      createStack: ({required db, required selfDeviceId}) async =>
+      createStack: ({required db, required selfDeviceId, transport}) async =>
           throw StateError('boom'),
     );
 
@@ -183,7 +184,7 @@ void main() {
     test('test_E01_B01_concurrent_calls_do_not_build_two_stacks', () async {
       final createdWith = <String>[];
       final readiness = build(
-        createStack: ({required db, required selfDeviceId}) async {
+        createStack: ({required db, required selfDeviceId, transport}) async {
           createdWith.add(selfDeviceId);
           // A real `create` is asynchronous; the second caller must land
           // while the first is still inside it. `_handled` alone is set too
@@ -210,28 +211,26 @@ void main() {
       );
     });
 
-    test('test_E01_B01_the_previous_stack_is_disposed_not_leaked', () async {
+    test('test_E01_B01_the_previous_stack_is_deregistered_not_leaked',
+        () async {
+      // Renamed from "..._is_disposed_...": the fix deliberately does NOT
+      // call `dispose()`. That is sign-OUT's teardown and it closes the
+      // shared `AppDatabase` and the transport, both of which the
+      // replacement inherits. What must be true is narrower and is what
+      // this asserts: the old stack is unreachable, and the shared
+      // resources survive.
       final readiness = build();
       await readiness.onLocalIdentityProvisioned(_realDeviceId);
 
-      // The old stack is gone from Get -- nothing can resolve it any more,
-      // so no later binding can accidentally keep the empty-identity one
-      // alive.
-      expect(identical(Get.find<MessagingStack>(), launchStack), isFalse);
-
-      // And it was actually shut down, not merely dropped on the floor:
-      // a disposed stack refuses to start.
-      var disposedCleanly = true;
-      try {
-        await launchStack.dispose();
-      } on Object {
-        disposedCleanly = false;
-      }
       expect(
-        disposedCleanly,
-        isTrue,
-        reason: 'a second dispose must be harmless -- if this throws, the '
-            'first dispose did not happen or left the stack half-torn-down',
+        identical(Get.find<MessagingStack>(), launchStack),
+        isFalse,
+        reason: 'nothing may resolve the empty-identity stack any more',
+      );
+      await expectLater(
+        db.latestDeviceIdentity(),
+        completes,
+        reason: 'the shared database must NOT have been closed',
       );
     });
 
@@ -252,7 +251,7 @@ void main() {
       final createdWith = <String>[];
       final readiness = MessagingReadiness(
         initialStatus: good.status,
-        createStack: ({required db, required selfDeviceId}) async {
+        createStack: ({required db, required selfDeviceId, transport}) async {
           createdWith.add(selfDeviceId);
           return MessagingStack.create(
                 db: db,
@@ -278,6 +277,96 @@ void main() {
       expect(createdWith, isEmpty);
       expect(readiness.handled, isFalse);
       expect(identical(Get.find<MessagingStack>(), launchStack), isTrue);
+    });
+  });
+
+  group('the REAL default factory — no injected createStack', () {
+    // Review finding, and the reason this group exists: every other test in
+    // this file injects `createStack`, so none of them ever ran the code
+    // path `lib/app/main.dart` actually constructs. The first draft of this
+    // fix called `existing.dispose()`, which closes the single app-wide
+    // `AppDatabase`, and then handed that closed database to the
+    // replacement. `MessagingStack.create` swallows the resulting failure
+    // into an `unavailable` status instead of throwing, so the bug looked
+    // like a success. Nine green tests did not see it.
+
+    test('test_E01_B01_the_real_factory_leaves_the_shared_database_usable',
+        () async {
+      final readiness = MessagingReadiness(initialStatus: launchStack.status);
+
+      await readiness.onLocalIdentityProvisioned(_realDeviceId);
+
+      // The assertion the first draft would have failed on: the shared
+      // database must still be open and usable by every other feature.
+      await expectLater(db.latestDeviceIdentity(), completes);
+
+      final registered = Get.find<MessagingStack>();
+      expect(registered.selfDeviceId, _realDeviceId);
+      expect(
+        identical(registered.db, db),
+        isTrue,
+        reason: 'the replacement must inherit the ONE shared AppDatabase, '
+            'never open a second',
+      );
+      expect(
+        identical(registered.transport, launchStack.transport),
+        isTrue,
+        reason: 'a second TransportService on the same channel suffix '
+            'silently steals the native handlers (bindings.dart, E06-B02)',
+      );
+    });
+
+    test('test_E01_B01_the_real_factory_rewires_the_identity_capturing_uses',
+        () async {
+      // `SendMessageUseCase` captures `selfDeviceId` at construction and is
+      // registered by `AppBinding` as its own permanent singleton. If the
+      // re-create replaced only the `MessagingStack` registration, this
+      // would still be the empty-identity instance -- an app that looks
+      // fixed and cannot send.
+      Get.put<SendMessageUseCase>(launchStack.sendMessage, permanent: true);
+      final before = Get.find<SendMessageUseCase>();
+
+      final readiness = MessagingReadiness(initialStatus: launchStack.status);
+      await readiness.onLocalIdentityProvisioned(_realDeviceId);
+
+      expect(
+        identical(Get.find<SendMessageUseCase>(), before),
+        isFalse,
+        reason: 'the send path must be rebuilt from the real device id',
+      );
+      expect(
+        identical(
+          Get.find<SendMessageUseCase>(),
+          Get.find<MessagingStack>().sendMessage,
+        ),
+        isTrue,
+      );
+    });
+
+    test('test_E01_B01_a_replacement_that_is_not_ready_does_not_latch',
+        () async {
+      // Latching on a non-ready replacement is what made the first draft
+      // give up permanently after a failure it had not noticed.
+      final readiness = MessagingReadiness(
+        initialStatus: launchStack.status,
+        createStack: ({required db, required selfDeviceId, transport}) async =>
+            MessagingStack.create(
+          db: db,
+          // An empty id is the one input that reliably yields `unavailable`
+          // without any error being thrown.
+          selfDeviceId: '',
+          transport: transport,
+        ),
+      );
+
+      await readiness.onLocalIdentityProvisioned(_realDeviceId);
+
+      expect(readiness.status.value.isReady, isFalse);
+      expect(
+        readiness.handled,
+        isFalse,
+        reason: 'an unavailable replacement is not a handled transition',
+      );
     });
   });
 }

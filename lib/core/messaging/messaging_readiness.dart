@@ -31,12 +31,21 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:nexora/core/messaging/messaging_stack.dart';
 import 'package:nexora/core/observability/observability_service.dart';
+import 'package:nexora/app/bindings.dart';
 import 'package:nexora/core/persistence/database.dart';
+import 'package:nexora/core/transport/transport_service.dart';
 
 /// The stack factory, injected so a test never stands up the real one.
+/// `transport` is part of this signature deliberately. The replacement stack
+/// MUST be handed the ORIGINAL `TransportService`: `MessagingStack.create`
+/// otherwise builds a second one with the same (empty) `messageChannelSuffix`,
+/// whose constructor calls `TransportEventsApi.setUp` again and silently
+/// steals every native transport-channel handler the first one owns — the
+/// exact failure `bindings.dart`'s own E06-B02 note names.
 typedef CreateMessagingStack = Future<MessagingStack> Function({
   required AppDatabase db,
   required String selfDeviceId,
+  TransportService? transport,
 });
 
 class MessagingReadiness {
@@ -98,15 +107,23 @@ class MessagingReadiness {
       return;
     }
 
-    // The precedent, unchanged: `settings_binding.dart` disposes the stack
-    // and force-deletes the registration before anything replaces it.
+    // **NOT `existing.dispose()`.** That is sign-OUT's teardown
+    // (`settings_binding.dart:119-121`) and it closes `db` — the single
+    // app-wide `AppDatabase` every other feature shares — and disposes the
+    // transport. Reusing it here was this fix's first draft and it was
+    // wrong: the replacement was then handed an already-closed database
+    // ("Bad state: Can't re-open a database after closing it"), which
+    // `MessagingStack.create` swallows into an `unavailable` status rather
+    // than throwing, so the failure looked like success. Caught in review,
+    // reproduced against a real Drift database.
+    //
+    // A mid-session identity arrival is not a sign-out. Only the old
+    // stack's own work is stopped; `db` and `transport` are inherited.
     try {
-      await existing.dispose();
+      await existing.coordinator.stop();
     } catch (e) {
-      // A failed dispose must not strand the app on the old stack; it is
-      // logged and the replacement proceeds.
       ObservabilityService.instance.logError(
-        'session.stack_dispose_failed',
+        'session.stack_coordinator_stop_failed',
         cause: e,
       );
     }
@@ -116,19 +133,40 @@ class MessagingReadiness {
       final replacement = await _createStack(
         db: existing.db,
         selfDeviceId: deviceId,
+        transport: existing.transport,
       );
       Get.put<MessagingStack>(replacement, permanent: true);
-      // The ONLY write that can publish `ready`, and it reads the status of
-      // the stack that was just built with the real id.
+
+      // Five of the stack's collaborators capture `selfDeviceId` at
+      // construction and `AppBinding` registered them as their own
+      // permanent singletons. Replacing only the `MessagingStack`
+      // registration would leave `Get.find<SendMessageUseCase>()` still
+      // addressed from the empty id — an app that looks fixed and cannot
+      // send, which is the outcome option (a) was chosen to avoid.
+      registerStackDerivedSingletons(
+        replacement,
+        blockCommunication: false,
+      );
+
       status.value = replacement.status;
-      _handled = true;
+      // Latched ONLY on a genuinely ready stack. A replacement that came
+      // back `unavailable` is not a handled transition — the first draft
+      // latched regardless, which permanently gave up after a failure it
+      // had not noticed.
+      _handled = replacement.status.isReady;
+      if (!_handled) {
+        ObservabilityService.instance.logError(
+          'session.stack_recreate_not_ready',
+          cause: StateError(replacement.status.toString()),
+        );
+      }
     } catch (e) {
       ObservabilityService.instance.logError(
         'session.stack_recreate_failed',
         cause: e,
       );
       // Deliberately NOT marked handled: the identity is still there, so a
-      // later trigger may retry. `status` is left reporting unavailable --
+      // later trigger may retry. `status` is left reporting unavailable —
       // never optimistically ready against a stack that does not exist.
       status.value = const MessagingStackStatus.unavailable(
         'messaging could not be started after sign-in',
