@@ -176,43 +176,14 @@ class AppBinding extends Bindings {
     if (!blockCommunication) {
       messagingStack.coordinator.start();
     }
-    Get.put(messagingStack.sendMessage, permanent: true);
-    Get.put(messagingStack.receiveMessage, permanent: true);
-    Get.put(messagingStack.syncCursors, permanent: true);
-    Get.put(messagingStack.relayEngine, permanent: true);
-    Get.put(messagingStack.routingEngine, permanent: true);
-    // E06-B02: this registration is also what `DevicesBinding` now resolves
-    // via `Get.find<TransportService>()` to inject the shared instance into
-    // `DevicesController` -- it MUST run (as it already does, here, at app
-    // startup, before any route's `Bindings.dependencies()` can run) before
-    // the user can navigate to `/devices`, or `Get.find` there throws.
-    // Never remove this registration or make it lazy: `DevicesController`
-    // needs a resolvable shared `TransportService` the very first time the
-    // user opens the Devices screen, and a second live `TransportService`
-    // (the previous, broken behaviour) silently steals every native
-    // transport-channel handler this instance owns.
-    Get.put(messagingStack.transport, permanent: true);
-
-    // E06-T04: the producer/consumer wiring E04-B03 named and E05 never
-    // wrote. Without this, `RoutingEngine._knownLinks` has no production
-    // populator and `computeRoute()` always returns `null` on a real
-    // device — every other messaging task is downstream of this being
-    // true. Constructed from the already-registered singletons above
-    // (never a second `TransportService`/`RoutingEngine`), started once.
-    // E14-B02: construction/registration stays unconditional (a future
-    // screen resolving `Get.find<LinkQualityFeed>()` must not fail merely
-    // because communication is blocked); only `.start()` — which subscribes
-    // to live transport link-quality events — is gated.
-    final linkQualityFeed = Get.put(
-      LinkQualityFeed(
-        transport: messagingStack.transport,
-        routing: messagingStack.routingEngine,
-      ),
-      permanent: true,
+    // E01-B01: extracted so `MessagingReadiness` can re-run EXACTLY this
+    // wiring after it replaces the stack on a mid-session identity arrival.
+    // Two copies of this list would drift, and the half that drifts is the
+    // half nobody re-reads.
+    registerStackDerivedSingletons(
+      messagingStack,
+      blockCommunication: blockCommunication,
     );
-    if (!blockCommunication) {
-      linkQualityFeed.start();
-    }
 
     // E08-T06: the storage-retention composition root. Built AFTER `db`
     // above (StorageInventory/StorageSettingsRepository/RetentionExecutor/
@@ -657,4 +628,91 @@ class BackgroundLifecycleObserver extends WidgetsBindingObserver {
       unawaited(transport.stopDiscovery().catchError((Object _) {}));
     }
   }
+}
+
+
+/// Every singleton derived from [messagingStack], registered in one place.
+///
+/// Called by [AppBinding.dependencies] at startup and by
+/// `MessagingReadiness` after it replaces the stack when a local device
+/// identity arrives mid-session (E01-B01 findings 2+3).
+///
+/// **Why this had to be extracted:** five of these — `sendMessage`,
+/// `receiveMessage`, `syncCursors`, `relayEngine`, `routingEngine` — capture
+/// `selfDeviceId` at construction. Replacing only the `MessagingStack`
+/// registration would leave `Get.find<SendMessageUseCase>()` still addressed
+/// from the EMPTY device id, so the app would look fixed and still not send.
+/// That is precisely the failure mode the human rejected when choosing
+/// option (a) on 2026-09-25.
+///
+/// `transport` is deliberately re-registered with the SAME instance the
+/// replacement stack was given: a second live `TransportService` on the same
+/// channel suffix silently steals every native transport-channel handler
+/// (this file's own E06-B02 note, above).
+void registerStackDerivedSingletons(
+  MessagingStack messagingStack, {
+  required bool blockCommunication,
+}) {
+  // `Get.put` is `putIfAbsent` under the hood: an existing PERMANENT
+  // registration is NOT replaced by a later put. At startup nothing is
+  // registered so this is a no-op; on E01-B01's re-create it is the whole
+  // point, and without it `Get.find<SendMessageUseCase>()` would keep
+  // returning the empty-identity instance. Found by a test that exercised
+  // the real factory instead of an injected one.
+  void replace<T>(T instance) {
+    if (Get.isRegistered<T>()) {
+      Get.delete<T>(force: true);
+    }
+    Get.put<T>(instance, permanent: true);
+  }
+
+  // A replaced `LinkQualityFeed` must stop the old one first, or its
+  // subscription keeps feeding the previous `RoutingEngine`.
+  //
+  // Captured here and awaited AFTER the new feed is built (see the end of
+  // this function) rather than fired and forgotten. `stop()` is async, so
+  // `unawaited` left a window in which both feeds were subscribed to the
+  // same broadcast `transport.linkQuality` stream -- harmless (the old
+  // `RoutingEngine` is already orphaned from `Get`, so it is wasted work
+  // rather than corruption), but pointless, and a window nobody documented
+  // is a window someone later has to re-derive. Review round 2, S4.
+  final previousFeed = Get.isRegistered<LinkQualityFeed>()
+      ? Get.find<LinkQualityFeed>()
+      : null;
+  replace(messagingStack.sendMessage);
+  replace(messagingStack.receiveMessage);
+  replace(messagingStack.syncCursors);
+  replace(messagingStack.relayEngine);
+  replace(messagingStack.routingEngine);
+  // E06-B02: this registration is also what `DevicesBinding` now resolves
+  // via `Get.find<TransportService>()` to inject the shared instance into
+  // `DevicesController` -- it MUST run (as it already does, here, at app
+  // startup, before any route's `Bindings.dependencies()` can run) before
+  // the user can navigate to `/devices`, or `Get.find` there throws.
+  // Never remove this registration or make it lazy: `DevicesController`
+  // needs a resolvable shared `TransportService` the very first time the
+  // user opens the Devices screen, and a second live `TransportService`
+  // (the previous, broken behaviour) silently steals every native
+  // transport-channel handler this instance owns.
+  replace(messagingStack.transport);
+
+  // E06-T04: the producer/consumer wiring E04-B03 named and E05 never
+  // wrote. Without this, `RoutingEngine._knownLinks` has no production
+  // populator and `computeRoute()` always returns `null` on a real
+  // device — every other messaging task is downstream of this being
+  // true. Constructed from the already-registered singletons above
+  // (never a second `TransportService`/`RoutingEngine`), started once.
+  // E14-B02: construction/registration stays unconditional (a future
+  // screen resolving `Get.find<LinkQualityFeed>()` must not fail merely
+  // because communication is blocked); only `.start()` — which subscribes
+  // to live transport link-quality events — is gated.
+  final linkQualityFeed = LinkQualityFeed(
+    transport: messagingStack.transport,
+    routing: messagingStack.routingEngine,
+  );
+  replace(linkQualityFeed);
+  if (!blockCommunication) {
+    linkQualityFeed.start();
+  }
+  unawaited(previousFeed?.stop() ?? Future<void>.value());
 }
