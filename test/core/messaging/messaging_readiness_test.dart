@@ -170,6 +170,14 @@ void main() {
       // swallowed by the caller's broad catch.
       expect(createdWith, [_realDeviceId]);
       expect(readiness.handled, isTrue);
+
+      // Honest note on this test's strength, found by falsifying it:
+      // deleting the `_handled` guard does NOT make it fail, because the
+      // second call then hits the "stack already has this identity" branch
+      // and returns without creating. Two independent guards protect the
+      // sequential case. The guard that only the CONCURRENT test can catch
+      // is `_inFlight` -- see the next test, which does fail without it
+      // (three stacks instead of one).
     });
 
     test('test_E01_B01_concurrent_calls_do_not_build_two_stacks', () async {
