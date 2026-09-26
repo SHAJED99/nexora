@@ -95,6 +95,7 @@ import 'package:nexora/core/persistence/group_tables.dart';
 import 'package:nexora/features/groups/presentation/group_thread_controller.dart';
 import 'package:nexora/features/groups/presentation/group_thread_view.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
+import 'package:nexora/features/trust/data/trust_settings_repository.dart';
 import 'package:on_process_button_widget/on_process_button_widget.dart';
 import 'package:path/path.dart' as p;
 
@@ -821,6 +822,7 @@ void main() {
     late AppDatabase db;
     late LocationSettingsRepository locationRepository;
     late NotificationSettingsRepository notificationRepository;
+    late TrustSettingsRepository trustSettingsRepository;
     late PrivacySettingsController controller;
 
     setUp(() async {
@@ -828,6 +830,7 @@ void main() {
       db = AppDatabase.forTesting(NativeDatabase.memory());
       locationRepository = LocationSettingsRepository(db: db);
       notificationRepository = NotificationSettingsRepository(db: db);
+      trustSettingsRepository = TrustSettingsRepository(db: db);
       await locationRepository.writeGlobalEnabled(true);
       await locationRepository.writePeerEnabled('peer-nexora-1', true);
       await notificationRepository.setPrivacyLevel(
@@ -835,6 +838,7 @@ void main() {
       );
       controller = PrivacySettingsController(
         locationRepository: locationRepository,
+        trustSettingsRepository: trustSettingsRepository,
         notificationRepository: notificationRepository,
       );
       Get.put<PrivacySettingsController>(controller);

@@ -142,6 +142,7 @@ import '../../features/location/data/location_settings_repository.dart';
 import '../../features/location/data/platform_location_source.dart';
 import '../../features/location/domain/location_share_service.dart';
 import '../../features/trust/data/relationship_repository.dart';
+import '../../features/trust/data/trust_settings_repository.dart';
 import '../../features/trust/domain/evaluate_connection_request_use_case.dart';
 import 'ciphertext_codec.dart';
 import 'delivery_ack.dart';
@@ -331,11 +332,17 @@ class MessagingStack {
     // defaulted to `null` and the connection-request admission gate that
     // `RelationshipState.blocked` short-circuit relies on could never
     // actually deny anything in the running app (task §2 item 1).
+    // E02-T04 (`Q-FUNC-011`): also the real, only production construction
+    // site of `TrustSettingsRepository` reaching this use case --
+    // `DevicesController`'s own fallback construction (outside this
+    // task's `files:` fence, task §2 "Wiring") stays without one, so it
+    // is unaffected by this setting.
     prekeyExchange = PrekeyExchange(
       stack: this,
       evaluateConnectionRequest: EvaluateConnectionRequestUseCase(
         RelationshipRepository(db),
         rateLimiter: RateLimiter(db),
+        trustSettings: TrustSettingsRepository(db: db),
       ),
     );
     inbound.registerControlHandler(

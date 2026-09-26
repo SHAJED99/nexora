@@ -399,6 +399,10 @@ void main() {
       // widening again -- current `schemaVersion` is now 20, so this v15
       // handle also runs the `from < 20` step, adding `version_policy_cache`
       // to the diff below.
+      //
+      // E02-T04 note (`Q-FUNC-011`): same widening again -- current
+      // `schemaVersion` is now 24, so this v15 handle also runs the
+      // `from < 24` step, adding `trust_settings` to the diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -408,11 +412,13 @@ void main() {
           'device_revocations',
           'rate_limit_counters',
           'version_policy_cache',
+          'trust_settings',
         },
         reason: 'the v15->current-version upgrade must add exactly these '
             'tables (notifications from v15->v16, device_revocations from '
             'v16->v17, rate_limit_counters from v17->v18; v18->v19 adds an '
-            'index only, no new table; version_policy_cache from v19->v20)',
+            'index only, no new table; version_policy_cache from v19->v20; '
+            'trust_settings from v23->v24)',
       );
 
       // Nine user-facing categories, every one enabled -- no

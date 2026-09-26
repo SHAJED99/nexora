@@ -22,6 +22,7 @@ import 'revocation_table.dart';
 import 'routing_tables.dart';
 import 'storage_tables.dart';
 import 'sync_tables.dart';
+import 'trust_tables.dart';
 import 'version_policy_tables.dart';
 
 part 'database.g.dart';
@@ -96,6 +97,7 @@ class DeviceIdentities extends Table {
     DeviceRevocations,
     RateLimitCounters,
     VersionPolicyCache,
+    TrustSettings,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -105,7 +107,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 23;
+  int get schemaVersion => 24;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -164,6 +166,23 @@ class AppDatabase extends _$AppDatabase {
       // install has no revocation history to seed from (task §3), same
       // as the `from < 17` upgrade step below. createAll() above
       // already creates the table itself.
+      // E02-T04 (`Q-FUNC-011`): a fresh install must have the same single
+      // default `trust_settings` row (`allowNewConnectionRequests ==
+      // true`) that the `from < 24` upgrade step inserts below -- the app
+      // never has to cope with an absent settings row on either path
+      // (task §3, §6 risk note, same reasoning as
+      // `storage_policy_settings`/`location_settings` above). `true`, not
+      // `false`: the honest default for "keep accepting new connection
+      // requests" on a device that has decided nothing yet is unchanged
+      // behaviour, not a privacy-control opt-in.
+      await into(trustSettings).insert(
+        TrustSettingsCompanion.insert(
+          id: const Value(1),
+          allowNewConnectionRequests: const Value(true),
+          updatedAt: DateTime.now().millisecondsSinceEpoch,
+        ),
+        mode: InsertMode.insertOrIgnore,
+      );
     },
     onUpgrade: (m, from, to) async {
       if (from < 2) {
@@ -686,6 +705,44 @@ class AppDatabase extends _$AppDatabase {
         // simply stays `NULL` and keeps showing "(unable to decrypt this
         // message)", same as before this migration.
         await m.addColumn(messages, messages.plaintextPayload);
+      }
+      if (from < 24) {
+        // E02-T04 (`Q-FUNC-011`): new `trust_settings` table -- additive
+        // only, no changes to any pre-existing table (task §2,
+        // docs/conventions.md "Schema migrations"). No index needed: the
+        // only local access pattern is a point lookup by the fixed row id
+        // `1`, which the PK's own implicit index already serves (same
+        // reasoning as `sync_tables.dart`'s "no @TableIndex" comment).
+        //
+        // Wrapped in a transaction, the same precedent the `from < 14`/
+        // `from < 15`/`from < 16` steps set for a step that inserts: this
+        // step also inserts the single default `trust_settings` row
+        // (`allowNewConnectionRequests == true`), and that insert must be
+        // atomic with the `createTable` call -- without the wrap, a
+        // crash/kill between "table created" and "default row inserted"
+        // would leave `trust_settings` created but empty on a
+        // failed-then-retried migration, breaking "the app never has to
+        // cope with an absent settings row" (task §3). `true`, not
+        // `false`: an existing install's current behaviour -- accepting
+        // new connection requests -- must be unchanged by this migration
+        // (task §2 "Default value").
+        await m.database.transaction(() async {
+          await m.createTable(trustSettings);
+          // insertOrIgnore: drift stamps user_version AFTER onUpgrade
+          // returns, so a process crash between this transaction's
+          // COMMIT and that PRAGMA write makes the next open re-run
+          // this whole step against a DB that already has the row.
+          // createTable is already retry-safe (IF NOT EXISTS); this
+          // insert needed the same property.
+          await into(trustSettings).insert(
+            TrustSettingsCompanion.insert(
+              id: const Value(1),
+              allowNewConnectionRequests: const Value(true),
+              updatedAt: DateTime.now().millisecondsSinceEpoch,
+            ),
+            mode: InsertMode.insertOrIgnore,
+          );
+        });
       }
     },
   );

@@ -22,6 +22,7 @@ import 'package:nexora/core/persistence/notification_tables.dart'
 import 'package:nexora/features/location/data/location_settings_repository.dart';
 import 'package:nexora/features/settings/privacy/presentation/privacy_settings_controller.dart';
 import 'package:nexora/features/settings/privacy/presentation/privacy_settings_view.dart';
+import 'package:nexora/features/trust/data/trust_settings_repository.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -29,14 +30,17 @@ void main() {
   late AppDatabase db;
   late LocationSettingsRepository locationRepository;
   late NotificationSettingsRepository notificationRepository;
+  late TrustSettingsRepository trustSettingsRepository;
   late PrivacySettingsController controller;
 
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     locationRepository = LocationSettingsRepository(db: db);
     notificationRepository = NotificationSettingsRepository(db: db);
+    trustSettingsRepository = TrustSettingsRepository(db: db);
     controller = PrivacySettingsController(
       locationRepository: locationRepository,
+      trustSettingsRepository: trustSettingsRepository,
       notificationRepository: notificationRepository,
     );
   });
@@ -72,6 +76,7 @@ void main() {
       final countingRepository = _CountingLocationRepository(db: db);
       final countingController = PrivacySettingsController(
         locationRepository: countingRepository,
+        trustSettingsRepository: trustSettingsRepository,
         notificationRepository: notificationRepository,
       );
       countingController.onInit();
@@ -95,6 +100,7 @@ void main() {
       final countingRepository = _CountingLocationRepository(db: db);
       final countingController = PrivacySettingsController(
         locationRepository: countingRepository,
+        trustSettingsRepository: trustSettingsRepository,
         notificationRepository: notificationRepository,
       );
       countingController.onInit();
@@ -175,6 +181,7 @@ void main() {
     Get.testMode = true;
     final countingController = PrivacySettingsController(
       locationRepository: locationRepository,
+      trustSettingsRepository: trustSettingsRepository,
       notificationRepository: countingRepository,
     );
     Get.put<PrivacySettingsController>(countingController);
@@ -298,6 +305,7 @@ void main() {
       Get.testMode = true;
       final controller = PrivacySettingsController(
         locationRepository: locationRepository,
+        trustSettingsRepository: trustSettingsRepository,
         notificationRepository: notificationRepository,
       );
       Get.put<PrivacySettingsController>(controller);
@@ -391,6 +399,7 @@ void main() {
       Get.testMode = true;
       final controller = PrivacySettingsController(
         locationRepository: locationRepository,
+        trustSettingsRepository: trustSettingsRepository,
         notificationRepository: notificationRepository,
       );
       Get.put<PrivacySettingsController>(controller);
@@ -481,6 +490,7 @@ void main() {
       final erroringRepository = _ErroringPeerReadRepository(db: db);
       final erroringController = PrivacySettingsController(
         locationRepository: erroringRepository,
+        trustSettingsRepository: trustSettingsRepository,
         notificationRepository: notificationRepository,
       );
 
@@ -504,6 +514,7 @@ void main() {
       final erroringRepository = _ErroringGlobalWatchRepository(db: db);
       final erroringController = PrivacySettingsController(
         locationRepository: erroringRepository,
+        trustSettingsRepository: trustSettingsRepository,
         notificationRepository: notificationRepository,
       );
 
@@ -516,6 +527,175 @@ void main() {
       expect(erroringController.notificationPrivacyLabel.value, 'Full');
 
       erroringController.onClose();
+    },
+  );
+
+  // `Q-FUNC-011` / PV28 (E02-T04) -- the same three controller shapes this
+  // file already proves for location sharing, now proved for
+  // `allowNewConnectionRequests`.
+
+  test(
+    'test_Q_FUNC_011_global_switch_persists_through_the_repository',
+    () async {
+      controller.onInit();
+      await pumpEventQueue();
+      expect(controller.allowNewConnectionRequests.value, isTrue);
+
+      await controller.setAllowNewConnectionRequests(false);
+      await pumpEventQueue();
+
+      expect(controller.allowNewConnectionRequests.value, isFalse);
+      expect(
+        await trustSettingsRepository.readAllowNewConnectionRequests(),
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'test_Q_FUNC_011_set_before_first_emission_performs_no_write',
+    () async {
+      // Same "unknown state never writes" guard `setGlobalLocation` uses
+      // (task §3 item 6), falsified with a call counter rather than a
+      // `fail()` inside the seam (L-testing: a broad catch in the SUT
+      // would swallow a bare `fail()`).
+      final countingRepository = _CountingTrustSettingsRepository(db: db);
+      final countingController = PrivacySettingsController(
+        locationRepository: locationRepository,
+        trustSettingsRepository: countingRepository,
+        notificationRepository: notificationRepository,
+      );
+      countingController.onInit();
+
+      expect(countingController.allowNewConnectionRequests.value, isNull);
+
+      await countingController.setAllowNewConnectionRequests(false);
+
+      expect(countingRepository.writeAllowNewConnectionRequestsCalls, 0);
+
+      countingController.onClose();
+    },
+  );
+
+  test(
+    'test_Q_FUNC_011_stream_error_sets_connection_settings_error_only',
+    () async {
+      // EARS-UI-11's shape, applied to the new card: a failure reading
+      // `trust_settings` must set only `connectionSettingsError`, leaving
+      // every other card's already-loaded value untouched.
+      await locationRepository.writeGlobalEnabled(true);
+      final erroringRepository = _ErroringTrustSettingsWatchRepository(
+        db: db,
+      );
+      final erroringController = PrivacySettingsController(
+        locationRepository: locationRepository,
+        trustSettingsRepository: erroringRepository,
+        notificationRepository: notificationRepository,
+      );
+
+      erroringController.onInit();
+      await pumpEventQueue();
+
+      expect(erroringController.connectionSettingsError.value, isTrue);
+      expect(erroringController.allowNewConnectionRequests.value, isNull);
+      expect(erroringController.globalLocationError.value, isFalse);
+      expect(erroringController.globalLocationEnabled.value, isTrue);
+
+      erroringController.onClose();
+    },
+  );
+
+  test(
+    'test_Q_FUNC_011_onClose_cancels_the_connection_settings_subscription',
+    () async {
+      // Falsifies with a call counter on the underlying stream's `listen`
+      // rather than a timing assumption -- `#336`'s six-deleted-`onClose()`
+      // lesson is exactly "an added subscription with no matching cancel",
+      // so this asserts the cancellation actually happens: no further
+      // controller-visible update after `onClose()`, driven by a write
+      // that happens strictly after it.
+      controller.onInit();
+      await pumpEventQueue();
+      expect(controller.allowNewConnectionRequests.value, isTrue);
+
+      controller.onClose();
+      await trustSettingsRepository.writeAllowNewConnectionRequests(false);
+      await pumpEventQueue();
+
+      expect(controller.allowNewConnectionRequests.value, isTrue);
+    },
+  );
+
+  testWidgets(
+    'test_Q_FUNC_011_view_renders_pv28_and_toggles_exactly_once',
+    (tester) async {
+      // PV28: label, state and body line render, and a tap toggles
+      // through to the repository exactly once -- a call-counter seam
+      // (`_CountingTrustSettingsRepository`), never a bare `fail()`
+      // inside it (L-testing).
+      Get.testMode = true;
+      final countingRepository = _CountingTrustSettingsRepository(db: db);
+      final viewController = PrivacySettingsController(
+        locationRepository: locationRepository,
+        trustSettingsRepository: countingRepository,
+        notificationRepository: notificationRepository,
+      );
+      Get.put<PrivacySettingsController>(viewController);
+
+      await tester.pumpWidget(
+        const GetMaterialApp(home: PrivacySettingsView()),
+      );
+      // Bounded settle -- `flutter_probe_dumper.dart`'s own documented
+      // gotcha (docs/design-gate-flutter.md §6): this screen can leave
+      // the tree never settling under a plain unbounded `pumpAndSettle()`,
+      // which hangs the whole suite rather than failing. Same bound the
+      // probe dumper uses.
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 5),
+      );
+
+      expect(find.text('Connection requests'), findsOneWidget);
+      expect(find.text('Allow new connection requests'), findsOneWidget);
+      expect(
+        find.text(
+          'When this is off, people you have not connected with before '
+          'cannot reach you. Conversations you already have keep working.',
+        ),
+        findsOneWidget,
+      );
+
+      // The row can render below the fold on the default test viewport --
+      // scroll it into view before tapping, same discipline any real
+      // touch interaction on a long scrollable settings screen needs.
+      await tester.ensureVisible(find.text('Allow new connection requests'));
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 5),
+      );
+
+      await tester.tap(find.text('Allow new connection requests'));
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 5),
+      );
+
+      expect(
+        countingRepository.writeAllowNewConnectionRequestsCalls,
+        1,
+        reason: 'PV28: exactly one tap must write exactly once',
+      );
+
+      viewController.onClose();
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 2),
+      );
+      Get.reset();
     },
   );
 }
@@ -583,5 +763,32 @@ class _CountingNotificationRepository extends NotificationSettingsRepository {
   Future<void> setPrivacyLevel(NotificationPrivacyLevel level) async {
     setPrivacyLevelCalls++;
     await super.setPrivacyLevel(level);
+  }
+}
+
+/// Counts `writeAllowNewConnectionRequests` calls -- `Q-FUNC-011`'s own
+/// unknown-state-never-writes falsification seam, same shape as
+/// `_CountingLocationRepository` above.
+class _CountingTrustSettingsRepository extends TrustSettingsRepository {
+  _CountingTrustSettingsRepository({required super.db});
+
+  int writeAllowNewConnectionRequestsCalls = 0;
+
+  @override
+  Future<void> writeAllowNewConnectionRequests(bool allowed) async {
+    writeAllowNewConnectionRequestsCalls++;
+    await super.writeAllowNewConnectionRequests(allowed);
+  }
+}
+
+/// A repository whose `watchAllowNewConnectionRequests` always errors, for
+/// `Q-FUNC-011`'s `EARS-UI-11`-shaped falsification -- this card's own read
+/// fails while the location card's independent read still succeeds.
+class _ErroringTrustSettingsWatchRepository extends TrustSettingsRepository {
+  _ErroringTrustSettingsWatchRepository({required super.db});
+
+  @override
+  Stream<bool> watchAllowNewConnectionRequests() {
+    return Stream<bool>.error(StateError('simulated read failure'));
   }
 }

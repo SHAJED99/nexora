@@ -1929,15 +1929,20 @@ and that is the strongest single argument for this disposition.**
   | PV25 | row + toggle | **Auto-accept trusted devices** | `FR-TRUST-004`, already built and tested (`EARS-TRUST-1`) |
   | PV26 | row + toggle | **Require authentication for unknown senders** | wires the inert `requireAuthForUnknown` flag |
   | PV27 | row → sub-list | **Auto-accept specific people** | wires the inert `autoAcceptSpecific` flag |
-  | PV28 | ⛔ **not specified** | *allow/disable communication* | **blocked on `Q-FUNC-011`** — scope undecided, see below |
+  | PV28 | row + toggle — **built `E02-T04`** | *allow/disable communication* | `Q-FUNC-011` answered 2026-09-27; scoped to new connection requests only |
   | PV29 | row → `/devices` | **Blocked devices** — reports the count and navigates; offers **no action** | preserves §Derivation-boundary item 5's single home for blocking |
   | PV30 | `generic` | empty / error copy | `SH13` |
 
-- **PV28 is deliberately unspecified.** `FR-TRUST-006`'s "allow/disable
-  communication" has no defined scope — new connection requests only, or
-  existing conversations too. Raised as **`Q-FUNC-011`** and left open by
-  human decision, 2026-09-22. **PV28 is the only blocked element**; PV23-PV27,
-  PV29 and PV30 are unaffected by it.
+- **PV28 was deliberately unspecified, now answered.** `FR-TRUST-006`'s
+  "allow/disable communication" had no defined scope — new connection
+  requests only, or existing conversations too. Raised as **`Q-FUNC-011`**
+  and left open by human decision, 2026-09-22; **answered 2026-09-27**,
+  verbatim: "'Disable communication' blocks only new connection requests. It
+  does not suppress inbound delivery, hide existing conversations, alter
+  notifications, or otherwise silence established conversations." PV28 is
+  built against that answer (`E02-T04`); PV25-PV27 and PV29 remain unbuilt,
+  still pending their own element-scope sign-off (unaffected by this
+  answer).
 - **prerequisite, not a design question:** there is **no settings store**.
   `LocationSettingsRepository` persists the location toggles; nothing persists
   trust preferences. PV25-PV27 need one before they are more than decoration,
@@ -1948,8 +1953,13 @@ and that is the strongest single argument for this disposition.**
   `GAP-005` asked for a Privacy & Security sub-screen for `FR-TRUST-006`;
   `IMP-003` caused one to be built (`GAP-033`, `E15-T05`) scoped to location
   and notification privacy instead. This entry records the remainder.
-- **approved by:** _(pending — element scope)_
-- **built:** not built — this entry is the proposal only.
+- **approved by:** _(pending — element scope; PV28's copy specifically is
+  agent-derived and not human-approved wording, `OQ-E02-T04-1`,
+  `L-process-002`)_
+- **built:** PV23, PV24, PV28, PV30 — the section card, its heading, the one
+  toggle row `Q-FUNC-011` actually answers, and its own error line — `E02-T04`,
+  2026-09-27. PV25-PV27 and PV29 remain unbuilt pending element-scope
+  sign-off.
 
 ## GAP-045 — a blocked member's message in a group thread has no words
 - **status:** 🟢 **approved — option (b), human, 2026-09-25.** Was

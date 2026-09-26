@@ -485,6 +485,10 @@ void main() {
       // pre-existing table's own DDL rather than only adding new ones, so
       // `relationships` is excluded from the strict byte-identical loop
       // near the end of this test and checked separately, right after it.
+      //
+      // E02-T04 note (`Q-FUNC-011`): same widening an eighth time --
+      // current `schemaVersion` is now 24, so this v13 handle also runs
+      // the `from < 24` step, adding `trust_settings` to the diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -500,12 +504,14 @@ void main() {
           'device_revocations',
           'rate_limit_counters',
           'version_policy_cache',
+          'trust_settings',
         },
         reason: 'the v13->current-version upgrade must add exactly these '
             'tables (storage from v13->v14, location from v14->v15, '
             'notifications from v15->v16, device_revocations from '
             'v16->v17, rate_limit_counters from v17->v18; v18->v19 adds an '
-            'index only, no new table; version_policy_cache from v19->v20)',
+            'index only, no new table; version_policy_cache from v19->v20; '
+            'trust_settings from v23->v24)',
       );
 
       // Same exact-set treatment for the declared indexes. Neither
@@ -743,6 +749,10 @@ void main() {
       // above's identical note. `relationships` is excluded from the strict
       // byte-identical loop near the end of this test and checked
       // separately, right after it.
+      //
+      // E02-T04 note (`Q-FUNC-011`): same widening an eighth time --
+      // current `schemaVersion` is now 24, so this v14 handle also runs
+      // the `from < 24` step, adding `trust_settings` to the diff below.
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
@@ -755,12 +765,14 @@ void main() {
           'device_revocations',
           'rate_limit_counters',
           'version_policy_cache',
+          'trust_settings',
         },
         reason: 'the v14->current-version upgrade must add exactly these '
             'tables (location from v14->v15, notifications from v15->v16, '
             'device_revocations from v16->v17, rate_limit_counters from '
             'v17->v18; v18->v19 adds an index only, no new table; '
-            'version_policy_cache from v19->v20)',
+            'version_policy_cache from v19->v20; trust_settings from '
+            'v23->v24)',
       );
 
       // Same exact-set treatment for the declared indexes.

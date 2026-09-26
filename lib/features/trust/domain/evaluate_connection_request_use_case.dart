@@ -12,13 +12,29 @@
 // omitted, the gate is skipped and behavior is byte-for-byte unchanged from
 // before this task (see task's Run log Deviations for the follow-up this
 // leaves open).
+//
+// E02-T04 (`Q-FUNC-011`): gains an optional `TrustSettingsRepository`
+// admission check, same optional/nullable shape as `_rateLimiter` above and
+// for the same reason -- `DevicesController`'s own fallback construction
+// site is outside this task's `files:` fence and stays byte-for-byte
+// unchanged when the parameter is omitted. Placed AFTER the
+// `existing != null` early return below (never before it, task §2's
+// "structural guarantee"): the human's 2026-09-27 answer to `Q-FUNC-011` is
+// that "disable communication" refuses ONLY a genuinely new connection
+// request -- a device with no stored relationship row -- and must not
+// suppress inbound delivery, hide existing conversations, alter
+// notifications, or otherwise silence an established conversation. A
+// device this side has already evaluated (trusted/allowed/blocked) returns
+// its stored state exactly as before, regardless of this setting.
 import 'package:nexora/core/abuse/rate_limiter.dart';
 import 'package:nexora/features/trust/data/relationship_repository.dart';
+import 'package:nexora/features/trust/data/trust_settings_repository.dart';
 import 'package:nexora/features/trust/domain/relationship.dart';
 
 class EvaluateConnectionRequestUseCase {
   final RelationshipRepository _repository;
   final RateLimiter? _rateLimiter;
+  final TrustSettingsRepository? _trustSettings;
 
   /// Bucket key scheme + limit chosen by this task (§3): keyed by the
   /// REMOTE device id being evaluated, since the abuse shape being bounded
@@ -29,7 +45,12 @@ class EvaluateConnectionRequestUseCase {
   static const int _maxConnectionRequestsPerWindow = 10;
   static const Duration _connectionRequestWindow = Duration(minutes: 1);
 
-  EvaluateConnectionRequestUseCase(this._repository, {this._rateLimiter});
+  EvaluateConnectionRequestUseCase(
+    this._repository, {
+    this._rateLimiter,
+    TrustSettingsRepository? trustSettings,
+    // ignore: prefer_initializing_formals
+  }) : _trustSettings = trustSettings;
 
   /// Returns this side's independent evaluation of a connection request
   /// from [deviceId].
@@ -75,6 +96,26 @@ class EvaluateConnectionRequestUseCase {
     // Only a device with no relationship row at all is genuinely Unknown.
     if (existing != null) {
       return existing.state;
+    }
+    // `Q-FUNC-011` (human, 2026-09-27, verbatim): "'Disable communication'
+    // blocks only new connection requests. It does not suppress inbound
+    // delivery, hide existing conversations, alter notifications, or
+    // otherwise silence established conversations." Only reachable here,
+    // AFTER the `existing != null` early return above -- a device with any
+    // stored relationship row already returned above and never reaches
+    // this check, so an established conversation is completely unaffected
+    // by this setting.
+    if (_trustSettings != null) {
+      final allowed = await _trustSettings.readAllowNewConnectionRequests();
+      if (!allowed) {
+        // `blocked`, not `unknown` -- same precedent as the rate-limiter
+        // denial above: every existing caller already refuses on
+        // `blocked` (`MessagingStack`, `prekey_exchange.dart`'s two
+        // evaluation sites); `unknown` would let them proceed. This never
+        // writes a `relationships` row, so turning the setting back on
+        // later leaves no persisted false "blocked" verdict.
+        return RelationshipState.blocked;
+      }
     }
     // No FR-TRUST-006 config wired yet — defaults to Unknown regardless of
     // the flags' values until E02-T03 gives them real meaning.
