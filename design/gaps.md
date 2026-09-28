@@ -2092,3 +2092,50 @@ Checklist for the gap pass. In rough order of how often each is missed:
   decision and is not a defect introduced by any build — it is `chat.md`'s
   own measured element 31, followed faithfully. It becomes honest when
   GAP-014 (voice messages, approved 2026-08-30) is built.
+
+## GAP-047b — login has no error state, so a failed sign-in is a dead end
+
+- **status:** 🟡 **built under an established convention; copy pending human
+  confirmation.** The *behaviour* is not in question — a screen that claims
+  to be signing in after sign-in has failed is simply wrong. The exact
+  wording is what needs a nod.
+- **screen:** login (`design/screens/login.md`, `source: ui`, `states:
+  [default]`)
+- **spec:** `EARS-AUTH-3` — "surface as a mapped failure, never crash".
+  `login_controller.dart` mapped and logged the failure correctly; the
+  design gave it nowhere to appear.
+- **design shows:** the in-progress state only. One heading,
+  `Signing in with Google...`, drawn as a constant.
+- **found:** real-device run, 2026-09-28. Device B logged
+  `auth.google_sign_in_failed` at 21:06:41; at 21:08:12 the screen still
+  read `Signing in with Google...` with no spinner, no error and no action.
+  The only escape was force-stopping the app. A real user has no such
+  affordance, so a first sign-in that fails once — B's failed simply because
+  it had no network yet — strands the device permanently.
+- **derived from:** existing primitives only. **No new token, colour, size
+  or element type.** The failure copy follows the pattern this project has
+  already approved four times over:
+  - `dashboard.md` DX8 — `Couldn't read local storage. Try again.`
+  - `group-create.md` GC16 — `Couldn't create the group. Try again.`
+  - `group-manage.md` GM19 — `Couldn't apply that change. Try again.`
+  - `settings-storage.md` SS28 — `Couldn't read local storage. Try again.`
+
+  Each carries the failure in the words and invents **no error colour**,
+  which is `GAP-009`'s own precedent. This entry applies that same shape.
+- **built (`E01-B02`, 2026-09-28):**
+  - the heading becomes reactive; on failure it reads
+    **`Couldn't sign in. Try again.`**
+  - the spinner's slot becomes a **`Try again`** action that re-runs
+    sign-in and returns the screen to its in-progress state.
+  - a plain `TextButton`, deliberately **not** `OnProcessButtonWidget` —
+    that widget drops any tap arriving while its internal `isRunning` is
+    not `stable`, and this is the only exit from a dead end. Defensive, not
+    a verdict on that widget (`E01-B02` §9, `OQ-E01-B02-2`).
+- **what is NOT derived:** no distinction between causes (offline vs
+  cancelled vs rejected). One honest failure line, one action. Telling
+  those apart is a larger product decision and is deliberately not taken
+  here.
+- **approved by:** _(pending — the wording only; `Couldn't sign in. Try
+  again.` follows the four precedents above but has not itself been
+  confirmed, `L-process-002`)_
+- **built:** `E01-B02`, 2026-09-28 — behind this pending copy line.

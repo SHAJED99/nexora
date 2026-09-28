@@ -89,5 +89,27 @@ character; a case or spacing change is a finding, not a nit.
   derivation in `design/gaps.md` GAP-028. ✅ approved (human, 2026-09-05)
   — not yet built.
 
+- **GAP-047b (E01, `EARS-AUTH-3`)** — this design draws only the
+  *in-progress* state. It has **no `error` state**, so a sign-in that fails
+  had nowhere to go: the build rendered the heading as a constant and the
+  screen went on claiming it was signing in forever, with no retry.
+  Confirmed on real hardware 2026-09-28 (`auth.google_sign_in_failed`
+  logged at 21:06:41; screen unchanged at 21:08:12). Built in `E01-B02`
+  using only existing primitives and the project's established
+  `Couldn't <thing>. Try again.` wording — full derivation in
+  `design/gaps.md` GAP-047b. ⏳ **copy pending human confirmation.**
+
 ## Notes for the implementing agent
 - (exact copy quirks, dynamic data, anything the probe cannot see)
+- **The heading is no longer static** (`E01-B02`). It reads
+  `Signing in with Google...` while `signingIn`, and
+  `Couldn't sign in. Try again.` once `signInFailed`. The generated
+  §Copy block above lists only the former because the golden predates the
+  error state; the delta is recorded in `design/gaps.md` GAP-047b rather
+  than by hand-editing the generated tables.
+- **The retry action (`Try again`) is a plain `TextButton`, not
+  `OnProcessButtonWidget`.** That widget gates every tap on its own
+  internal `isRunning` state, and this button is the only exit from a dead
+  end — it must not be able to swallow a tap. A local, defensive choice;
+  whether that widget actually drops taps in production is a separate,
+  unproven question (`E01-B02` §9, `OQ-E01-B02-2`).
