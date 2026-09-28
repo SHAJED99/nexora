@@ -64,10 +64,15 @@ class LoginView extends GetView<LoginController> {
                   );
                 }
                 if (controller.signInFailed.value) {
-                  // `LG7`. A plain `TextButton`, deliberately NOT
-                  // `OnProcessButtonWidget`: this is the only way out of a
-                  // dead end, so it must not depend on a widget whose taps
-                  // are gated on internal state (`E01-B03`).
+                  // A plain `TextButton`, deliberately NOT
+                  // `OnProcessButtonWidget`: that widget opens its tap
+                  // handler with
+                  // `if (isRunning != OnProcessButtonStatus.stable) return;`,
+                  // so an instance whose internal state is not `stable`
+                  // silently swallows the tap. This button is the only exit
+                  // from a dead end and must not be able to do that. A
+                  // local, defensive choice — not a claim that the widget is
+                  // defective (`E01-B02` §9, OQ-E01-B02-2).
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 32),
                     child: TextButton(

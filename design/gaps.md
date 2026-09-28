@@ -2129,7 +2129,8 @@ Checklist for the gap pass. In rough order of how often each is missed:
     sign-in and returns the screen to its in-progress state.
   - a plain `TextButton`, deliberately **not** `OnProcessButtonWidget` —
     that widget drops any tap arriving while its internal `isRunning` is
-    not `stable`, and this is the only exit from a dead end (`E01-B03`).
+    not `stable`, and this is the only exit from a dead end. Defensive, not
+    a verdict on that widget (`E01-B02` §9, `OQ-E01-B02-2`).
 - **what is NOT derived:** no distinction between causes (offline vs
   cancelled vs rejected). One honest failure line, one action. Telling
   those apart is a larger product decision and is deliberately not taken

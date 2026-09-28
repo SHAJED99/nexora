@@ -110,4 +110,6 @@ character; a case or spacing change is a finding, not a nit.
 - **The retry action (`Try again`) is a plain `TextButton`, not
   `OnProcessButtonWidget`.** That widget gates every tap on its own
   internal `isRunning` state, and this button is the only exit from a dead
-  end — it must not be able to swallow a tap. See `E01-B03`.
+  end — it must not be able to swallow a tap. A local, defensive choice;
+  whether that widget actually drops taps in production is a separate,
+  unproven question (`E01-B02` §9, `OQ-E01-B02-2`).

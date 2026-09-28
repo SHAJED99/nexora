@@ -239,7 +239,7 @@ class LoginController extends GetxController {
   /// moment a new attempt starts, so the heading can never claim both.
   final RxBool signInFailed = false.obs;
 
-  /// Re-runs the sign-in the view's retry action invokes (`LG7`). A no-op
+  /// Re-runs the sign-in the view's retry action invokes. A no-op
   /// while an attempt is already in flight — a double tap must not start a
   /// second concurrent `_signIn()`.
   Future<void> retry() async {
