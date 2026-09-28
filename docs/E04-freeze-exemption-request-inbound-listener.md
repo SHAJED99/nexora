@@ -1,103 +1,104 @@
-# E04 freeze-exemption request — inbound delivery depends on a recent Discover
+# E04 freeze-exemption request — WITHDRAWN
 
-> **Status: 🧍 AWAITING HUMAN.** E04 is frozen. Nothing in this document has
-> been implemented, and `BluetoothTransport.kt` has not been modified.
-> Raised 2026-09-29 by `claude-opus-5` from direct hardware observation.
+> **Status: ❌ WITHDRAWN, 2026-09-29, by the author.** No exemption is
+> needed. The defect is real, but it is **not in E04** — it is in
+> `lib/app/bindings.dart`. `BluetoothTransport.kt` was never modified.
 
-## The ask, in one line
+## What was asked for, and why it was wrong
 
-Permission to change **where `ensureListening()` is called from** in
-`android/app/src/main/kotlin/com/nexora/nexora/transport/BluetoothTransport.kt`
-— and nothing else in E04.
+This document originally asked for permission to change where
+`BluetoothTransport.ensureListening()` is called from, on the grounds that
+*"there is no call on app start, on transport start, or on entering a
+conversation"* and *"no Dart-side code can open one"*.
 
-## The exact code
+**The second claim was false, and the first was misleading.** Review caught
+it, and the author verified the correction first-hand before withdrawing.
 
-`ensureListening()` opens this device's own RFCOMM server socket
-(`listenUsingRfcommWithServiceRecord`) and publishes its SDP record. It is
-defined at `BluetoothTransport.kt:503` and called from **exactly two
-places**:
+`BackgroundLifecycleObserver` in `lib/app/bindings.dart` **already calls
+`transport.startDiscovery()` automatically**, with no user tap:
 
-| Call site | Method |
-|---|---|
-| `BluetoothTransport.kt:781` | `connect()` |
-| `BluetoothTransport.kt:1497` | `doStartDiscovery()` |
+- `_applyPlan()` calls
+  `unawaited(transport.startDiscovery().catchError((Object _) {}))` whenever
+  the computed plan allows discovery;
+- `BackgroundPolicy.plan` returns `discoveryAllowed: true` for the ordinary
+  foreground case;
+- `_discoveryAllowed` is declared `bool?`, so it starts `null` and the first
+  plan genuinely differs — the early-return guard does not suppress the
+  first call.
 
-Both are commented `// E04-B06 -- see that method's own doc comment.`
+And `startDiscovery()` → `doStartDiscovery()` → `ensureListening()`.
 
-There is **no** call on app start, on transport start, or on entering a
-conversation.
+So the wiring this document asked to add **already exists**, and E04 already
+anticipates exactly this. `startDiscovery()` (`BluetoothTransport.kt:477`)
+handles the permission race on purpose, stashing
+`pendingPermissionAction = { doStartDiscovery() }`, and `ensureListening()`'s
+own doc comment states the design intent the request was going to propose:
 
-## The observed defect
+> *"Deliberately NOT gated behind discovery or an active outbound `connect`
+> attempt — a peer can only ever reach this device if something is
+> listening, symmetrically, on BOTH sides, all the time this device's
+> Bluetooth is on."*
 
-During the 1:1 validation run (`docs/real-device-validation-1to1.md`):
+Asking E04 to adopt an intent it already documents, and already wires, was
+the wrong request.
 
-- A→B succeeded, because **A initiated**, so A's own `connect()` ran and B
-  had previously run Discover.
-- B→A then sat at `state=sent` in B's database and **did not arrive on A for
-  over 45 seconds**, across two separate checks.
-- It landed **immediately** once A re-ran Discover from the Devices tab.
+## Where the defect actually is
 
-So a device that has the app open, is bonded, and is sitting in the
-conversation is **not necessarily accepting inbound connections**.
+`lib/app/bindings.dart`, in the path that is supposed to make that intent
+true at cold start:
 
-Two things make this worse in ordinary use:
+1. `BackgroundLifecycleObserver.start()` **deliberately does not** call
+   `_applyPlan()` synchronously. That is correct and intentional — it avoids
+   acting on the optimistic default `PowerState` before a real reading
+   arrives.
+2. So the first `_applyPlan()` depends entirely on
+   `_refreshPowerStateOnResume()`, whose body is wrapped in
+   `try { … } catch (_) { }`. If `_service.powerState()` throws,
+   `_onPowerStateChanged` is never called, `_applyPlan()` never runs, and
+   `startDiscovery()` is never called — so **nothing ever listens**.
+3. The catch block's comment asserts *"the stream subscription remains the
+   fallback source of truth"*. **That premise is wrong**, and the same file
+   says so twenty lines earlier: the power-state stream is *"fed by
+   broadcast receivers that fire on TRANSITIONS only"*. With no transition,
+   nothing arrives. There is no fallback.
+4. `_applyPlan()` then latches:
+   `if (_discoveryAllowed == plan.discoveryAllowed) return;`. Nothing retries
+   a `startDiscovery()` that failed.
 
-1. Each Discover raises the system dialog *"nexora wants to make your phone
-   visible to other Bluetooth devices for 120 seconds"*. That window
-   **expires**, and nothing re-arms it.
-2. Nothing on screen tells the user any of this. The Dashboard says
-   `No peers nearby`, which reads as "nobody is around", not "tap Discover
-   or you will not receive anything".
+That is a single un-retried, exception-swallowing path to the app's only
+automatic listener startup, with a fallback that cannot fire.
 
-**User-visible consequence: someone who opens Nexora and waits for a message
-may simply never receive one.** That is not a corner case; it is the normal
-way a person uses a messaging app.
+## Evidence
 
-## Why no fix outside E04 is valid
+Reproduced cleanly after force-stopping and relaunching **both** apps, with
+all Bluetooth permissions already granted, and **no Discover tapped**:
 
-I looked for one, because the freeze is real and I would rather not ask.
+```
+=== B (sender) ===            === A (recipient) ===
+sent  NODISCOVER-B-0231       (absent)
+```
 
-- **The listener is native.** The server socket and its SDP record exist only
-  in `BluetoothTransport.kt`. No Dart-side code can open one.
-- **Calling `startDiscovery()` from Dart on a timer is not the same fix, and
-  is worse.** It would re-trigger the 120-second visibility **system dialog**
-  repeatedly, which is user-hostile, and it would run a full BT scan purely
-  as a side effect of wanting to listen. It also does not fix the underlying
-  fact that listening is coupled to discovering.
-- **Calling `connect()` speculatively is not valid either** — it changes
-  outbound behaviour and bond-retry backoff (`E04-B29`) to achieve an
-  inbound effect.
+Tapping Discover on A delivered a previously stuck message immediately,
+which is consistent with `ensureListening()` simply never having run on A.
 
-The honest fix is to call `ensureListening()` when the transport starts, so
-that listening is a property of *the app running* rather than a side effect
-of two unrelated actions. That is a one-line-scope change, in E04.
+**One honest limit on this evidence:** it proves `_applyPlan()` did not
+result in a listener on A. It does **not** independently prove *which* of
+the two failure modes above occurred (a thrown `powerState()` vs. some other
+reason the plan never applied). The structural fragility is proven from the
+code regardless, and the fix should address the path, not one symptom.
 
-## What I would change, precisely
+## What happens next
 
-Add a call to `ensureListening()` at transport start, leaving both existing
-call sites untouched (they are idempotent by construction — the method
-already distinguishes "listening already in progress", per its own doc at
-`BluetoothTransport.kt:439`).
+A bug task against `lib/app/bindings.dart` — **outside the freeze**, so it
+needs no exemption and no decision from the human. It must not swallow a
+failed one-shot power read without either retrying or applying a plan, and
+must not latch `_discoveryAllowed` on a `startDiscovery()` that failed.
 
-Explicitly **not** proposed:
+## Lesson
 
-- no change to `connect()`'s own logic, the bond checks (`E04-B09`), or the
-  bond-retry backoff (`E04-B29`);
-- no change to discovery, SDP filtering (`E04-T07`) or the accept loop's
-  threading model (`BluetoothTransport.kt:431–456`, which is delicate and
-  documented as such);
-- no change to the visibility/discoverability request;
-- no change to any Dart-side routing, addressing or the destination gate.
-
-## If you would rather not open E04 at all
-
-That is a legitimate call, and the honest consequence should be recorded
-rather than hidden: **1:1 messaging works, but only when the receiving user
-has recently tapped Discover.** If the freeze holds, this belongs in
-`CHANGELOG.md` §Known gaps and should block any claim that the app is
-generally usable for receiving messages.
-
-## Decision
-
-- [ ] 🧍 Exemption **granted** — scope limited to the above.
-- [ ] 🧍 Exemption **refused** — record the gap instead.
+The original request asserted *"I looked for one"* about a non-E04 fix and
+did not name the mechanism that already existed. An argument for opening a
+frozen file has to enumerate what it ruled out, by name — otherwise
+"I found none" is an assertion, not a finding. The freeze did its job here:
+it forced the argument to be written down, and writing it down is what
+exposed that it was wrong.
