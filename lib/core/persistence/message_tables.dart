@@ -87,6 +87,20 @@ class Messages extends Table {
   /// `DeliveryStateMachine.transition`.
   TextColumn get deliveryState => text()();
 
+  /// E05-T06 (ADR-0009): what this message's payload CONTAINS -- a
+  /// `MessageContentKind.wireValue` (`1` text, `2` image, `3` file, `4`
+  /// voice, `5` location).
+  ///
+  /// **`null` means text.** Every row written before this column existed is
+  /// text by the convention that was the only thing making messages readable
+  /// at all, so `null` is not "unknown" here -- it is the correct, complete
+  /// answer for all of them. No backfill is attempted, and none is needed.
+  ///
+  /// Nothing writes this column yet: ADR-0009 authorises the discriminator,
+  /// not the attachment journeys that will eventually populate it, and
+  /// E05-T06's scope fence keeps every producer out of scope.
+  IntColumn get kind => integer().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
