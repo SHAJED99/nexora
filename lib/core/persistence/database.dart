@@ -107,7 +107,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 24;
+  int get schemaVersion => 25;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -743,6 +743,27 @@ class AppDatabase extends _$AppDatabase {
             mode: InsertMode.insertOrIgnore,
           );
         });
+      }
+      if (from >= 11 && from < 25) {
+        // E05-T06 (ADR-0009): `messages.kind` -- the content-kind
+        // discriminator. Additive only: one nullable column on an existing
+        // table, no data rewritten and nothing dropped (docs/conventions.md
+        // "Schema migrations", FR-VER-003).
+        //
+        // No backfill, and none is possible or needed: `null` MEANS text,
+        // and every pre-existing row is text. A DEFAULT would be worse than
+        // useless here -- it would assert a kind the sender never sent.
+        //
+        // `from >= 11` is NOT optional, and is the same guard
+        // `messages.plaintextPayload` carries three steps above for exactly
+        // the same reason: `messages` is first created by the `from < 11`
+        // step, and `m.createTable` builds it from the CURRENT Dart table
+        // definition -- which already includes this column. An install
+        // older than 11 therefore gets `kind` from createTable, and running
+        // this ALTER as well fails the whole open with "duplicate column
+        // name: kind". Caught by the 25 cascade-from-an-old-schema
+        // migration tests, which is precisely what they are for.
+        await m.addColumn(messages, messages.kind);
       }
     },
   );

@@ -513,7 +513,7 @@ void main() {
         '      sequence_number INTEGER NOT NULL,\n'
         '      ciphertext BLOB NOT NULL,\n'
         '      created_at INTEGER NOT NULL,\n'
-        '      delivery_state TEXT NOT NULL, "plaintext_payload" BLOB NULL,\n'
+        '      delivery_state TEXT NOT NULL, "plaintext_payload" BLOB NULL, "kind" INTEGER NULL,\n'
         '      PRIMARY KEY (id)\n'
         '    )',
       );

@@ -43,6 +43,14 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../../../core/auth/google_auth_service.dart' show AppFailure;
+// One definition of the content-kind registry, two envelopes — the same
+// discipline this file's header already explains E05-B01 was a defect for
+// not applying to the envelope itself. `features/groups` already imports
+// `features/messaging/domain` freely (`send_group_message_use_case.dart`
+// takes `message.dart` and `message_sequence_reserver.dart`), so this
+// crosses no boundary that is not already crossed.
+import '../../messaging/domain/message_envelope.dart'
+    show MessageContentKind;
 
 /// The `controlKind` byte a group text message travels as — `1` is
 /// `PrekeyExchange`'s (E06-T07), `2` is `DeliveryAckService`'s (E06-T08),
@@ -63,8 +71,18 @@ import '../../../core/auth/google_auth_service.dart' show AppFailure;
 /// available the way T07/T08/T03/T04 each had one).
 const int kControlKindGroupMessage = 6;
 
-/// Current, and so far only, [GroupMessageEnvelope] wire layout version.
+/// The original [GroupMessageEnvelope] wire layout version — no content-kind
+/// byte, and therefore text unconditionally (E05-T06, ADR-0009).
 const int groupMessageEnvelopeVersion = 1;
+
+/// The **v2** [GroupMessageEnvelope] layout (E05-T06, ADR-0009): one extra
+/// `u8 kind` immediately after the version byte, every subsequent field
+/// keeping its order and shifting by exactly one.
+///
+/// A real monotonic version here, unlike `MessageEnvelope`'s magic
+/// `0xE5`/`0xE6` sentinels — that asymmetry is pre-existing and deliberate,
+/// and `message_envelope.dart` explains it at `envelopeFormatVersionV2`.
+const int groupMessageEnvelopeVersionV2 = 2;
 
 /// The plaintext structure `GroupCryptoService.encryptForGroup` encrypts as
 /// one unit (task file §2/§3/§5) — the group analogue of `MessageEnvelope`.
@@ -91,10 +109,24 @@ class GroupMessageEnvelope {
     required this.sequenceNumber,
     required this.createdAtMs,
     required this.body,
+    this.kind = MessageContentKind.text,
+    this.unknownKindWireValue,
   });
 
   final String groupId;
   final int epoch;
+
+  /// What [body] contains (E05-T06, ADR-0009) — the group analogue of
+  /// `MessageEnvelope.kind`, sharing its one registry. `null` means this
+  /// build does not recognise the kind byte a v2 envelope carried; see
+  /// [unknownKindWireValue].
+  final MessageContentKind? kind;
+
+  /// The raw kind byte, preserved **only** when it was not recognised
+  /// (exactly when [kind] is `null`); `null` otherwise. See
+  /// `MessageEnvelope.unknownKindWireValue` for why an unknown kind is
+  /// carried rather than guessed or dropped.
+  final int? unknownKindWireValue;
 
   /// The AUTHORITATIVE sender — written by the sender at compose time and
   /// recovered only once this envelope has been decrypted under a real
@@ -129,7 +161,18 @@ class GroupMessageEnvelope {
     final senderDeviceIdBytes = _utf8(senderDeviceId);
     final messageIdBytes = _utf8(messageId);
 
+    // ADR-0009's emission rule, identical to `MessageEnvelope`'s: text emits
+    // v1, byte-identical to what this app has always sent, so the working
+    // group sender-key path never executes the v2 branch. See
+    // `MessageEnvelope.serialize` for why an unrecognised kind refuses to
+    // re-emit rather than silently degrading to text.
+    if (kind == null) {
+      throw const AppFailure('group.malformed_message');
+    }
+    final emitV2 = kind != MessageContentKind.text;
+
     final totalLength = _headerFixedBytes +
+        (emitV2 ? 1 : 0) +
         groupIdBytes.length +
         senderDeviceIdBytes.length +
         messageIdBytes.length +
@@ -139,8 +182,15 @@ class GroupMessageEnvelope {
     final bytes = buffer.buffer.asUint8List();
     var offset = 0;
 
-    buffer.setUint8(offset, groupMessageEnvelopeVersion);
-    offset += 1;
+    if (emitV2) {
+      buffer.setUint8(offset, groupMessageEnvelopeVersionV2);
+      offset += 1;
+      buffer.setUint8(offset, kind!.wireValue);
+      offset += 1;
+    } else {
+      buffer.setUint8(offset, groupMessageEnvelopeVersion);
+      offset += 1;
+    }
 
     offset = _putLengthPrefixed(buffer, bytes, offset, groupIdBytes);
 
@@ -176,11 +226,30 @@ class GroupMessageEnvelope {
       final view = ByteData.sublistView(bytes);
       var offset = 0;
 
+      // Was a strict `!=` against `1`; E05-T06 widens it to the two-value
+      // known set {1, 2}. Every other version still fails exactly as before.
       final version = view.getUint8(offset);
-      if (version != groupMessageEnvelopeVersion) {
+      if (version != groupMessageEnvelopeVersion &&
+          version != groupMessageEnvelopeVersionV2) {
         throw const AppFailure('group.malformed_message');
       }
       offset += 1;
+
+      // v1 means text, unconditionally — no kind byte to read, and none
+      // inferred (ADR-0009's decode rule).
+      var kind = MessageContentKind.text;
+      int? unknownKindWireValue;
+      if (version == groupMessageEnvelopeVersionV2) {
+        _requireRemaining(bytes, offset, 1);
+        final kindByte = view.getUint8(offset);
+        offset += 1;
+        final resolved = MessageContentKind.fromWire(kindByte);
+        if (resolved == null) {
+          unknownKindWireValue = kindByte;
+        } else {
+          kind = resolved;
+        }
+      }
 
       final groupIdRead = _readLengthPrefixedString(view, bytes, offset);
       final groupId = groupIdRead.$1;
@@ -216,6 +285,8 @@ class GroupMessageEnvelope {
         sequenceNumber: sequenceNumber,
         createdAtMs: createdAtMs,
         body: body,
+        kind: unknownKindWireValue == null ? kind : null,
+        unknownKindWireValue: unknownKindWireValue,
       );
     } on AppFailure {
       rethrow;
