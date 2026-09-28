@@ -67,8 +67,15 @@ Three things in that output matter beyond "a row exists":
 1. **The message id is identical on both devices** — this is the same
    message, not two coincidentally similar rows.
 2. **`sender_device_id` is the real Nexora device identity on both sides**
-   (`050f551b…` / `05fb7cc0…`), **never a MAC address**. This is the
-   property `E06-B04` exists to protect, and it holds on real hardware.
+   (`050f551b…` / `05fb7cc0…`), **never a MAC address**. This is what
+   `E04-B12` (learn a peer's real `selfDeviceId` over the transport) and
+   `E04-B13` (resolve it into outbound addressing) exist to achieve, and it
+   holds on real hardware.
+
+   > An earlier revision of this file cited `E06-B04` here. That was
+   > **wrong**: `E06-B04` is about delivery-ack control frames trusting an
+   > unauthenticated `frame.source`, which is a different concern. Corrected
+   > after review; recorded rather than quietly swapped.
 3. **`plaintext_payload` decrypted correctly on the recipient**, from a
    396-byte ciphertext on A to a 211-byte one on B — a genuine Signal
    session, not a passthrough.
@@ -93,29 +100,81 @@ their message.
 
 ## Open finding — inbound delivery depends on a recent Discover
 
-**This is a real usability defect, and it is inside frozen E04, so it is
-documented here rather than fixed.** See
-`docs/E04-freeze-exemption-request-inbound-listener.md` for the exemption
-request.
+**This is a real defect, and it is NOT in E04.** It is in
+`lib/app/bindings.dart`. An earlier revision of this file asked for an E04
+freeze exemption; that request has been **withdrawn** — see
+`docs/E04-freeze-exemption-request-inbound-listener.md`, which now records
+why it was wrong.
 
 Observed directly: B's reply sat at `state=sent` on B and **did not arrive on
 A for over 45 seconds**. It landed immediately once A re-ran **Discover**.
 
-The mechanism is not in doubt. `BluetoothTransport.ensureListening()` — which
-opens this device's own RFCOMM server socket and publishes its SDP record —
-is called from exactly two places:
+### Reproduced cleanly
 
-- `BluetoothTransport.kt:781`, inside `connect()`
-- `BluetoothTransport.kt:1497`, inside `doStartDiscovery()`
+After force-stopping and relaunching **both** apps, with every Bluetooth
+permission already granted, and **without tapping Discover anywhere**:
 
-So a device that is merely *running the app* is not necessarily accepting
-inbound connections. Compounding it, each Discover raises the system dialog
-*"nexora wants to make your phone visible to other Bluetooth devices for 120
-seconds"*, and that window expires.
+```
+=== B (sender) ===            === A (recipient) ===
+sent  NODISCOVER-B-0231       (absent)
+```
 
-The practical consequence: **a user who opens the app and waits for a message
-may never receive one.** They have to go to Devices and tap Discover first,
-which nothing on screen tells them.
+B recorded the send; A never received it. So this is not an artifact of one
+stale discoverability window.
+
+### Where it actually is
+
+`BluetoothTransport.ensureListening()` — which opens this device's RFCOMM
+server socket and publishes its SDP record — is reached from `connect()`
+(`BluetoothTransport.kt:781`) and `doStartDiscovery()` (`:1497`).
+
+**E04 is not the defect.** `startDiscovery()` (`:477`) already handles the
+permission race deliberately, stashing
+`pendingPermissionAction = { doStartDiscovery() }`, and `ensureListening()`'s
+own documentation states the intent plainly: it is *"deliberately NOT gated
+behind discovery or an active outbound connect attempt — a peer can only ever
+reach this device if something is listening, symmetrically, on BOTH sides,
+all the time this device's Bluetooth is on"*.
+
+The Dart side is supposed to make that true, and does not reliably:
+
+1. `BackgroundLifecycleObserver.start()` (`lib/app/bindings.dart`)
+   **deliberately does not** call `_applyPlan()` synchronously — by design,
+   so it never acts on the optimistic default `PowerState`.
+2. It instead relies on `_refreshPowerStateOnResume()`, whose entire body is
+   wrapped in `try { … } catch (_) { }`. If `_service.powerState()` throws,
+   `_onPowerStateChanged` is never called and **`_applyPlan()` never runs for
+   the first time**.
+3. `_applyPlan()` is the only thing that calls `transport.startDiscovery()`,
+   and it is what would have started the listener.
+
+The catch block's comment says *"the stream subscription remains the fallback
+source of truth"*. That premise does not hold: the same file's own comment in
+`start()` records that the power-state stream **fires on transitions only**.
+With no transition, nothing ever arrives, so there is no fallback — the app
+simply never listens.
+
+Compounding it, `_applyPlan()` latches its decision
+(`if (_discoveryAllowed == plan.discoveryAllowed) return;`), so once a value
+is recorded no later call retries a `startDiscovery()` that failed.
+
+**Practical consequence: a user who opens the app and waits for a message may
+never receive one**, and nothing on screen says so — the Dashboard reads
+`No peers nearby`, which sounds like nobody is around.
+
+## Evidence quality — read this before citing the table
+
+Two claims above are **prose, not pasted command output**, and are weaker
+than the rest of the record: `signal_sessions = 1 both sides` and the
+`396B → 211B` ciphertext sizes. Both were read off the devices by the
+author, but neither is reproduced here as raw output, so they do not meet
+this project's own "paste the output, never a recalled number" bar. The
+`messages` table dumps, which carry the load of the argument, ARE verbatim.
+
+The "recipient rendered plaintext" rows rest on screenshots taken during the
+run that are **not committed to this repository**. The claim is consistent
+with the database evidence, but a reader cannot independently check it from
+the repo alone, and should not treat it as if they could.
 
 ## What is NOT yet validated
 
