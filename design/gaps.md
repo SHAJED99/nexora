@@ -1904,8 +1904,10 @@ and that is the strongest single argument for this disposition.**
 
 ## GAP-044 — settings-privacy, FR-TRUST-006's connection-request controls have no design source
 
-- **status:** 🟡 proposed — the human approved the design pass on
-  2026-09-22; the element scope below still needs its own sign-off
+- **status:** 🟢 **partially approved.** The human approved the design pass
+  on 2026-09-22, and on **2026-09-28** approved PV28's copy verbatim (see
+  `approved by:` below). PV25-PV27 and PV29's element scope still needs its
+  own sign-off and stays 🟡 — those four are unbuilt.
 - **screen:** settings-privacy (`design/screens/settings-privacy.md`) — an
   **extension of the built screen**, not a new one (the same shape `GAP-023`
   used to extend `GAP-014`)
@@ -1953,9 +1955,18 @@ and that is the strongest single argument for this disposition.**
   `GAP-005` asked for a Privacy & Security sub-screen for `FR-TRUST-006`;
   `IMP-003` caused one to be built (`GAP-033`, `E15-T05`) scoped to location
   and notification privacy instead. This entry records the remainder.
-- **approved by:** _(pending — element scope; PV28's copy specifically is
-  agent-derived and not human-approved wording, `OQ-E02-T04-1`,
-  `L-process-002`)_
+- **approved by:** ✅ **human, 2026-09-28 — PV28's copy, verbatim:** row label
+  `Allow new connection requests`; body line `When this is off, people you
+  have not connected with before cannot reach you. Conversations you already
+  have keep working.` This closes `OQ-E02-T04-1`, which carried the wording as
+  agent-derived and explicitly not human-approved (`L-process-002`). The same
+  decision approved the additive v23→v24 `trust_settings` migration
+  (`OQ-E02-T04-2`), on the stated conditions: one additive table, existing
+  rows preserved, default `true`, nothing destructive, no unrelated schema
+  change — each verified, the default directly and by mutation
+  (`test/core/persistence/migration_v23_to_v24_verification_test.dart`).
+  _(Still pending: PV25-PV27 and PV29's element scope — unchanged by this
+  approval.)_
 - **built:** PV23, PV24, PV28, PV30 — the section card, its heading, the one
   toggle row `Q-FUNC-011` actually answers, and its own error line — `E02-T04`,
   2026-09-27. PV25-PV27 and PV29 remain unbuilt pending element-scope
