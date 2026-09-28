@@ -28,11 +28,28 @@ that convention is the only thing making it readable.
 
 **The frame-level type system cannot be used for this.** `PayloadType`
 (`preKeySignalMessage` / `signalMessage` / `control`) is relay-visible
-metadata by design, and the `kControlKind` registry (1-8) is carried in
-cleartext. Putting "this is a voice note" in either would disclose content
-type to every relay that forwards the packet — a direct regression against
-`FR-ROUTE-003`/`FR-ROUTE-004`. **The discriminator must live inside the
-encrypted envelope.**
+metadata by design — `relay_packet_frame.dart`'s own class doc: "Every field
+except `payload` is metadata a relay is allowed to see (`FR-ROUTE-004`)".
+
+The control-kind registry is the more interesting case, and the precise fact
+matters. It is **not** true that all eight control sub-protocols are
+cleartext: only kinds 1 (`PrekeyExchange`) and 2 (`DeliveryAck`) send
+cleartext bodies, and kinds 3, 4, 5 and 7 deliberately encrypt theirs through
+the pairwise Double Ratchet — `group_control.dart` states outright that "this
+file's wire body is never sent in the clear", precisely because a forged
+`frame.source` on a cleartext `memberRemoved` would let any mesh node remove
+any member of any group (`E06-B04`).
+
+What *is* universally true, and what actually rules this position out, is
+narrower: **the discriminator byte itself is read before any decryption.**
+`inbound_pipeline.dart:1062` does `final int controlKind = frame.payload[0];`
+unconditionally, ahead of dispatch. Any byte in a pre-decrypt position is
+visible to every relay that forwards the packet, whatever the body behind it
+does. Putting "this is a voice note" there would disclose content type on the
+wire — a direct regression against `FR-ROUTE-003`/`FR-ROUTE-004`.
+
+**So the discriminator must live inside the encrypted envelope**, in a
+position no one reaches without the keys.
 
 A second, easily-missed half: the local `messages` table has no content-type
 column either (`id, conversationId, senderDeviceId, sequenceNumber,

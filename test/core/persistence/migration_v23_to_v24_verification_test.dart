@@ -27,10 +27,19 @@ void main() {
   test(
     'a real v23 database upgrades to v24 and receives the default true',
     () async {
-      final raw = sqlite3.sqlite3.openInMemory();
+      // File-backed so the first handle can be CLOSED before the second is
+      // opened. An in-memory handle cannot: closing it destroys the
+      // database. Sharing one raw handle across two `AppDatabase`
+      // constructions instead would trip drift's own multi-instance race
+      // warning ("might corrupt the database") -- flagged in review, and
+      // not a pattern worth keeping in the file that is now the cited
+      // evidence for a human-approved migration.
+      final dir = await Directory.systemTemp.createTemp('nexora_v23_');
+      addTearDown(() => dir.delete(recursive: true));
+      final file = File(p.join(dir.path, 'app.sqlite'));
 
       // 1. Build the real, complete current schema via onCreate.
-      final seeded = AppDatabase.forTesting(NativeDatabase.opened(raw));
+      final seeded = AppDatabase.forTesting(NativeDatabase(file));
       await seeded.customSelect('SELECT 1').get();
 
       // A row that must survive the upgrade untouched.
@@ -44,10 +53,17 @@ void main() {
       //    v23 install would have it.
       await seeded.customStatement('DROP TABLE trust_settings;');
       await seeded.customStatement('PRAGMA user_version = 23;');
-      expect(raw.userVersion, 23, reason: 'precondition: handle is at v23');
+      await seeded.close();
+
+      // Read the stamped version back through an independent handle, so the
+      // precondition is proved against the file itself rather than against
+      // the connection that wrote it.
+      final probe = sqlite3.sqlite3.open(file.path);
+      expect(probe.userVersion, 23, reason: 'precondition: file is at v23');
+      probe.close();
 
       // 3. Re-open. This is the production upgrade: from == 23, to == 24.
-      final upgraded = AppDatabase.forTesting(NativeDatabase.opened(raw));
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
       final row = await (upgraded.select(
@@ -58,7 +74,10 @@ void main() {
       // requests. A default of `false` here would silently cut off every
       // upgrading user.
       expect(row.allowNewConnectionRequests, isTrue);
-      expect(raw.userVersion, 24, reason: 'upgrade actually ran');
+
+      final after = sqlite3.sqlite3.open(file.path);
+      expect(after.userVersion, 24, reason: 'upgrade actually ran');
+      after.close();
 
       // Additive only: pre-existing data survived.
       final identity = await upgraded.latestDeviceIdentity();
