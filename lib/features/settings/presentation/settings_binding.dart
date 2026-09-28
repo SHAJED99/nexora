@@ -45,6 +45,7 @@ import 'package:nexora/features/settings/privacy/presentation/privacy_settings_c
 import 'package:nexora/features/settings/security_center/data/security_records_repository.dart';
 import 'package:nexora/features/settings/security_center/presentation/security_center_controller.dart';
 import 'package:nexora/features/settings/storage/presentation/storage_settings_controller.dart';
+import 'package:nexora/features/trust/data/trust_settings_repository.dart';
 
 class SettingsBinding extends Bindings {
   @override
@@ -145,6 +146,7 @@ class SettingsBinding extends Bindings {
       final db = Get.find<AppDatabase>();
       return PrivacySettingsController(
         locationRepository: LocationSettingsRepository(db: db),
+        trustSettingsRepository: TrustSettingsRepository(db: db),
         notificationRepository: NotificationSettingsRepository(db: db),
       );
     });

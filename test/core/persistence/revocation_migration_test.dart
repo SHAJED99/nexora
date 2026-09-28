@@ -421,21 +421,29 @@ void main() {
       // lazy migration to run before inspecting sqlite_master.
       await db.customSelect('SELECT 1').get();
 
-      // Exactly these three new tables -- `device_revocations` (v16->v17,
+      // Exactly these four new tables -- `device_revocations` (v16->v17,
       // no index, task §5, sync_tables.dart's "point lookup by PK needs no
       // secondary index" reasoning applies identically here),
       // `rate_limit_counters` (v17->v18, E13-T01, same no-index reasoning;
-      // v18->v19 adds an index only, no new table) and
-      // `version_policy_cache` (v19->v20, E14-T01, renumbered from
-      // `from < 18` at this same merge, same no-index reasoning).
+      // v18->v19 adds an index only, no new table), `version_policy_cache`
+      // (v19->v20, E14-T01, renumbered from `from < 18` at this same
+      // merge, same no-index reasoning) and `trust_settings` (v23->v24,
+      // E02-T04, `Q-FUNC-011`, same no-index reasoning -- point lookup by
+      // the fixed row id `1`).
       final postMigrationTables = await _tableNames(db);
       expect(
         postMigrationTables.difference(preMigrationTables),
-        {'device_revocations', 'rate_limit_counters', 'version_policy_cache'},
+        {
+          'device_revocations',
+          'rate_limit_counters',
+          'version_policy_cache',
+          'trust_settings',
+        },
         reason: 'the v16->current-version upgrade must add exactly these '
             'tables (device_revocations from v16->v17, rate_limit_counters '
             'from v17->v18; v18->v19 adds an index only, no new table; '
-            'version_policy_cache from v19->v20)',
+            'version_policy_cache from v19->v20; trust_settings from '
+            'v23->v24)',
       );
 
       // The new table is usable through the real Dart definition.

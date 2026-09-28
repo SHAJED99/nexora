@@ -18,9 +18,9 @@ Q-DESIGN-001; that clearance stands unchanged.
 | | Count |
 |---|---|
 | 🟡 blocking | 0 |
-| 🟡 important | 1 |
+| 🟡 important | 0 |
 | 🟡 optional | 0 |
-| 🟢 answered | 8 |
+| 🟢 answered | 9 |
 | ⚪ assumed / deferred | 2 |
 
 <!-- Recounted 2026-09-24 from the question bodies below, which are the source
@@ -29,7 +29,8 @@ Q-DESIGN-001; that clearance stands unchanged.
      Q-ARCH-004, Q-FUNC-005, Q-FUNC-006 -- were all answered during 2026-09-07's
      registry sweep and their own bodies say so, but this summary was never
      recounted, so it kept reporting them as open. The one genuinely open
-     question is Q-FUNC-011. -->
+     question was Q-FUNC-011, answered 2026-09-27 (E02-T04) -- no open
+     question remains on file as of this recount. -->
 
 **Genesis and implementation may not proceed while any 🟡 blocking row exists.**
 
@@ -213,13 +214,15 @@ Batching rule: **≤10 per round**, grouped by area.
 
 ### Q-FUNC-011 — "Allow/disable communication" in FR-TRUST-006 has no defined scope
 - **Priority:** important
-- **Status:** 🟡 open (raised 2026-09-22, deliberately not decided)
+- **Status:** 🟢 answered (raised 2026-09-22, answered 2026-09-27)
 - **Raised by:** `GAP-044` element scoping
 - **Question:** `FR-TRUST-006` lists "allow/disable communication" among six configurable rules. Does disabling refuse only NEW connection requests, or does it also silence EXISTING conversations?
 - **Why it matters:** The narrow reading is one toggle read by `EvaluateConnectionRequestUseCase` — a setting beside the other three. The broad reading is a messaging-layer behaviour affecting inbound delivery, notification suppression and conversation-list visibility — a much larger change with its own criteria, tests and blast radius.
 - **Options considered:** _(not pre-empted — the human declined to decide this on 2026-09-22 and asked that it be recorded as unresolved)_
 - **Blocks:** `PV28` on `design/screens/settings-privacy.md` only. PV23-PV27, PV29 and PV30 proceed without it.
-- **Answer:** _(none yet)_
+- **Answer:** verbatim, 2026-09-27: "'Disable communication' blocks only new connection requests. It does not suppress inbound delivery, hide existing conversations, alter notifications, or otherwise silence established conversations."
+- **Answered by:** human, 2026-09-27
+- **Fed into:** `epics/E02-trust-blocking/tasks/E02-T04.md` — `EvaluateConnectionRequestUseCase`'s new gate (placed strictly after the `existing != null` early return), `TrustSettingsRepository`/`trust_settings` (schema v23→v24), and `design/screens/settings-privacy.md`'s PV28.
 
 ---
 

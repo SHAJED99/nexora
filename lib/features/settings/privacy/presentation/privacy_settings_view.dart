@@ -1,5 +1,5 @@
-// features/settings/privacy/presentation -- PV1-PV22
-// (design/screens/settings-privacy.md, GAP-033 + GAP-040). Composes
+// features/settings/privacy/presentation -- PV1-PV22, PV23/PV24/PV28
+// (design/screens/settings-privacy.md, GAP-033 + GAP-040 + GAP-044). Composes
 // E15-T03's `SettingsSubScreenScaffold`; no local frame, no route, no row
 // wiring (task §4 -- all three are E15-T11's alone).
 import 'package:flutter/material.dart';
@@ -9,8 +9,8 @@ import 'package:nexora/features/settings/presentation/widgets/settings_sub_scree
 
 import 'privacy_settings_controller.dart';
 
-/// PV1-PV22. Every string below is `settings-privacy.md`'s §Copy, copied
-/// character for character.
+/// PV1-PV22, PV23/PV24/PV28. Every string below is `settings-privacy.md`'s
+/// §Copy, copied character for character.
 class PrivacySettingsView extends GetView<PrivacySettingsController> {
   const PrivacySettingsView({super.key});
 
@@ -122,6 +122,43 @@ class PrivacySettingsView extends GetView<PrivacySettingsController> {
                       !entry.value,
                     ),
                   ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // PV23/PV24/PV28 -- Connection requests (`GAP-044`, `Q-FUNC-011`,
+          // human-answered 2026-09-27). The row + body-line shape copies
+          // PV16/PV17 exactly (task §3 item 7) -- no new primitive. PV25,
+          // PV26, PV27 and PV29 stay unbuilt (`GAP-044`'s other elements,
+          // task §4 scope fence): this card renders PV28 only.
+          SettingsSectionCard(
+            children: [
+              const SettingsSectionHeading('Connection requests'),
+              const SizedBox(height: 12),
+              if (controller.connectionSettingsError.value)
+                const SettingsEmptyOrErrorLine(
+                  'Connection settings could not be read.',
+                )
+              else ...[
+                _AllowConnectionRequestsRow(
+                  enabled: controller.allowNewConnectionRequests.value,
+                  // Inert (`null`) while the switch's own value is still
+                  // unknown, same carried-forward F1 shape as
+                  // `_GlobalLocationRow` above -- the real write guard
+                  // also lives in
+                  // `PrivacySettingsController.setAllowNewConnectionRequests`.
+                  onTap: controller.allowNewConnectionRequests.value == null
+                      ? null
+                      : () => controller.setAllowNewConnectionRequests(
+                          !controller.allowNewConnectionRequests.value!,
+                        ),
+                ),
+                const SizedBox(height: 8),
+                const SettingsBodyLine(
+                  'When this is off, people you have not connected with '
+                  'before cannot reach you. Conversations you already have '
+                  'keep working.',
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 16),
@@ -258,6 +295,48 @@ class _GlobalLocationRow extends StatelessWidget {
           child: Row(
             children: [
               const Expanded(child: SettingsBodyLine('Share my location')),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: enabled == null
+                    ? null
+                    : SettingsSelectionGlyph(selected: enabled!),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// PV28 -- `Allow new connection requests` + state (SH7 + SH12).
+/// `Q-FUNC-011`-derived copy (task §3, `OQ-E02-T04-1`). Same blank
+/// selection-slot / inert-while-loading shape as `_GlobalLocationRow`
+/// above (task's carried-forward F1 finding).
+class _AllowConnectionRequestsRow extends StatelessWidget {
+  const _AllowConnectionRequestsRow({
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final bool? enabled;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              const Expanded(
+                child: SettingsBodyLine('Allow new connection requests'),
+              ),
               const SizedBox(width: 12),
               SizedBox(
                 width: 24,

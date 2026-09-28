@@ -72,6 +72,7 @@ Frame: SH1-SH4, with SH3 = `Privacy & Security`.
 | PV25 | row | `Auto-accept trusted devices` + state | SH7 + SH12 — `GAP-044` |
 | PV26 | row | `Require authentication for unknown senders` + state | SH7 + SH12 — `GAP-044` |
 | PV27 | row | `Auto-accept specific people` + `chevron_right` | SH7 + SH9 — `GAP-044` |
+| PV28 | row | `Allow new connection requests` + state | SH7 + SH12 — `GAP-044`, `Q-FUNC-011` answered 2026-09-27, built `E02-T04` |
 | PV29 | row | `Blocked devices` + count + `chevron_right` — navigates to `/devices`, no action here | SH7 + SH9 + SH12 — `GAP-044` |
 | PV30 | `generic` | `Connection settings could not be read.` | SH13 — `GAP-044` |
 | PV22 | `generic` | `App lock and a permissions manager are not available in this version.` | SH7, `GAP-040`, human-approved 2026-09-09 |
@@ -97,6 +98,8 @@ Frame: SH1-SH4, with SH3 = `Privacy & Security`.
 - `Auto-accept trusted devices`
 - `Require authentication for unknown senders`
 - `Auto-accept specific people`
+- `Allow new connection requests`
+- `When this is off, people you have not connected with before cannot reach you. Conversations you already have keep working.`
 - `Blocked devices`
 - `Connection settings could not be read.`
 
@@ -112,9 +115,9 @@ row as a promise the global switch silently overrides.
 3. **`empty`** — the per-person list only: PV20. The global switch and the
    encryption card are unchanged — an empty peer list is the ordinary state on
    a new install, not an error.
-4. **`error`** — PV21 replaces the affected card's values only. **The global
-   location switch is never cleared by a failed read of something else**
-   (`settings-shell.md` §States).
+4. **`error`** — PV21/PV30 replace the affected card's values only. **The
+   global location switch and PV28 are never cleared by a failed read of
+   something else** (`settings-shell.md` §States).
 
 PV22 is constant across every state above: it names a capability this build
 never implements, not a value read from a repository, so no failure mode
@@ -145,13 +148,14 @@ touches it (`GAP-040`).
 5. **No block/unblock control.** Blocking lives on `devices.md` and keeps
    exactly one home (see also `settings-security-center.md`, which reports
    blocks and also offers no action).
-7. **No duplicate block control, and no PV28.** PV29 reports the blocked-device
-   count and navigates to `/devices`; it offers no action, so item 5 above
-   still holds and blocking keeps exactly one home — two writers for one list
-   is the trap `E05-B03` cost this project once. **PV28 is absent on purpose:**
-   `FR-TRUST-006`'s "allow/disable communication" has no defined scope, raised
-   as `Q-FUNC-011` and left open by human decision (2026-09-22). Drawing a
-   control for an undecided behaviour would be inventing the behaviour.
-   (`GAP-044`)
+7. **No duplicate block control.** PV29 reports the blocked-device count and
+   navigates to `/devices`; it offers no action, so item 5 above still holds
+   and blocking keeps exactly one home — two writers for one list is the trap
+   `E05-B03` cost this project once. **PV28 is now built (`E02-T04`):**
+   `FR-TRUST-006`'s "allow/disable communication" was raised as `Q-FUNC-011`
+   and left open by human decision (2026-09-22); the human answered it on
+   2026-09-27 — "disable communication" refuses only new connection requests,
+   never existing conversations — and PV28's copy is derived from that answer
+   (`OQ-E02-T04-1`: not itself human-approved wording). (`GAP-044`)
 6. **No location history and no map.** `FR-LOC-004` explicitly forbids a
    permanent location store; a history view would imply one exists.

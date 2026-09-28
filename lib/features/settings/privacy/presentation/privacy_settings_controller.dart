@@ -14,6 +14,11 @@
 //   holds no second copy of a preference and no defaulting rule of its own
 //   (task §2/§6): if a widget and a repository ever disagree, the
 //   repository wins and the widget is the bug.
+// - Connection requests (PV23/PV24/PV28, E02-T04, `Q-FUNC-011`) is the
+//   second writable surface: [allowNewConnectionRequests]/
+//   [setAllowNewConnectionRequests], delegating to
+//   `TrustSettingsRepository` -- same "one setting, one writer" shape as
+//   location sharing above, and the same unknown-state-never-writes guard.
 import 'dart:async';
 
 import 'package:get/get.dart';
@@ -21,6 +26,7 @@ import 'package:nexora/core/notifications/notification_settings_repository.dart'
 import 'package:nexora/core/persistence/notification_tables.dart'
     show NotificationPrivacyLevel;
 import 'package:nexora/features/location/data/location_settings_repository.dart';
+import 'package:nexora/features/trust/data/trust_settings_repository.dart';
 
 /// FR-SEC-005's screen controller.
 class PrivacySettingsController extends GetxController {
@@ -30,11 +36,18 @@ class PrivacySettingsController extends GetxController {
   // (`this._x`) can't be used here without also renaming the parameter.
   PrivacySettingsController({
     required this.locationRepository,
+    required this.trustSettingsRepository,
     required NotificationSettingsRepository notificationRepository,
     // ignore: prefer_initializing_formals
   }) : _notificationRepository = notificationRepository;
 
   final LocationSettingsRepository locationRepository;
+
+  /// `Q-FUNC-011`'s sole source of truth for
+  /// `allowNewConnectionRequests` -- same "the repository is the
+  /// authority, this screen holds no second copy" discipline as
+  /// [locationRepository] above.
+  final TrustSettingsRepository trustSettingsRepository;
 
   /// Private (review round 2, F2): `PrivacySettingsView` -- or anything
   /// else -- must reach `NotificationSettingsRepository.setPrivacyLevel`
@@ -80,7 +93,18 @@ class PrivacySettingsController extends GetxController {
   /// `true` once the notification-privacy read has failed.
   final RxBool notificationPrivacyError = false.obs;
 
+  /// `Q-FUNC-011`'s "allow new connection requests" switch, `null` until
+  /// `watchAllowNewConnectionRequests()` has emitted at least once -- the
+  /// `loading` state, same shape as [globalLocationEnabled].
+  final Rx<bool?> allowNewConnectionRequests = Rx<bool?>(null);
+
+  /// `true` once this switch's own stream has emitted an error. Kept
+  /// independent of the other cards' error flags, same reasoning as
+  /// [globalLocationError].
+  final RxBool connectionSettingsError = false.obs;
+
   StreamSubscription<bool>? _globalSubscription;
+  StreamSubscription<bool>? _connectionSettingsSubscription;
 
   @override
   void onInit() {
@@ -91,6 +115,14 @@ class PrivacySettingsController extends GetxController {
         globalLocationError.value = true;
       },
     );
+    _connectionSettingsSubscription = trustSettingsRepository
+        .watchAllowNewConnectionRequests()
+        .listen(
+          (allowed) => allowNewConnectionRequests.value = allowed,
+          onError: (Object _, StackTrace _) {
+            connectionSettingsError.value = true;
+          },
+        );
     unawaited(_loadPeerLocations());
     unawaited(_loadNotificationPrivacy());
   }
@@ -157,9 +189,23 @@ class PrivacySettingsController extends GetxController {
     }
   }
 
+  /// `Q-FUNC-011`'s write path. Same unknown-state guard as
+  /// [setGlobalLocation] -- while [allowNewConnectionRequests] has not yet
+  /// emitted (still `null`, the `loading` state), the current value is
+  /// genuinely unknown, and this screen holds no defaulting rule of its
+  /// own -- writing here could silently clobber the real stored value
+  /// before it is even known. The view additionally keeps the switch's own
+  /// tap target inert (nullable `onTap`) while this is `null`, so this
+  /// guard is a backstop, not the only line of defence.
+  Future<void> setAllowNewConnectionRequests(bool allowed) async {
+    if (allowNewConnectionRequests.value == null) return;
+    await trustSettingsRepository.writeAllowNewConnectionRequests(allowed);
+  }
+
   @override
   void onClose() {
     _globalSubscription?.cancel();
+    _connectionSettingsSubscription?.cancel();
     super.onClose();
   }
 }

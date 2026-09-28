@@ -9985,6 +9985,279 @@ class VersionPolicyCacheCompanion
   }
 }
 
+class $TrustSettingsTable extends TrustSettings
+    with TableInfo<$TrustSettingsTable, TrustSettingRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TrustSettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _allowNewConnectionRequestsMeta =
+      const VerificationMeta('allowNewConnectionRequests');
+  @override
+  late final GeneratedColumn<bool> allowNewConnectionRequests =
+      GeneratedColumn<bool>(
+        'allow_new_connection_requests',
+        aliasedName,
+        false,
+        type: DriftSqlType.bool,
+        requiredDuringInsert: false,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("allow_new_connection_requests" IN (0, 1))',
+        ),
+        defaultValue: const Constant(true),
+      );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    allowNewConnectionRequests,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'trust_settings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TrustSettingRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('allow_new_connection_requests')) {
+      context.handle(
+        _allowNewConnectionRequestsMeta,
+        allowNewConnectionRequests.isAcceptableOrUnknown(
+          data['allow_new_connection_requests']!,
+          _allowNewConnectionRequestsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TrustSettingRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TrustSettingRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      allowNewConnectionRequests: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}allow_new_connection_requests'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TrustSettingsTable createAlias(String alias) {
+    return $TrustSettingsTable(attachedDatabase, alias);
+  }
+}
+
+class TrustSettingRow extends DataClass implements Insertable<TrustSettingRow> {
+  final int id;
+  final bool allowNewConnectionRequests;
+
+  /// Epoch-ms.
+  final int updatedAt;
+  const TrustSettingRow({
+    required this.id,
+    required this.allowNewConnectionRequests,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['allow_new_connection_requests'] = Variable<bool>(
+      allowNewConnectionRequests,
+    );
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  TrustSettingsCompanion toCompanion(bool nullToAbsent) {
+    return TrustSettingsCompanion(
+      id: Value(id),
+      allowNewConnectionRequests: Value(allowNewConnectionRequests),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory TrustSettingRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TrustSettingRow(
+      id: serializer.fromJson<int>(json['id']),
+      allowNewConnectionRequests: serializer.fromJson<bool>(
+        json['allowNewConnectionRequests'],
+      ),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'allowNewConnectionRequests': serializer.toJson<bool>(
+        allowNewConnectionRequests,
+      ),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  TrustSettingRow copyWith({
+    int? id,
+    bool? allowNewConnectionRequests,
+    int? updatedAt,
+  }) => TrustSettingRow(
+    id: id ?? this.id,
+    allowNewConnectionRequests:
+        allowNewConnectionRequests ?? this.allowNewConnectionRequests,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  TrustSettingRow copyWithCompanion(TrustSettingsCompanion data) {
+    return TrustSettingRow(
+      id: data.id.present ? data.id.value : this.id,
+      allowNewConnectionRequests: data.allowNewConnectionRequests.present
+          ? data.allowNewConnectionRequests.value
+          : this.allowNewConnectionRequests,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TrustSettingRow(')
+          ..write('id: $id, ')
+          ..write('allowNewConnectionRequests: $allowNewConnectionRequests, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, allowNewConnectionRequests, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TrustSettingRow &&
+          other.id == this.id &&
+          other.allowNewConnectionRequests == this.allowNewConnectionRequests &&
+          other.updatedAt == this.updatedAt);
+}
+
+class TrustSettingsCompanion extends UpdateCompanion<TrustSettingRow> {
+  final Value<int> id;
+  final Value<bool> allowNewConnectionRequests;
+  final Value<int> updatedAt;
+  const TrustSettingsCompanion({
+    this.id = const Value.absent(),
+    this.allowNewConnectionRequests = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  TrustSettingsCompanion.insert({
+    this.id = const Value.absent(),
+    this.allowNewConnectionRequests = const Value.absent(),
+    required int updatedAt,
+  }) : updatedAt = Value(updatedAt);
+  static Insertable<TrustSettingRow> custom({
+    Expression<int>? id,
+    Expression<bool>? allowNewConnectionRequests,
+    Expression<int>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (allowNewConnectionRequests != null)
+        'allow_new_connection_requests': allowNewConnectionRequests,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  TrustSettingsCompanion copyWith({
+    Value<int>? id,
+    Value<bool>? allowNewConnectionRequests,
+    Value<int>? updatedAt,
+  }) {
+    return TrustSettingsCompanion(
+      id: id ?? this.id,
+      allowNewConnectionRequests:
+          allowNewConnectionRequests ?? this.allowNewConnectionRequests,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (allowNewConnectionRequests.present) {
+      map['allow_new_connection_requests'] = Variable<bool>(
+        allowNewConnectionRequests.value,
+      );
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TrustSettingsCompanion(')
+          ..write('id: $id, ')
+          ..write('allowNewConnectionRequests: $allowNewConnectionRequests, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -10036,6 +10309,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $RateLimitCountersTable(this);
   late final $VersionPolicyCacheTable versionPolicyCache =
       $VersionPolicyCacheTable(this);
+  late final $TrustSettingsTable trustSettings = $TrustSettingsTable(this);
   late final Index idxMessagesConversationCreatedAt = Index(
     'idx_messages_conversation_created_at',
     'CREATE INDEX idx_messages_conversation_created_at ON messages (conversation_id, created_at)',
@@ -10101,6 +10375,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     deviceRevocations,
     rateLimitCounters,
     versionPolicyCache,
+    trustSettings,
     idxMessagesConversationCreatedAt,
     idxGroupMembersCurrent,
     idxGroupSingleOwner,
@@ -15691,6 +15966,164 @@ typedef $$VersionPolicyCacheTableProcessedTableManager =
       VersionPolicyCacheRow,
       PrefetchHooks Function()
     >;
+typedef $$TrustSettingsTableCreateCompanionBuilder =
+    TrustSettingsCompanion Function({
+      Value<int> id,
+      Value<bool> allowNewConnectionRequests,
+      required int updatedAt,
+    });
+typedef $$TrustSettingsTableUpdateCompanionBuilder =
+    TrustSettingsCompanion Function({
+      Value<int> id,
+      Value<bool> allowNewConnectionRequests,
+      Value<int> updatedAt,
+    });
+
+class $$TrustSettingsTableFilterComposer
+    extends Composer<_$AppDatabase, $TrustSettingsTable> {
+  $$TrustSettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get allowNewConnectionRequests => $composableBuilder(
+    column: $table.allowNewConnectionRequests,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TrustSettingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $TrustSettingsTable> {
+  $$TrustSettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get allowNewConnectionRequests => $composableBuilder(
+    column: $table.allowNewConnectionRequests,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TrustSettingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TrustSettingsTable> {
+  $$TrustSettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<bool> get allowNewConnectionRequests => $composableBuilder(
+    column: $table.allowNewConnectionRequests,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$TrustSettingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TrustSettingsTable,
+          TrustSettingRow,
+          $$TrustSettingsTableFilterComposer,
+          $$TrustSettingsTableOrderingComposer,
+          $$TrustSettingsTableAnnotationComposer,
+          $$TrustSettingsTableCreateCompanionBuilder,
+          $$TrustSettingsTableUpdateCompanionBuilder,
+          (
+            TrustSettingRow,
+            BaseReferences<_$AppDatabase, $TrustSettingsTable, TrustSettingRow>,
+          ),
+          TrustSettingRow,
+          PrefetchHooks Function()
+        > {
+  $$TrustSettingsTableTableManager(_$AppDatabase db, $TrustSettingsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TrustSettingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TrustSettingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TrustSettingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<bool> allowNewConnectionRequests = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+              }) => TrustSettingsCompanion(
+                id: id,
+                allowNewConnectionRequests: allowNewConnectionRequests,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<bool> allowNewConnectionRequests = const Value.absent(),
+                required int updatedAt,
+              }) => TrustSettingsCompanion.insert(
+                id: id,
+                allowNewConnectionRequests: allowNewConnectionRequests,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TrustSettingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TrustSettingsTable,
+      TrustSettingRow,
+      $$TrustSettingsTableFilterComposer,
+      $$TrustSettingsTableOrderingComposer,
+      $$TrustSettingsTableAnnotationComposer,
+      $$TrustSettingsTableCreateCompanionBuilder,
+      $$TrustSettingsTableUpdateCompanionBuilder,
+      (
+        TrustSettingRow,
+        BaseReferences<_$AppDatabase, $TrustSettingsTable, TrustSettingRow>,
+      ),
+      TrustSettingRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -15761,4 +16194,6 @@ class $AppDatabaseManager {
       $$RateLimitCountersTableTableManager(_db, _db.rateLimitCounters);
   $$VersionPolicyCacheTableTableManager get versionPolicyCache =>
       $$VersionPolicyCacheTableTableManager(_db, _db.versionPolicyCache);
+  $$TrustSettingsTableTableManager get trustSettings =>
+      $$TrustSettingsTableTableManager(_db, _db.trustSettings);
 }
