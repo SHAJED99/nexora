@@ -230,6 +230,23 @@ class LoginController extends GetxController {
 
   final RxBool signingIn = true.obs;
 
+  /// `true` once a sign-in attempt has FAILED and no retry is in flight —
+  /// the `error` state `design/screens/login.md` gained for this bug
+  /// (`E01-B02`). Kept separate from [signingIn] rather than inferred from
+  /// `!signingIn.value`: before the first attempt settles both are false in
+  /// principle, and a view that inferred failure from "not signing in"
+  /// would flash the error copy during that window. Cleared by [retry] the
+  /// moment a new attempt starts, so the heading can never claim both.
+  final RxBool signInFailed = false.obs;
+
+  /// Re-runs the sign-in the view's retry action invokes (`LG7`). A no-op
+  /// while an attempt is already in flight — a double tap must not start a
+  /// second concurrent `_signIn()`.
+  Future<void> retry() async {
+    if (signingIn.value) return;
+    await _signIn();
+  }
+
   @override
   void onInit() {
     super.onInit();
@@ -238,6 +255,7 @@ class LoginController extends GetxController {
 
   Future<void> _signIn() async {
     signingIn.value = true;
+    signInFailed.value = false;
     try {
       final deviceIdentityRepository = _resolveDeviceIdentityRepository();
 
@@ -371,6 +389,11 @@ class LoginController extends GetxController {
       // error-state UI is out of scope for this task (see task §4) — this
       // is the minimum the task asks for: map + log, no error screen yet.
       signingIn.value = false;
+      // `E01-B02`: the screen must stop claiming it is signing in. Before
+      // this, only the spinner was cleared and the heading kept reading
+      // "Signing in with Google..." forever, with no retry — confirmed on
+      // real hardware, where the only escape was force-stopping the app.
+      signInFailed.value = true;
       ObservabilityService.instance.logError(
         e is AppFailure ? e.code : 'auth.google_sign_in_failed',
         cause: e,
