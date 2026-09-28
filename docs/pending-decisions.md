@@ -68,14 +68,26 @@ No output means no ADR is pending, which is the state today: all eight are
 | 2 | Decide Play App Signing enrolment | `secrets_or_env_change` | `docs/release-signing.md` | Irreversible after the first upload |
 | 3 | `OQ-E01-B01-1` — what *is* the pairing code? | rule 1 (spec silent) | `epics/E01-identity-access/tasks/E01-B01.md` | `E01-B01`, a **P2/must/S2** bug |
 | 4 | `OQ-E01-B01-2` — how does the app notice identity arriving mid-session? | rule 3 (ADR-0005 area) | `epics/E01-identity-access/tasks/E01-B01.md` | `E01-B01`, the same bug |
-| 5 | `Q-FUNC-011` — scope of "allow/disable communication" in `FR-TRUST-006` | rule 3 | `spec/questions.md` §Open questions | `PV28` on `design/screens/settings-privacy.md` only |
+| 5 | ~~`Q-FUNC-011` — scope of "allow/disable communication"~~ — **answered 2026-09-27, built + merged `E02-T04` (#338); copy and migration approved 2026-09-28** | — | `spec/questions.md` §Answered; `ADR-0009` is unrelated | nothing |
+| 5b | **The unknown-kind placeholder copy** — what a v2 message with an unrecognised `kind` says on screen | rule 2 (design is law) | `ADR-0009` §Consequences; a `GAP-0nn` to be raised when implementation reaches it | the v2 receive path only |
 | 6 | Lift or keep the **E04 freeze** | — *(see the note below)* | a standing human instruction, not a repository state | 6 of 14 blocking orphans; 2 of 3 open bugs |
 | 7 | Clear `dev_to_main_merge`, or descope the unmet preconditions | `dev_to_main_merge` | `harness.yaml` `human_gates`; `docs/release-readiness.md` | The release itself |
 | 8 | Approve the four lesson promotions | `retro_promotions` | `make lessons`; `agent/memory/lessons/process.md` | `L-process-011`, `L-process-012`, `L-process-014`, `L-process-020` |
 
 Items 1, 2 and 7 are the release path. Items 3 and 4 are one bug. Item 5 is
-narrow. Item 6 is an epic. Item 8 is process, and is the only one of the eight
-that does not stand between this project and a release.
+**closed** — `Q-FUNC-011` was answered on 2026-09-27 and its copy and
+migration approved on 2026-09-28; the row is struck rather than deleted so the
+history stays readable. Item 5b replaces it as the one narrow open decision.
+Item 6 is an epic. Item 8 is process, and is the only one of the eight that
+does not stand between this project and a release.
+
+> **Reconciliation note, 2026-09-28.** Only rows 5/5b were re-verified in this
+> pass, because that is what the merge of `E02-T04` (#338) touched. **Row 4 is
+> very likely stale** — `OQ-E01-B01-2` was answered on 2026-09-27 and built in
+> #337 — but it was not independently re-checked here and is deliberately left
+> as-is rather than edited on recollection. The next full reconciliation should
+> re-run the recipe at the bottom of this file against
+> `origin/development = 3964c97`.
 
 ### Manual actions that need no decision, only a human and hardware
 
