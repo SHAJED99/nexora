@@ -75,6 +75,50 @@ class _NoTransitionBackgroundControl implements BackgroundControl {
   }
 }
 
+/// A [BackgroundControl] double for the **E10-B11** regression tests: its
+/// one-shot [powerState] read THROWS, and — like
+/// [_NoTransitionBackgroundControl] — neither stream ever emits.
+///
+/// This is the exact cold-start shape that left a real device unable to
+/// receive anything: `BackgroundLifecycleObserver.start()` deliberately does
+/// not call `_applyPlan()` synchronously, so before the fix a throw here
+/// meant `_applyPlan()` never ran at all, `transport.startDiscovery()` was
+/// never called, and `BluetoothTransport.ensureListening()` therefore never
+/// opened this device's RFCOMM server socket. The catch block's claim that
+/// "the stream subscription remains the fallback source of truth" could not
+/// save it: that stream is fed by broadcast receivers that fire on
+/// TRANSITIONS only, which is what the silent streams here model.
+class _ThrowingPowerReadBackgroundControl implements BackgroundControl {
+  final StreamController<ServiceState> _stateController =
+      StreamController<ServiceState>.broadcast();
+  final StreamController<PowerState> _powerStateController =
+      StreamController<PowerState>.broadcast();
+
+  @override
+  Stream<ServiceState> get state => _stateController.stream;
+
+  @override
+  Future<PowerState> powerState() async =>
+      throw StateError('platform power read failed');
+
+  @override
+  Stream<PowerState> get powerStates => _powerStateController.stream;
+
+  @override
+  Future<bool> start() async => true;
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  Future<bool> isRunning() async => false;
+
+  Future<void> dispose() async {
+    await _stateController.close();
+    await _powerStateController.close();
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final TestDefaultBinaryMessenger messenger =
@@ -566,6 +610,128 @@ void main() {
         final ticksAfterApply = stack.coordinator.counters.ticks;
         await Future<void>.delayed(const Duration(milliseconds: 120));
         expect(stack.coordinator.counters.ticks, ticksAfterApply);
+      },
+    );
+
+    // ---- E10-B11 -------------------------------------------------------
+    // The device could silently never listen. Both tests drive the REAL
+    // `BackgroundLifecycleObserver` against a real `TransportService`
+    // (mocked at the platform-channel boundary), so they fail if either
+    // half of the fix is reverted.
+
+    test(
+      'test_E10_B11_a_failing_one_shot_power_read_still_applies_a_plan',
+      () async {
+        final suffix = nextCompositionSuffix();
+        final calls = <String>[];
+        mockDiscoveryChannels(suffix, calls);
+        final stack = await newCompositionStack(suffix);
+        addTearDown(stack.dispose);
+        addTearDown(stack.coordinator.stop);
+
+        final control = _ThrowingPowerReadBackgroundControl();
+        addTearDown(control.dispose);
+        final observer = BackgroundLifecycleObserver(
+          coordinator: stack.coordinator,
+          transport: stack.transport,
+          service: control,
+        );
+        addTearDown(observer.stop);
+
+        observer.start();
+        // Two microtask drains: one for the throwing `powerState()` future
+        // to reject, one for the `startDiscovery()` call it now leads to.
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+
+        // THE regression. Before the fix this was `[]` -- the catch block
+        // swallowed the failure, `_applyPlan()` never ran, and nothing ever
+        // opened a listening socket. A device in this state cannot receive
+        // a single message, and says nothing about it.
+        expect(
+          calls,
+          contains('start'),
+          reason: 'a failed power read must not leave the device deaf',
+        );
+      },
+    );
+
+    test(
+      'test_E10_B11_a_failed_start_discovery_does_not_latch_and_is_retried',
+      () async {
+        final suffix = nextCompositionSuffix();
+        final calls = <String>[];
+        // First `startDiscovery` FAILS at the platform boundary; later ones
+        // succeed. Pre-fix, `_discoveryAllowed` was set to `true` before the
+        // call and never cleared on failure, so the observer believed
+        // discovery was on and no later plan ever retried it.
+        var attempts = 0;
+        messenger.setMockMessageHandler(
+          'dev.flutter.pigeon.nexora.TransportApi.startDiscovery.$suffix',
+          (ByteData? _) async {
+            attempts++;
+            calls.add('start');
+            if (attempts == 1) {
+              return TransportApi.pigeonChannelCodec.encodeMessage(
+                <Object?>['err', 'simulated', null],
+              );
+            }
+            return TransportApi.pigeonChannelCodec
+                .encodeMessage(<Object?>[null]);
+          },
+        );
+        messenger.setMockMessageHandler(
+          'dev.flutter.pigeon.nexora.TransportApi.stopDiscovery.$suffix',
+          (ByteData? _) async {
+            calls.add('stop');
+            return TransportApi.pigeonChannelCodec
+                .encodeMessage(<Object?>[null]);
+          },
+        );
+
+        final stack = await newCompositionStack(suffix);
+        addTearDown(stack.dispose);
+        addTearDown(stack.coordinator.stop);
+
+        final backgroundStub = BackgroundStub();
+        addTearDown(backgroundStub.dispose);
+        final observer = BackgroundLifecycleObserver(
+          coordinator: stack.coordinator,
+          transport: stack.transport,
+          service: backgroundStub,
+        );
+        addTearDown(observer.stop);
+
+        observer.start();
+        // A real (short) delay, not microtask drains: the failing call
+        // travels through the platform-channel messenger, so its rejection
+        // -- and therefore the `catchError` that clears the latch -- lands
+        // several event-loop turns later.
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(attempts, 1, reason: 'the first attempt ran, and failed');
+
+        // Something ordinary that re-applies the plan: the user backgrounds
+        // the app and comes back. `discoveryAllowed` is `true` on BOTH
+        // sides of that transition (the foreground and the
+        // "background, service running" rows share the unrestricted band),
+        // so this is only ever a retry -- which is exactly what makes the
+        // test discriminating. Pre-fix the latch still read `true`, this
+        // early-returned, `attempts` stayed at 1 forever and the device
+        // never listened.
+        //
+        // NOT `backgroundStub.emitPowerState(allClearPowerState())`: the
+        // stub dedupes an unchanged state (`if (state == _powerState)
+        // return;`), so re-emitting all-clear over all-clear never reaches
+        // the observer at all.
+        observer.didChangeAppLifecycleState(AppLifecycleState.paused);
+        observer.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(
+          attempts,
+          greaterThanOrEqualTo(2),
+          reason: 'a failed startDiscovery must not latch as success',
+        );
       },
     );
   });
