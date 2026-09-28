@@ -3379,6 +3379,15 @@ class $MessagesTable extends Messages
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<int> kind = GeneratedColumn<int>(
+    'kind',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -3389,6 +3398,7 @@ class $MessagesTable extends Messages
     plaintextPayload,
     createdAt,
     deliveryState,
+    kind,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3476,6 +3486,12 @@ class $MessagesTable extends Messages
     } else if (isInserting) {
       context.missing(_deliveryStateMeta);
     }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    }
     return context;
   }
 
@@ -3517,6 +3533,10 @@ class $MessagesTable extends Messages
         DriftSqlType.string,
         data['${effectivePrefix}delivery_state'],
       )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}kind'],
+      ),
     );
   }
 
@@ -3560,6 +3580,20 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
   /// Read/Failed, F-032) -- never written directly; always via
   /// `DeliveryStateMachine.transition`.
   final String deliveryState;
+
+  /// E05-T06 (ADR-0009): what this message's payload CONTAINS -- a
+  /// `MessageContentKind.wireValue` (`1` text, `2` image, `3` file, `4`
+  /// voice, `5` location).
+  ///
+  /// **`null` means text.** Every row written before this column existed is
+  /// text by the convention that was the only thing making messages readable
+  /// at all, so `null` is not "unknown" here -- it is the correct, complete
+  /// answer for all of them. No backfill is attempted, and none is needed.
+  ///
+  /// Nothing writes this column yet: ADR-0009 authorises the discriminator,
+  /// not the attachment journeys that will eventually populate it, and
+  /// E05-T06's scope fence keeps every producer out of scope.
+  final int? kind;
   const MessageRow({
     required this.id,
     required this.conversationId,
@@ -3569,6 +3603,7 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
     this.plaintextPayload,
     required this.createdAt,
     required this.deliveryState,
+    this.kind,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3583,6 +3618,9 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
     }
     map['created_at'] = Variable<int>(createdAt);
     map['delivery_state'] = Variable<String>(deliveryState);
+    if (!nullToAbsent || kind != null) {
+      map['kind'] = Variable<int>(kind);
+    }
     return map;
   }
 
@@ -3598,6 +3636,7 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
           : Value(plaintextPayload),
       createdAt: Value(createdAt),
       deliveryState: Value(deliveryState),
+      kind: kind == null && nullToAbsent ? const Value.absent() : Value(kind),
     );
   }
 
@@ -3617,6 +3656,7 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
       ),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       deliveryState: serializer.fromJson<String>(json['deliveryState']),
+      kind: serializer.fromJson<int?>(json['kind']),
     );
   }
   @override
@@ -3631,6 +3671,7 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
       'plaintextPayload': serializer.toJson<Uint8List?>(plaintextPayload),
       'createdAt': serializer.toJson<int>(createdAt),
       'deliveryState': serializer.toJson<String>(deliveryState),
+      'kind': serializer.toJson<int?>(kind),
     };
   }
 
@@ -3643,6 +3684,7 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
     Value<Uint8List?> plaintextPayload = const Value.absent(),
     int? createdAt,
     String? deliveryState,
+    Value<int?> kind = const Value.absent(),
   }) => MessageRow(
     id: id ?? this.id,
     conversationId: conversationId ?? this.conversationId,
@@ -3654,6 +3696,7 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
         : this.plaintextPayload,
     createdAt: createdAt ?? this.createdAt,
     deliveryState: deliveryState ?? this.deliveryState,
+    kind: kind.present ? kind.value : this.kind,
   );
   MessageRow copyWithCompanion(MessagesCompanion data) {
     return MessageRow(
@@ -3677,6 +3720,7 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
       deliveryState: data.deliveryState.present
           ? data.deliveryState.value
           : this.deliveryState,
+      kind: data.kind.present ? data.kind.value : this.kind,
     );
   }
 
@@ -3690,7 +3734,8 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
           ..write('ciphertext: $ciphertext, ')
           ..write('plaintextPayload: $plaintextPayload, ')
           ..write('createdAt: $createdAt, ')
-          ..write('deliveryState: $deliveryState')
+          ..write('deliveryState: $deliveryState, ')
+          ..write('kind: $kind')
           ..write(')'))
         .toString();
   }
@@ -3705,6 +3750,7 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
     $driftBlobEquality.hash(plaintextPayload),
     createdAt,
     deliveryState,
+    kind,
   );
   @override
   bool operator ==(Object other) =>
@@ -3720,7 +3766,8 @@ class MessageRow extends DataClass implements Insertable<MessageRow> {
             this.plaintextPayload,
           ) &&
           other.createdAt == this.createdAt &&
-          other.deliveryState == this.deliveryState);
+          other.deliveryState == this.deliveryState &&
+          other.kind == this.kind);
 }
 
 class MessagesCompanion extends UpdateCompanion<MessageRow> {
@@ -3732,6 +3779,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
   final Value<Uint8List?> plaintextPayload;
   final Value<int> createdAt;
   final Value<String> deliveryState;
+  final Value<int?> kind;
   final Value<int> rowid;
   const MessagesCompanion({
     this.id = const Value.absent(),
@@ -3742,6 +3790,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
     this.plaintextPayload = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.deliveryState = const Value.absent(),
+    this.kind = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   MessagesCompanion.insert({
@@ -3753,6 +3802,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
     this.plaintextPayload = const Value.absent(),
     required int createdAt,
     required String deliveryState,
+    this.kind = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        conversationId = Value(conversationId),
@@ -3770,6 +3820,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
     Expression<Uint8List>? plaintextPayload,
     Expression<int>? createdAt,
     Expression<String>? deliveryState,
+    Expression<int>? kind,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -3781,6 +3832,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
       if (plaintextPayload != null) 'plaintext_payload': plaintextPayload,
       if (createdAt != null) 'created_at': createdAt,
       if (deliveryState != null) 'delivery_state': deliveryState,
+      if (kind != null) 'kind': kind,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -3794,6 +3846,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
     Value<Uint8List?>? plaintextPayload,
     Value<int>? createdAt,
     Value<String>? deliveryState,
+    Value<int?>? kind,
     Value<int>? rowid,
   }) {
     return MessagesCompanion(
@@ -3805,6 +3858,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
       plaintextPayload: plaintextPayload ?? this.plaintextPayload,
       createdAt: createdAt ?? this.createdAt,
       deliveryState: deliveryState ?? this.deliveryState,
+      kind: kind ?? this.kind,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -3836,6 +3890,9 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
     if (deliveryState.present) {
       map['delivery_state'] = Variable<String>(deliveryState.value);
     }
+    if (kind.present) {
+      map['kind'] = Variable<int>(kind.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -3853,6 +3910,7 @@ class MessagesCompanion extends UpdateCompanion<MessageRow> {
           ..write('plaintextPayload: $plaintextPayload, ')
           ..write('createdAt: $createdAt, ')
           ..write('deliveryState: $deliveryState, ')
+          ..write('kind: $kind, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -12261,6 +12319,7 @@ typedef $$MessagesTableCreateCompanionBuilder =
       Value<Uint8List?> plaintextPayload,
       required int createdAt,
       required String deliveryState,
+      Value<int?> kind,
       Value<int> rowid,
     });
 typedef $$MessagesTableUpdateCompanionBuilder =
@@ -12273,6 +12332,7 @@ typedef $$MessagesTableUpdateCompanionBuilder =
       Value<Uint8List?> plaintextPayload,
       Value<int> createdAt,
       Value<String> deliveryState,
+      Value<int?> kind,
       Value<int> rowid,
     });
 
@@ -12322,6 +12382,11 @@ class $$MessagesTableFilterComposer
 
   ColumnFilters<String> get deliveryState => $composableBuilder(
     column: $table.deliveryState,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get kind => $composableBuilder(
+    column: $table.kind,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -12374,6 +12439,11 @@ class $$MessagesTableOrderingComposer
     column: $table.deliveryState,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$MessagesTableAnnotationComposer
@@ -12420,6 +12490,9 @@ class $$MessagesTableAnnotationComposer
     column: $table.deliveryState,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
 }
 
 class $$MessagesTableTableManager
@@ -12461,6 +12534,7 @@ class $$MessagesTableTableManager
                 Value<Uint8List?> plaintextPayload = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<String> deliveryState = const Value.absent(),
+                Value<int?> kind = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MessagesCompanion(
                 id: id,
@@ -12471,6 +12545,7 @@ class $$MessagesTableTableManager
                 plaintextPayload: plaintextPayload,
                 createdAt: createdAt,
                 deliveryState: deliveryState,
+                kind: kind,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -12483,6 +12558,7 @@ class $$MessagesTableTableManager
                 Value<Uint8List?> plaintextPayload = const Value.absent(),
                 required int createdAt,
                 required String deliveryState,
+                Value<int?> kind = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MessagesCompanion.insert(
                 id: id,
@@ -12493,6 +12569,7 @@ class $$MessagesTableTableManager
                 plaintextPayload: plaintextPayload,
                 createdAt: createdAt,
                 deliveryState: deliveryState,
+                kind: kind,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

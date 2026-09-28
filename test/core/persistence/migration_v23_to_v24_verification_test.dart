@@ -52,6 +52,12 @@ void main() {
       //    stamp the version back. Everything else stays exactly as a real
       //    v23 install would have it.
       await seeded.customStatement('DROP TABLE trust_settings;');
+      // E05-T06: `messages.kind` arrived in v25, so a genuine v23 database
+      // does not have it either. Without this drop the cascade's `from >= 11
+      // && from < 25` step would fail the whole open with "duplicate column
+      // name: kind" -- and, more to the point, the simulated v23 would not
+      // actually be a v23.
+      await seeded.customStatement('ALTER TABLE messages DROP COLUMN kind;');
       await seeded.customStatement('PRAGMA user_version = 23;');
       await seeded.close();
 
@@ -76,7 +82,22 @@ void main() {
       expect(row.allowNewConnectionRequests, isTrue);
 
       final after = sqlite3.sqlite3.open(file.path);
-      expect(after.userVersion, 24, reason: 'upgrade actually ran');
+      // Against the LIVE schema version, not a literal `24`: re-opening runs
+      // the whole remaining cascade, so this stamp is whatever the current
+      // schema is (25 once E05-T06 landed), and hard-coding the number here
+      // only ever means "this test was written before the next migration".
+      // The claim under test is the `from < 24` step's own outcome --
+      // asserted above on `allowNewConnectionRequests` -- not the stamp.
+      expect(
+        after.userVersion,
+        upgraded.schemaVersion,
+        reason: 'upgrade actually ran',
+      );
+      expect(
+        after.userVersion,
+        greaterThanOrEqualTo(24),
+        reason: 'and ran at least as far as the step under test',
+      );
       after.close();
 
       // Additive only: pre-existing data survived.

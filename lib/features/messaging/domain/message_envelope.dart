@@ -26,6 +26,66 @@ import 'dart:typed_data';
 /// incompatibly.
 const int envelopeFormatVersion = 0xE5;
 
+/// The **v2** format tag (E05-T06, ADR-0009). An envelope led by this byte
+/// carries one extra `u8 kind` immediately after it; every subsequent field
+/// keeps its order and shifts by exactly one.
+///
+/// Note the asymmetry with `GroupMessageEnvelope`, which is pre-existing and
+/// deliberate: this field is a **magic sentinel**, not a counter (see
+/// [envelopeFormatVersion]'s own doc -- its job is to make a non-envelope
+/// payload fail loudly), so "v2" here is a second accepted sentinel rather
+/// than `0xE5 + 1` meaning anything arithmetically. `GroupMessageEnvelope`
+/// does use a real monotonic version, so its v2 is plain `2`.
+const int envelopeFormatVersionV2 = 0xE6;
+
+/// What a message's payload actually *contains* (ADR-0009).
+///
+/// **Why this lives inside the encrypted envelope and nowhere else.** The
+/// frame-level `PayloadType` is relay-visible metadata by design
+/// (`relay_packet_frame.dart`: "Every field except `payload` is metadata a
+/// relay is allowed to see (`FR-ROUTE-004`)"), and the control-kind
+/// discriminator is read *before* any decryption --
+/// `inbound_pipeline.dart` does `final int controlKind = frame.payload[0];`
+/// unconditionally, ahead of dispatch. Any byte in a pre-decrypt position is
+/// visible to every relay that forwards the packet. Putting "this is a voice
+/// note" in either place would disclose content type on the wire, a direct
+/// regression against FR-ROUTE-003/FR-ROUTE-004. Carried here, inside the
+/// plaintext the two endpoints encrypt as a unit, a relay observes nothing
+/// new at all.
+enum MessageContentKind {
+  /// Wire value `1`. Defined so the decoder is total, but **never emitted**
+  /// as a v2 kind byte: a text message is always a v1 envelope, byte for
+  /// byte identical to what this app has always sent (ADR-0009's emission
+  /// rule, and the reason the working path never executes new code).
+  text(1),
+  image(2),
+  file(3),
+  voice(4),
+  location(5);
+
+  const MessageContentKind(this.wireValue);
+
+  final int wireValue;
+
+  /// The kind for [wireValue], or `null` if this build does not recognise
+  /// it.
+  ///
+  /// `null` is a real, carried outcome -- **not** an error and **not** an
+  /// invitation to guess. ADR-0009 is explicit: an unknown kind is neither
+  /// guessed nor silently dropped, and nothing infers content from payload
+  /// shape, filename, magic bytes or MIME sniffing. Silently resolving an
+  /// unrecognised byte to [text] would re-create exactly the silent
+  /// mis-parse class `E05-B01` already cost this project once.
+  static MessageContentKind? fromWire(int wireValue) {
+    for (final kind in MessageContentKind.values) {
+      if (kind.wireValue == wireValue) {
+        return kind;
+      }
+    }
+    return null;
+  }
+}
+
 /// The minimal wire envelope both `SendMessageUseCase` and
 /// `ReceiveMessageUseCase` share: NOT raw ciphertext bytes -- E03's
 /// `CryptoService` only encrypts/decrypts opaque plaintext, it never defines
@@ -46,10 +106,30 @@ class MessageEnvelope {
     required this.conversationId,
     required this.sequenceNumber,
     required this.payload,
+    this.kind = MessageContentKind.text,
+    this.unknownKindWireValue,
   });
 
   final String id;
   final String conversationId;
+
+  /// What [payload] contains (E05-T06, ADR-0009). `null` means this build
+  /// does not recognise the kind byte a v2 envelope carried -- see
+  /// [unknownKindWireValue].
+  ///
+  /// Defaults to [MessageContentKind.text], which is also what every v1
+  /// envelope decodes to unconditionally.
+  final MessageContentKind? kind;
+
+  /// The raw kind byte, preserved **only** when it was not recognised
+  /// (i.e. exactly when [kind] is `null`); `null` otherwise.
+  ///
+  /// Kept so an unknown kind is neither guessed nor silently dropped: the
+  /// message still parses, still persists, and a caller can report honestly
+  /// that it cannot render *this specific* kind. What that caller should
+  /// say is an open Rule-2 product decision (`E05-T06` §9) and no string is
+  /// invented for it here.
+  final int? unknownKindWireValue;
 
   /// Monotonic per `(conversationId, senderDeviceId)`, assigned by the
   /// sender at compose time (T02) -- this is the field that lets the
@@ -72,15 +152,43 @@ class MessageEnvelope {
     final conversationIdBytes =
         Uint8List.fromList(utf8.encode(conversationId));
 
+    // ADR-0009's emission rule. Text emits v1 -- byte-identical to what this
+    // app has always sent, not merely compatible with it -- so the only path
+    // that actually runs today never executes the v2 branch at all. v2 is
+    // emitted ONLY for a non-text kind.
+    //
+    // An unknown kind (`kind == null`) cannot be re-emitted: this build does
+    // not know what it means, and writing a byte for it would be inventing
+    // one. Nothing in this codebase re-serializes a decoded envelope, so
+    // this is unreachable today; it throws rather than silently degrading to
+    // text, which is the failure mode ADR-0009 exists to prevent.
+    if (kind == null) {
+      throw StateError(
+        'MessageEnvelope: refusing to serialize an unrecognised content kind '
+        '(wire value ${unknownKindWireValue ?? "unknown"}) -- this build '
+        'cannot know what it means, and guessing is exactly what ADR-0009 '
+        'forbids',
+      );
+    }
+    final emitV2 = kind != MessageContentKind.text;
+
     final totalLength = _headerFixedBytes +
+        (emitV2 ? 1 : 0) +
         idBytes.length +
         conversationIdBytes.length +
         payload.length;
     final buffer = ByteData(totalLength);
     var offset = 0;
 
-    buffer.setUint8(offset, envelopeFormatVersion);
-    offset += 1;
+    if (emitV2) {
+      buffer.setUint8(offset, envelopeFormatVersionV2);
+      offset += 1;
+      buffer.setUint8(offset, kind!.wireValue);
+      offset += 1;
+    } else {
+      buffer.setUint8(offset, envelopeFormatVersion);
+      offset += 1;
+    }
 
     buffer.setUint32(offset, idBytes.length);
     offset += 4;
@@ -123,17 +231,47 @@ class MessageEnvelope {
     final view = ByteData.sublistView(bytes);
     var offset = 0;
 
+    // Was a strict `!=` against the single sentinel; E05-T06 widens it to a
+    // two-value known set (v1 `0xE5`, v2 `0xE6`). Everything else about the
+    // E05-B01 hardening is unchanged -- any OTHER leading byte is still
+    // rejected outright rather than risking a silent mis-parse.
     final version = view.getUint8(offset);
-    if (version != envelopeFormatVersion) {
+    if (version != envelopeFormatVersion &&
+        version != envelopeFormatVersionV2) {
       throw FormatException(
         'MessageEnvelope: not an envelope (leading format-version byte was '
         '0x${version.toRadixString(16)}, expected '
-        '0x${envelopeFormatVersion.toRadixString(16)}) -- refusing to parse '
-        'a payload that is very likely not one of these envelopes, rather '
-        'than risk a silent mis-parse into a garbage row (E05-B01)',
+        '0x${envelopeFormatVersion.toRadixString(16)} or '
+        '0x${envelopeFormatVersionV2.toRadixString(16)}) -- refusing to '
+        'parse a payload that is very likely not one of these envelopes, '
+        'rather than risk a silent mis-parse into a garbage row (E05-B01)',
       );
     }
     offset += 1;
+
+    // v1 means text, unconditionally (ADR-0009's decode rule) -- there is no
+    // kind byte to read and none is inferred.
+    var kind = MessageContentKind.text;
+    int? unknownKindWireValue;
+    if (version == envelopeFormatVersionV2) {
+      if (bytes.length < offset + 1) {
+        throw const FormatException(
+          'MessageEnvelope: truncated, v2 envelope is missing its '
+          'content-kind byte',
+        );
+      }
+      final kindByte = view.getUint8(offset);
+      offset += 1;
+      final resolved = MessageContentKind.fromWire(kindByte);
+      if (resolved == null) {
+        // Neither guessed nor dropped: the envelope still parses and the
+        // raw byte is carried out so the caller can be honest about what it
+        // cannot render (ADR-0009).
+        unknownKindWireValue = kindByte;
+      } else {
+        kind = resolved;
+      }
+    }
 
     if (bytes.length < offset + 4) {
       throw const FormatException(
@@ -189,6 +327,8 @@ class MessageEnvelope {
       conversationId: conversationId,
       sequenceNumber: sequenceNumber,
       payload: payload,
+      kind: unknownKindWireValue == null ? kind : null,
+      unknownKindWireValue: unknownKindWireValue,
     );
   }
 }
