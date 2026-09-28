@@ -579,10 +579,31 @@ class BackgroundLifecycleObserver extends WidgetsBindingObserver {
       final PowerState fresh = await _service.powerState();
       _onPowerStateChanged(fresh);
     } catch (_) {
-      // A one-shot platform read failing on resume must not crash the
-      // lifecycle callback -- the stream subscription remains the fallback
-      // source of truth (same "never take down the app" posture as every
-      // other peripheral read in this file, e.g. `_measureDatabaseFileBytes`).
+      // A one-shot platform read failing must not crash the lifecycle
+      // callback -- but it must not silently end the startup path either
+      // (E10-B11, S1).
+      //
+      // This block used to do nothing, on the stated grounds that "the
+      // stream subscription remains the fallback source of truth". That
+      // premise is FALSE, and `start()` twenty lines above says so itself:
+      // the `PowerState` stream is "fed by broadcast receivers that fire on
+      // TRANSITIONS only". With no transition there is no event, so there
+      // was no fallback -- and since `start()` deliberately does not call
+      // `_applyPlan()` synchronously, a throw here meant `_applyPlan()`
+      // never ran AT ALL. Nothing then called `transport.startDiscovery()`,
+      // so `BluetoothTransport.ensureListening()` never opened this
+      // device's RFCOMM server socket and the device could not receive a
+      // single message, with no user-visible signal beyond a Dashboard
+      // reading "No peers nearby".
+      //
+      // So apply a plan from the last known `_powerState` instead. That IS
+      // the optimistic default on a cold start, which is precisely what
+      // `start()`'s comment wanted to avoid acting on -- accepted
+      // deliberately and only on this path, because the alternative it was
+      // protecting (an unbidden `startDiscovery()`) is strictly less bad
+      // than a device that can never receive anything. A later real
+      // transition still corrects the plan through the stream.
+      _applyPlan();
     }
   }
 
@@ -623,7 +644,18 @@ class BackgroundLifecycleObserver extends WidgetsBindingObserver {
     if (_discoveryAllowed == plan.discoveryAllowed) return;
     _discoveryAllowed = plan.discoveryAllowed;
     if (plan.discoveryAllowed) {
-      unawaited(transport.startDiscovery().catchError((Object _) {}));
+      // E10-B11: clear the latch if the call FAILED. Previously the failure
+      // was swallowed while `_discoveryAllowed` stayed `true`, so this
+      // observer believed discovery -- and therefore listening -- was on
+      // when it was not, and no later plan ever retried it. Resetting to
+      // `null` (rather than `false`) means "unknown", so the next
+      // `_applyPlan()` differs from it whatever the plan says and genuinely
+      // re-attempts.
+      unawaited(
+        transport.startDiscovery().catchError((Object _) {
+          if (_discoveryAllowed == true) _discoveryAllowed = null;
+        }),
+      );
     } else {
       unawaited(transport.stopDiscovery().catchError((Object _) {}));
     }
