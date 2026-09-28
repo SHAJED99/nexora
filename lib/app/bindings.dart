@@ -601,8 +601,16 @@ class BackgroundLifecycleObserver extends WidgetsBindingObserver {
       // `start()`'s comment wanted to avoid acting on -- accepted
       // deliberately and only on this path, because the alternative it was
       // protecting (an unbidden `startDiscovery()`) is strictly less bad
-      // than a device that can never receive anything. A later real
-      // transition still corrects the plan through the stream.
+      // than a device that can never receive anything.
+      //
+      // That correction is NOT prompt in the one case that matters most
+      // (OQ-E10-B11-2): on a cold start ALREADY in Doze, the power-state
+      // stream fires on transitions only, so nothing corrects this plan
+      // until Doze ENDS -- by which point there is nothing left to
+      // correct, and this path will have scanned for the whole Doze
+      // window. That is a deliberate, disclosed trade against a device
+      // that is permanently deaf and says nothing about it, not a free
+      // one. A retry-with-backoff on the one-shot read would close it.
       _applyPlan();
     }
   }
